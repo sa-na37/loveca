@@ -1725,7 +1725,20 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(content)))
         self.end_headers()
+
+        # SAFETY_HEAD_NO_BODY: HEAD should not send body
+        if getattr(self, "_is_head", False):
+            return
         self.wfile.write(content)
+
+    def do_HEAD(self):
+        # HEAD: same routing as GET, but never write response body
+        self._is_head = True
+        try:
+            self.do_GET()
+        finally:
+            self._is_head = False
+
 
     def do_GET(self):
         u = urlparse(self.path)
