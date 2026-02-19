@@ -349,6 +349,10 @@ body{font-family:system-ui,sans-serif;margin:0}
 <script>
 (()=>{
 let STATE=null;
+// SAFETY_NORMALIZE_PENDING: avoid null state crash
+if (STATE == null || typeof STATE !== "object") STATE = {};
+if (!STATE.pending || typeof STATE.pending !== "object") STATE.pending = {};
+
 let bannerTimer=null;
 let selectedHand=new Set();
 let playPick=null;
