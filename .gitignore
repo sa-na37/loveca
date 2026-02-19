@@ -1,0 +1,10 @@
+llocg_db_out_full/
+.venv/
+__pycache__/
+*.pyc
+analysis_out/
+logs/
+video_out_*/
+*.bak
+.DS_Store
+__MACOSX/
