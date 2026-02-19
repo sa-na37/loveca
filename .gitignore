@@ -8,3 +8,5 @@ video_out_*/
 *.bak
 .DS_Store
 __MACOSX/
+jank/
+llocg_ui_jank/
