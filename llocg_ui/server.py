@@ -347,6 +347,7 @@ body{font-family:system-ui,sans-serif;margin:0}
 </div>
 
 <script>
+(()=>{
 let STATE=null;
 let bannerTimer=null;
 let selectedHand=new Set();
@@ -1458,6 +1459,7 @@ function showZone(title, cns){
 
 
 
+})();
 </script>
 </body></html>
 """
@@ -1725,6 +1727,9 @@ class Handler(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         if u.path == "/":
             self._send(200, HTML.encode("utf-8"), "text/html; charset=utf-8")
+            return
+        if u.path == "/favicon.ico":
+            self._send(204, b"", "image/x-icon")
             return
         if u.path == "/playmat":
             # Serve playmat.jpg from loveca root (next to scripts) if present.
