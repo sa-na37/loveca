@@ -1,59 +1,83 @@
+# -*- coding: utf-8 -*-
 from __future__ import annotations
-import pathlib
+
+"""llocg_ui.images
+
+`<root>/card_images/*/<cardnumber>-<rarity>.png` から画像を引くためのローカル解決。
+
+- `db._cardno_variants()` で揺れを吸収
+- 同一カードが複数レアリティで存在するため、優先順で 1 枚選ぶ
+"""
+
+from pathlib import Path
 from typing import Dict, List, Optional
+import re
 
-IMG_EXTS = (".png",".jpg",".jpeg",".webp")
+from .db import _cardno_variants
 
-def _norm(s: str) -> str:
-    s = (s or "").strip().lower()
-    s = s.replace("＋","+")
-    while s.endswith("-"):
-        s = s[:-1]
-    return s
+RARITY_PREF = ["N", "R", "R2", "L", "L2", "SD", "PR", "SEC", "SECL", "AR", "RM", "P", "P2"]
+
 
 class ImageLocator:
-    def __init__(self, card_images_dir: pathlib.Path):
-        self.card_images_dir = card_images_dir
-        self.by_basename: Dict[str, pathlib.Path] = {}
-        self.all_files: List[pathlib.Path] = []
-        if card_images_dir.exists():
-            for p in card_images_dir.rglob("*"):
-                if p.is_file() and p.suffix.lower() in IMG_EXTS:
-                    self.all_files.append(p)
-                    self.by_basename[p.stem.lower()] = p
+    def __init__(self, root: Path):
+        self.root = Path(root)
+        # Folder naming drift across runs:
+        #   - legacy:  <root>/card_images/
+        #   - current: <root>/card_image/
+        # Support both without creating/renaming folders.
+        self.bases: List[Path] = []
+        for name in ("card_images", "card_image"):
+            p = self.root / name
+            if p.exists() and p.is_dir():
+                self.bases.append(p)
+        # Keep previous behaviour if neither exists yet.
+        if not self.bases:
+            self.bases = [self.root / "card_images"]
+        self.cache: Dict[str, Path] = {}
 
-    def resolve(self, card_no: str, rarity: str = "") -> Optional[pathlib.Path]:
-        cn = _norm(card_no)
-        rr = _norm(rarity)
+    def _choose_best(self, paths: List[Path]) -> Optional[Path]:
+        if not paths:
+            return None
+        scored = []
+        for p in paths:
+            m = re.match(r"^(.*?)-([A-Za-z0-9\+]+)\.png$", p.name)
+            rarity = m.group(2).upper() if m else ""
+            try:
+                r_rank = RARITY_PREF.index(rarity)
+            except ValueError:
+                r_rank = 999
+            scored.append((r_rank, len(str(p)), p))
+        scored.sort(key=lambda x: (x[0], x[1]))
+        return scored[0][2]
+
+    def find(self, cardnumber: str) -> Optional[Path]:
+        # Try all supported bases (plural/singular) in order.
+        bases = [b for b in self.bases if b.exists()]
+        if not bases:
+            return None
+        cn = (cardnumber or "").strip()
         if not cn:
             return None
-
-        if cn in self.by_basename:
-            return self.by_basename[cn]
-
-        if rr:
-            for c in (f"{cn}_{rr}", f"{cn}-{rr}", f"{rr}_{cn}", f"{rr}-{cn}"):
-                if c in self.by_basename:
-                    return self.by_basename[c]
-
-        toks = [t for t in cn.replace("!","-").split("-") if t]
-        best = None
-        best_score = -1
-        for p in self.all_files:
-            stem = p.stem.lower()
-            ok = True
-            score = 0
-            for t in toks:
-                if t in stem:
-                    score += 2
-                else:
-                    ok = False
-                    break
-            if not ok:
-                continue
-            if rr and rr in stem:
-                score += 3
-            if score > best_score:
-                best_score = score
-                best = p
+        if cn == "__BACK__":
+            for fn in ("back.jpeg","back.jpg","back.png"):
+                for base in bases:
+                    p = base / fn
+                    if p.exists():
+                        return p
+            return None
+        cands = _cardno_variants(cn)
+        for key in cands:
+            if key in self.cache and self.cache[key].exists():
+                return self.cache[key]
+        hits: List[Path] = []
+        for key in cands:
+            for base in bases:
+                hits.extend([p for p in base.glob(f"*/{key}-*.png") if p.is_file()])
+        best = self._choose_best(hits)
+        if best:
+            for key in cands:
+                self.cache[key] = best
         return best
+
+
+# ----------------------------
