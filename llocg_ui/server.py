@@ -52,7 +52,7 @@ from .engine import (
     can_activate,
 )
 
-APP_VERSION = "clean-ui-v1"
+APP_VERSION = "clean-ui-v2_3"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -411,7 +411,7 @@ HTML = r'''<!doctype html>
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>LLCG Manual UI (Clean)</title>
+<title>LLCG Manual UI</title>
 <style>
   :root{
     --pmW: 1200px;
@@ -420,6 +420,7 @@ HTML = r'''<!doctype html>
     --cardW: 347px;
     --cardH: 485px;
     --gap: 8px;
+    --sideW: 0px;
   }
   html,body{height:100%;margin:0;background:#111;color:#eee;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
   #root{height:100%;display:flex;align-items:center;justify-content:center;}
@@ -427,18 +428,17 @@ HTML = r'''<!doctype html>
   #playmat{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;user-select:none;pointer-events:none;}
   #zones{position:absolute;inset:0;}
 
-  /* zone shell */
+  /* zone */
   .zone{position:absolute;box-sizing:border-box;}
   .zone.debug{outline:2px dashed rgba(0,0,0,.35);}
   .label{position:absolute;left:6px;top:6px;padding:2px 6px;font-size:12px;background:rgba(0,0,0,.55);border-radius:6px;pointer-events:none;}
   .countBadge{position:absolute;right:6px;bottom:6px;padding:2px 6px;font-size:12px;background:rgba(0,0,0,.75);border-radius:6px;pointer-events:none;}
   .zoneInner{position:absolute;inset:0;overflow:hidden;}
-  .scrollX{overflow-x:auto;overflow-y:hidden;}
 
   /* cards */
   .cardWrap{position:absolute;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.55);user-select:none;cursor:pointer;background:#000;}
   .cardWrap img{position:absolute;left:0;top:0;border-radius:8px;display:block;width:100%;height:100%;pointer-events:none;}
-  .cardWrap.selected{outline:6px solid rgba(255,213,74,.95); outline-offset:-6px;}
+  .cardWrap.selected{outline:6px solid rgba(0,0,0,.85); outline-offset:-6px;}
   .cap{position:absolute;left:6px;right:6px;bottom:-18px;font-size:11px;line-height:1.1;color:#eee;text-shadow:0 1px 2px rgba(0,0,0,.8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;}
 
   /* rotation wrappers */
@@ -450,25 +450,73 @@ HTML = r'''<!doctype html>
   #topBar .miniBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:6px 10px;border-radius:10px;cursor:pointer;}
   #topBar .miniBtn:hover{background:rgba(255,255,255,.18);}
 
-  /* right command bar */
-  #cmdBar{position:absolute;right:10px;top:80px;display:flex;flex-direction:column;gap:8px;z-index:6500;}
-  #cmdBar .cmdBtn{background:rgba(0,0,0,.65);color:#eee;border:1px solid rgba(255,255,255,.14);padding:8px 10px;border-radius:12px;cursor:pointer;font-size:12px;text-align:left;min-width:150px;}
-  #cmdBar .cmdBtn.primary{background:#ffd54a;color:#111;border-color:rgba(0,0,0,.3);}
-  #cmdBar .cmdBtn:disabled{opacity:.45;cursor:not-allowed;}
-
-  /* modal */
-  #mask{position:absolute;inset:0;background:rgba(0,0,0,.55);display:none;z-index:9000;}
-  #modal{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(92%, calc(var(--pmW) * 0.82));background:#1b1b1b;border:1px solid rgba(255,255,255,.15);border-radius:16px;padding:12px;box-shadow:0 14px 60px rgba(0,0,0,.7);}
-  #modalTitle{font-weight:700;}
-  #modalText{white-space:pre-wrap;line-height:1.35;color:#ddd;font-size:13px;margin-top:10px;}
-  #modalActions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap;}
-  #modalActions .miniBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:6px 10px;border-radius:10px;cursor:pointer;}
-
   /* banner */
-  #banner{position:absolute;left:50%;top:54px;transform:translateX(-50%);padding:6px 10px;border-radius:999px;background:rgba(0,0,0,.7);border:1px solid rgba(255,255,255,.18);z-index:7000;display:none;font-size:12px;}
+  #banner{position:absolute;left:50%;top:54px;transform:translateX(-50%);padding:10px 16px;border-radius:999px;background:rgba(0,0,0,.72);border:1px solid rgba(255,255,255,.22);z-index:9900;display:none;font-size:18px;font-weight:800;letter-spacing:.5px;pointer-events:none;max-width:85%;text-align:center;}
+  #banner[data-kind="fail"]{background:rgba(160,20,20,.78);}
+  #banner[data-kind="success"]{background:rgba(20,140,60,.78);}
+  #banner[data-kind="info"]{background:rgba(0,0,0,.72);}
+
 
   /* log */
   #logBox{position:absolute;inset:0;overflow:auto;font-size:12px;line-height:1.3;padding:8px;background:rgba(0,0,0,.45);border-radius:10px;white-space:pre-wrap;}
+
+  /* energy UI */
+  .energyUI{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-start;gap:8px;padding:26px 10px 10px 10px;}
+  .energyUI .energyText{font-size:14px;line-height:1.2;background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:8px 10px;color:#eee;}
+  .energyUI .btn{background:rgba(0,0,0,.65);color:#eee;border:1px solid rgba(255,255,255,.14);padding:10px 10px;border-radius:12px;cursor:pointer;font-size:13px;text-align:center;}
+  .energyUI .btn.primary{background:#ffd54a;color:#111;border-color:rgba(0,0,0,.3);}
+
+  /* small activation button on stage card */
+  .actBtn{position:absolute;left:6px;right:6px;bottom:6px;padding:6px 6px;border-radius:10px;border:1px solid rgba(255,255,255,.18);
+          background:rgba(0,0,0,.6);color:#fff;font-size:12px;cursor:pointer;}
+  .actBtn:hover{background:rgba(0,0,0,.74);}
+
+  /* popups */
+  #mask{position:absolute;left:0;top:0;bottom:0;right:var(--sideW);background:rgba(0,0,0,.55);display:none;z-index:9000;}
+  #modal{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(92%, calc(var(--pmW) - var(--sideW) - 140px));max-height:min(64%, calc(var(--pmH) - 160px));overflow:hidden;background:#1b1b1b;border:1px solid rgba(255,255,255,.15);border-radius:16px;padding:12px;box-shadow:0 14px 60px rgba(0,0,0,.7);display:flex;flex-direction:column;}
+  #modalTitle{font-weight:700;}
+  #modalText{white-space:pre-wrap;line-height:1.35;color:#ddd;font-size:13px;margin-top:8px;}
+  #modalCards{margin-top:10px;overflow-x:auto;overflow-y:hidden;padding-bottom:6px;} 
+  #modalCards .surf{position:relative;height:1px;}
+  #modalActions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap;}
+  #modalActions .miniBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:6px 10px;border-radius:10px;cursor:pointer;}
+
+/* PATCH_v2_4_CARDLIST_SHRINK */
+#modal, #modalActions, #modalCards, #modalText, #modalTitle {
+  /* popup を中央寄せ（横幅は中身に追従） */
+  text-align: center;
+}
+
+/* 「カードリスト」ポップアップ本体：中身サイズに追従しつつ上限を設ける */
+#modal, #modalActions, #modalCards, #modalText, #modalTitle .popupBox,
+#modal, #modalActions, #modalCards, #modalText, #modalTitle .popupPanel,
+#modal, #modalActions, #modalCards, #modalText, #modalTitle .popupInner,
+#modal, #modalActions, #modalCards, #modalText, #modalTitle .cardListPopup {
+  width: max-content;
+  max-width: min(72vw, 1100px);
+}
+
+/* カード列：横方向は「必要分だけ」幅を取る（＝余白だらけを防ぐ） */
+#modal, #modalActions, #modalCards, #modalText, #modalTitle .cardList,
+#modal, #modalActions, #modalCards, #modalText, #modalTitle .cards,
+#modal, #modalActions, #modalCards, #modalText, #modalTitle .cardlist,
+#modal, #modalActions, #modalCards, #modalText, #modalTitle .list {
+  display: inline-flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 0;
+}
+
+/* カードが多い時は横スクロールで救済 */
+#modal, #modalActions, #modalCards, #modalText, #modalTitle .cardListScroll,
+#modal, #modalActions, #modalCards, #modalText, #modalTitle .scrollX,
+#modal, #modalActions, #modalCards, #modalText, #modalTitle .scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: min(70vw, 1060px);
+  padding-bottom: 6px;
+}
+
 </style>
 </head>
 <body>
@@ -480,38 +528,20 @@ HTML = r'''<!doctype html>
       <div class="pill">Turn: <b id="turn">?</b> | Phase: <b id="phase">?</b> | Energy: <b id="energy">?</b></div>
       <div class="pill">Selected(hand): <b id="selected">0</b></div>
       <button class="miniBtn" id="btnDbg">枠表示</button>
-      <button class="miniBtn" id="btnDebugToggle">debug</button>
-      <div class="pill" id="deckInfo"></div>
     </div>
 
     <div id="banner"></div>
-
-    <div id="cmdBar">
-      <button class="cmdBtn" id="btnUndo">UNDO</button>
-      <button class="cmdBtn primary" id="btnNext">NEXT</button>
-      <button class="cmdBtn" id="btnEnd">END TURN</button>
-      <button class="cmdBtn" id="btnSet">SET (from hand)</button>
-      <button class="cmdBtn" id="btnPlayL">PLAY → L</button>
-      <button class="cmdBtn" id="btnPlayC">PLAY → C</button>
-      <button class="cmdBtn" id="btnPlayR">PLAY → R</button>
-      <button class="cmdBtn" id="btnActL">ACTIVATE L→GREEN</button>
-      <button class="cmdBtn" id="btnActC">ACTIVATE C→GREEN</button>
-      <button class="cmdBtn" id="btnActR">ACTIVATE R→GREEN</button>
-      <button class="cmdBtn" id="btnYell">YELL</button>
-      <button class="cmdBtn" id="btnAttempt">ATTEMPT</button>
-      <button class="cmdBtn" id="btnAck">ACK</button>
-    </div>
 
     <div id="zones"></div>
 
     <div id="mask">
       <div id="modal">
-        <div id="modalTitle">Pending</div>
+        <div id="modalTitle">Popup</div>
         <div id="modalText"></div>
+        <div id="modalCards"></div>
         <div id="modalActions"></div>
       </div>
     </div>
-
   </div>
 </div>
 
@@ -520,19 +550,21 @@ HTML = r'''<!doctype html>
   const BASE_W = 1560;
   const BASE_H = 851;
 
-  // Base (playmat) coordinates; scaled to viewport.
+  // Base coordinates, aligned to playmat.jpg
+  // Right side contains: DECK (top), Waiting room (middle), Energy+UNDO+NEXT (bottom)
   const layout = {
     zones: {
-      deck:    {x: 1235, y:  60, w: 270, h: 180, kind:"stack", orient:"portrait", label:"DECK"},
-      green:   {x: 1235, y: 255, w: 270, h: 260, kind:"stack", orient:"portrait", label:"GREEN"},
-      log:     {x:   50, y: 585, w: 430, h: 235, kind:"log",   orient:"portrait", label:"LOG"},
-      hand:    {x:  520, y: 600, w: 650, h: 235, kind:"fan",   orient:"portrait", label:"HAND"},
-      stageL:  {x:  352, y: 280, w: 181, h: 252, kind:"stage", orient:"portrait", label:"L", slot:"L"},
-      stageC:  {x:  683, y: 280, w: 180, h: 251, kind:"stage", orient:"portrait", label:"C", slot:"C"},
-      stageR:  {x:  995, y: 280, w: 180, h: 251, kind:"stage", orient:"portrait", label:"R", slot:"R"},
-      liveset: {x:  600, y:  80, w: 650, h: 200, kind:"fan",   orient:"landscape", label:"LIVE SET"},
-      resolve: {x:  520, y: 445, w: 710, h: 160, kind:"fan",   orient:"portrait", label:"RESOLVE"},
-      energy:  {x: 1235, y: 545, w: 270, h: 280, kind:"energy",orient:"portrait", label:"ENERGY"},
+      deck:    {x: 1235, y:  60, w: 270, h: 180, kind:"deck",    orient:"portrait", label:"DECK"},
+      green:   {x: 1235, y: 255, w: 270, h: 260, kind:"green",   orient:"portrait", label:"Waiting room"},
+      energy:  {x: 1235, y: 545, w: 270, h: 280, kind:"energy",  orient:"portrait", label:"ENERGY"},
+
+      liveset: {x: 300, y: 55, w: 910, h: 210, kind:"fan",     orient:"landscape", label:"LIVE SET"},
+      stageL:  {x:  352, y: 280, w: 181, h: 252, kind:"stage",   orient:"portrait",  label:"L", slot:"L"},
+      stageC:  {x:  683, y: 280, w: 180, h: 251, kind:"stage",   orient:"portrait",  label:"C", slot:"C"},
+      stageR:  {x:  995, y: 280, w: 180, h: 251, kind:"stage",   orient:"portrait",  label:"R", slot:"R"},
+
+      hand:    {x:  420, y: 600, w: 805, h: 235, kind:"hand",    orient:"portrait",  label:"HAND"},
+      log:     {x:   40, y: 585, w: 360, h: 235, kind:"log",     orient:"portrait",  label:"LOG"},
     }
   };
 
@@ -541,33 +573,24 @@ HTML = r'''<!doctype html>
   const elPhase = document.getElementById('phase');
   const elEnergy = document.getElementById('energy');
   const elSelected = document.getElementById('selected');
-  const elDeckInfo = document.getElementById('deckInfo');
   const elBanner = document.getElementById('banner');
 
   const elMask = document.getElementById('mask');
+  const elModal = document.getElementById('modal');
   const elModalTitle = document.getElementById('modalTitle');
   const elModalText = document.getElementById('modalText');
+  const elModalCards = document.getElementById('modalCards');
   const elModalActions = document.getElementById('modalActions');
 
   const btnDbg = document.getElementById('btnDbg');
-  const btnDebugToggle = document.getElementById('btnDebugToggle');
-  const btnUndo = document.getElementById('btnUndo');
-  const btnNext = document.getElementById('btnNext');
-  const btnEnd = document.getElementById('btnEnd');
-  const btnSet = document.getElementById('btnSet');
-  const btnPlayL = document.getElementById('btnPlayL');
-  const btnPlayC = document.getElementById('btnPlayC');
-  const btnPlayR = document.getElementById('btnPlayR');
-  const btnActL = document.getElementById('btnActL');
-  const btnActC = document.getElementById('btnActC');
-  const btnActR = document.getElementById('btnActR');
-  const btnYell = document.getElementById('btnYell');
-  const btnAttempt = document.getElementById('btnAttempt');
-  const btnAck = document.getElementById('btnAck');
 
   let debug = false;
   let st = null;
   let selHand = []; // indices
+  let popup = {type:null};
+  let bannerTimer = null;
+  let stdPortrait = null;
+  let stdLandscape = null;
 
   function cssScale(){
     const pad = 12;
@@ -581,6 +604,8 @@ HTML = r'''<!doctype html>
     document.documentElement.style.setProperty('--scale', s.toFixed(6));
     document.documentElement.style.setProperty('--cardW', (451*s).toFixed(2) + 'px');
     document.documentElement.style.setProperty('--cardH', (630*s).toFixed(2) + 'px');
+    // right-side panel width in pixels (scaled)
+    document.documentElement.style.setProperty('--sideW', (270*s).toFixed(2) + 'px');
   }
 
   function scale(){
@@ -611,15 +636,12 @@ HTML = r'''<!doctype html>
     if(t.includes('LIVE')) return 'landscape';
     return 'portrait';
   }
-
+  function imgUrl(cn){
+    return `/img?cn=${encodeURIComponent(cn)}`;
+  }
   function labelFor(cn){
     const m = (st && st.cn2label) ? st.cn2label : null;
     return (m && m[cn]) ? String(m[cn]) : String(cn);
-  }
-
-  function imgUrl(cn){
-    const enc = encodeURIComponent(cn);
-    return `/img?cn=${enc}`;
   }
 
   function selLimit(){
@@ -634,18 +656,47 @@ HTML = r'''<!doctype html>
       const lim = selLimit();
       while(selHand.length > lim) selHand.shift();
     }
+    updateTop();
     render();
   }
-  function clearSel(){ selHand = []; render(); }
+  function clearSel(){ selHand = []; updateTop(); render(); }
+
+  function setBanner(text){
+    if(bannerTimer){ clearTimeout(bannerTimer); bannerTimer = null; }
+    if(text){
+      const t = String(text);
+      elBanner.textContent = t;
+      const u = t.toUpperCase();
+      if(u.includes('FAIL')) elBanner.dataset.kind = 'fail';
+      else if(u.includes('SUCCESS') || u.includes('OK')) elBanner.dataset.kind = 'success';
+      else elBanner.dataset.kind = 'info';
+      elBanner.style.display = 'block';
+      bannerTimer = setTimeout(()=>{ elBanner.style.display = 'none'; }, 1600);
+    }else{
+      elBanner.style.display = 'none';
+      elBanner.textContent = '';
+      elBanner.dataset.kind = 'info';
+    }
+  }
 
   function computeDispSize(wantOrient, zoneW, zoneH){
     const cw = px(451), ch = px(630);
-    let baseW = (wantOrient==='portrait') ? cw : ch;
-    let baseH = (wantOrient==='portrait') ? ch : cw;
+    const baseW = (wantOrient==='portrait') ? cw : ch;
+    const baseH = (wantOrient==='portrait') ? ch : cw;
     const s = Math.min(1.0, zoneW / baseW, zoneH / baseH);
     return {w: baseW*s, h: baseH*s};
   }
 
+
+  function standardSize(orient){
+    // Prefer the hand card size as the global standard (spec: unify card sizes)
+    if(orient==='portrait' && stdPortrait) return stdPortrait;
+    if(orient==='landscape' && stdLandscape) return stdLandscape;
+    const cw = px(451) * 0.38;
+    const ch = px(630) * 0.38;
+    if(orient==='landscape') return {w: ch, h: cw};
+    return {w: cw, h: ch};
+  }
   function makeCard(cn, wantOrient, x, y, w, h, capText, onClick, isSelected=false, z=100){
     const wrap = document.createElement('div');
     wrap.className = 'cardWrap';
@@ -654,6 +705,7 @@ HTML = r'''<!doctype html>
     wrap.style.width = w + 'px';
     wrap.style.height = h + 'px';
     wrap.style.zIndex = String(z);
+    wrap.dataset.baseZ = String(z);
     if(isSelected) wrap.classList.add('selected');
 
     const intr = intrinsicOrient(cn);
@@ -665,18 +717,14 @@ HTML = r'''<!doctype html>
       img.alt = cn;
       wrap.appendChild(img);
     }else{
-      // We keep the wrapper box as desired (w x h), and place a rotated inner box.
       // portrait<-landscape : rotate +90 (CW)
       // landscape<-portrait : rotate -90 (CCW)
       const inner = document.createElement('div');
       inner.className = 'rot';
       const rotDeg = (wantOrient==='portrait') ? 90 : -90;
       inner.style.transform = `translate(-50%,-50%) rotate(${rotDeg}deg)`;
-      // inner box should be swapped
       inner.style.width = h + 'px';
       inner.style.height = w + 'px';
-      inner.style.marginLeft = '0';
-      inner.style.marginTop = '0';
       inner.style.left = '50%';
       inner.style.top = '50%';
 
@@ -701,8 +749,21 @@ HTML = r'''<!doctype html>
       wrap.appendChild(cap);
     }
 
+    // hover: lift + bring front
+    wrap.addEventListener('mouseenter', ()=>{
+      const lift = Math.max(4, Math.floor(w * 0.05));
+      wrap.style.transform = `translateY(${-lift}px)`;
+      wrap.style.zIndex = '20000';
+    });
+    wrap.addEventListener('mouseleave', ()=>{
+      wrap.style.transform = '';
+      wrap.style.zIndex = wrap.dataset.baseZ || '100';
+    });
+
     if(onClick){
       wrap.addEventListener('click', (ev)=>{ ev.stopPropagation(); onClick(); });
+    }else{
+      wrap.addEventListener('click', (ev)=>{ ev.stopPropagation(); });
     }
     return wrap;
   }
@@ -720,261 +781,417 @@ HTML = r'''<!doctype html>
     lab.textContent = z.label || '';
     d.appendChild(lab);
 
+    const inner = document.createElement('div');
+    inner.className = 'zoneInner';
+    d.appendChild(inner);
+
     return d;
   }
 
-  function renderLog(zone, lines){
-    const inner = document.createElement('div');
-    inner.className = 'zoneInner';
+  function renderLog(zoneEl, lines){
+    const inner = zoneEl.querySelector('.zoneInner');
     const box = document.createElement('div');
     box.id = 'logBox';
     const tail = (lines||[]).slice(-28).join('\n');
     box.textContent = tail;
     inner.appendChild(box);
-    zone.appendChild(inner);
   }
 
-  function renderStack(zone, cards, wantOrient){
-    const ZW = px(zone._zw), ZH = px(zone._zh);
-    const w = px(zone._zw), h = px(zone._zh);
+  function renderTopCard(zoneEl, cn, wantOrient, countText, onClick){
+    const inner = zoneEl.querySelector('.zoneInner');
+    inner.style.cursor = onClick ? 'pointer' : 'default';
+    if(onClick){
+      zoneEl.addEventListener('click', (ev)=>{ ev.stopPropagation(); onClick(); });
+    }
 
-    const d = document.createElement('div');
-    d.className = 'zoneInner scrollX';
-    d.style.paddingTop = '18px';
-    d.style.paddingLeft = '6px';
-    d.style.paddingRight = '6px';
-
-    const zoneW = px(zone._zw) - 12;
-    const zoneH = px(zone._zh) - 24;
-    const sz = computeDispSize(wantOrient, zoneW*0.65, zoneH*0.75);
-
-    const overlap = sz.w * 0.22;
-    const step = Math.max(6, Math.floor(overlap));
-
-    // horizontal layout with overlap, inside a wider scrollable surface
-    const surf = document.createElement('div');
-    surf.style.position = 'relative';
-    surf.style.height = Math.max(sz.h + 26, zoneH) + 'px';
-    surf.style.minWidth = (cards.length ? (sz.w + step*(cards.length-1) + 20) : zoneW) + 'px';
-
-    cards.forEach((cn, i)=>{
-      const x = 0 + step*i;
-      const y = 10;
-      const card = makeCard(cn, wantOrient, x, y, sz.w, sz.h, '', null, false, 100+i);
-      surf.appendChild(card);
-    });
-
-    d.appendChild(surf);
-
-    const badge = document.createElement('div');
-    badge.className = 'countBadge';
-    badge.textContent = String(cards.length);
-    zone.appendChild(badge);
-
-    zone.appendChild(d);
-  }
-
-  function renderFan(zone, cards, wantOrient, clickKind){
-    const zoneW = px(zone._zw);
-    const zoneH = px(zone._zh);
-
-    const padTop = 20;
+    const zoneW = zoneEl.clientWidth;
+    const zoneH = zoneEl.clientHeight;
+    const padTop = 22;
     const padX = 8;
     const availW = zoneW - padX*2;
-    const availH = zoneH - padTop - 8;
-
+    const availH = zoneH - padTop - 10;
     const sz = computeDispSize(wantOrient, availW, availH);
-    const step = Math.max(10, Math.floor(sz.w * (cards.length <= 3 ? 0.34 : 0.24)));
+    const x = (zoneW - sz.w)/2;
+    const y = padTop + (availH - sz.h)/2;
+
+    const card = makeCard(cn, wantOrient, x, y, sz.w, sz.h, '', null, false, 200);
+    inner.appendChild(card);
+
+    const badge = document.createElement('div');
+    badge.className = 'countBadge';
+    badge.textContent = String(countText);
+    zoneEl.appendChild(badge);
+  }
+
+  function renderHand(zoneEl, cards){
+    const inner = zoneEl.querySelector('.zoneInner');
+    const zoneW = zoneEl.clientWidth;
+    const zoneH = zoneEl.clientHeight;
+    const padTop = 22;
+    const padX = 10;
+    const availW = zoneW - padX*2;
+    const availH = zoneH - padTop - 10;
+
+    const sz = computeDispSize('portrait', availW, availH);
+    // cache standard card size from hand area
+    stdPortrait = {w: sz.w, h: sz.h};
+    stdLandscape = {w: sz.h, h: sz.w};
+    const n = cards.length;
+
+    let step = 0;
+    if(n <= 1){
+      step = 0;
+    }else{
+      const maxStep = sz.w + px(8);
+      const fitStep = (availW - sz.w) / (n - 1);
+      step = Math.min(maxStep, fitStep);
+      if(!isFinite(step) || step < 0) step = 0;
+    }
+
+    const totalW = (n===0) ? 0 : (sz.w + step*(n-1));
+    const startX = (availW > totalW) ? (availW - totalW)/2 : 0;
+    const baseY = padTop + Math.max(0, (availH - sz.h)/2);
 
     cards.forEach((cn, i)=>{
-      const x = px(zone._zx) + padX + step*i;
-      const y = px(zone._zy) + padTop;
-      const cap = (clickKind === 'hand') ? labelFor(cn) : '';
-      const isSel = (clickKind === 'hand') ? selHand.includes(i) : false;
-
-      const onClick = (clickKind === 'hand') ? (()=>toggleSel(i)) : null;
-      const card = makeCard(cn, wantOrient, x, y, sz.w, sz.h, cap, onClick, isSel, 200+i);
-      elZones.appendChild(card);
+      const x = padX + startX + step*i;
+      const y = baseY;
+      const cap = labelFor(cn);
+      const isSel = selHand.includes(i);
+      const card = makeCard(cn, 'portrait', x, y, sz.w, sz.h, cap, ()=>toggleSel(i), isSel, 100+i);
+      inner.appendChild(card);
     });
 
     const badge = document.createElement('div');
     badge.className = 'countBadge';
     badge.textContent = String(cards.length);
-    zone._el.appendChild(badge);
+    zoneEl.appendChild(badge);
   }
 
-  function renderStageSlot(zone, slot){
-    const zoneW = px(zone._zw);
-    const zoneH = px(zone._zh);
-    const padTop = 20;
-    const availW = zoneW - 10;
-    const availH = zoneH - padTop - 8;
-    const sz = computeDispSize('portrait', availW, availH);
+  function renderFan(zoneEl, cards, wantOrient){
+    const inner = zoneEl.querySelector('.zoneInner');
+    const zoneW = zoneEl.clientWidth;
+    const zoneH = zoneEl.clientHeight;
+    const padTop = 22;
+    const padX = 10;
+    const availW = zoneW - padX*2;
+    const availH = zoneH - padTop - 10;
+    const sz = computeDispSize(wantOrient, availW, availH);
+    const n = cards.length;
 
-    const cn = slot ? String(slot.cardnumber||'') : '';
-    if(!cn) return;
-
-    const x = px(zone._zx) + (zoneW - sz.w)/2;
-    const y = px(zone._zy) + padTop;
-    const cap = labelFor(cn);
-
-    const card = makeCard(cn, 'portrait', x, y, sz.w, sz.h, cap, null, false, 400);
-    elZones.appendChild(card);
-  }
-
-  function setBanner(text){
-    if(text){
-      elBanner.textContent = text;
-      elBanner.style.display = 'block';
+    let step = 0;
+    if(n <= 1){
+      step = 0;
     }else{
-      elBanner.style.display = 'none';
+      const maxStep = sz.w + px(10);
+      const fitStep = (availW - sz.w) / (n - 1);
+      step = Math.min(maxStep, fitStep);
+      if(!isFinite(step) || step < 0) step = 0;
     }
+
+    const totalW = (n===0) ? 0 : (sz.w + step*(n-1));
+    const startX = (availW > totalW) ? (availW - totalW)/2 : 0;
+    const baseY = padTop + Math.max(0, (availH - sz.h)/2);
+
+    cards.forEach((cn, i)=>{
+      const x = padX + startX + step*i;
+      const y = baseY;
+      const card = makeCard(cn, wantOrient, x, y, sz.w, sz.h, '', null, false, 100+i);
+      inner.appendChild(card);
+    });
+
+    const badge = document.createElement('div');
+    badge.className = 'countBadge';
+    badge.textContent = String(cards.length);
+    zoneEl.appendChild(badge);
   }
+
+
+  function renderLiveSet(zoneEl, cards){
+    const inner = zoneEl.querySelector('.zoneInner');
+    const zoneW = zoneEl.clientWidth;
+    const zoneH = zoneEl.clientHeight;
+    const padTop = 22;
+    const padX = 10;
+    const availW = zoneW - padX*2;
+    const availH = zoneH - padTop - 10;
+    const gap = Math.max(6, px(14));
+    const slotW = (availW - gap*2) / 3;
+    const slotsX = [0, slotW + gap, 2*(slotW + gap)];
+    for(let i=0;i<3;i++){
+      const cn = (Array.isArray(cards) && i < cards.length) ? String(cards[i]) : null;
+      if(!cn) continue;
+      const sz = computeDispSize('landscape', slotW, availH);
+      const x = padX + slotsX[i] + (slotW - sz.w)/2;
+      const y = padTop + Math.max(0, (availH - sz.h)/2);
+      const card = makeCard(cn, 'landscape', x, y, sz.w, sz.h, '', null, false, 100+i);
+      inner.appendChild(card);
+    }
+    const badge = document.createElement('div');
+    badge.className = 'countBadge';
+    badge.textContent = String((Array.isArray(cards)?cards.length:0));
+    zoneEl.appendChild(badge);
+  }
+  function renderStage(zoneEl, slotKey, slotObj){
+    // clicking the zone plays a selected hand card into this slot
+    zoneEl.addEventListener('click', async (ev)=>{
+      ev.stopPropagation();
+      if(selHand.length !== 1){
+        setBanner('手札を1枚選択して、置きたい枠をクリック');
+        return;
+      }
+      const idx = selHand[0];
+      st = await apiCmd('play', {hand_idx: idx, pos: slotKey});
+      selHand = [];
+      updateTop();
+      render();
+    });
+
+    if(!slotObj || !slotObj.cardnumber) return;
+    const cn = String(slotObj.cardnumber);
+
+    const inner = zoneEl.querySelector('.zoneInner');
+    const zoneW = zoneEl.clientWidth;
+    const zoneH = zoneEl.clientHeight;
+    const padTop = 22;
+    const availW = zoneW - 10;
+    const availH = zoneH - padTop - 10;
+    const sz = computeDispSize('portrait', availW, availH);
+    // cache standard card size from hand area
+    stdPortrait = {w: sz.w, h: sz.h};
+    stdLandscape = {w: sz.h, h: sz.w};
+    const x = (zoneW - sz.w)/2;
+    const y = padTop + Math.max(0, (availH - sz.h)/2);
+
+    const card = makeCard(cn, 'portrait', x, y, sz.w, sz.h, labelFor(cn), null, false, 400);
+
+    // activation button (if possible)
+    try{
+      const sd = (st && st.stage_detail) ? st.stage_detail : null;
+      const det = sd ? sd[slotKey] : null;
+      const canAct = det && det.can_activate;
+      if(canAct){
+        const b = document.createElement('button');
+        b.className = 'actBtn';
+        b.textContent = '起動';
+        b.addEventListener('click', async (ev)=>{
+          ev.stopPropagation();
+          st = await apiCmd('activate_to_green', {pos: slotKey});
+          updateTop();
+          render();
+        });
+        card.appendChild(b);
+      }
+    }catch(e){}
+
+    inner.appendChild(card);
+  }
+
+  function renderEnergy(zoneEl){
+    const inner = zoneEl.querySelector('.zoneInner');
+    const wrap = document.createElement('div');
+    wrap.className = 'energyUI';
+
+    const active = st ? Number(st.energy_active||0) : 0;
+    const wait = st ? Number(st.energy_wait||0) : 0;
+    const total = active + wait;
+
+    const t = document.createElement('div');
+    t.className = 'energyText';
+    t.innerHTML = `Energy: <b>${active}</b> / <b>${total}</b><div style="opacity:.8;font-size:12px;margin-top:2px;">wait: ${wait}</div>`;
+    wrap.appendChild(t);
+
+    const btnUndo = document.createElement('button');
+    btnUndo.className = 'btn';
+    btnUndo.textContent = 'UNDO';
+    btnUndo.addEventListener('click', async (ev)=>{
+      ev.stopPropagation();
+      st = await apiCmd('undo', {});
+      selHand = [];
+      updateTop();
+      render();
+    });
+
+    const btnNext = document.createElement('button');
+    btnNext.className = 'btn primary';
+    btnNext.textContent = 'NEXT';
+    btnNext.addEventListener('click', async (ev)=>{
+      ev.stopPropagation();
+      st = await apiCmd('next', {indices: selHand.slice()});
+      selHand = [];
+      updateTop();
+      render();
+    });
+
+    wrap.appendChild(btnUndo);
+    wrap.appendChild(btnNext);
+    inner.appendChild(wrap);
+  }
+
+  function openCardListPopup(title, cards, {closable=true, helperText='' } = {}){
+    popup = {type:'cardlist', title, cards: cards.slice(), closable, helperText};
+    elModalTitle.textContent = title;
+    elModalText.textContent = helperText || '';
+    elModalActions.innerHTML = '';
+    elModalCards.innerHTML = '';
+
+    // layout card list with overlap + horizontal scroll
+    // Use the standard (hand-based) card size in popups
+    const dimsP = standardSize('portrait');
+    const dimsL = standardSize('landscape');
+    const maxW = Math.max(dimsP.w, dimsL.w);
+    const maxH = Math.max(dimsP.h, dimsL.h);
+
+    const surf = document.createElement('div');
+    surf.className = 'surf';
+    surf.style.height = (maxH + 12) + 'px';
+    const step = maxW * 0.45; // overlap ~55% (spec: 1/2~2/3)
+    const minW = (cards.length<=1) ? (maxW + 24) : (maxW + step*(cards.length-1) + 24);
+    surf.style.minWidth = minW + 'px';
+
+    cards.forEach((cn, i)=>{
+      const orient = intrinsicOrient(cn);
+      const d = (orient==='landscape') ? dimsL : dimsP;
+      const x = 12 + step*i + (maxW - d.w)/2;
+      const y = 6 + (maxH - d.h)/2;
+      const c = makeCard(cn, orient, x, y, d.w, d.h, '', null, false, 100+i);
+      surf.appendChild(c);
+    });
+
+    elModalCards.appendChild(surf);
+
+    if(closable){
+      const close = document.createElement('button');
+      close.className = 'miniBtn';
+      close.textContent = 'Close';
+      close.addEventListener('click', ()=>{ closePopup(); });
+      elModalActions.appendChild(close);
+    }
+
+    elMask.style.display = 'block';
+  }
+
+  function closePopup(){
+    popup = {type:null};
+    elMask.style.display = 'none';
+    elModalCards.innerHTML = '';
+    elModalText.textContent = '';
+    elModalActions.innerHTML = '';
+  }
+
 
   function showPending(p){
-    elModalTitle.textContent = 'Pending';
-    elModalText.textContent = String(p.text || '');
+    popup = {type:'pending', closable:false};
+    elModalTitle.textContent = '選択';
+    elModalText.textContent = String(p && p.text ? p.text : '');
     elModalActions.innerHTML = '';
+    elModalCards.innerHTML = '';
 
-    const opts = Array.isArray(p.options) ? p.options : [];
+    const opts = Array.isArray(p && p.options) ? p.options : [];
     if(opts.length){
       opts.forEach(opt=>{
         const b = document.createElement('button');
         b.className = 'miniBtn';
         b.textContent = String(opt);
-        b.addEventListener('click', async ()=>{
-          elMask.style.display = 'none';
-          selHand = [];
+        b.addEventListener('click', async (ev)=>{
+          ev.stopPropagation();
           st = await apiCmd('resolve_pending', {idx:0, choice:String(opt)});
+          selHand = [];
           updateTop();
           render();
         });
         elModalActions.appendChild(b);
       });
     }
-    const close = document.createElement('button');
-    close.className = 'miniBtn';
-    close.textContent = 'Close';
-    close.addEventListener('click', ()=>{ elMask.style.display='none'; });
-    elModalActions.appendChild(close);
 
     elMask.style.display = 'block';
   }
 
-  function updateButtons(){
-    const hasSel1 = selHand.length === 1;
-    btnPlayL.disabled = !hasSel1;
-    btnPlayC.disabled = !hasSel1;
-    btnPlayR.disabled = !hasSel1;
+  function maybeShowPending(){
+    const p = (st && Array.isArray(st.pending) && st.pending.length) ? st.pending[0] : null;
+    if(p){
+      showPending(p);
+      return true;
+    }
+    if(popup && popup.type==='pending'){
+      closePopup();
+    }
+    return false;
+  }
 
-    const canSet = (st && st.phase === 'LIVE_SET');
-    btnSet.disabled = !(canSet && selHand.length >= 1);
-
-    const sd = (st && st.stage_detail) ? st.stage_detail : {};
-    btnActL.disabled = !(sd && sd.L && sd.L.can_activate);
-    btnActC.disabled = !(sd && sd.C && sd.C.can_activate);
-    btnActR.disabled = !(sd && sd.R && sd.R.can_activate);
+  function maybeShowResolvePopup(){
+    const rz = (st && Array.isArray(st.resolve_zone)) ? st.resolve_zone : [];
+    if(rz.length > 0){
+      // confirm-only popup; user proceeds with NEXT.
+      openCardListPopup('解決領域', rz, {closable:false, helperText:'NEXTで次へ進みます'});
+    }else{
+      // if the current popup is resolve, close it
+      if(popup && popup.type==='cardlist' && !popup.closable){
+        closePopup();
+      }
+    }
   }
 
   function updateTop(){
     elTurn.textContent = st ? String(st.turn) : '?';
     elPhase.textContent = st ? String(st.phase) : '?';
-    elEnergy.textContent = st ? String(st.energy_active) + ' / wait ' + String(st.energy_wait) : '?';
+    const active = st ? Number(st.energy_active||0) : 0;
+    const wait = st ? Number(st.energy_wait||0) : 0;
+    elEnergy.textContent = st ? `${active}/${active+wait}` : '?';
     elSelected.textContent = String(selHand.length);
-    if(st){
-      elDeckInfo.textContent = `deck=${(st.deck||[]).length} hand=${(st.hand||[]).length} green=${(st.green_room||[]).length} set=${(st.set_zone||[]).length} resolve=${(st.resolve_zone||[]).length}`;
-      setBanner(st.banner && st.banner.text ? String(st.banner.text) : '');
-    }else{
-      elDeckInfo.textContent = '';
-      setBanner('');
-    }
-    updateButtons();
+    setBanner(st && st.banner && st.banner.text ? String(st.banner.text) : '');
   }
 
   function render(){
     if(!st) return;
-
     elZones.innerHTML = '';
 
-    // zones (with cached px values)
+    // build zones
+    const zels = {};
     for(const [k,z] of Object.entries(layout.zones)){
       const zd = zoneDiv(z);
-      // cache base coords for render helpers
-      z._el = zd;
-      z._zx = z.x; z._zy = z.y; z._zw = z.w; z._zh = z.h;
+      zels[k] = zd;
       elZones.appendChild(zd);
-
-      if(z.kind === 'log'){
-        renderLog(zd, st.log || []);
-      }
-      if(z.kind === 'stack'){
-        const cards = (k === 'deck') ? (st.deck || []).map(()=> '__BACK__') : (k === 'green' ? (st.green_room || []) : []);
-        renderStack(zd, cards, 'portrait');
-      }
-      if(z.kind === 'energy'){
-        const inner = document.createElement('div');
-        inner.className = 'zoneInner';
-        inner.style.paddingTop = '22px';
-        inner.style.paddingLeft = '10px';
-        inner.style.fontSize = '14px';
-        inner.style.lineHeight = '1.4';
-        inner.innerHTML = `<div>Active: <b>${st.energy_active}</b></div><div>Wait: <b>${st.energy_wait}</b></div>`;
-        zd.appendChild(inner);
-      }
+      if(z.kind==='log') renderLog(zd, st.log || []);
     }
 
-    // stage
+    // DECK (always back)
+    const deckCount = (st.deck||[]).length;
+    renderTopCard(zels.deck, '__BACK__', 'portrait', deckCount, null);
+
+    // Waiting room (show top card if exists)
+    const gr = Array.isArray(st.green_room) ? st.green_room : [];
+    const top = gr.length ? String(gr[gr.length-1]) : '__BACK__';
+    renderTopCard(zels.green, top, 'portrait', gr.length, ()=>{
+      if(gr.length){
+        openCardListPopup('控え室', gr, {closable:true, helperText:''});
+      }else{
+        openCardListPopup('控え室', ['__BACK__'], {closable:true, helperText:'（空）'});
+      }
+    });
+
+    // Energy + UNDO/NEXT
+    renderEnergy(zels.energy);
+
+    // Live set (fixed 3 slots; cards do not shift when count changes)
+    renderLiveSet(zels.liveset, Array.isArray(st.set_zone)?st.set_zone:[]);
+
+    // Stage
     const stage = st.stage || {};
-    renderStageSlot(layout.zones.stageL, stage.L);
-    renderStageSlot(layout.zones.stageC, stage.C);
-    renderStageSlot(layout.zones.stageR, stage.R);
+    renderStage(zels.stageL, 'L', stage.L);
+    renderStage(zels.stageC, 'C', stage.C);
+    renderStage(zels.stageR, 'R', stage.R);
 
-    // liveset (landscape desired)
-    renderFan(layout.zones.liveset, st.set_zone || [], 'landscape', '');
+    // Hand
+    renderHand(zels.hand, Array.isArray(st.hand)?st.hand:[]);
 
-    // resolve (portrait desired)
-    renderFan(layout.zones.resolve, st.resolve_zone || [], 'portrait', '');
-
-    // hand (portrait desired, selectable indices)
-    renderFan(layout.zones.hand, st.hand || [], 'portrait', 'hand');
-
-    // pending modal
-    if(st.pending && st.pending.length){
-      // show only the first pending prompt
-      showPending(st.pending[0]);
+    // Pending (choice) takes precedence; otherwise show resolve popup
+    if(!maybeShowPending()){
+      maybeShowResolvePopup();
     }
-
-    updateTop();
   }
 
-  // Wire commands
   btnDbg.addEventListener('click', ()=>{ debug = !debug; render(); });
-  btnDebugToggle.addEventListener('click', async ()=>{ st = await apiCmd('toggle_debug', {}); updateTop(); render(); });
-
-  btnUndo.addEventListener('click', async ()=>{ st = await apiCmd('undo', {}); clearSel(); updateTop(); render(); });
-  btnNext.addEventListener('click', async ()=>{ st = await apiCmd('next', {indices: selHand.slice()}); clearSel(); updateTop(); render(); });
-  btnEnd.addEventListener('click', async ()=>{ st = await apiCmd('end_turn', {}); clearSel(); updateTop(); render(); });
-  btnSet.addEventListener('click', async ()=>{ st = await apiCmd('set', {indices: selHand.slice()}); clearSel(); updateTop(); render(); });
-
-  async function doPlay(pos){
-    if(selHand.length !== 1) return;
-    const idx = selHand[0];
-    st = await apiCmd('play', {hand_idx: idx, pos});
-    clearSel();
-    updateTop();
-    render();
-  }
-  btnPlayL.addEventListener('click', ()=>doPlay('L'));
-  btnPlayC.addEventListener('click', ()=>doPlay('C'));
-  btnPlayR.addEventListener('click', ()=>doPlay('R'));
-
-  btnActL.addEventListener('click', async ()=>{ st = await apiCmd('activate_to_green', {pos:'L'}); updateTop(); render(); });
-  btnActC.addEventListener('click', async ()=>{ st = await apiCmd('activate_to_green', {pos:'C'}); updateTop(); render(); });
-  btnActR.addEventListener('click', async ()=>{ st = await apiCmd('activate_to_green', {pos:'R'}); updateTop(); render(); });
-
-  btnYell.addEventListener('click', async ()=>{ st = await apiCmd('yell', {}); updateTop(); render(); });
-  btnAttempt.addEventListener('click', async ()=>{ st = await apiCmd('attempt', {}); updateTop(); render(); });
-  btnAck.addEventListener('click', async ()=>{ st = await apiCmd('ack', {}); updateTop(); render(); });
+  elMask.addEventListener('click', (ev)=>{ if(popup && popup.type==='cardlist' && popup.closable){ closePopup(); } });
 
   // init
   cssScale();
