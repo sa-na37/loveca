@@ -52,7 +52,7 @@ from .engine import (
     can_activate,
 )
 
-APP_VERSION = "clean-ui-v2_3"
+APP_VERSION = "clean-ui-v2_6_waiting_sort_click_and_skip"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -438,7 +438,7 @@ HTML = r'''<!doctype html>
   /* cards */
   .cardWrap{position:absolute;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.55);user-select:none;cursor:pointer;background:#000;}
   .cardWrap img{position:absolute;left:0;top:0;border-radius:8px;display:block;width:100%;height:100%;pointer-events:none;}
-  .cardWrap.selected{outline:6px solid rgba(0,0,0,.85); outline-offset:-6px;}
+  .cardWrap.selected{box-shadow:0 0 0 5px rgba(0,0,0,.92) inset, 0 0 0 5px rgba(0,0,0,.92); border-radius:12px;}
   .cap{position:absolute;left:6px;right:6px;bottom:-18px;font-size:11px;line-height:1.1;color:#eee;text-shadow:0 1px 2px rgba(0,0,0,.8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;}
 
   /* rotation wrappers */
@@ -480,162 +480,13 @@ HTML = r'''<!doctype html>
   #modalCards .surf{position:relative;height:1px;}
   #modalActions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap;}
   #modalActions .miniBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:6px 10px;border-radius:10px;cursor:pointer;}
-
-/* PATCH_v2_4_CARDLIST_SHRINK */
-#modal, #modalActions, #modalCards, #modalText, #modalTitle {
-  /* popup を中央寄せ（横幅は中身に追従） */
-  text-align: center;
-}
-
-/* 「カードリスト」ポップアップ本体：中身サイズに追従しつつ上限を設ける */
-#modal, #modalActions, #modalCards, #modalText, #modalTitle .popupBox,
-#modal, #modalActions, #modalCards, #modalText, #modalTitle .popupPanel,
-#modal, #modalActions, #modalCards, #modalText, #modalTitle .popupInner,
-#modal, #modalActions, #modalCards, #modalText, #modalTitle .cardListPopup {
-  width: max-content;
-  max-width: min(72vw, 1100px);
-}
-
-/* カード列：横方向は「必要分だけ」幅を取る（＝余白だらけを防ぐ） */
-#modal, #modalActions, #modalCards, #modalText, #modalTitle .cardList,
-#modal, #modalActions, #modalCards, #modalText, #modalTitle .cards,
-#modal, #modalActions, #modalCards, #modalText, #modalTitle .cardlist,
-#modal, #modalActions, #modalCards, #modalText, #modalTitle .list {
-  display: inline-flex;
-  align-items: flex-start;
-  justify-content: flex-start;
-  gap: 0;
-}
-
-/* カードが多い時は横スクロールで救済 */
-#modal, #modalActions, #modalCards, #modalText, #modalTitle .cardListScroll,
-#modal, #modalActions, #modalCards, #modalText, #modalTitle .scrollX,
-#modal, #modalActions, #modalCards, #modalText, #modalTitle .scroll {
-  overflow-x: auto;
-  overflow-y: hidden;
-  max-width: min(70vw, 1060px);
-  padding-bottom: 6px;
-}
-
-
-/* PATCH_v2_5_WAITINGLIST_AND_PENDING_CARDLIST */
-/* waiting-room list modal (self-contained) */
-.llEnhMask {
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,0.55);
-  z-index: 100000;
-  display: none;
-  align-items: center;
-  justify-content: center;
-}
-.llEnhPanel {
-  background: rgba(20,20,20,0.95);
-  color: #fff;
-  border-radius: 16px;
-  padding: 14px 14px 10px 14px;
-  width: min(78vw, 1100px);
-  max-height: min(72vh, 720px);
-  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
-}
-.llEnhHead {
-  display:flex; align-items:center; justify-content:space-between;
-  gap: 10px; margin-bottom: 10px;
-}
-.llEnhTitle { font-size: 18px; font-weight: 700; }
-.llEnhClose {
-  border: 0; color: #fff; background: rgba(255,255,255,0.12);
-  border-radius: 10px; padding: 6px 10px; cursor: pointer;
-}
-.llEnhSub { font-size: 13px; opacity: 0.85; margin-bottom: 10px; }
-
-.llEnhScroll {
-  overflow-x: auto; overflow-y: hidden;
-  padding-bottom: 8px;
-  max-width: 100%;
-}
-.llEnhRow {
-  display: inline-flex;
-  gap: 8px;
-  align-items: flex-start;
-}
-.llEnhCard {
-  width: var(--cardW, 156px);
-  height: var(--cardH, 218px);
-  border-radius: 12px;
-  background: rgba(255,255,255,0.08);
-  overflow: hidden;
-  position: relative;
-  flex: 0 0 auto;
-  box-shadow: 0 6px 16px rgba(0,0,0,0.35);
-}
-.llEnhCard img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display:block;
-}
-.llEnhCap {
-  position:absolute; left:0; right:0; bottom:0;
-  font-size: 11px;
-  padding: 4px 6px;
-  background: linear-gradient(to top, rgba(0,0,0,0.65), rgba(0,0,0,0.05));
-  color:#fff;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.6);
-}
-
-/* pending choice button -> image card style */
-.llEnhChoiceBtn {
-  width: var(--cardW, 156px);
-  height: var(--cardH, 218px);
-  padding: 0 !important;
-  border-radius: 12px !important;
-  overflow: hidden !important;
-  position: relative !important;
-  border: 1px solid rgba(255,255,255,0.18) !important;
-  background: rgba(255,255,255,0.06) !important;
-}
-.llEnhChoiceBtn img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display:block;
-}
-.llEnhChoiceBtn .llEnhCap {
-  font-size: 11px;
-}
-.llEnhChoiceWrap {
-  display: inline-flex !important;
-  gap: 8px !important;
-  align-items: flex-start !important;
-  overflow-x: auto !important;
-  max-width: min(72vw, 1060px) !important;
-  padding-bottom: 6px !important;
-}
-
-
-/* PATCH_v2_6_WAITING_PENDING_HANDSEL */
-/* 1) 選択(候補)ポップアップ内のカードが大きすぎる→最大サイズを制限 */
-.llEnhChoiceBtn {
-  width: var(--cardW, 156px);
-  height: var(--cardH, 218px);
-  max-width: 180px;
-  max-height: 252px;
-}
-.llEnhChoiceBtn img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-/* 2) 手札選択枠が見えない→強制アウトライン（z-indexも上げる） */
-.llHandSel {
-  outline: 4px solid rgba(255, 120, 190, 0.95);
-  outline-offset: -4px;
-  border-radius: 12px;
-  position: relative;
-  z-index: 90000;
-}
-
+/* UI_FIX_PENDING_CARD_CHOICES */
+  /* pending card choice list (image buttons) */
+  .choiceRow{display:inline-flex;gap:8px;align-items:flex-start;overflow-x:auto;overflow-y:hidden;max-width:min(72vw, 1060px);padding:6px 2px 10px 2px;}
+  .choiceBtn{border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);border-radius:12px;padding:0;cursor:pointer;position:relative;flex:0 0 auto;box-shadow:0 6px 16px rgba(0,0,0,.35);}
+  .choiceBtn:hover{outline:3px solid rgba(255,255,255,.22);outline-offset:-3px;}
+  .choiceBtn img{width:100%;height:100%;object-fit:cover;display:block;border-radius:12px;}
+  .choiceCap{position:absolute;left:0;right:0;bottom:0;font-size:11px;padding:4px 6px;background:linear-gradient(to top, rgba(0,0,0,.65), rgba(0,0,0,.05));color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6);border-bottom-left-radius:12px;border-bottom-right-radius:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 </style>
 </head>
 <body>
@@ -825,7 +676,7 @@ HTML = r'''<!doctype html>
     wrap.style.height = h + 'px';
     wrap.style.zIndex = String(z);
     wrap.dataset.baseZ = String(z);
-    if(isSelected) wrap.classList.add('selected');
+    if(isSelected){ wrap.classList.add('selected'); wrap.style.zIndex='18000'; wrap.dataset.baseZ='18000'; }
 
     const intr = intrinsicOrient(cn);
     const needsRotate = (intr !== wantOrient);
@@ -920,7 +771,9 @@ HTML = r'''<!doctype html>
     const inner = zoneEl.querySelector('.zoneInner');
     inner.style.cursor = onClick ? 'pointer' : 'default';
     if(onClick){
-      zoneEl.addEventListener('click', (ev)=>{ ev.stopPropagation(); onClick(); });
+      zoneEl.onclick = (ev)=>{ ev.stopPropagation(); onClick(); };
+    }else{
+      zoneEl.onclick = null;
     }
 
     const zoneW = zoneEl.clientWidth;
@@ -933,7 +786,7 @@ HTML = r'''<!doctype html>
     const x = (zoneW - sz.w)/2;
     const y = padTop + (availH - sz.h)/2;
 
-    const card = makeCard(cn, wantOrient, x, y, sz.w, sz.h, '', null, false, 200);
+    const card = makeCard(cn, wantOrient, x, y, sz.w, sz.h, '', (onClick?()=>onClick():null), false, 200);
     inner.appendChild(card);
 
     const badge = document.createElement('div');
@@ -1051,9 +904,8 @@ HTML = r'''<!doctype html>
     zoneEl.appendChild(badge);
   }
   function renderStage(zoneEl, slotKey, slotObj){
-    // clicking the zone plays a selected hand card into this slot
-    zoneEl.addEventListener('click', async (ev)=>{
-      ev.stopPropagation();
+    // clicking the zone plays a selected hand card into this slot (card itself is also clickable)
+    const doPlayHere = async ()=>{
       if(selHand.length !== 1){
         setBanner('手札を1枚選択して、置きたい枠をクリック');
         return;
@@ -1063,7 +915,10 @@ HTML = r'''<!doctype html>
       selHand = [];
       updateTop();
       render();
-    });
+    };
+
+    zoneEl.onclick = (ev)=>{ ev.stopPropagation(); doPlayHere(); };
+
 
     if(!slotObj || !slotObj.cardnumber) return;
     const cn = String(slotObj.cardnumber);
@@ -1081,7 +936,7 @@ HTML = r'''<!doctype html>
     const x = (zoneW - sz.w)/2;
     const y = padTop + Math.max(0, (availH - sz.h)/2);
 
-    const card = makeCard(cn, 'portrait', x, y, sz.w, sz.h, labelFor(cn), null, false, 400);
+    const card = makeCard(cn, 'portrait', x, y, sz.w, sz.h, labelFor(cn), ()=>doPlayHere(), false, 400);
 
     // activation button (if possible)
     try{
@@ -1146,8 +1001,27 @@ HTML = r'''<!doctype html>
     inner.appendChild(wrap);
   }
 
-  function openCardListPopup(title, cards, {closable=true, helperText='' } = {}){
-    popup = {type:'cardlist', title, cards: cards.slice(), closable, helperText};
+  function openCardListPopup(title, cards, {closable=true, helperText='', forcePortrait=false } = {}){
+    let cardsList = cards.slice();
+    // sort waiting room cards (spec update): by cardnumber asc, then card type
+    try{
+      const t = String(title||'');
+      if(t.includes('控え室') || t.toLowerCase().includes('waiting')){
+        const typeOrder = (tp)=>{ const u=String(tp||'').toUpperCase(); if(u.includes('MEMBER')) return 0; if(u.includes('LIVE')) return 1; return 2; };
+        cardsList.sort((a,b)=>{
+          const sa=String(a||'');
+          const sb=String(b||'');
+          const c = sa.localeCompare(sb, 'en', {numeric:true});
+          if(c!==0) return c;
+          const ta = typeOrder(cnType(sa));
+          const tb = typeOrder(cnType(sb));
+          return ta - tb;
+        });
+      }
+    }catch(e){ cardsList = cards.slice(); }
+
+    popup = {type:'cardlist', title, cards: cardsList.slice(), closable, helperText};
+
     elModalTitle.textContent = title;
     elModalText.textContent = helperText || '';
     elModalActions.innerHTML = '';
@@ -1164,11 +1038,11 @@ HTML = r'''<!doctype html>
     surf.className = 'surf';
     surf.style.height = (maxH + 12) + 'px';
     const step = maxW * 0.45; // overlap ~55% (spec: 1/2~2/3)
-    const minW = (cards.length<=1) ? (maxW + 24) : (maxW + step*(cards.length-1) + 24);
+    const minW = (cardsList.length<=1) ? (maxW + 24) : (maxW + step*(cardsList.length-1) + 24);
     surf.style.minWidth = minW + 'px';
 
-    cards.forEach((cn, i)=>{
-      const orient = intrinsicOrient(cn);
+    cardsList.forEach((cn, i)=>{
+      const orient = forcePortrait ? 'portrait' : intrinsicOrient(cn);
       const d = (orient==='landscape') ? dimsL : dimsP;
       const x = 12 + step*i + (maxW - d.w)/2;
       const y = 6 + (maxH - d.h)/2;
@@ -1198,15 +1072,85 @@ HTML = r'''<!doctype html>
   }
 
 
+  
+  function looksLikeCardNo(x){
+    if(x==null) return false;
+    const s = String(x).trim();
+    if(!s) return false;
+    // Typical cardnumber patterns in this project
+    return (s.includes('!') && /\d{2,3}/.test(s)) || /bp\d-\d{3}/i.test(s) || /-PR-\d{3}/i.test(s) || /-P\d-\d{3}/i.test(s);
+  }
+
   function showPending(p){
     popup = {type:'pending', closable:false};
     elModalTitle.textContent = '選択';
-    elModalText.textContent = String(p && p.text ? p.text : '');
+    elModalText.textContent = String((p && (p.text || p.prompt || p.message)) ? (p.text || p.prompt || p.message) : '');
+    const pendText = String((p && (p.text || p.prompt || p.message)) ? (p.text || p.prompt || p.message) : '');
+    const allowSkip = /Skip可/i.test(pendText) || /\bskip\b/i.test(pendText) || (p && p.kind && /pick/i.test(String(p.kind)));
     elModalActions.innerHTML = '';
     elModalCards.innerHTML = '';
 
-    const opts = Array.isArray(p && p.options) ? p.options : [];
-    if(opts.length){
+    const opts = (p && (Array.isArray(p.options)?p.options: (Array.isArray(p.candidates)?p.candidates:(Array.isArray(p.cards)?p.cards:(Array.isArray(p.shown)?p.shown:[]))))) || [];
+    const allCardNo = opts.length && opts.every(o=>looksLikeCardNo(o));
+
+    if(allCardNo){
+      // Render as image list (clickable) in modalCards; keep card size unified
+      const row = document.createElement('div');
+      row.className = 'choiceRow';
+
+      const dimsP = standardSize('portrait');
+      const dimsL = standardSize('landscape');
+
+      opts.forEach(opt=>{
+        const cn = String(opt).trim();
+        const intr = intrinsicOrient(cn);
+        const d = (intr==='landscape') ? dimsL : dimsP;
+
+        const b = document.createElement('button');
+        b.className = 'choiceBtn';
+        b.style.width = d.w + 'px';
+        b.style.height = d.h + 'px';
+
+        const img = document.createElement('img');
+        img.src = imgUrl(cn);
+        img.alt = cn;
+
+        const cap = document.createElement('div');
+        cap.className = 'choiceCap';
+        cap.textContent = cn;
+
+        b.appendChild(img);
+        b.appendChild(cap);
+
+        b.addEventListener('click', async (ev)=>{
+          ev.stopPropagation();
+          st = await apiCmd('resolve_pending', {idx:0, choice: cn});
+          selHand = [];
+          updateTop();
+          render();
+        });
+
+        row.appendChild(b);
+      });
+
+      elModalCards.appendChild(row);
+
+      if(allowSkip){
+        const bSkip = document.createElement('button');
+        bSkip.className = 'miniBtn';
+        bSkip.textContent = 'Skip';
+        bSkip.addEventListener('click', async (ev)=>{
+          ev.stopPropagation();
+          st = await apiCmd('resolve_pending', {idx:0, choice:'skip'});
+          selHand = [];
+          updateTop();
+          render();
+        });
+        elModalActions.appendChild(bSkip);
+      }
+
+    }else if(opts.length){
+      // Fallback: text buttons
       opts.forEach(opt=>{
         const b = document.createElement('button');
         b.className = 'miniBtn';
@@ -1241,7 +1185,7 @@ HTML = r'''<!doctype html>
     const rz = (st && Array.isArray(st.resolve_zone)) ? st.resolve_zone : [];
     if(rz.length > 0){
       // confirm-only popup; user proceeds with NEXT.
-      openCardListPopup('解決領域', rz, {closable:false, helperText:'NEXTで次へ進みます'});
+      openCardListPopup('解決領域', rz, {closable:false, helperText:'NEXTで次へ進みます', forcePortrait:true});
     }else{
       // if the current popup is resolve, close it
       if(popup && popup.type==='cardlist' && !popup.closable){
@@ -1320,360 +1264,5 @@ HTML = r'''<!doctype html>
   });
 })();
 </script>
-
-<script id="llEnhV25">
-(()=> {
-  if (window.__llEnhV25) return;
-  window.__llEnhV25 = true;
-
-  function qs(sel, root=document){ return root.querySelector(sel); }
-  function qsa(sel, root=document){ return Array.from(root.querySelectorAll(sel)); }
-
-  function isCardNo(t){
-    if(!t) return false;
-    const s = t.trim();
-    if (s.length < 6) return false;
-    // typical: PL!N-bp1-029 / PLN-bp1-029 / ...-PR-018 etc
-    return /[!]|bp\d-\d{3}|-PR-\d{3}|-P\d-\d{3}/i.test(s) || (/^[A-Z]{2,}[-!]/.test(s) && /\d/.test(s));
-  }
-
-  // ---------- Waiting room list modal ----------
-  const mask = document.createElement("div");
-  mask.className = "llEnhMask";
-  mask.innerHTML = `
-    <div class="llEnhPanel" role="dialog" aria-modal="true">
-      <div class="llEnhHead">
-        <div class="llEnhTitle">控え室</div>
-        <button class="llEnhClose" type="button">Close</button>
-      </div>
-      <div class="llEnhSub">クリックで確認できます（選択は行いません）</div>
-      <div class="llEnhScroll"><div class="llEnhRow"></div></div>
-    </div>
-  `;
-  document.addEventListener("DOMContentLoaded", ()=> document.body.appendChild(mask));
-  mask.addEventListener("click", (e)=>{
-    if (e.target === mask) hideWaiting();
-  });
-  qs(".llEnhClose", mask).addEventListener("click", hideWaiting);
-
-  function showWaiting(cards){
-    const row = qs(".llEnhRow", mask);
-    row.innerHTML = "";
-    for (const cn of cards){
-      const d = document.createElement("div");
-      d.className = "llEnhCard";
-      const img = document.createElement("img");
-      img.loading = "lazy";
-      img.src = "/img?cn=" + encodeURIComponent(cn);
-      const cap = document.createElement("div");
-      cap.className = "llEnhCap";
-      cap.textContent = cn;
-      d.appendChild(img);
-      d.appendChild(cap);
-      row.appendChild(d);
-    }
-    mask.style.display = "flex";
-  }
-  function hideWaiting(){ mask.style.display = "none"; }
-
-  async function fetchState(){
-    const r = await fetch("/state", {cache:"no-store"});
-    return await r.json();
-  }
-  function extractWaitingList(st){
-    // try common keys first
-    const candKeys = Object.keys(st).filter(k => /wait/i.test(k));
-    const keys = ["waiting", "waiting_room", "waitingRoom", "wait", "grave", ...candKeys];
-    for (const k of keys){
-      const v = st[k];
-      if (!v) continue;
-      if (Array.isArray(v) && v.length){
-        // strings
-        if (typeof v[0] === "string") return v;
-        // objects
-        const out = [];
-        for (const it of v){
-          if (typeof it === "string") { out.append(it); continue; }
-          if (it && typeof it === "object"){
-            const cn = it.cn || it.card_no || it.cardnumber || it.cardNumber || it.db_id || it.id;
-            if (cn) out.push(String(cn));
-          }
-        }
-        if (out.length) return out;
-      }
-    }
-    return [];
-  }
-
-  function clickedWaitingRoom(e){
-    const t = e.target;
-    if (!t) return false;
-    // explicit selectors if present
-    const hit = t.closest('[data-zone="waiting"],[data-zone="waiting_room"],[data-zone="waitingRoom"],#zone_waiting,#zone_waiting_room,.zone-waiting,.waitingRoom,.waiting-room,#waitingRoom');
-    if (hit) return true;
-    // fallback: within sidebar label
-    let n = t;
-    for (let i=0; i<6 && n; i++, n=n.parentElement){
-      if (!n || !n.textContent) continue;
-      const txt = n.textContent;
-      if (txt.includes("Waiting room") || txt.includes("控え室")) return true;
-    }
-    return false;
-  }
-
-  document.addEventListener("click", async (e)=>{
-    if (!clickedWaitingRoom(e)) return;
-    try{
-      const st = await fetchState();
-      const cards = extractWaitingList(st);
-      if (cards.length) showWaiting(cards);
-    } catch(_){}
-  }, true);
-
-  // ---------- Pending choice: transform card-no buttons into image list ----------
-  function upgradePendingButtons(root=document.body){
-    // find groups of buttons that look like card numbers
-    const btns = qsa("button", root);
-    const targets = btns.filter(b => {
-      if (b.classList.contains("llEnhChoiceBtn")) return false;
-      const txt = (b.textContent || "").trim();
-      if (!isCardNo(txt)) return false;
-      // ignore UNDO/NEXT etc
-      if (/UNDO|NEXT|PLAY|Close/i.test(txt)) return false;
-      return true;
-    });
-
-    // group by closest modal/popup container
-    const groups = new Map();
-    for (const b of targets){
-      const box = b.closest(".popupBox,.popupPanel,.popupInner,.modal,.dialog,.llEnhPanel") || b.parentElement;
-      if (!box) continue;
-      const key = box;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(b);
-    }
-
-    for (const [box, bs] of groups.entries()){
-      if (bs.length < 2) continue; // likely not a choice list
-      // wrap their parent into scrollable row
-      const parent = bs[0].parentElement;
-      if (parent && !parent.classList.contains("llEnhChoiceWrap")){
-        parent.classList.add("llEnhChoiceWrap");
-      }
-      for (const b of bs){
-        const cn = (b.textContent || "").trim();
-        // preserve click handler; just replace content
-        b.classList.add("llEnhChoiceBtn");
-        b.textContent = "";
-        const img = document.createElement("img");
-        img.loading = "lazy";
-        img.src = "/img?cn=" + encodeURIComponent(cn);
-        const cap = document.createElement("div");
-        cap.className = "llEnhCap";
-        cap.textContent = cn;
-        b.appendChild(img);
-        b.appendChild(cap);
-      }
-    }
-  }
-
-  const mo = new MutationObserver(()=>upgradePendingButtons());
-  mo.observe(document.documentElement, {subtree:true, childList:true});
-  setTimeout(()=>upgradePendingButtons(), 500);
-
-})();
-</script>
-
-
-<script id="llEnhV26">
-(()=> {
-  if (window.__llEnhV26) return;
-  window.__llEnhV26 = true;
-
-  const qs = (sel, root=document) => root.querySelector(sel);
-  const qsa = (sel, root=document) => Array.from(root.querySelectorAll(sel));
-
-  function isCardNo(t){
-    if(!t) return false;
-    const s = String(t).trim();
-    if (s.length < 6) return false;
-    return /[!]|bp\d-\d{3}|-PR-\d{3}|-P\d-\d{3}/i.test(s) || (/^[A-Z]{2,}[-!]/.test(s) && /\d/.test(s));
-  }
-
-  // ---------- waiting room: robust extractor ----------
-  function extractCardNosFromArray(arr){
-    const out = [];
-    for (const it of arr){
-      if (typeof it === "string"){
-        const cn = it.trim();
-        if (cn) out.push(cn);
-        continue;
-      }
-      if (it && typeof it === "object"){
-        const cn = it.cn || it.card_no || it.cardnumber || it.cardNumber || it.db_id || it.id || it.card;
-        if (cn) out.push(String(cn));
-      }
-    }
-    return out.filter(Boolean);
-  }
-
-  function findWaitingCardsDeep(obj){
-    let best = [];
-    const seen = new Set();
-
-    function visit(node, kHint=""){
-      if (!node) return;
-      if (seen.has(node)) return;
-      if (typeof node === "object") seen.add(node);
-
-      // key-hinted candidates
-      if (Array.isArray(node)){
-        return;
-      }
-      if (typeof node !== "object") return;
-
-      for (const [k,v] of Object.entries(node)){
-        const kk = String(k).toLowerCase();
-        const isWaitKey = /wait|waiting|grave|discard|trash|yard|控え|墓地|捨て/i.test(kk) || /wait|waiting|grave|discard|trash|yard|控え|墓地|捨て/i.test(kHint);
-        if (v && typeof v === "object"){
-          // direct array
-          if (isWaitKey && Array.isArray(v)){
-            const c = extractCardNosFromArray(v);
-            if (c.length > best.length) best = c;
-          }
-          // dict with cards/list
-          if (isWaitKey && !Array.isArray(v)){
-            for (const kk2 of ["cards","list","pile","stack","items"]){
-              if (Array.isArray(v[kk2])){
-                const c = extractCardNosFromArray(v[kk2]);
-                if (c.length > best.length) best = c;
-              }
-            }
-          }
-        }
-        // recurse
-        if (v && typeof v === "object") visit(v, kk);
-      }
-    }
-    visit(obj, "");
-    return best;
-  }
-
-  async function fetchState(){
-    const r = await fetch("/state", {cache:"no-store"});
-    return await r.json();
-  }
-
-  // ---------- waiting room modal (reuse existing mask if v25 exists) ----------
-  function ensureWaitingModal(){
-    let mask = document.querySelector(".llEnhMask");
-    if (mask) return mask;
-
-    mask = document.createElement("div");
-    mask.className = "llEnhMask";
-    mask.innerHTML = `
-      <div class="llEnhPanel" role="dialog" aria-modal="true">
-        <div class="llEnhHead">
-          <div class="llEnhTitle">控え室</div>
-          <button class="llEnhClose" type="button">Close</button>
-        </div>
-        <div class="llEnhSub">クリックで確認できます（選択は行いません）</div>
-        <div class="llEnhScroll"><div class="llEnhRow"></div></div>
-      </div>
-    `;
-    document.body.appendChild(mask);
-    mask.addEventListener("click", (e)=>{ if (e.target===mask) mask.style.display="none"; });
-    qs(".llEnhClose", mask).addEventListener("click", ()=> mask.style.display="none");
-    return mask;
-  }
-
-  function showWaiting(cards){
-    const mask = ensureWaitingModal();
-    const row = qs(".llEnhRow", mask);
-    row.innerHTML = "";
-    for (const cn of cards){
-      const d = document.createElement("div");
-      d.className = "llEnhCard";
-      const img = document.createElement("img");
-      img.loading = "lazy";
-      img.src = "/img?cn=" + encodeURIComponent(cn);
-      const cap = document.createElement("div");
-      cap.className = "llEnhCap";
-      cap.textContent = cn;
-      d.appendChild(img);
-      d.appendChild(cap);
-      row.appendChild(d);
-    }
-    mask.style.display = "flex";
-  }
-
-  async function openWaiting(){
-    try{
-      const st = await fetchState();
-      const cards = findWaitingCardsDeep(st);
-      if (cards && cards.length) showWaiting(cards);
-    }catch(e){}
-  }
-
-  // 「Waiting room」ラベル周辺をホットスポット化（クリック検出を確実に）
-  function wireWaitingHotspots(){
-    const nodes = qsa("*").filter(el=>{
-      if (!el || el.dataset && el.dataset.llWaitingHot==="1") return false;
-      const t = (el.textContent||"").trim();
-      if (!t) return false;
-      if (t === "Waiting room" || t === "控え室" || t.includes("Waiting room") || t.includes("控え室")) return true;
-      return false;
-    });
-    for (const el of nodes){
-      const box = el.closest("div") || el.parentElement;
-      if (!box) continue;
-      box.dataset.llWaitingHot = "1";
-      box.style.cursor = "pointer";
-      box.addEventListener("click", (e)=>{ e.stopPropagation(); openWaiting(); }, true);
-    }
-  }
-
-  // ---------- hand selection outline ----------
-  function isInHandZone(el){
-    if (!el) return false;
-    const hit = el.closest('[data-zone="hand"],#zone_hand,.zone-hand,.handZone,#handZone,.hand');
-    if (hit) return true;
-    // fallback: near "HAND" label
-    let n = el;
-    for (let i=0; i<6 && n; i++, n=n.parentElement){
-      const t = (n.textContent||"");
-      if (t.includes("HAND")) return true;
-    }
-    return false;
-  }
-
-  function findCardContainer(el){
-    if (!el) return null;
-    const cand = el.closest("button,div");
-    if (!cand) return null;
-    const img = cand.querySelector('img[src*="/img?cn="]');
-    if (!img) return null;
-    return cand;
-  }
-
-  document.addEventListener("click", (e)=>{
-    const t = e.target;
-    if (!isInHandZone(t)) return;
-    const card = findCardContainer(t);
-    if (!card) return;
-    // clear
-    qsa(".llHandSel").forEach(x=>x.classList.remove("llHandSel"));
-    card.classList.add("llHandSel");
-  }, true);
-
-  // init + observe
-  const mo = new MutationObserver(()=>wireWaitingHotspots());
-  mo.observe(document.documentElement, {subtree:true, childList:true});
-  document.addEventListener("DOMContentLoaded", ()=> setTimeout(wireWaitingHotspots, 50));
-  setTimeout(wireWaitingHotspots, 500);
-
-})();
-</script>
-
 </body>
 </html>'''
