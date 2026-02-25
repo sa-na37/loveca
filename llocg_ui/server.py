@@ -612,6 +612,30 @@ HTML = r'''<!doctype html>
   padding-bottom: 6px !important;
 }
 
+
+/* PATCH_v2_6_WAITING_PENDING_HANDSEL */
+/* 1) 選択(候補)ポップアップ内のカードが大きすぎる→最大サイズを制限 */
+.llEnhChoiceBtn {
+  width: var(--cardW, 156px);
+  height: var(--cardH, 218px);
+  max-width: 180px;
+  max-height: 252px;
+}
+.llEnhChoiceBtn img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* 2) 手札選択枠が見えない→強制アウトライン（z-indexも上げる） */
+.llHandSel {
+  outline: 4px solid rgba(255, 120, 190, 0.95);
+  outline-offset: -4px;
+  border-radius: 12px;
+  position: relative;
+  z-index: 90000;
+}
+
 </style>
 </head>
 <body>
@@ -1456,6 +1480,197 @@ HTML = r'''<!doctype html>
   const mo = new MutationObserver(()=>upgradePendingButtons());
   mo.observe(document.documentElement, {subtree:true, childList:true});
   setTimeout(()=>upgradePendingButtons(), 500);
+
+})();
+</script>
+
+
+<script id="llEnhV26">
+(()=> {
+  if (window.__llEnhV26) return;
+  window.__llEnhV26 = true;
+
+  const qs = (sel, root=document) => root.querySelector(sel);
+  const qsa = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+
+  function isCardNo(t){
+    if(!t) return false;
+    const s = String(t).trim();
+    if (s.length < 6) return false;
+    return /[!]|bp\d-\d{3}|-PR-\d{3}|-P\d-\d{3}/i.test(s) || (/^[A-Z]{2,}[-!]/.test(s) && /\d/.test(s));
+  }
+
+  // ---------- waiting room: robust extractor ----------
+  function extractCardNosFromArray(arr){
+    const out = [];
+    for (const it of arr){
+      if (typeof it === "string"){
+        const cn = it.trim();
+        if (cn) out.push(cn);
+        continue;
+      }
+      if (it && typeof it === "object"){
+        const cn = it.cn || it.card_no || it.cardnumber || it.cardNumber || it.db_id || it.id || it.card;
+        if (cn) out.push(String(cn));
+      }
+    }
+    return out.filter(Boolean);
+  }
+
+  function findWaitingCardsDeep(obj){
+    let best = [];
+    const seen = new Set();
+
+    function visit(node, kHint=""){
+      if (!node) return;
+      if (seen.has(node)) return;
+      if (typeof node === "object") seen.add(node);
+
+      // key-hinted candidates
+      if (Array.isArray(node)){
+        return;
+      }
+      if (typeof node !== "object") return;
+
+      for (const [k,v] of Object.entries(node)){
+        const kk = String(k).toLowerCase();
+        const isWaitKey = /wait|waiting|grave|discard|trash|yard|控え|墓地|捨て/i.test(kk) || /wait|waiting|grave|discard|trash|yard|控え|墓地|捨て/i.test(kHint);
+        if (v && typeof v === "object"){
+          // direct array
+          if (isWaitKey && Array.isArray(v)){
+            const c = extractCardNosFromArray(v);
+            if (c.length > best.length) best = c;
+          }
+          // dict with cards/list
+          if (isWaitKey && !Array.isArray(v)){
+            for (const kk2 of ["cards","list","pile","stack","items"]){
+              if (Array.isArray(v[kk2])){
+                const c = extractCardNosFromArray(v[kk2]);
+                if (c.length > best.length) best = c;
+              }
+            }
+          }
+        }
+        // recurse
+        if (v && typeof v === "object") visit(v, kk);
+      }
+    }
+    visit(obj, "");
+    return best;
+  }
+
+  async function fetchState(){
+    const r = await fetch("/state", {cache:"no-store"});
+    return await r.json();
+  }
+
+  // ---------- waiting room modal (reuse existing mask if v25 exists) ----------
+  function ensureWaitingModal(){
+    let mask = document.querySelector(".llEnhMask");
+    if (mask) return mask;
+
+    mask = document.createElement("div");
+    mask.className = "llEnhMask";
+    mask.innerHTML = `
+      <div class="llEnhPanel" role="dialog" aria-modal="true">
+        <div class="llEnhHead">
+          <div class="llEnhTitle">控え室</div>
+          <button class="llEnhClose" type="button">Close</button>
+        </div>
+        <div class="llEnhSub">クリックで確認できます（選択は行いません）</div>
+        <div class="llEnhScroll"><div class="llEnhRow"></div></div>
+      </div>
+    `;
+    document.body.appendChild(mask);
+    mask.addEventListener("click", (e)=>{ if (e.target===mask) mask.style.display="none"; });
+    qs(".llEnhClose", mask).addEventListener("click", ()=> mask.style.display="none");
+    return mask;
+  }
+
+  function showWaiting(cards){
+    const mask = ensureWaitingModal();
+    const row = qs(".llEnhRow", mask);
+    row.innerHTML = "";
+    for (const cn of cards){
+      const d = document.createElement("div");
+      d.className = "llEnhCard";
+      const img = document.createElement("img");
+      img.loading = "lazy";
+      img.src = "/img?cn=" + encodeURIComponent(cn);
+      const cap = document.createElement("div");
+      cap.className = "llEnhCap";
+      cap.textContent = cn;
+      d.appendChild(img);
+      d.appendChild(cap);
+      row.appendChild(d);
+    }
+    mask.style.display = "flex";
+  }
+
+  async function openWaiting(){
+    try{
+      const st = await fetchState();
+      const cards = findWaitingCardsDeep(st);
+      if (cards && cards.length) showWaiting(cards);
+    }catch(e){}
+  }
+
+  // 「Waiting room」ラベル周辺をホットスポット化（クリック検出を確実に）
+  function wireWaitingHotspots(){
+    const nodes = qsa("*").filter(el=>{
+      if (!el || el.dataset && el.dataset.llWaitingHot==="1") return false;
+      const t = (el.textContent||"").trim();
+      if (!t) return false;
+      if (t === "Waiting room" || t === "控え室" || t.includes("Waiting room") || t.includes("控え室")) return true;
+      return false;
+    });
+    for (const el of nodes){
+      const box = el.closest("div") || el.parentElement;
+      if (!box) continue;
+      box.dataset.llWaitingHot = "1";
+      box.style.cursor = "pointer";
+      box.addEventListener("click", (e)=>{ e.stopPropagation(); openWaiting(); }, true);
+    }
+  }
+
+  // ---------- hand selection outline ----------
+  function isInHandZone(el){
+    if (!el) return false;
+    const hit = el.closest('[data-zone="hand"],#zone_hand,.zone-hand,.handZone,#handZone,.hand');
+    if (hit) return true;
+    // fallback: near "HAND" label
+    let n = el;
+    for (let i=0; i<6 && n; i++, n=n.parentElement){
+      const t = (n.textContent||"");
+      if (t.includes("HAND")) return true;
+    }
+    return false;
+  }
+
+  function findCardContainer(el){
+    if (!el) return null;
+    const cand = el.closest("button,div");
+    if (!cand) return null;
+    const img = cand.querySelector('img[src*="/img?cn="]');
+    if (!img) return null;
+    return cand;
+  }
+
+  document.addEventListener("click", (e)=>{
+    const t = e.target;
+    if (!isInHandZone(t)) return;
+    const card = findCardContainer(t);
+    if (!card) return;
+    // clear
+    qsa(".llHandSel").forEach(x=>x.classList.remove("llHandSel"));
+    card.classList.add("llHandSel");
+  }, true);
+
+  // init + observe
+  const mo = new MutationObserver(()=>wireWaitingHotspots());
+  mo.observe(document.documentElement, {subtree:true, childList:true});
+  document.addEventListener("DOMContentLoaded", ()=> setTimeout(wireWaitingHotspots, 50));
+  setTimeout(wireWaitingHotspots, 500);
 
 })();
 </script>
