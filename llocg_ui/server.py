@@ -517,6 +517,101 @@ HTML = r'''<!doctype html>
   padding-bottom: 6px;
 }
 
+
+/* PATCH_v2_5_WAITINGLIST_AND_PENDING_CARDLIST */
+/* waiting-room list modal (self-contained) */
+.llEnhMask {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 100000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.llEnhPanel {
+  background: rgba(20,20,20,0.95);
+  color: #fff;
+  border-radius: 16px;
+  padding: 14px 14px 10px 14px;
+  width: min(78vw, 1100px);
+  max-height: min(72vh, 720px);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+}
+.llEnhHead {
+  display:flex; align-items:center; justify-content:space-between;
+  gap: 10px; margin-bottom: 10px;
+}
+.llEnhTitle { font-size: 18px; font-weight: 700; }
+.llEnhClose {
+  border: 0; color: #fff; background: rgba(255,255,255,0.12);
+  border-radius: 10px; padding: 6px 10px; cursor: pointer;
+}
+.llEnhSub { font-size: 13px; opacity: 0.85; margin-bottom: 10px; }
+
+.llEnhScroll {
+  overflow-x: auto; overflow-y: hidden;
+  padding-bottom: 8px;
+  max-width: 100%;
+}
+.llEnhRow {
+  display: inline-flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.llEnhCard {
+  width: var(--cardW, 156px);
+  height: var(--cardH, 218px);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.08);
+  overflow: hidden;
+  position: relative;
+  flex: 0 0 auto;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.35);
+}
+.llEnhCard img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display:block;
+}
+.llEnhCap {
+  position:absolute; left:0; right:0; bottom:0;
+  font-size: 11px;
+  padding: 4px 6px;
+  background: linear-gradient(to top, rgba(0,0,0,0.65), rgba(0,0,0,0.05));
+  color:#fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+}
+
+/* pending choice button -> image card style */
+.llEnhChoiceBtn {
+  width: var(--cardW, 156px);
+  height: var(--cardH, 218px);
+  padding: 0 !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
+  position: relative !important;
+  border: 1px solid rgba(255,255,255,0.18) !important;
+  background: rgba(255,255,255,0.06) !important;
+}
+.llEnhChoiceBtn img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display:block;
+}
+.llEnhChoiceBtn .llEnhCap {
+  font-size: 11px;
+}
+.llEnhChoiceWrap {
+  display: inline-flex !important;
+  gap: 8px !important;
+  align-items: flex-start !important;
+  overflow-x: auto !important;
+  max-width: min(72vw, 1060px) !important;
+  padding-bottom: 6px !important;
+}
+
 </style>
 </head>
 <body>
@@ -1201,5 +1296,169 @@ HTML = r'''<!doctype html>
   });
 })();
 </script>
+
+<script id="llEnhV25">
+(()=> {
+  if (window.__llEnhV25) return;
+  window.__llEnhV25 = true;
+
+  function qs(sel, root=document){ return root.querySelector(sel); }
+  function qsa(sel, root=document){ return Array.from(root.querySelectorAll(sel)); }
+
+  function isCardNo(t){
+    if(!t) return false;
+    const s = t.trim();
+    if (s.length < 6) return false;
+    // typical: PL!N-bp1-029 / PLN-bp1-029 / ...-PR-018 etc
+    return /[!]|bp\d-\d{3}|-PR-\d{3}|-P\d-\d{3}/i.test(s) || (/^[A-Z]{2,}[-!]/.test(s) && /\d/.test(s));
+  }
+
+  // ---------- Waiting room list modal ----------
+  const mask = document.createElement("div");
+  mask.className = "llEnhMask";
+  mask.innerHTML = `
+    <div class="llEnhPanel" role="dialog" aria-modal="true">
+      <div class="llEnhHead">
+        <div class="llEnhTitle">控え室</div>
+        <button class="llEnhClose" type="button">Close</button>
+      </div>
+      <div class="llEnhSub">クリックで確認できます（選択は行いません）</div>
+      <div class="llEnhScroll"><div class="llEnhRow"></div></div>
+    </div>
+  `;
+  document.addEventListener("DOMContentLoaded", ()=> document.body.appendChild(mask));
+  mask.addEventListener("click", (e)=>{
+    if (e.target === mask) hideWaiting();
+  });
+  qs(".llEnhClose", mask).addEventListener("click", hideWaiting);
+
+  function showWaiting(cards){
+    const row = qs(".llEnhRow", mask);
+    row.innerHTML = "";
+    for (const cn of cards){
+      const d = document.createElement("div");
+      d.className = "llEnhCard";
+      const img = document.createElement("img");
+      img.loading = "lazy";
+      img.src = "/img?cn=" + encodeURIComponent(cn);
+      const cap = document.createElement("div");
+      cap.className = "llEnhCap";
+      cap.textContent = cn;
+      d.appendChild(img);
+      d.appendChild(cap);
+      row.appendChild(d);
+    }
+    mask.style.display = "flex";
+  }
+  function hideWaiting(){ mask.style.display = "none"; }
+
+  async function fetchState(){
+    const r = await fetch("/state", {cache:"no-store"});
+    return await r.json();
+  }
+  function extractWaitingList(st){
+    // try common keys first
+    const candKeys = Object.keys(st).filter(k => /wait/i.test(k));
+    const keys = ["waiting", "waiting_room", "waitingRoom", "wait", "grave", ...candKeys];
+    for (const k of keys){
+      const v = st[k];
+      if (!v) continue;
+      if (Array.isArray(v) && v.length){
+        // strings
+        if (typeof v[0] === "string") return v;
+        // objects
+        const out = [];
+        for (const it of v){
+          if (typeof it === "string") { out.append(it); continue; }
+          if (it && typeof it === "object"){
+            const cn = it.cn || it.card_no || it.cardnumber || it.cardNumber || it.db_id || it.id;
+            if (cn) out.push(String(cn));
+          }
+        }
+        if (out.length) return out;
+      }
+    }
+    return [];
+  }
+
+  function clickedWaitingRoom(e){
+    const t = e.target;
+    if (!t) return false;
+    // explicit selectors if present
+    const hit = t.closest('[data-zone="waiting"],[data-zone="waiting_room"],[data-zone="waitingRoom"],#zone_waiting,#zone_waiting_room,.zone-waiting,.waitingRoom,.waiting-room,#waitingRoom');
+    if (hit) return true;
+    // fallback: within sidebar label
+    let n = t;
+    for (let i=0; i<6 && n; i++, n=n.parentElement){
+      if (!n || !n.textContent) continue;
+      const txt = n.textContent;
+      if (txt.includes("Waiting room") || txt.includes("控え室")) return true;
+    }
+    return false;
+  }
+
+  document.addEventListener("click", async (e)=>{
+    if (!clickedWaitingRoom(e)) return;
+    try{
+      const st = await fetchState();
+      const cards = extractWaitingList(st);
+      if (cards.length) showWaiting(cards);
+    } catch(_){}
+  }, true);
+
+  // ---------- Pending choice: transform card-no buttons into image list ----------
+  function upgradePendingButtons(root=document.body){
+    // find groups of buttons that look like card numbers
+    const btns = qsa("button", root);
+    const targets = btns.filter(b => {
+      if (b.classList.contains("llEnhChoiceBtn")) return false;
+      const txt = (b.textContent || "").trim();
+      if (!isCardNo(txt)) return false;
+      // ignore UNDO/NEXT etc
+      if (/UNDO|NEXT|PLAY|Close/i.test(txt)) return false;
+      return true;
+    });
+
+    // group by closest modal/popup container
+    const groups = new Map();
+    for (const b of targets){
+      const box = b.closest(".popupBox,.popupPanel,.popupInner,.modal,.dialog,.llEnhPanel") || b.parentElement;
+      if (!box) continue;
+      const key = box;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(b);
+    }
+
+    for (const [box, bs] of groups.entries()){
+      if (bs.length < 2) continue; // likely not a choice list
+      // wrap their parent into scrollable row
+      const parent = bs[0].parentElement;
+      if (parent && !parent.classList.contains("llEnhChoiceWrap")){
+        parent.classList.add("llEnhChoiceWrap");
+      }
+      for (const b of bs){
+        const cn = (b.textContent || "").trim();
+        // preserve click handler; just replace content
+        b.classList.add("llEnhChoiceBtn");
+        b.textContent = "";
+        const img = document.createElement("img");
+        img.loading = "lazy";
+        img.src = "/img?cn=" + encodeURIComponent(cn);
+        const cap = document.createElement("div");
+        cap.className = "llEnhCap";
+        cap.textContent = cn;
+        b.appendChild(img);
+        b.appendChild(cap);
+      }
+    }
+  }
+
+  const mo = new MutationObserver(()=>upgradePendingButtons());
+  mo.observe(document.documentElement, {subtree:true, childList:true});
+  setTimeout(()=>upgradePendingButtons(), 500);
+
+})();
+</script>
+
 </body>
 </html>'''
