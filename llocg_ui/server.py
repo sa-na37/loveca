@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import csv
+import re
 """llocg_ui.server
 
 Manual UI web server for LLCG.
@@ -288,6 +290,86 @@ class App:
         return self.state_json()
 
 
+
+# PATCH_SORT_META_V1
+_CN_META_CACHE = None
+
+def _infer_num(cn: str) -> int:
+    m = re.search(r"(\d+)(?!.*\d)", cn or "")
+    return int(m.group(1)) if m else 10**9
+
+def _infer_rarity_from_cn(cn: str) -> str:
+    if not cn:
+        return ""
+    m = re.search(r"-(PR|UR|SR|R|U|C|SEC)(?:-|$)", cn, flags=re.I)
+    return (m.group(1) or "").upper() if m else ""
+
+def _normalize_type(t: str) -> str:
+    if not t:
+        return ""
+    tt = str(t).strip().upper()
+    if "MEMBER" in tt or "メンバー" in tt:
+        return "MEMBER"
+    if "LIVE" in tt or "ライブ" in tt:
+        return "LIVE"
+    if "SUPPORT" in tt or "サポート" in tt:
+        return "SUPPORT"
+    if "EVENT" in tt:
+        return "EVENT"
+    return tt
+
+def _load_cn_meta():
+    global _CN_META_CACHE
+    if _CN_META_CACHE is not None:
+        return _CN_META_CACHE
+
+    here = Path(__file__).resolve()
+    root = here.parent.parent
+    cand = [
+        root / "cards_min_tokv1.csv",
+        root / "llocg_db_out_full" / "cards_min_tokv1.csv",
+        here.parent / "cards_min_tokv1.csv",
+    ]
+    fp = None
+    for c in cand:
+        if c.exists():
+            fp = c
+            break
+
+    meta = {}
+    if fp is None:
+        _CN_META_CACHE = meta
+        return meta
+
+    def pick(row, keys):
+        for k in keys:
+            if k in row and row[k] not in (None, ""):
+                return row[k]
+        low = {kk.lower(): kk for kk in row.keys()}
+        for k in keys:
+            kk = low.get(k.lower())
+            if kk and row.get(kk) not in (None, ""):
+                return row.get(kk)
+        return ""
+
+    with fp.open("r", encoding="utf-8-sig", newline="") as f:
+        rdr = csv.DictReader(f)
+        for row in rdr:
+            cn = pick(row, ["cardnumber","card_no","cn","\ufeffcardnumber"])
+            if not cn:
+                continue
+            rarity = pick(row, ["rarity","rare","rar"])
+            ctype = pick(row, ["type","card_type","cardtype","db_type","category"])
+            cn = str(cn)
+            meta[cn] = {
+                "type": _normalize_type(ctype),
+                "num": _infer_num(cn),
+                "rarity": (str(rarity).strip().upper() if rarity else _infer_rarity_from_cn(cn)),
+            }
+
+    _CN_META_CACHE = meta
+    return meta
+
 class Handler(BaseHTTPRequestHandler):
     """HTTP router."""
 
@@ -348,6 +430,35 @@ class Handler(BaseHTTPRequestHandler):
             data = json.dumps(self.app.state_json(), ensure_ascii=False).encode("utf-8")
             self._send(200, data, "application/json; charset=utf-8")
             return
+
+        if u.path == "/meta":
+
+            qs = dict(parse_qsl(u.query))
+
+            cn = qs.get("cn","")
+
+            meta = _load_cn_meta().get(cn, {})
+
+            self._send(200, json.dumps(meta, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+
+            return
+
+        if u.path == "/meta_bulk":
+
+            qs = dict(parse_qsl(u.query))
+
+            raw = qs.get("cns","")
+
+            cns = [x for x in raw.split(",") if x]
+
+            allm = _load_cn_meta()
+
+            out = {cn: allm.get(cn, {}) for cn in cns}
+
+            self._send(200, json.dumps(out, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+
+            return
+
 
         if u.path == "/img":
             qs = parse_qs(u.query)
@@ -1264,5 +1375,102 @@ HTML = r'''<!doctype html>
   });
 })();
 </script>
+
+<script id="llEnhSortV1">
+(()=>{
+  /* PATCH_SORT_JS_V1 */
+  if (window.__llEnhSortV1) return;
+  window.__llEnhSortV1 = true;
+
+  const TYPE_RANK = (t)=> {
+    const x = String(t||"").toUpperCase();
+    if (x.includes("MEMBER")) return 0;
+    if (x.includes("LIVE")) return 1;
+    if (x.includes("SUPPORT")) return 2;
+    if (x.includes("EVENT")) return 3;
+    return 9;
+  };
+  const RAR_RANK = (r)=> {
+    const x = String(r||"").toUpperCase();
+    const map = { "C":0, "U":1, "R":2, "SR":3, "UR":4, "SEC":5, "PR":6 };
+    return (map[x] ?? 99);
+  };
+  const NUM_OF = (cn, meta)=> {
+    if (meta && typeof meta.num === "number") return meta.num;
+    const m = String(cn||"").match(/(\d+)(?!.*\d)/);
+    return m ? parseInt(m[1],10) : 1e9;
+  };
+
+  const metaCache = new Map(); // cn -> meta
+
+  async function getMetaBulk(cns){
+    const need = cns.filter(cn => !metaCache.has(cn));
+    if (need.length){
+      try{
+        const url = "/meta_bulk?cns=" + encodeURIComponent(need.join(","));
+        const r = await fetch(url, {cache:"no-store"});
+        if (r.ok){
+          const obj = await r.json();
+          for (const [cn, m] of Object.entries(obj||{})) {
+            metaCache.set(cn, m||{});
+          }
+        }
+      }catch(_e){}
+      for (const cn of need) if (!metaCache.has(cn)) metaCache.set(cn, {});
+    }
+  }
+
+  function getCN(el){
+    const cap = el.querySelector(".llEnhCap");
+    return cap ? cap.textContent.trim() : "";
+  }
+
+  async function sortContainer(container){
+    if (!container) return;
+    const kids = Array.from(container.children);
+    const items = kids.filter(ch => ch.querySelector && ch.querySelector(".llEnhCap"));
+    if (items.length < 2) return;
+
+    const cns = items.map(getCN).filter(Boolean);
+    if (cns.length < 2) return;
+
+    await getMetaBulk(cns);
+
+    items.sort((a,b)=>{
+      const ca = getCN(a), cb = getCN(b);
+      const ma = metaCache.get(ca) || {};
+      const mb = metaCache.get(cb) || {};
+
+      const ta = TYPE_RANK(ma.type), tb = TYPE_RANK(mb.type);
+      if (ta !== tb) return ta - tb;
+
+      const na = NUM_OF(ca, ma), nb = NUM_OF(cb, mb);
+      if (na !== nb) return na - nb;
+
+      const ra = RAR_RANK(ma.rarity), rb = RAR_RANK(mb.rarity);
+      if (ra !== rb) return ra - rb;
+
+      return ca.localeCompare(cb);
+    });
+
+    for (const it of items) container.appendChild(it);
+  }
+
+  function scanAndSort(){
+    // waiting room
+    document.querySelectorAll(".llEnhRow").forEach(c=>sortContainer(c));
+    // pending choice image list
+    document.querySelectorAll(".llEnhChoiceWrap").forEach(c=>sortContainer(c));
+    // resolve or generic card lists (best-effort; only sorts if .llEnhCap exists)
+    document.querySelectorAll(".cardList,.cards,.cardlist,.list").forEach(c=>sortContainer(c));
+  }
+
+  const mo = new MutationObserver(()=>scanAndSort());
+  mo.observe(document.documentElement, {subtree:true, childList:true});
+  document.addEventListener("DOMContentLoaded", ()=>setTimeout(scanAndSort, 100));
+  setTimeout(scanAndSort, 800);
+})();
+</script>
+
 </body>
 </html>'''
