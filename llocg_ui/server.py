@@ -1382,11 +1382,13 @@ HTML = r'''<!doctype html>
 })();
 </script>
 
-<script id="llEnhSortV2">
+
+
+<script id="llEnhSortV3">
 (()=> {
-  /* PATCH_SORT_JS_V2 */
-  if (window.__llEnhSortV2) return;
-  window.__llEnhSortV2 = true;
+  /* PATCH_SORT_JS_V3 */
+  if (window.__llEnhSortV3) return;
+  window.__llEnhSortV3 = true;
 
   const TYPE_RANK = (t)=> {
     const x = String(t||"").toUpperCase();
@@ -1401,19 +1403,26 @@ HTML = r'''<!doctype html>
     const map = { "C":0, "U":1, "R":2, "SR":3, "UR":4, "SEC":5, "PR":6 };
     return (map[x] ?? 99);
   };
-  const PREF_OF = (cn, meta)=> {
-    if (meta && meta.prefix) return String(meta.prefix);
-    const s = String(cn||"").replace(/-+$/,"");
-    const m = s.match(/^(.*?)-(\d+)$/);
-    return m ? m[1] : s;
-  };
-  const NUM_OF = (cn, meta)=> {
-    if (meta && typeof meta.num === "number") return meta.num;
-    const m = String(cn||"").match(/(\d+)(?!.*\d)/);
-    return m ? parseInt(m[1],10) : 1e9;
-  };
 
-  const metaCache = new Map(); // cn -> meta
+  function parseCnFromImg(el){
+    const img = el.querySelector('img[src*="/img?cn="]') || el.querySelector('img');
+    if (!img || !img.src) return "";
+    try{
+      const u = new URL(img.src, location.href);
+      const cn = u.searchParams.get("cn");
+      return cn ? cn.trim() : "";
+    }catch(_){ return ""; }
+  }
+
+  function getCN(el){
+    const cap = el.querySelector(".llEnhCap");
+    if (cap && cap.textContent) return cap.textContent.trim();
+    const dcn = el.dataset && (el.dataset.cn || el.dataset.cardnumber || el.dataset.cardNo);
+    if (dcn) return String(dcn).trim();
+    return parseCnFromImg(el);
+  }
+
+  const metaCache = new Map();
   async function getMetaBulk(cns){
     const need = cns.filter(cn => !metaCache.has(cn));
     if (need.length){
@@ -1422,46 +1431,41 @@ HTML = r'''<!doctype html>
         const r = await fetch(url, {cache:"no-store"});
         if (r.ok){
           const obj = await r.json();
-          for (const [cn, m] of Object.entries(obj||{})) {
-            metaCache.set(cn, m||{});
-          }
+          for (const [cn, m] of Object.entries(obj||{})) metaCache.set(cn, m||{});
         }
       }catch(_e){}
       for (const cn of need) if (!metaCache.has(cn)) metaCache.set(cn, {});
     }
   }
 
-  function getCN(el){
-    const cap = el.querySelector(".llEnhCap");
-    return cap ? cap.textContent.trim() : "";
-  }
+  const PREF_OF = (cn, meta)=> meta && meta.prefix ? String(meta.prefix) : (String(cn||"").replace(/-+$/,"").match(/^(.*?)-(\d+)$/)?.[1] ?? String(cn||""));
+  const NUM_OF  = (cn, meta)=> (meta && typeof meta.num==="number") ? meta.num : (parseInt((String(cn||"").match(/(\d+)(?!.*\d)/)||[])[1]||"1000000000",10));
 
   async function sortContainer(container){
     if (!container) return;
     const kids = Array.from(container.children);
-    const items = kids.filter(ch => ch.querySelector && ch.querySelector(".llEnhCap"));
+    const items = kids.filter(ch => ch.querySelector && getCN(ch));
     if (items.length < 2) return;
+
     const cns = items.map(getCN).filter(Boolean);
     if (cns.length < 2) return;
 
     await getMetaBulk(cns);
 
     items.sort((a,b)=>{
-      const ca = getCN(a), cb = getCN(b);
-      const ma = metaCache.get(ca) || {};
-      const mb = metaCache.get(cb) || {};
+      const ca=getCN(a), cb=getCN(b);
+      const ma=metaCache.get(ca)||{}, mb=metaCache.get(cb)||{};
+      const ta=TYPE_RANK(ma.type), tb=TYPE_RANK(mb.type);
+      if (ta!==tb) return ta-tb;
 
-      const ta = TYPE_RANK(ma.type), tb = TYPE_RANK(mb.type);
-      if (ta !== tb) return ta - tb;
+      const pa=PREF_OF(ca,ma), pb=PREF_OF(cb,mb);
+      if (pa!==pb) return pa.localeCompare(pb);
 
-      const pa = PREF_OF(ca, ma), pb = PREF_OF(cb, mb);
-      if (pa !== pb) return pa.localeCompare(pb);
+      const na=NUM_OF(ca,ma), nb=NUM_OF(cb,mb);
+      if (na!==nb) return na-nb;
 
-      const na = NUM_OF(ca, ma), nb = NUM_OF(cb, mb);
-      if (na !== nb) return na - nb;
-
-      const ra = RAR_RANK(ma.rarity), rb = RAR_RANK(mb.rarity);
-      if (ra !== rb) return ra - rb;
+      const ra=RAR_RANK(ma.rarity), rb=RAR_RANK(mb.rarity);
+      if (ra!==rb) return ra-rb;
 
       return ca.localeCompare(cb);
     });
