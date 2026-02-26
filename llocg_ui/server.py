@@ -298,6 +298,11 @@ def _infer_num(cn: str) -> int:
     m = re.search(r"(\d+)(?!.*\d)", cn or "")
     return int(m.group(1)) if m else 10**9
 
+def _infer_prefix(cn: str) -> str:
+    cn = (cn or '').rstrip('-')
+    m = re.search(r'^(.*?)-(\d+)$', cn)
+    return m.group(1) if m else cn
+
 def _infer_rarity_from_cn(cn: str) -> str:
     if not cn:
         return ""
@@ -359,10 +364,11 @@ def _load_cn_meta():
             if not cn:
                 continue
             rarity = pick(row, ["rarity","rare","rar"])
-            ctype = pick(row, ["type","card_type","cardtype","db_type","category"])
+            ctype = pick(row, ["card_type_norm","card_type_raw","card_type","type","db_type","category","cardtype"])
             cn = str(cn)
             meta[cn] = {
                 "type": _normalize_type(ctype),
+                "prefix": _infer_prefix(cn),
                 "num": _infer_num(cn),
                 "rarity": (str(rarity).strip().upper() if rarity else _infer_rarity_from_cn(cn)),
             }
@@ -1376,11 +1382,11 @@ HTML = r'''<!doctype html>
 })();
 </script>
 
-<script id="llEnhSortV1">
-(()=>{
-  /* PATCH_SORT_JS_V1 */
-  if (window.__llEnhSortV1) return;
-  window.__llEnhSortV1 = true;
+<script id="llEnhSortV2">
+(()=> {
+  /* PATCH_SORT_JS_V2 */
+  if (window.__llEnhSortV2) return;
+  window.__llEnhSortV2 = true;
 
   const TYPE_RANK = (t)=> {
     const x = String(t||"").toUpperCase();
@@ -1395,6 +1401,12 @@ HTML = r'''<!doctype html>
     const map = { "C":0, "U":1, "R":2, "SR":3, "UR":4, "SEC":5, "PR":6 };
     return (map[x] ?? 99);
   };
+  const PREF_OF = (cn, meta)=> {
+    if (meta && meta.prefix) return String(meta.prefix);
+    const s = String(cn||"").replace(/-+$/,"");
+    const m = s.match(/^(.*?)-(\d+)$/);
+    return m ? m[1] : s;
+  };
   const NUM_OF = (cn, meta)=> {
     if (meta && typeof meta.num === "number") return meta.num;
     const m = String(cn||"").match(/(\d+)(?!.*\d)/);
@@ -1402,7 +1414,6 @@ HTML = r'''<!doctype html>
   };
 
   const metaCache = new Map(); // cn -> meta
-
   async function getMetaBulk(cns){
     const need = cns.filter(cn => !metaCache.has(cn));
     if (need.length){
@@ -1430,7 +1441,6 @@ HTML = r'''<!doctype html>
     const kids = Array.from(container.children);
     const items = kids.filter(ch => ch.querySelector && ch.querySelector(".llEnhCap"));
     if (items.length < 2) return;
-
     const cns = items.map(getCN).filter(Boolean);
     if (cns.length < 2) return;
 
@@ -1443,6 +1453,9 @@ HTML = r'''<!doctype html>
 
       const ta = TYPE_RANK(ma.type), tb = TYPE_RANK(mb.type);
       if (ta !== tb) return ta - tb;
+
+      const pa = PREF_OF(ca, ma), pb = PREF_OF(cb, mb);
+      if (pa !== pb) return pa.localeCompare(pb);
 
       const na = NUM_OF(ca, ma), nb = NUM_OF(cb, mb);
       if (na !== nb) return na - nb;
@@ -1457,18 +1470,15 @@ HTML = r'''<!doctype html>
   }
 
   function scanAndSort(){
-    // waiting room
     document.querySelectorAll(".llEnhRow").forEach(c=>sortContainer(c));
-    // pending choice image list
     document.querySelectorAll(".llEnhChoiceWrap").forEach(c=>sortContainer(c));
-    // resolve or generic card lists (best-effort; only sorts if .llEnhCap exists)
     document.querySelectorAll(".cardList,.cards,.cardlist,.list").forEach(c=>sortContainer(c));
   }
 
   const mo = new MutationObserver(()=>scanAndSort());
   mo.observe(document.documentElement, {subtree:true, childList:true});
-  document.addEventListener("DOMContentLoaded", ()=>setTimeout(scanAndSort, 100));
-  setTimeout(scanAndSort, 800);
+  document.addEventListener("DOMContentLoaded", ()=>setTimeout(scanAndSort, 120));
+  setTimeout(scanAndSort, 900);
 })();
 </script>
 
