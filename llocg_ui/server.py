@@ -52,7 +52,7 @@ from .engine import (
     can_activate,
 )
 
-APP_VERSION = "clean-ui-v2_7_1_mulligan_jp_fix"
+APP_VERSION = "clean-ui-v2_8_skip_yell_empty_live"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -414,6 +414,23 @@ class App:
             idxs = payload.get("indices", [])
             if not isinstance(idxs, list):
                 idxs = []
+
+            # SPEC: If there is no LIVE card in live-set (set_zone) after performance,
+            # do NOT perform YELL/ATTEMPT; end the live processing and go to turn end.
+            # (The engine currently may still proceed; we guard here to match spec.)
+            phase = str(getattr(self.gs, "phase", "")).upper()
+            if phase in {"LIVE_ATTEMPT", "LIVE", "LIVE_YELL", "LIVE_JUDGE", "LIVE_RESOLVE"}:
+                live_in_set = []
+                for cn in list(getattr(self.gs, "set_zone", []) or []):
+                    card = _get_card(self.cards_db, cn)
+                    if card and str(getattr(card, "type", "")).upper() == "LIVE":
+                        live_in_set.append(cn)
+                if len(live_in_set) == 0:
+                    self.gs.log.append("[LIVE] no LIVE in set_zone -> skip YELL/ATTEMPT and end turn")
+                    cmd_end_turn(self.gs, self.rng)
+                    self.save_trace()
+                    return self.state_json()
+
             cmd_next(self.gs, self.rng, self.cards_db, [int(x) for x in idxs])
 
         elif name == "mulligan_next":
