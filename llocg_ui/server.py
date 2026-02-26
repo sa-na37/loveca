@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-import csv
-import re
 """llocg_ui.server
 
 Manual UI web server for LLCG.
@@ -54,7 +52,7 @@ from .engine import (
     can_activate,
 )
 
-APP_VERSION = "clean-ui-v2_6_waiting_sort_click_and_skip"
+APP_VERSION = "clean-ui-v2_7_mulligan_jp"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -81,12 +79,124 @@ class App:
         self.ui_code = str(code)
         self.deck_code = str(deck_code)
         self.gs, self.rng = new_game(self.root, self.deck_code, seed=seed, debug=debug)
+        self._force_mulligan_start()
         self.save_trace()
 
     def save_trace(self) -> None:
         self.outdir.mkdir(parents=True, exist_ok=True)
         _write_text(self.outdir / "ui_trace.txt", "\n".join(self.gs.log) + ("\n" if self.gs.log else ""))
 
+
+
+def _force_mulligan_start(self) -> None:
+    """Force the game into MULLIGAN state at boot (spec).
+
+    Spec: show 6-card opening hand, let user select any number to redraw,
+    then start Turn 1 automatically (energy +1 -> 4, draw 1 -> 7 cards)."""
+    gs = self.gs
+    try:
+        # Avoid re-applying if already in mulligan
+        if str(getattr(gs, 'phase', '')).upper() == 'MULLIGAN':
+            return
+        # Collect starting deck+hand and re-deal 6
+        deck = list(getattr(gs, 'deck', []) or [])
+        hand = list(getattr(gs, 'hand', []) or [])
+        deck.extend(hand)
+        # Reset zones defensively (should be empty at start)
+        try:
+            getattr(gs, 'hand').clear()
+        except Exception:
+            gs.hand = []
+        gs.deck = deck
+        try:
+            self.rng.shuffle(gs.deck)
+        except Exception:
+            pass
+        # draw 6
+        new_hand = []
+        for _ in range(6):
+            if not gs.deck:
+                break
+            new_hand.append(gs.deck.pop(0))
+        gs.hand = new_hand
+
+        # Reset turn/phase/energy to pre-turn1 baseline
+        gs.turn = 0
+        gs.phase = 'MULLIGAN'
+        # energy_wait is "max" and energy_active is "remaining" (UI shows active/(active+wait))
+        gs.energy_wait = 0
+        gs.energy_active = 3
+
+        # Clear selection/pending UI remnants if any
+        try:
+            gs.pending = []
+        except Exception:
+            pass
+        try:
+            gs.banner_text = 'マリガン：引き直すカードを選んでNEXT'
+            gs.banner_ts = 0.0
+            gs.banner_ttl = 0.0
+        except Exception:
+            pass
+
+        try:
+            gs.log.append('[PHASE] MULLIGAN (choose cards to redraw)')
+        except Exception:
+            pass
+    except Exception as e:
+        try:
+            gs.log.append(f'[ERR] mulligan init failed: {e}')
+        except Exception:
+            pass
+
+def _cmd_mulligan_next(self, indices: list[int]) -> None:
+    """Apply mulligan, then auto-start Turn 1 per spec."""
+    gs = self.gs
+    # normalize indices
+    idxs = [i for i in indices if isinstance(i, int)]
+    idxs = sorted(set(i for i in idxs if 0 <= i < len(gs.hand)))
+
+    # remove selected from hand
+    removed = [gs.hand[i] for i in idxs]
+    keep = [c for j, c in enumerate(gs.hand) if j not in set(idxs)]
+
+    # draw same count from deck
+    draw_n = len(removed)
+    drawn = []
+    for _ in range(draw_n):
+        if not gs.deck:
+            break
+        drawn.append(gs.deck.pop(0))
+
+    gs.hand = keep + drawn
+
+    # return removed to deck and shuffle
+    gs.deck.extend(removed)
+    try:
+        self.rng.shuffle(gs.deck)
+    except Exception:
+        pass
+
+    try:
+        gs.log.append(f'[MULLIGAN] redraw={draw_n}')
+    except Exception:
+        pass
+
+    # ---- auto start Turn 1 ----
+    gs.turn = 1
+    # energy total starts at 3 then +1 at turn start => 4
+    gs.energy_wait = 0
+    gs.energy_active = 4
+
+    # draw 1 at turn start
+    if gs.deck:
+        gs.hand.append(gs.deck.pop(0))
+
+    gs.phase = 'MAIN'
+    try:
+        gs.log.append('[PHASE] MAIN turn=1 (auto after mulligan)')
+    except Exception:
+        pass
     def _all_cardnumbers_in_state(self) -> list[str]:
         gs = getattr(self, "gs", None)
         if gs is None:
@@ -275,7 +385,11 @@ class App:
             idxs = payload.get("indices", [])
             if not isinstance(idxs, list):
                 idxs = []
-            cmd_next(self.gs, self.rng, self.cards_db, [int(x) for x in idxs])
+            # MULLIGAN is handled in UI wrapper (engine stays unchanged)
+            if str(getattr(self.gs, 'phase', '')).upper() == 'MULLIGAN':
+                self._cmd_mulligan_next([int(x) for x in idxs])
+            else:
+                cmd_next(self.gs, self.rng, self.cards_db, [int(x) for x in idxs])
         elif name == "end_turn":
             cmd_end_turn(self.gs, self.rng)
         elif name == "undo":
@@ -289,92 +403,6 @@ class App:
         self.save_trace()
         return self.state_json()
 
-
-
-# PATCH_SORT_META_V1
-_CN_META_CACHE = None
-
-def _infer_num(cn: str) -> int:
-    m = re.search(r"(\d+)(?!.*\d)", cn or "")
-    return int(m.group(1)) if m else 10**9
-
-def _infer_prefix(cn: str) -> str:
-    cn = (cn or '').rstrip('-')
-    m = re.search(r'^(.*?)-(\d+)$', cn)
-    return m.group(1) if m else cn
-
-def _infer_rarity_from_cn(cn: str) -> str:
-    if not cn:
-        return ""
-    m = re.search(r"-(PR|UR|SR|R|U|C|SEC)(?:-|$)", cn, flags=re.I)
-    return (m.group(1) or "").upper() if m else ""
-
-def _normalize_type(t: str) -> str:
-    if not t:
-        return ""
-    tt = str(t).strip().upper()
-    if "MEMBER" in tt or "メンバー" in tt:
-        return "MEMBER"
-    if "LIVE" in tt or "ライブ" in tt:
-        return "LIVE"
-    if "SUPPORT" in tt or "サポート" in tt:
-        return "SUPPORT"
-    if "EVENT" in tt:
-        return "EVENT"
-    return tt
-
-def _load_cn_meta():
-    global _CN_META_CACHE
-    if _CN_META_CACHE is not None:
-        return _CN_META_CACHE
-
-    here = Path(__file__).resolve()
-    root = here.parent.parent
-    cand = [
-        root / "cards_min_tokv1.csv",
-        root / "llocg_db_out_full" / "cards_min_tokv1.csv",
-        here.parent / "cards_min_tokv1.csv",
-    ]
-    fp = None
-    for c in cand:
-        if c.exists():
-            fp = c
-            break
-
-    meta = {}
-    if fp is None:
-        _CN_META_CACHE = meta
-        return meta
-
-    def pick(row, keys):
-        for k in keys:
-            if k in row and row[k] not in (None, ""):
-                return row[k]
-        low = {kk.lower(): kk for kk in row.keys()}
-        for k in keys:
-            kk = low.get(k.lower())
-            if kk and row.get(kk) not in (None, ""):
-                return row.get(kk)
-        return ""
-
-    with fp.open("r", encoding="utf-8-sig", newline="") as f:
-        rdr = csv.DictReader(f)
-        for row in rdr:
-            cn = pick(row, ["cardnumber","card_no","cn","\ufeffcardnumber"])
-            if not cn:
-                continue
-            rarity = pick(row, ["rarity","rare","rar"])
-            ctype = pick(row, ["card_type_norm","card_type_raw","card_type","type","db_type","category","cardtype"])
-            cn = str(cn)
-            meta[cn] = {
-                "type": _normalize_type(ctype),
-                "prefix": _infer_prefix(cn),
-                "num": _infer_num(cn),
-                "rarity": (str(rarity).strip().upper() if rarity else _infer_rarity_from_cn(cn)),
-            }
-
-    _CN_META_CACHE = meta
-    return meta
 
 class Handler(BaseHTTPRequestHandler):
     """HTTP router."""
@@ -436,35 +464,6 @@ class Handler(BaseHTTPRequestHandler):
             data = json.dumps(self.app.state_json(), ensure_ascii=False).encode("utf-8")
             self._send(200, data, "application/json; charset=utf-8")
             return
-
-        if u.path == "/meta":
-
-            qs = dict(parse_qsl(u.query))
-
-            cn = qs.get("cn","")
-
-            meta = _load_cn_meta().get(cn, {})
-
-            self._send(200, json.dumps(meta, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
-
-            return
-
-        if u.path == "/meta_bulk":
-
-            qs = dict(parse_qsl(u.query))
-
-            raw = qs.get("cns","")
-
-            cns = [x for x in raw.split(",") if x]
-
-            allm = _load_cn_meta()
-
-            out = {cn: allm.get(cn, {}) for cn in cns}
-
-            self._send(200, json.dumps(out, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
-
-            return
-
 
         if u.path == "/img":
             qs = parse_qs(u.query)
@@ -612,8 +611,9 @@ HTML = r'''<!doctype html>
     <img id="playmat" src="/playmat" alt="playmat"/>
 
     <div id="topBar">
-      <div class="pill">Turn: <b id="turn">?</b> | Phase: <b id="phase">?</b> | Energy: <b id="energy">?</b></div>
-      <div class="pill">Selected(hand): <b id="selected">0</b></div>
+      <div class="pill">ターン: <b id="turn">?</b> | フェイズ: <b id="phase">?</b> | エネルギー: <b id="energy">?</b></div>
+      <div class="pill">選択(手札): <b id="selected">0</b></div>
+      <div class="pill" id="hint" style="display:none;"></div>
       <button class="miniBtn" id="btnDbg">枠表示</button>
     </div>
 
@@ -660,6 +660,7 @@ HTML = r'''<!doctype html>
   const elPhase = document.getElementById('phase');
   const elEnergy = document.getElementById('energy');
   const elSelected = document.getElementById('selected');
+  const elHint = document.getElementById('hint');
   const elBanner = document.getElementById('banner');
 
   const elMask = document.getElementById('mask');
@@ -733,7 +734,7 @@ HTML = r'''<!doctype html>
 
   function selLimit(){
     if(!st) return 1;
-    return (st.phase === 'LIVE_SET') ? 3 : 1;
+    if(st.phase === 'LIVE_SET') return 3; if(String(st.phase).toUpperCase()==='MULLIGAN') return (st.hand? st.hand.length : 6) || 6; return 1;
   }
   function toggleSel(i){
     const idx = selHand.indexOf(i);
@@ -754,8 +755,8 @@ HTML = r'''<!doctype html>
       const t = String(text);
       elBanner.textContent = t;
       const u = t.toUpperCase();
-      if(u.includes('FAIL')) elBanner.dataset.kind = 'fail';
-      else if(u.includes('SUCCESS') || u.includes('OK')) elBanner.dataset.kind = 'success';
+      if(u.includes('FAIL') || t.includes('失敗')) elBanner.dataset.kind = 'fail';
+      else if(u.includes('SUCCESS') || u.includes('OK') || t.includes('成功')) elBanner.dataset.kind = 'success';
       else elBanner.dataset.kind = 'info';
       elBanner.style.display = 'block';
       bannerTimer = setTimeout(()=>{ elBanner.style.display = 'none'; }, 1600);
@@ -1088,7 +1089,7 @@ HTML = r'''<!doctype html>
 
     const t = document.createElement('div');
     t.className = 'energyText';
-    t.innerHTML = `Energy: <b>${active}</b> / <b>${total}</b><div style="opacity:.8;font-size:12px;margin-top:2px;">wait: ${wait}</div>`;
+    t.innerHTML = `エネルギー: <b>${active}</b> / <b>${total}</b><div style="opacity:.8;font-size:12px;margin-top:2px;">待機: ${wait}</div>`;
     wrap.appendChild(t);
 
     const btnUndo = document.createElement('button');
@@ -1172,7 +1173,7 @@ HTML = r'''<!doctype html>
     if(closable){
       const close = document.createElement('button');
       close.className = 'miniBtn';
-      close.textContent = 'Close';
+      close.textContent = '閉じる';
       close.addEventListener('click', ()=>{ closePopup(); });
       elModalActions.appendChild(close);
     }
@@ -1255,7 +1256,7 @@ HTML = r'''<!doctype html>
       if(allowSkip){
         const bSkip = document.createElement('button');
         bSkip.className = 'miniBtn';
-        bSkip.textContent = 'Skip';
+        bSkip.textContent = 'スキップ';
         bSkip.addEventListener('click', async (ev)=>{
           ev.stopPropagation();
           st = await apiCmd('resolve_pending', {idx:0, choice:'skip'});
@@ -1318,6 +1319,18 @@ HTML = r'''<!doctype html>
     const wait = st ? Number(st.energy_wait||0) : 0;
     elEnergy.textContent = st ? `${active}/${active+wait}` : '?';
     elSelected.textContent = String(selHand.length);
+    try{
+      if(elHint){
+        const ph = st ? String(st.phase||'') : '';
+        if(String(ph).toUpperCase()==='MULLIGAN'){
+          elHint.textContent = 'マリガン：引き直すカードを選んでNEXT';
+          elHint.style.display = 'inline-block';
+        }else{
+          elHint.textContent = '';
+          elHint.style.display = 'none';
+        }
+      }
+    }catch(e){}
     setBanner(st && st.banner && st.banner.text ? String(st.banner.text) : '');
   }
 
@@ -1381,110 +1394,5 @@ HTML = r'''<!doctype html>
   });
 })();
 </script>
-
-
-
-<script id="llEnhSortV3">
-(()=> {
-  /* PATCH_SORT_JS_V3 */
-  if (window.__llEnhSortV3) return;
-  window.__llEnhSortV3 = true;
-
-  const TYPE_RANK = (t)=> {
-    const x = String(t||"").toUpperCase();
-    if (x.includes("MEMBER")) return 0;
-    if (x.includes("LIVE")) return 1;
-    if (x.includes("SUPPORT")) return 2;
-    if (x.includes("EVENT")) return 3;
-    return 9;
-  };
-  const RAR_RANK = (r)=> {
-    const x = String(r||"").toUpperCase();
-    const map = { "C":0, "U":1, "R":2, "SR":3, "UR":4, "SEC":5, "PR":6 };
-    return (map[x] ?? 99);
-  };
-
-  function parseCnFromImg(el){
-    const img = el.querySelector('img[src*="/img?cn="]') || el.querySelector('img');
-    if (!img || !img.src) return "";
-    try{
-      const u = new URL(img.src, location.href);
-      const cn = u.searchParams.get("cn");
-      return cn ? cn.trim() : "";
-    }catch(_){ return ""; }
-  }
-
-  function getCN(el){
-    const cap = el.querySelector(".llEnhCap");
-    if (cap && cap.textContent) return cap.textContent.trim();
-    const dcn = el.dataset && (el.dataset.cn || el.dataset.cardnumber || el.dataset.cardNo);
-    if (dcn) return String(dcn).trim();
-    return parseCnFromImg(el);
-  }
-
-  const metaCache = new Map();
-  async function getMetaBulk(cns){
-    const need = cns.filter(cn => !metaCache.has(cn));
-    if (need.length){
-      try{
-        const url = "/meta_bulk?cns=" + encodeURIComponent(need.join(","));
-        const r = await fetch(url, {cache:"no-store"});
-        if (r.ok){
-          const obj = await r.json();
-          for (const [cn, m] of Object.entries(obj||{})) metaCache.set(cn, m||{});
-        }
-      }catch(_e){}
-      for (const cn of need) if (!metaCache.has(cn)) metaCache.set(cn, {});
-    }
-  }
-
-  const PREF_OF = (cn, meta)=> meta && meta.prefix ? String(meta.prefix) : (String(cn||"").replace(/-+$/,"").match(/^(.*?)-(\d+)$/)?.[1] ?? String(cn||""));
-  const NUM_OF  = (cn, meta)=> (meta && typeof meta.num==="number") ? meta.num : (parseInt((String(cn||"").match(/(\d+)(?!.*\d)/)||[])[1]||"1000000000",10));
-
-  async function sortContainer(container){
-    if (!container) return;
-    const kids = Array.from(container.children);
-    const items = kids.filter(ch => ch.querySelector && getCN(ch));
-    if (items.length < 2) return;
-
-    const cns = items.map(getCN).filter(Boolean);
-    if (cns.length < 2) return;
-
-    await getMetaBulk(cns);
-
-    items.sort((a,b)=>{
-      const ca=getCN(a), cb=getCN(b);
-      const ma=metaCache.get(ca)||{}, mb=metaCache.get(cb)||{};
-      const ta=TYPE_RANK(ma.type), tb=TYPE_RANK(mb.type);
-      if (ta!==tb) return ta-tb;
-
-      const pa=PREF_OF(ca,ma), pb=PREF_OF(cb,mb);
-      if (pa!==pb) return pa.localeCompare(pb);
-
-      const na=NUM_OF(ca,ma), nb=NUM_OF(cb,mb);
-      if (na!==nb) return na-nb;
-
-      const ra=RAR_RANK(ma.rarity), rb=RAR_RANK(mb.rarity);
-      if (ra!==rb) return ra-rb;
-
-      return ca.localeCompare(cb);
-    });
-
-    for (const it of items) container.appendChild(it);
-  }
-
-  function scanAndSort(){
-    document.querySelectorAll(".llEnhRow").forEach(c=>sortContainer(c));
-    document.querySelectorAll(".llEnhChoiceWrap").forEach(c=>sortContainer(c));
-    document.querySelectorAll(".cardList,.cards,.cardlist,.list").forEach(c=>sortContainer(c));
-  }
-
-  const mo = new MutationObserver(()=>scanAndSort());
-  mo.observe(document.documentElement, {subtree:true, childList:true});
-  document.addEventListener("DOMContentLoaded", ()=>setTimeout(scanAndSort, 120));
-  setTimeout(scanAndSort, 900);
-})();
-</script>
-
 </body>
 </html>'''
