@@ -458,6 +458,57 @@ class App:
                 str(payload.get("choice", "")),
             )
         elif name == "next":
+            # PATCH_V2_11_SKIP_CHEER_EMPTY_LIVE
+            # If no LIVE cards remain in live card storage (set_zone), skip cheer and end turn.
+            try:
+                ph = str(getattr(self.gs, 'phase', '') or '').upper()
+            except Exception:
+                ph = ''
+            if ph.startswith('LIVE') and ('SET' not in ph):
+                try:
+                    items = list(getattr(self.gs, 'set_zone', []) or [])
+                except Exception:
+                    items = []
+                live = []
+                other = []
+                for cn in items:
+                    try:
+                        ci = _get_card(self.cards_db, cn)
+                        t = str(getattr(ci, 'type', '') or '').upper() if ci else ''
+                    except Exception:
+                        t = ''
+                    if 'LIVE' in t:
+                        live.append(cn)
+                    else:
+                        other.append(cn)
+                if len(live) == 0:
+                    try:
+                        gr = getattr(self.gs, 'green_room', None)
+                        if isinstance(gr, list):
+                            gr.extend(other)
+                    except Exception:
+                        pass
+                    try:
+                        self.gs.set_zone = []
+                    except Exception:
+                        pass
+                    try:
+                        if hasattr(self.gs, 'resolve_zone'):
+                            self.gs.resolve_zone = []
+                    except Exception:
+                        pass
+                    try:
+                        self.gs.log.append('[UI] LIVEカードが無いためエールをスキップしてターン終了')
+                    except Exception:
+                        pass
+                    try:
+                        self.gs.phase = 'MAIN'
+                    except Exception:
+                        pass
+                    cmd_end_turn(self.gs, self.rng)
+                    self.save_trace()
+                    return self.state_json()
+
             idxs = payload.get("indices", [])
             if not isinstance(idxs, list):
                 idxs = []
