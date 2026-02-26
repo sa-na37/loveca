@@ -370,8 +370,55 @@ class App:
             "banner": banner,
             "ui_version": APP_VERSION,
         }
+# PATCH_V2_10_LIVE_GUARD_MAIN_ONLY_APPCMD
+    def _live_set_split(self):
+        # returns (live_cns, other_cns)
+        live = []
+        other = []
+        try:
+            items = list(getattr(self.gs, 'set_zone', []) or [])
+        except Exception:
+            items = []
+        for cn in items:
+            try:
+                ci = _get_card(self.cards_db, cn)
+                t = str(getattr(ci, 'type', '') or '').upper() if ci else ''
+            except Exception:
+                t = ''
+            if 'LIVE' in t:
+                live.append(cn)
+            else:
+                other.append(cn)
+        return live, other
 
-    def cmd(self, name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    def _end_turn_skip_cheer(self, reason: str = '') -> None:
+        # clear resolve zone (avoid popup), then end turn
+        try:
+            if hasattr(self.gs, 'resolve_zone'):
+                self.gs.resolve_zone = []
+        except Exception:
+            pass
+        try:
+            if reason:
+                self.gs.log.append(f'[UI] {reason}')
+        except Exception:
+            pass
+        cmd_end_turn(self.gs, self.rng)
+
+
+    def cmd(self, name: str, payload: Dict[str, Any]) -> Dict[str, Any]:        # PATCH_V2_10_GUARD_MAIN_ONLY
+        try:
+            ph0 = str(getattr(self.gs, 'phase', '') or '')
+        except Exception:
+            ph0 = ''
+        if name in {'play', 'activate_to_green'} and ph0 != 'MAIN':
+            try:
+                self.gs.log.append('[UI] メインフェイズのみ実行できます')
+            except Exception:
+                pass
+            self.save_trace()
+            return self.state_json()
+
         mutating = name in {
             "play",
             "set",
@@ -429,7 +476,30 @@ class App:
                     self.gs.log.append("[LIVE] no LIVE in set_zone -> skip YELL/ATTEMPT and end turn")
                     cmd_end_turn(self.gs, self.rng)
                     self.save_trace()
+                    return self.state_json()            # PATCH_V2_10_LIVE_EMPTY_GUARD
+            try:
+                ph = str(getattr(self.gs, 'phase', '') or '').upper()
+            except Exception:
+                ph = ''
+            if ph.startswith('LIVE') and ('SET' not in ph):
+                live, other = self._live_set_split()
+                if len(live) == 0:
+                    # In performance step, move member cards out first
+                    if ('PERF' in ph) or ('PERFORMANCE' in ph):
+                        try:
+                            gr = getattr(self.gs, 'green_room', None)
+                            if isinstance(gr, list):
+                                gr.extend(other)
+                        except Exception:
+                            pass
+                        try:
+                            self.gs.set_zone = []
+                        except Exception:
+                            pass
+                    self._end_turn_skip_cheer('LIVEカードが無いためエールをスキップしてターン終了')
+                    self.save_trace()
                     return self.state_json()
+
 
             cmd_next(self.gs, self.rng, self.cards_db, [int(x) for x in idxs])
 
