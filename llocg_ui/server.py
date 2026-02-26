@@ -52,7 +52,7 @@ from .engine import (
     can_activate,
 )
 
-APP_VERSION = "clean-ui-v2_7_mulligan_jp"
+APP_VERSION = "clean-ui-v2_7_1_mulligan_jp_fix"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -87,116 +87,144 @@ class App:
         _write_text(self.outdir / "ui_trace.txt", "\n".join(self.gs.log) + ("\n" if self.gs.log else ""))
 
 
+    def _force_mulligan_start(self) -> None:
+        """Force MULLIGAN state at boot (spec).
 
-def _force_mulligan_start(self) -> None:
-    """Force the game into MULLIGAN state at boot (spec).
-
-    Spec: show 6-card opening hand, let user select any number to redraw,
-    then start Turn 1 automatically (energy +1 -> 4, draw 1 -> 7 cards)."""
-    gs = self.gs
-    try:
-        # Avoid re-applying if already in mulligan
-        if str(getattr(gs, 'phase', '')).upper() == 'MULLIGAN':
-            return
-        # Collect starting deck+hand and re-deal 6
-        deck = list(getattr(gs, 'deck', []) or [])
-        hand = list(getattr(gs, 'hand', []) or [])
-        deck.extend(hand)
-        # Reset zones defensively (should be empty at start)
+        - Deal opening 6 cards.
+        - Phase becomes 'MULLIGAN' (user selects any number to redraw).
+        - After decision, UI calls cmd 'mulligan_next' which redraws and auto-starts Turn 1.
+        """
+        gs = self.gs
         try:
-            getattr(gs, 'hand').clear()
-        except Exception:
-            gs.hand = []
-        gs.deck = deck
-        try:
-            self.rng.shuffle(gs.deck)
+            if str(getattr(gs, 'phase', '')).upper() == 'MULLIGAN':
+                return
         except Exception:
             pass
-        # draw 6
+
+        # Return any existing hand to deck, then shuffle and draw 6
+        try:
+            deck = list(getattr(gs, 'deck', []) or [])
+        except Exception:
+            deck = []
+        try:
+            hand = list(getattr(gs, 'hand', []) or [])
+        except Exception:
+            hand = []
+        deck.extend(hand)
+        try:
+            self.rng.shuffle(deck)
+        except Exception:
+            pass
+
         new_hand = []
         for _ in range(6):
-            if not gs.deck:
+            if not deck:
                 break
-            new_hand.append(gs.deck.pop(0))
-        gs.hand = new_hand
+            new_hand.append(deck.pop(0))
 
-        # Reset turn/phase/energy to pre-turn1 baseline
-        gs.turn = 0
-        gs.phase = 'MULLIGAN'
-        # energy_wait is "max" and energy_active is "remaining" (UI shows active/(active+wait))
-        gs.energy_wait = 0
-        gs.energy_active = 3
-
-        # Clear selection/pending UI remnants if any
         try:
-            gs.pending = []
+            gs.deck = deck
+            gs.hand = new_hand
         except Exception:
             pass
+
+        # Reset baseline before Turn 1
         try:
-            gs.banner_text = 'マリガン：引き直すカードを選んでNEXT'
-            gs.banner_ts = 0.0
-            gs.banner_ttl = 0.0
+            gs.turn = 0
+            gs.phase = 'MULLIGAN'
+            gs.energy_active = 3
+            gs.energy_wait = 0
         except Exception:
             pass
+
+        # Clear any leftover stacks/pending defensively
+        for k in ('set_zone','resolve_zone','pending'):
+            try:
+                v = getattr(gs, k, None)
+                if isinstance(v, list):
+                    v.clear()
+                elif v is not None:
+                    setattr(gs, k, [])
+            except Exception:
+                pass
 
         try:
             gs.log.append('[PHASE] MULLIGAN (choose cards to redraw)')
         except Exception:
             pass
-    except Exception as e:
+
+    def _cmd_mulligan_next(self, indices: list[int]) -> None:
+        """Apply mulligan redraw, then auto-start Turn 1 per spec."""
+        gs = self.gs
         try:
-            gs.log.append(f'[ERR] mulligan init failed: {e}')
+            n = len(gs.hand)
+        except Exception:
+            n = 0
+        idxs = []
+        for x in indices:
+            try:
+                i = int(x)
+            except Exception:
+                continue
+            if 0 <= i < n:
+                idxs.append(i)
+        idxs = sorted(set(idxs))
+        idxset = set(idxs)
+
+        try:
+            removed = [gs.hand[i] for i in idxs]
+            keep = [c for j,c in enumerate(gs.hand) if j not in idxset]
+        except Exception:
+            removed = []
+            keep = list(getattr(gs, 'hand', []) or [])
+
+        draw_n = len(removed)
+        drawn = []
+        try:
+            for _ in range(draw_n):
+                if not gs.deck:
+                    break
+                drawn.append(gs.deck.pop(0))
         except Exception:
             pass
 
-def _cmd_mulligan_next(self, indices: list[int]) -> None:
-    """Apply mulligan, then auto-start Turn 1 per spec."""
-    gs = self.gs
-    # normalize indices
-    idxs = [i for i in indices if isinstance(i, int)]
-    idxs = sorted(set(i for i in idxs if 0 <= i < len(gs.hand)))
+        try:
+            gs.hand = keep + drawn
+        except Exception:
+            pass
 
-    # remove selected from hand
-    removed = [gs.hand[i] for i in idxs]
-    keep = [c for j, c in enumerate(gs.hand) if j not in set(idxs)]
+        try:
+            gs.deck.extend(removed)
+        except Exception:
+            pass
+        try:
+            self.rng.shuffle(gs.deck)
+        except Exception:
+            pass
 
-    # draw same count from deck
-    draw_n = len(removed)
-    drawn = []
-    for _ in range(draw_n):
-        if not gs.deck:
-            break
-        drawn.append(gs.deck.pop(0))
+        try:
+            gs.log.append(f'[MULLIGAN] redraw={draw_n}')
+        except Exception:
+            pass
 
-    gs.hand = keep + drawn
+        # Auto-start Turn 1: energy 4/4, draw 1, enter MAIN
+        try:
+            gs.turn = 1
+            gs.energy_active = 4
+            gs.energy_wait = 0
+        except Exception:
+            pass
+        try:
+            if gs.deck:
+                gs.hand.append(gs.deck.pop(0))
+        except Exception:
+            pass
+        try:
+            gs.phase = 'MAIN'
+            gs.log.append('[PHASE] MAIN turn=1 (auto after mulligan)')
+        except Exception:
+            pass
 
-    # return removed to deck and shuffle
-    gs.deck.extend(removed)
-    try:
-        self.rng.shuffle(gs.deck)
-    except Exception:
-        pass
-
-    try:
-        gs.log.append(f'[MULLIGAN] redraw={draw_n}')
-    except Exception:
-        pass
-
-    # ---- auto start Turn 1 ----
-    gs.turn = 1
-    # energy total starts at 3 then +1 at turn start => 4
-    gs.energy_wait = 0
-    gs.energy_active = 4
-
-    # draw 1 at turn start
-    if gs.deck:
-        gs.hand.append(gs.deck.pop(0))
-
-    gs.phase = 'MAIN'
-    try:
-        gs.log.append('[PHASE] MAIN turn=1 (auto after mulligan)')
-    except Exception:
-        pass
     def _all_cardnumbers_in_state(self) -> list[str]:
         gs = getattr(self, "gs", None)
         if gs is None:
@@ -355,6 +383,7 @@ def _cmd_mulligan_next(self, indices: list[int]) -> None:
             "activate_to_green",
             "resolve_pending",
             "next",
+            "mulligan_next",
         }
         if mutating and name != "toggle_debug":
             push_undo(self.gs, self.rng)
@@ -385,11 +414,16 @@ def _cmd_mulligan_next(self, indices: list[int]) -> None:
             idxs = payload.get("indices", [])
             if not isinstance(idxs, list):
                 idxs = []
-            # MULLIGAN is handled in UI wrapper (engine stays unchanged)
-            if str(getattr(self.gs, 'phase', '')).upper() == 'MULLIGAN':
+            cmd_next(self.gs, self.rng, self.cards_db, [int(x) for x in idxs])
+
+        elif name == "mulligan_next":
+            idxs = payload.get("indices", [])
+            if not isinstance(idxs, list):
+                idxs = []
+            if str(getattr(self.gs, "phase", "")).upper() == "MULLIGAN":
                 self._cmd_mulligan_next([int(x) for x in idxs])
             else:
-                cmd_next(self.gs, self.rng, self.cards_db, [int(x) for x in idxs])
+                self.gs.log.append("[WARN] mulligan_next ignored (phase mismatch)")
         elif name == "end_turn":
             cmd_end_turn(self.gs, self.rng)
         elif name == "undo":
@@ -611,9 +645,8 @@ HTML = r'''<!doctype html>
     <img id="playmat" src="/playmat" alt="playmat"/>
 
     <div id="topBar">
-      <div class="pill">ターン: <b id="turn">?</b> | フェイズ: <b id="phase">?</b> | エネルギー: <b id="energy">?</b></div>
-      <div class="pill">選択(手札): <b id="selected">0</b></div>
-      <div class="pill" id="hint" style="display:none;"></div>
+      <div class="pill">Turn: <b id="turn">?</b> | Phase: <b id="phase">?</b> | Energy: <b id="energy">?</b></div>
+      <div class="pill">Selected(hand): <b id="selected">0</b></div>
       <button class="miniBtn" id="btnDbg">枠表示</button>
     </div>
 
@@ -660,7 +693,6 @@ HTML = r'''<!doctype html>
   const elPhase = document.getElementById('phase');
   const elEnergy = document.getElementById('energy');
   const elSelected = document.getElementById('selected');
-  const elHint = document.getElementById('hint');
   const elBanner = document.getElementById('banner');
 
   const elMask = document.getElementById('mask');
@@ -734,7 +766,8 @@ HTML = r'''<!doctype html>
 
   function selLimit(){
     if(!st) return 1;
-    if(st.phase === 'LIVE_SET') return 3; if(String(st.phase).toUpperCase()==='MULLIGAN') return (st.hand? st.hand.length : 6) || 6; return 1;
+    if(String(st.phase||'').toUpperCase()==='MULLIGAN') return (st.hand? st.hand.length : 6) || 6;
+    return (st.phase === 'LIVE_SET') ? 3 : 1;
   }
   function toggleSel(i){
     const idx = selHand.indexOf(i);
@@ -755,8 +788,8 @@ HTML = r'''<!doctype html>
       const t = String(text);
       elBanner.textContent = t;
       const u = t.toUpperCase();
-      if(u.includes('FAIL') || t.includes('失敗')) elBanner.dataset.kind = 'fail';
-      else if(u.includes('SUCCESS') || u.includes('OK') || t.includes('成功')) elBanner.dataset.kind = 'success';
+      if(u.includes('FAIL')) elBanner.dataset.kind = 'fail';
+      else if(u.includes('SUCCESS') || u.includes('OK')) elBanner.dataset.kind = 'success';
       else elBanner.dataset.kind = 'info';
       elBanner.style.display = 'block';
       bannerTimer = setTimeout(()=>{ elBanner.style.display = 'none'; }, 1600);
@@ -1089,7 +1122,7 @@ HTML = r'''<!doctype html>
 
     const t = document.createElement('div');
     t.className = 'energyText';
-    t.innerHTML = `エネルギー: <b>${active}</b> / <b>${total}</b><div style="opacity:.8;font-size:12px;margin-top:2px;">待機: ${wait}</div>`;
+    t.innerHTML = `Energy: <b>${active}</b> / <b>${total}</b><div style="opacity:.8;font-size:12px;margin-top:2px;">wait: ${wait}</div>`;
     wrap.appendChild(t);
 
     const btnUndo = document.createElement('button');
@@ -1105,10 +1138,13 @@ HTML = r'''<!doctype html>
 
     const btnNext = document.createElement('button');
     btnNext.className = 'btn primary';
-    btnNext.textContent = 'NEXT';
+    const ph = String(st && st.phase ? st.phase : '').toUpperCase();
+    btnNext.textContent = (ph==='MULLIGAN') ? 'マリガン決定' : 'NEXT';
     btnNext.addEventListener('click', async (ev)=>{
       ev.stopPropagation();
-      st = await apiCmd('next', {indices: selHand.slice()});
+      const ph2 = String(st && st.phase ? st.phase : '').toUpperCase();
+      if(ph2==='MULLIGAN') st = await apiCmd('mulligan_next', {indices: selHand.slice()});
+      else st = await apiCmd('next', {indices: selHand.slice()});
       selHand = [];
       updateTop();
       render();
@@ -1173,7 +1209,7 @@ HTML = r'''<!doctype html>
     if(closable){
       const close = document.createElement('button');
       close.className = 'miniBtn';
-      close.textContent = '閉じる';
+      close.textContent = 'Close';
       close.addEventListener('click', ()=>{ closePopup(); });
       elModalActions.appendChild(close);
     }
@@ -1256,7 +1292,7 @@ HTML = r'''<!doctype html>
       if(allowSkip){
         const bSkip = document.createElement('button');
         bSkip.className = 'miniBtn';
-        bSkip.textContent = 'スキップ';
+        bSkip.textContent = 'Skip';
         bSkip.addEventListener('click', async (ev)=>{
           ev.stopPropagation();
           st = await apiCmd('resolve_pending', {idx:0, choice:'skip'});
@@ -1319,18 +1355,6 @@ HTML = r'''<!doctype html>
     const wait = st ? Number(st.energy_wait||0) : 0;
     elEnergy.textContent = st ? `${active}/${active+wait}` : '?';
     elSelected.textContent = String(selHand.length);
-    try{
-      if(elHint){
-        const ph = st ? String(st.phase||'') : '';
-        if(String(ph).toUpperCase()==='MULLIGAN'){
-          elHint.textContent = 'マリガン：引き直すカードを選んでNEXT';
-          elHint.style.display = 'inline-block';
-        }else{
-          elHint.textContent = '';
-          elHint.style.display = 'none';
-        }
-      }
-    }catch(e){}
     setBanner(st && st.banner && st.banner.text ? String(st.banner.text) : '');
   }
 
