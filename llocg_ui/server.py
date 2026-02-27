@@ -52,7 +52,7 @@ from .engine import (
     can_activate,
 )
 
-APP_VERSION = "clean-ui-v2_8_skip_yell_empty_live"
+APP_VERSION = "clean-ui-v2_16_engine_authoritative_v2"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -406,281 +406,78 @@ class App:
         cmd_end_turn(self.gs, self.rng)
 
 
-    def cmd(self, name: str, payload: Dict[str, Any]) -> Dict[str, Any]:        # PATCH_V2_10_GUARD_MAIN_ONLY
-        try:
-            ph0 = str(getattr(self.gs, 'phase', '') or '')
-        except Exception:
-            ph0 = ''
-        if name in {'play', 'activate_to_green'} and ph0 != 'MAIN':
-            try:
-                self.gs.log.append('[UI] メインフェイズのみ実行できます')
-            except Exception:
-                pass
-            self.save_trace()
-            return self.state_json()
+# FIX_V2_16_SERVER_CMD_THIN_ROUTER
+def cmd(self, name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Dispatch a UI command.
 
-        mutating = name in {
-            "play",
-            "set",
-            "yell",
-            "attempt",
-            "ack",
-            "end_turn",
-            "toggle_debug",
-            "activate_to_green",
-            "resolve_pending",
-            "next",
-            "mulligan_next",
-        }
-        if mutating and name != "toggle_debug":
-            push_undo(self.gs, self.rng)
+    Policy:
+    - Do NOT enforce MAIN-only operation restrictions (frozen).
+    - Do NOT intercept NEXT with skip/phase hacks.
+    - Let engine.cmd_next handle phase progression.
+    """
+    mutating = name in {
+        "play",
+        "set",
+        "yell",
+        "attempt",
+        "ack",
+        "end_turn",
+        "toggle_debug",
+        "activate_to_green",
+        "resolve_pending",
+        "next",
+        "mulligan_next",
+    }
+    if mutating and name != "toggle_debug":
+        push_undo(self.gs, self.rng)
 
-        if name == "play":
-            cmd_play(self.gs, self.cards_db, int(payload.get("hand_idx", -1)), str(payload.get("pos", "")))
-        elif name == "set":
-            idxs = payload.get("indices", [])
-            if not isinstance(idxs, list):
-                idxs = []
-            cmd_set(self.gs, self.rng, [int(x) for x in idxs])
-        elif name == "yell":
-            cmd_yell(self.gs, self.rng, self.cards_db)
-        elif name == "attempt":
-            cmd_attempt(self.gs, self.cards_db)
-        elif name == "ack":
-            cmd_ack(self.gs)
-        elif name == "activate_to_green":
-            cmd_activate_to_green(self.gs, self.cards_db, str(payload.get("pos", "")))
-        elif name == "resolve_pending":
-            cmd_resolve_pending(
-                self.gs,
-                self.cards_db,
-                int(payload.get("idx", -1)),
-                str(payload.get("choice", "")),
-            )
-        elif name == "next":
-            # PATCH_V2_15_ENDTURN_ADVANCE_TO_MAIN
-            def _get_turn(gs):
-                for k in ('turn','turn_n','turn_no','turn_idx'):
-                    try: v = getattr(gs, k)
-                    except Exception: v = None
-                    if isinstance(v, int): return v
-                    try:
-                        if v is not None and str(v).isdigit(): return int(str(v))
-                    except Exception:
-                        pass
-                return None
-
-            def _count_live(items):
-                n=0
-                for cn in items:
-                    try:
-                        ci=_get_card(self.cards_db, cn)
-                        t=str(getattr(ci,'type','') or '').upper() if ci else ''
-                    except Exception:
-                        t=''
-                    if 'LIVE' in t: n += 1
-                return n
-
-            def _end_turn_to_next_main(msg):
-                try: self.gs.log.append(msg)
-                except Exception: pass
-                t0 = _get_turn(self.gs)
-                # end_turn must be called in MAIN; then drive cmd_next until next-turn MAIN
-                try: self.gs.phase = 'MAIN'
-                except Exception: pass
-                try: cmd_end_turn(self.gs, self.rng)
-                except Exception: pass
-                for _ in range(60):
-                    try: cmd_next(self.gs, self.rng)
-                    except Exception: break
-                    try: ph2 = str(getattr(self.gs,'phase','') or '').upper()
-                    except Exception: ph2 = ''
-                    t1 = _get_turn(self.gs)
-                    if ph2 == 'MAIN' and (t0 is None or t1 is None or t1 != t0):
-                        break
-                self.save_trace()
-                return self.state_json()
-
-            try: ph0 = str(getattr(self.gs,'phase','') or '').upper()
-            except Exception: ph0 = ''
-            try: items0 = list(getattr(self.gs,'set_zone',[]) or [])
-            except Exception: items0 = []
-
-            # LIVE_CONFIRM で 0枚セット → ターン終了→次ターンMAINへ（ループ停止）
-            if ph0 == 'LIVE_CONFIRM' and len(items0) == 0:
-                return _end_turn_to_next_main('[UI] LIVEをセットしなかったためLIVEをスキップ（次ターンMAINへ）')
-
-            # LIVE中に LIVEが0枚 → エール無しで ターン終了→次ターンMAINへ
-            if ph0.startswith('LIVE') and ph0 != 'LIVE_SET' and ('SET' not in ph0):
-                if _count_live(items0) == 0:
-                    return _end_turn_to_next_main('[UI] LIVEカードが無いためエールをスキップ（次ターンMAINへ）')
-
-            try:
-                ph = str(getattr(self.gs, 'phase', '') or '').upper()
-            except Exception:
-                ph = ''
-            try:
-                items = list(getattr(self.gs, 'set_zone', []) or [])
-            except Exception:
-                items = []
-            if ph == 'LIVE_CONFIRM' and len(items) == 0:
-                try:
-                    self.gs.log.append('[UI] LIVEをセットしなかったためLIVEをスキップしてターン終了')
-                except Exception:
-                    pass
-                # cmd_end_turn requires MAIN
-                try:
-                    self.gs.phase = 'MAIN'
-                except Exception:
-                    pass
-                cmd_end_turn(self.gs, self.rng)
-                self.save_trace()
-                return self.state_json()
-
-            # Other LIVE subphases: if no LIVE remain in set_zone, skip cheer and end turn
-            if ph.startswith('LIVE') and (('ATTEMPT' in ph) or ('YELL' in ph) or ('PERF' in ph) or ('RESOLVE' in ph)):
-                live_n = 0
-                for cn in items:
-                    try:
-                        ci = _get_card(self.cards_db, cn)
-                        t = str(getattr(ci, 'type', '') or '').upper() if ci else ''
-                    except Exception:
-                        t = ''
-                    if 'LIVE' in t:
-                        live_n += 1
-                if live_n == 0:
-                    try:
-                        if hasattr(self.gs, 'resolve_zone'):
-                            self.gs.resolve_zone = []
-                    except Exception:
-                        pass
-                    try:
-                        self.gs.log.append('[UI] LIVEカードが無いためエールをスキップしてターン終了')
-                    except Exception:
-                        pass
-                    try:
-                        self.gs.phase = 'MAIN'
-                    except Exception:
-                        pass
-                    cmd_end_turn(self.gs, self.rng)
-                    self.save_trace()
-                    return self.state_json()
-
-            try:
-                ph = str(getattr(self.gs, 'phase', '') or '').upper()
-            except Exception:
-                ph = ''
-            if ph.startswith('LIVE') and ('SET' not in ph):
-                try:
-                    items = list(getattr(self.gs, 'set_zone', []) or [])
-                except Exception:
-                    items = []
-                live = []
-                other = []
-                for cn in items:
-                    try:
-                        ci = _get_card(self.cards_db, cn)
-                        t = str(getattr(ci, 'type', '') or '').upper() if ci else ''
-                    except Exception:
-                        t = ''
-                    if 'LIVE' in t:
-                        live.append(cn)
-                    else:
-                        other.append(cn)
-                if len(live) == 0:
-                    try:
-                        gr = getattr(self.gs, 'green_room', None)
-                        if isinstance(gr, list):
-                            gr.extend(other)
-                    except Exception:
-                        pass
-                    try:
-                        self.gs.set_zone = []
-                    except Exception:
-                        pass
-                    try:
-                        if hasattr(self.gs, 'resolve_zone'):
-                            self.gs.resolve_zone = []
-                    except Exception:
-                        pass
-                    try:
-                        self.gs.log.append('[UI] LIVEカードが無いためエールをスキップしてターン終了')
-                    except Exception:
-                        pass
-                    try:
-                        self.gs.phase = 'MAIN'
-                    except Exception:
-                        pass
-                    cmd_end_turn(self.gs, self.rng)
-                    self.save_trace()
-                    return self.state_json()
-
-            idxs = payload.get("indices", [])
-            if not isinstance(idxs, list):
-                idxs = []
-
-            # SPEC: If there is no LIVE card in live-set (set_zone) after performance,
-            # do NOT perform YELL/ATTEMPT; end the live processing and go to turn end.
-            # (The engine currently may still proceed; we guard here to match spec.)
-            phase = str(getattr(self.gs, "phase", "")).upper()
-            if phase in {"LIVE_ATTEMPT", "LIVE", "LIVE_YELL", "LIVE_JUDGE", "LIVE_RESOLVE"}:
-                live_in_set = []
-                for cn in list(getattr(self.gs, "set_zone", []) or []):
-                    card = _get_card(self.cards_db, cn)
-                    if card and str(getattr(card, "type", "")).upper() == "LIVE":
-                        live_in_set.append(cn)
-                if len(live_in_set) == 0:
-                    self.gs.log.append("[LIVE] no LIVE in set_zone -> skip YELL/ATTEMPT and end turn")
-                    cmd_end_turn(self.gs, self.rng)
-                    self.save_trace()
-                    return self.state_json()            # PATCH_V2_10_LIVE_EMPTY_GUARD
-            try:
-                ph = str(getattr(self.gs, 'phase', '') or '').upper()
-            except Exception:
-                ph = ''
-            if ph.startswith('LIVE') and ('SET' not in ph):
-                live, other = self._live_set_split()
-                if len(live) == 0:
-                    # In performance step, move member cards out first
-                    if ('PERF' in ph) or ('PERFORMANCE' in ph):
-                        try:
-                            gr = getattr(self.gs, 'green_room', None)
-                            if isinstance(gr, list):
-                                gr.extend(other)
-                        except Exception:
-                            pass
-                        try:
-                            self.gs.set_zone = []
-                        except Exception:
-                            pass
-                    self._end_turn_skip_cheer('LIVEカードが無いためエールをスキップしてターン終了')
-                    self.save_trace()
-                    return self.state_json()
-
-
-            cmd_next(self.gs, self.rng, self.cards_db, [int(x) for x in idxs])
-
-        elif name == "mulligan_next":
-            idxs = payload.get("indices", [])
-            if not isinstance(idxs, list):
-                idxs = []
-            if str(getattr(self.gs, "phase", "")).upper() == "MULLIGAN":
-                self._cmd_mulligan_next([int(x) for x in idxs])
-            else:
-                self.gs.log.append("[WARN] mulligan_next ignored (phase mismatch)")
-        elif name == "end_turn":
-            cmd_end_turn(self.gs, self.rng)
-        elif name == "undo":
-            do_undo(self.gs, self.rng)
-        elif name == "toggle_debug":
-            self.gs.debug = not self.gs.debug
-            self.gs.log.append(f"[DEBUG] debug={self.gs.debug}")
+    if name == "play":
+        cmd_play(self.gs, self.cards_db, int(payload.get("hand_idx", -1)), str(payload.get("pos", "")))
+    elif name == "set":
+        idxs = payload.get("indices", [])
+        if not isinstance(idxs, list):
+            idxs = []
+        cmd_set(self.gs, self.rng, [int(x) for x in idxs])
+    elif name == "yell":
+        cmd_yell(self.gs, self.rng, self.cards_db)
+    elif name == "attempt":
+        cmd_attempt(self.gs, self.cards_db)
+    elif name == "ack":
+        cmd_ack(self.gs)
+    elif name == "activate_to_green":
+        cmd_activate_to_green(self.gs, self.cards_db, str(payload.get("pos", "")))
+    elif name == "resolve_pending":
+        cmd_resolve_pending(
+            self.gs,
+            self.cards_db,
+            int(payload.get("idx", -1)),
+            str(payload.get("choice", "")),
+        )
+    elif name == "next":
+        idxs = payload.get("indices", [])
+        if not isinstance(idxs, list):
+            idxs = []
+        cmd_next(self.gs, self.rng, self.cards_db, [int(x) for x in idxs])
+    elif name == "mulligan_next":
+        idxs = payload.get("indices", [])
+        if not isinstance(idxs, list):
+            idxs = []
+        if str(getattr(self.gs, "phase", "")).upper() == "MULLIGAN":
+            self._cmd_mulligan_next([int(x) for x in idxs])
         else:
-            self.gs.log.append(f"[ERR] unknown cmd: {name}")
+            self.gs.log.append("[WARN] mulligan_next ignored (phase mismatch)")
+    elif name == "end_turn":
+        cmd_end_turn(self.gs, self.rng)
+    elif name == "undo":
+        do_undo(self.gs, self.rng)
+    elif name == "toggle_debug":
+        self.gs.debug = not self.gs.debug
+        self.gs.log.append(f"[DEBUG] debug={self.gs.debug}")
+    else:
+        self.gs.log.append(f"[ERR] unknown cmd: {name}")
 
-        self.save_trace()
-        return self.state_json()
-
+    self.save_trace()
+    return self.state_json()
 
 class Handler(BaseHTTPRequestHandler):
     """HTTP router."""
