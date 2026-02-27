@@ -1133,11 +1133,11 @@ def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], i
             gs.log.append(f"[SET] non-live {len(nonlives)} -> green room")
         gs.set_zone = lives
         # FIX_V2_16_NO_LIVE_AFTER_FILTER
-        # If no LIVE cards were set (e.g., only MEMBER was set), skip the live entirely.
+        # If no LIVE cards remain after filtering (e.g., only MEMBER was set), skip the live.
         if not lives:
-            gs.log.append("[INFO] confirm: no LIVE in set_zone after filtering; skipping live.")
-            gs.phase = "LIVE_RESOLVE"
-            gs.log.append(f"[PHASE] LIVE_RESOLVE (no live) turn={gs.turn}")
+            gs.log.append('[INFO] confirm: no LIVE in set_zone after filtering; skipping live.')
+            gs.phase = 'LIVE_RESOLVE'
+            gs.log.append(f"[PHASE] LIVE_RESOLVE (no live) turn={{gs.turn}}")
             return
 
 
@@ -1152,11 +1152,11 @@ def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], i
 
     if gs.phase == "LIVE_PERF":
         # FIX_V2_16_SKIP_PERF_WHEN_NO_LIVE
-        # If there is no LIVE card in set_zone, do not perform YELL/ATTEMPT.
+        # If set_zone has no LIVE card, do not do YELL/ATTEMPT.
         if not gs.set_zone:
-            gs.log.append("[INFO] perf: no LIVE in set_zone; skipping cheer/attempt.")
-            gs.phase = "LIVE_RESOLVE"
-            gs.log.append(f"[PHASE] LIVE_RESOLVE (no live) turn={gs.turn}")
+            gs.log.append('[INFO] perf: no LIVE in set_zone; skipping cheer/attempt.')
+            gs.phase = 'LIVE_RESOLVE'
+            gs.log.append(f"[PHASE] LIVE_RESOLVE (no live) turn={{gs.turn}}")
             return
 
         cmd_yell(gs, rng, cards_db)

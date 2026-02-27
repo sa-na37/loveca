@@ -52,7 +52,7 @@ from .engine import (
     can_activate,
 )
 
-APP_VERSION = "clean-ui-v2_16_engine_authoritative_v2"
+APP_VERSION = "clean-ui-v2_16_2_fix_live_loop_and_restore_cmd"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -406,14 +406,13 @@ class App:
         cmd_end_turn(self.gs, self.rng)
 
 
-# FIX_V2_16_SERVER_CMD_THIN_ROUTER
 def cmd(self, name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Dispatch a UI command.
+    """Dispatch UI commands (thin router).
 
     Policy:
-    - Do NOT enforce MAIN-only operation restrictions (frozen).
-    - Do NOT intercept NEXT with skip/phase hacks.
-    - Let engine.cmd_next handle phase progression.
+    - MAINフェイズ制限は凍結（行わない）
+    - NEXTのフェイズ割り込み（LIVEスキップ等）は行わない
+      → engine.py の cmd_next が正として遷移を管理する
     """
     mutating = name in {
         "play",
@@ -433,19 +432,25 @@ def cmd(self, name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
 
     if name == "play":
         cmd_play(self.gs, self.cards_db, int(payload.get("hand_idx", -1)), str(payload.get("pos", "")))
+
     elif name == "set":
         idxs = payload.get("indices", [])
         if not isinstance(idxs, list):
             idxs = []
         cmd_set(self.gs, self.rng, [int(x) for x in idxs])
+
     elif name == "yell":
         cmd_yell(self.gs, self.rng, self.cards_db)
+
     elif name == "attempt":
         cmd_attempt(self.gs, self.cards_db)
+
     elif name == "ack":
         cmd_ack(self.gs)
+
     elif name == "activate_to_green":
         cmd_activate_to_green(self.gs, self.cards_db, str(payload.get("pos", "")))
+
     elif name == "resolve_pending":
         cmd_resolve_pending(
             self.gs,
@@ -453,11 +458,13 @@ def cmd(self, name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
             int(payload.get("idx", -1)),
             str(payload.get("choice", "")),
         )
+
     elif name == "next":
         idxs = payload.get("indices", [])
         if not isinstance(idxs, list):
             idxs = []
         cmd_next(self.gs, self.rng, self.cards_db, [int(x) for x in idxs])
+
     elif name == "mulligan_next":
         idxs = payload.get("indices", [])
         if not isinstance(idxs, list):
@@ -466,13 +473,17 @@ def cmd(self, name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
             self._cmd_mulligan_next([int(x) for x in idxs])
         else:
             self.gs.log.append("[WARN] mulligan_next ignored (phase mismatch)")
+
     elif name == "end_turn":
         cmd_end_turn(self.gs, self.rng)
+
     elif name == "undo":
         do_undo(self.gs, self.rng)
+
     elif name == "toggle_debug":
         self.gs.debug = not self.gs.debug
         self.gs.log.append(f"[DEBUG] debug={self.gs.debug}")
+
     else:
         self.gs.log.append(f"[ERR] unknown cmd: {name}")
 
