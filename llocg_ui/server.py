@@ -52,7 +52,7 @@ from .engine import (
     can_activate,
 )
 
-APP_VERSION = "clean-ui-v2_16_2_fix_live_loop_and_restore_cmd"
+APP_VERSION = "clean-ui-v2_8_skip_yell_empty_live"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -406,89 +406,83 @@ class App:
         cmd_end_turn(self.gs, self.rng)
 
 
-def cmd(self, name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Dispatch UI commands (thin router).
+    def cmd(self, name: str, payload: Dict[str, Any]) -> Dict[str, Any]:        # PATCH_V2_10_GUARD_MAIN_ONLY
+        try:
+            ph0 = str(getattr(self.gs, 'phase', '') or '')
+        except Exception:
+            ph0 = ''
+        if name in {'play', 'activate_to_green'} and ph0 != 'MAIN':
+            try:
+                self.gs.log.append('[UI] メインフェイズのみ実行できます')
+            except Exception:
+                pass
+            self.save_trace()
+            return self.state_json()
 
-    Policy:
-    - MAINフェイズ制限は凍結（行わない）
-    - NEXTのフェイズ割り込み（LIVEスキップ等）は行わない
-      → engine.py の cmd_next が正として遷移を管理する
-    """
-    mutating = name in {
-        "play",
-        "set",
-        "yell",
-        "attempt",
-        "ack",
-        "end_turn",
-        "toggle_debug",
-        "activate_to_green",
-        "resolve_pending",
-        "next",
-        "mulligan_next",
-    }
-    if mutating and name != "toggle_debug":
-        push_undo(self.gs, self.rng)
+        mutating = name in {
+            "play",
+            "set",
+            "yell",
+            "attempt",
+            "ack",
+            "end_turn",
+            "toggle_debug",
+            "activate_to_green",
+            "resolve_pending",
+            "next",
+            "mulligan_next",
+        }
+        if mutating and name != "toggle_debug":
+            push_undo(self.gs, self.rng)
 
-    if name == "play":
-        cmd_play(self.gs, self.cards_db, int(payload.get("hand_idx", -1)), str(payload.get("pos", "")))
-
-    elif name == "set":
-        idxs = payload.get("indices", [])
-        if not isinstance(idxs, list):
-            idxs = []
-        cmd_set(self.gs, self.rng, [int(x) for x in idxs])
-
-    elif name == "yell":
-        cmd_yell(self.gs, self.rng, self.cards_db)
-
-    elif name == "attempt":
-        cmd_attempt(self.gs, self.cards_db)
-
-    elif name == "ack":
-        cmd_ack(self.gs)
-
-    elif name == "activate_to_green":
-        cmd_activate_to_green(self.gs, self.cards_db, str(payload.get("pos", "")))
-
-    elif name == "resolve_pending":
-        cmd_resolve_pending(
-            self.gs,
-            self.cards_db,
-            int(payload.get("idx", -1)),
-            str(payload.get("choice", "")),
-        )
-
-    elif name == "next":
-        idxs = payload.get("indices", [])
-        if not isinstance(idxs, list):
-            idxs = []
-        cmd_next(self.gs, self.rng, self.cards_db, [int(x) for x in idxs])
-
-    elif name == "mulligan_next":
-        idxs = payload.get("indices", [])
-        if not isinstance(idxs, list):
-            idxs = []
-        if str(getattr(self.gs, "phase", "")).upper() == "MULLIGAN":
-            self._cmd_mulligan_next([int(x) for x in idxs])
+        if name == "play":
+            cmd_play(self.gs, self.cards_db, int(payload.get("hand_idx", -1)), str(payload.get("pos", "")))
+        elif name == "set":
+            idxs = payload.get("indices", [])
+            if not isinstance(idxs, list):
+                idxs = []
+            cmd_set(self.gs, self.rng, [int(x) for x in idxs])
+        elif name == "yell":
+            cmd_yell(self.gs, self.rng, self.cards_db)
+        elif name == "attempt":
+            cmd_attempt(self.gs, self.cards_db)
+        elif name == "ack":
+            cmd_ack(self.gs)
+        elif name == "activate_to_green":
+            cmd_activate_to_green(self.gs, self.cards_db, str(payload.get("pos", "")))
+        elif name == "resolve_pending":
+            cmd_resolve_pending(
+                self.gs,
+                self.cards_db,
+                int(payload.get("idx", -1)),
+                str(payload.get("choice", "")),
+            )
+        elif name == "next":
+            idxs = payload.get("indices", [])
+            if not isinstance(idxs, list):
+                idxs = []
+            cmd_next(self.gs, self.rng, self.cards_db, [int(x) for x in idxs])
+        elif name == "mulligan_next":
+            idxs = payload.get("indices", [])
+            if not isinstance(idxs, list):
+                idxs = []
+            if str(getattr(self.gs, "phase", "")).upper() == "MULLIGAN":
+                self._cmd_mulligan_next([int(x) for x in idxs])
+            else:
+                self.gs.log.append("[WARN] mulligan_next ignored (phase mismatch)")
+        elif name == "end_turn":
+            cmd_end_turn(self.gs, self.rng)
+        elif name == "undo":
+            do_undo(self.gs, self.rng)
+        elif name == "toggle_debug":
+            self.gs.debug = not self.gs.debug
+            self.gs.log.append(f"[DEBUG] debug={self.gs.debug}")
         else:
-            self.gs.log.append("[WARN] mulligan_next ignored (phase mismatch)")
+            self.gs.log.append(f"[ERR] unknown cmd: {name}")
 
-    elif name == "end_turn":
-        cmd_end_turn(self.gs, self.rng)
+        self.save_trace()
+        return self.state_json()
 
-    elif name == "undo":
-        do_undo(self.gs, self.rng)
-
-    elif name == "toggle_debug":
-        self.gs.debug = not self.gs.debug
-        self.gs.log.append(f"[DEBUG] debug={self.gs.debug}")
-
-    else:
-        self.gs.log.append(f"[ERR] unknown cmd: {name}")
-
-    self.save_trace()
-    return self.state_json()
 
 class Handler(BaseHTTPRequestHandler):
     """HTTP router."""
