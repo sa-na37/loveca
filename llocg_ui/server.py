@@ -458,8 +458,114 @@ class App:
                 str(payload.get("choice", "")),
             )
         elif name == "next":
-            # PATCH_V2_11_SKIP_CHEER_EMPTY_LIVE
-            # If no LIVE cards remain in live card storage (set_zone), skip cheer and end turn.
+            # PATCH_V2_15_ENDTURN_ADVANCE_TO_MAIN
+            def _get_turn(gs):
+                for k in ('turn','turn_n','turn_no','turn_idx'):
+                    try: v = getattr(gs, k)
+                    except Exception: v = None
+                    if isinstance(v, int): return v
+                    try:
+                        if v is not None and str(v).isdigit(): return int(str(v))
+                    except Exception:
+                        pass
+                return None
+
+            def _count_live(items):
+                n=0
+                for cn in items:
+                    try:
+                        ci=_get_card(self.cards_db, cn)
+                        t=str(getattr(ci,'type','') or '').upper() if ci else ''
+                    except Exception:
+                        t=''
+                    if 'LIVE' in t: n += 1
+                return n
+
+            def _end_turn_to_next_main(msg):
+                try: self.gs.log.append(msg)
+                except Exception: pass
+                t0 = _get_turn(self.gs)
+                # end_turn must be called in MAIN; then drive cmd_next until next-turn MAIN
+                try: self.gs.phase = 'MAIN'
+                except Exception: pass
+                try: cmd_end_turn(self.gs, self.rng)
+                except Exception: pass
+                for _ in range(60):
+                    try: cmd_next(self.gs, self.rng)
+                    except Exception: break
+                    try: ph2 = str(getattr(self.gs,'phase','') or '').upper()
+                    except Exception: ph2 = ''
+                    t1 = _get_turn(self.gs)
+                    if ph2 == 'MAIN' and (t0 is None or t1 is None or t1 != t0):
+                        break
+                self.save_trace()
+                return self.state_json()
+
+            try: ph0 = str(getattr(self.gs,'phase','') or '').upper()
+            except Exception: ph0 = ''
+            try: items0 = list(getattr(self.gs,'set_zone',[]) or [])
+            except Exception: items0 = []
+
+            # LIVE_CONFIRM で 0枚セット → ターン終了→次ターンMAINへ（ループ停止）
+            if ph0 == 'LIVE_CONFIRM' and len(items0) == 0:
+                return _end_turn_to_next_main('[UI] LIVEをセットしなかったためLIVEをスキップ（次ターンMAINへ）')
+
+            # LIVE中に LIVEが0枚 → エール無しで ターン終了→次ターンMAINへ
+            if ph0.startswith('LIVE') and ph0 != 'LIVE_SET' and ('SET' not in ph0):
+                if _count_live(items0) == 0:
+                    return _end_turn_to_next_main('[UI] LIVEカードが無いためエールをスキップ（次ターンMAINへ）')
+
+            try:
+                ph = str(getattr(self.gs, 'phase', '') or '').upper()
+            except Exception:
+                ph = ''
+            try:
+                items = list(getattr(self.gs, 'set_zone', []) or [])
+            except Exception:
+                items = []
+            if ph == 'LIVE_CONFIRM' and len(items) == 0:
+                try:
+                    self.gs.log.append('[UI] LIVEをセットしなかったためLIVEをスキップしてターン終了')
+                except Exception:
+                    pass
+                # cmd_end_turn requires MAIN
+                try:
+                    self.gs.phase = 'MAIN'
+                except Exception:
+                    pass
+                cmd_end_turn(self.gs, self.rng)
+                self.save_trace()
+                return self.state_json()
+
+            # Other LIVE subphases: if no LIVE remain in set_zone, skip cheer and end turn
+            if ph.startswith('LIVE') and (('ATTEMPT' in ph) or ('YELL' in ph) or ('PERF' in ph) or ('RESOLVE' in ph)):
+                live_n = 0
+                for cn in items:
+                    try:
+                        ci = _get_card(self.cards_db, cn)
+                        t = str(getattr(ci, 'type', '') or '').upper() if ci else ''
+                    except Exception:
+                        t = ''
+                    if 'LIVE' in t:
+                        live_n += 1
+                if live_n == 0:
+                    try:
+                        if hasattr(self.gs, 'resolve_zone'):
+                            self.gs.resolve_zone = []
+                    except Exception:
+                        pass
+                    try:
+                        self.gs.log.append('[UI] LIVEカードが無いためエールをスキップしてターン終了')
+                    except Exception:
+                        pass
+                    try:
+                        self.gs.phase = 'MAIN'
+                    except Exception:
+                        pass
+                    cmd_end_turn(self.gs, self.rng)
+                    self.save_trace()
+                    return self.state_json()
+
             try:
                 ph = str(getattr(self.gs, 'phase', '') or '').upper()
             except Exception:
