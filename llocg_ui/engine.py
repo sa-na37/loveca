@@ -19,6 +19,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+
+# Energy deck total (fixed)
+ENERGY_TOTAL_DEFAULT = 12
 from .db import (
     CardInfo,
     _safe_int, _read_json, _write_text,
@@ -27,12 +30,533 @@ from .db import (
     _canon_cardno, _cardno_variants, _get_card,
 )
 
+
+# ----------------------------
+# Effect-template rule engine (regex-based)
+# ----------------------------
+
+import re
+
+# NOTE:
+# - Embedded minimal, high-impact subset to avoid increasing external files.
+# - Matching is strict (regex anchored with ^...$).
+
+_EFFECT_RULES = [
+    {"id": "draw_n", "pattern": r"^カードを(?P<n>\d+)枚引く。$", "op": "draw"},
+    {"id": "draw_n_discard_m", "pattern": r"^カードを(?P<n>\d+)枚引き、手札を(?P<m>\d+)枚控え室に置く。$", "op": "draw_then_discard"},
+    {"id": "discard_hand_n", "pattern": r"^手札を(?P<n>\d+)枚控え室に置く。$", "op": "discard_from_hand"},
+    {"id": "retrieve_waiting_live_n", "pattern": r"^自分の控え室からライブカードを(?P<n>\d+)枚手札に加える。$", "op": "retrieve_from_waiting_room", "card_kind": "LIVE"},
+    {"id": "retrieve_waiting_member_n", "pattern": r"^自分の控え室からメンバーカードを(?P<n>\d+)枚手札に加える。$", "op": "retrieve_from_waiting_room", "card_kind": "MEMBER"},
+    {"id": "retrieve_waiting_live_group_n", "pattern": r"^自分の控え室から『(?P<group>[^』]+)』のライブカードを(?P<n>\d+)枚手札に加える。$", "op": "retrieve_from_waiting_room", "card_kind": "LIVE"},
+    {"id": "look_top_k_choose_1_rest_waiting", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から1枚を手札に加え、残りを控え室に置く。$", "op": "look_top_choose"},
+        {"id": "look_top_k_reorder_keep_any_rest_waiting", "pattern": r"^自分のデッキの上からカードを(?P<k>\\d+)枚見る。その中から好きな枚数を好きな順番でデッキの上に置き、残りを控え室に置く。$", "op": "look_top_reorder_keep_any"},
+    {"id": "topdeck_green_member_n", "pattern": r"^自分の控え室にあるメンバーカード(?P<n>\d+)枚を好きな順番でデッキの一番上に置く。$", "op": "topdeck_from_green", "card_kind": "MEMBER", "allow_less": False},
+    {"id": "topdeck_green_live_group_upto_n", "pattern": r"^自分の控え室にある『(?P<group>[^』]+)』のライブカードを(?P<n>\d+)枚まで好きな順番でデッキの上に置く。$", "op": "topdeck_from_green", "card_kind": "LIVE", "allow_less": True},
+    {"id": "energy_put_wait_n", "pattern": r"^自分のエネルギーデッキから、エネルギーカードを(?P<n>\d+)枚ウェイト状態で置く。$", "op": "energy_put_wait"},
+    {"id": "energy_activate_n", "pattern": r"^エネルギーを(?P<n>\d+)枚アクティブにする。$", "op": "energy_activate"},
+    {"id": "gain_blade_until_end_live", "pattern": r"^ライブ終了時まで、(?P<blades>(?:<\(ブレード\)>)+)を得る。$", "op": "gain_blade_until_end_live"},
+    {"id": "activate_stage_member_upto1", "pattern": r"^自分のステージにいるメンバーを1人までアクティブにする。$", "op": "activate_stage_member"},
+]
+
+_EFFECT_RULES_COMPILED = [{**r, "re": re.compile(r["pattern"])} for r in _EFFECT_RULES]
+
+
+def _match_effect_template(effect_text: str):
+    s = (effect_text or "").strip()
+    if not s:
+        return None
+    for r in _EFFECT_RULES_COMPILED:
+        m = r["re"].match(s)
+        if m:
+            gd = {k: v for k, v in m.groupdict().items() if v is not None}
+            return (r, gd)
+    return None
+
+
+def _parse_energy_cost(cost_text: str) -> int:
+    t = (cost_text or "")
+    total = 0
+    for m in re.finditer(r"(?:<\(E\)>|\[E\]|Ｅ|E)\s*(\d+)", t):
+        try:
+            total += int(m.group(1))
+        except Exception:
+            pass
+    return total
+
+
+def _cost_requires_self_to_green(cost_text: str) -> bool:
+    t = (cost_text or "")
+    return ("このメンバー" in t) and ("控え室" in t) and ("置" in t)
+
+
+
+def _norm_digits_jp(s: str) -> str:
+    if s is None:
+        return ""
+    t = str(s)
+    # fullwidth digits -> ascii
+    fw = "０１２３４５６７８９"
+    for i,ch in enumerate(fw):
+        t = t.replace(ch, str(i))
+    return t
+
+
+def _ability_usage_flags(ab: Dict[str, Any]) -> Dict[str, Any]:
+    cond = _norm_digits_jp(str(ab.get('conditions', '') or ''))
+    flags: Dict[str, Any] = {"once_per_turn": False, "turn_only": None}
+    # <ターン1回> etc
+    m = re.search(r"ターン\s*(\d+)\s*回", cond)
+    if m:
+        flags["once_per_turn"] = True
+    # <ターン1のみ> etc (avoid matching ターン1回)
+    m2 = re.search(r"ターン\s*(\d+)\s*(?:のみ|だけ)", cond)
+    if m2:
+        try:
+            flags["turn_only"] = int(m2.group(1))
+        except Exception:
+            pass
+    # If condition is like 'ターン1' alone (rare), treat as turn_only
+    if flags["turn_only"] is None and ("ターン" in cond) and ("回" not in cond):
+        m3 = re.search(r"ターン\s*(\d+)", cond)
+        if m3:
+            try:
+                flags["turn_only"] = int(m3.group(1))
+            except Exception:
+                pass
+    return flags
+
+
+def _ability_key(ci: CardInfo, ab: Dict[str, Any], pos: str) -> str:
+    cn = str(getattr(ci, 'cardnumber', '') or '')
+    aid = str(ab.get('ability_id', '') or ab.get('ability_index', '') or '')
+    return f"{pos}:{cn}:{aid}"
+
+
+def _cost_move_active_energy_to_under(cost_text: str) -> bool:
+    t = _norm_digits_jp(cost_text or '')
+    # e.g. 自分のエネルギー置き場にあるエネルギー1枚をこのメンバーの下に置く
+    if "エネルギー置き場" not in t:
+        return False
+    if "このメンバーの下" not in t:
+        return False
+    if "エネルギー" not in t:
+        return False
+    if "1枚" in t or "１枚" in t or re.search(r"\b1\b", t):
+        return True
+    # fallback: 'エネルギーカードを1枚' variants
+    return bool(re.search(r"エネルギー.*?\d+枚.*?このメンバーの下", t))
+
+
+def can_activate_in_state(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: str) -> bool:
+    pos = str(pos or '').upper()
+    if pos not in ('L','C','R'):
+        return False
+    slot = gs.stage.get(pos)
+    if not slot:
+        return False
+    ci = _get_card(cards_db, slot.cardnumber)
+    if not ci:
+        return False
+
+    # check activated abilities for supported clauses + satisfiable costs + conditions
+    for ab in _iter_activated_abilities(ci):
+        if not isinstance(ab, dict):
+            continue
+        flags = _ability_usage_flags(ab)
+        key = _ability_key(ci, ab, pos)
+        if flags.get("turn_only") is not None and int(gs.turn or 0) != int(flags["turn_only"]):
+            continue
+        if flags.get("once_per_turn"):
+            used = int((getattr(gs, 'used_this_turn', {}) or {}).get(key, 0) or 0)
+            if used >= 1:
+                continue
+
+        clauses = ab.get('clauses', [])
+        if not isinstance(clauses, list) or not clauses:
+            continue
+        ok_any = False
+        for cl in clauses:
+            if not isinstance(cl, dict):
+                continue
+            cost = str(cl.get('cost_template', '') or '')
+            eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+            if not eff:
+                continue
+            if not _match_effect_template(eff):
+                continue
+            # energy cost check
+            need_e = _parse_energy_cost(cost)
+            if need_e > 0 and int(gs.energy_active or 0) < need_e:
+                continue
+            # special cost: move active energy to under
+            if _cost_move_active_energy_to_under(cost) and int(gs.energy_active or 0) < 1:
+                continue
+            ok_any = True
+        if ok_any:
+            return True
+    # legacy fallback (only when this card has no matchable activated ability templates)
+    if not _has_matchable_activated(ci):
+        if _has_green_live_take_ability(ci) or _has_green_member_take_ability(ci) or _has_sacrifice_ability(ci):
+            return True
+
+
+    return False
+
+def _count_blade_icons_from_tagblob(s: str) -> int:
+    return (s or "").count("<(ブレード)>")
+
+
+def _is_live_ci(ci: Optional[CardInfo]) -> bool:
+    if not ci:
+        return False
+    return "LIVE" in str(getattr(ci, 'type', '') or '').upper() or "ライブ" in str(getattr(ci, 'type', '') or '')
+
+
+def _is_member_ci(ci: Optional[CardInfo]) -> bool:
+    if not ci:
+        return False
+    return "MEMBER" in str(getattr(ci, 'type', '') or '').upper() or "メンバー" in str(getattr(ci, 'type', '') or '')
+
+
+def _green_candidates(gs: 'GameState', cards_db: Dict[str, CardInfo], kind: str, group: str = "") -> List[str]:
+    out = []
+    for cn in list(gs.green_room):
+        ci = _get_card(cards_db, cn)
+        if not ci:
+            continue
+        if kind == 'LIVE' and not _is_live_ci(ci):
+            continue
+        if kind == 'MEMBER' and not _is_member_ci(ci):
+            continue
+        if group and (group not in str(getattr(ci, 'group', '') or '')):
+            continue
+        out.append(cn)
+    return out
+
+
+def _enqueue_discard_from_hand(gs: 'GameState', n: int, label: str = "") -> None:
+    n = int(n or 0)
+    if n <= 0:
+        return
+    if not gs.hand:
+        gs.log.append('[ERR] discard: hand empty')
+        return
+    gs.pending.append({
+        'kind': 'discard_from_hand',
+        'remaining': n,
+        'text': (label or f'手札を{n}枚控え室に置く'),
+        'options': list(gs.hand),
+    })
+    gs.log.append(f'[PENDING] discard_from_hand remaining={n} hand={len(gs.hand)}')
+
+
+def _enqueue_choose_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo], kind: str, n: int = 1, group: str = "") -> None:
+    n = int(n or 1)
+    cands = _green_candidates(gs, cards_db, kind=kind, group=group)
+    if not cands:
+        gs.log.append(f'[INFO] retrieve: no {kind} in waiting room')
+        return
+    if n != 1:
+        gs.log.append(f'[WARN] retrieve: n={n} not supported yet')
+        return
+    if len(cands) == 1:
+        pick = cands[0]
+        gs.green_room.remove(pick)
+        gs.hand.append(pick)
+        gs.log.append(f'[AUTO] retrieved {kind} {pick} (only choice)')
+        return
+    gs.pending.append({
+        'kind': f'choose_{kind.lower()}_from_green',
+        'text': f'控え室の{("ライブ" if kind=="LIVE" else "メンバー")}カードを1枚手札に加える',
+        'options': cands,
+        'want_kind': kind,
+        'want_group': group,
+    })
+    gs.log.append(f'[PENDING] choose {kind} from waiting room ({len(cands)} candidates)')
+
+
+
+
+def _enqueue_topdeck_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo], kind: str, n: int, group: str = '', allow_less: bool = False) -> None:
+    kind = str(kind or '').upper()
+    n = int(n or 0)
+    group = str(group or '')
+    if n <= 0:
+        return
+
+    # candidates from waiting room
+    cands: List[str] = []
+    for cn in list(gs.green_room):
+        ci = _get_card(cards_db, cn)
+        if not ci:
+            continue
+        if kind == 'LIVE' and not _is_live_ci(ci):
+            continue
+        if kind == 'MEMBER' and not _is_member_ci(ci):
+            continue
+        if group and group not in str(getattr(ci, 'group', '') or ''):
+            continue
+        cands.append(cn)
+
+    if not cands:
+        gs.log.append(f'[INFO] topdeck: no {kind} candidates in waiting room')
+        return
+
+    if not allow_less:
+        # if fewer than n available, just take all available (avoid deadlock)
+        n = min(n, len(cands))
+
+    opts = list(cands) + (['skip'] if allow_less else [])
+    gs.pending.append({
+        'kind': 'topdeck_from_green',
+        'text': f'控え室の{kind}を{n}枚{("まで" if allow_less else "")}デッキ上に置く：1枚目=一番上。/ skipで終了' if allow_less else f'控え室の{kind}を{n}枚デッキ上（1枚目=一番上）',
+        'options': opts,
+        'remaining': n,
+        'picked': [],
+        'want_kind': kind,
+        'want_group': group,
+        'allow_less': bool(allow_less),
+    })
+    gs.log.append(f'[PENDING] topdeck_from_green: kind={kind} n={n} allow_less={allow_less} (cands={len(cands)})')
+
+def _enqueue_choose_from_topk(gs: 'GameState', k: int) -> None:
+    k = int(k or 0)
+    if k <= 0:
+        return
+    if not gs.deck:
+        gs.log.append('[INFO] look_top: deck empty')
+        return
+    pool = []
+    for _ in range(min(k, len(gs.deck))):
+        pool.append(gs.deck.pop(0))
+    if len(pool) == 1:
+        pick = pool[0]
+        gs.hand.append(pick)
+        gs.log.append(f'[AUTO] look_top: only 1 -> hand {pick}')
+        return
+    gs.pending.append({
+        'kind': 'choose_from_topk',
+        'text': f'デッキ上から{len(pool)}枚を見る：その中から1枚を手札に加え、残りを控え室に置く',
+        'options': list(pool),
+        'pool': list(pool),
+    })
+    gs.log.append(f'[PENDING] choose 1 from top {len(pool)} (rest -> waiting room)')
+
+
+def _enqueue_reorder_from_topk_keep_any(gs: 'GameState', k: int) -> None:
+    k = int(k or 0)
+    if k <= 0:
+        return
+    if not gs.deck:
+        gs.log.append('[INFO] look_top_reorder: deck empty')
+        return
+    pool: List[str] = []
+    for _ in range(min(k, len(gs.deck))):
+        pool.append(gs.deck.pop(0))
+    if not pool:
+        return
+    # Prompt user to pick cards to keep on top in order; 'skip' ends early.
+    opts = list(pool) + ['skip']
+    gs.pending.append({
+        'kind': 'reorder_topk_keep_any',
+        'text': f'デッキ上から{len(pool)}枚を見る：好きな枚数を好きな順番でデッキ上に置く（1枚目=一番上）。残りは控え室。/ skipで終了',
+        'options': opts,
+        'pool': list(pool),
+        'kept': [],
+        'allow_less': True,
+    })
+    gs.log.append(f'[PENDING] reorder top {len(pool)} keep-any (rest -> waiting room)')
+
+
+
+def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[str, CardInfo], rule: Dict[str, Any], gd: Dict[str, str], ctx: Dict[str, Any]) -> None:
+    op = rule.get('op')
+
+    if op == 'draw':
+        n = int(gd.get('n', 0) or 0)
+        got = draw(gs, n)
+        gs.log.append(f'[AUTO] draw {n} -> drew {got}')
+        return
+
+    if op == 'draw_then_discard':
+        n = int(gd.get('n', 0) or 0)
+        m = int(gd.get('m', 0) or 0)
+        got = draw(gs, n)
+        gs.log.append(f'[AUTO] draw {n} -> drew {got}; then discard {m}')
+        _enqueue_discard_from_hand(gs, m)
+        return
+
+    if op == 'discard_from_hand':
+        n = int(gd.get('n', 0) or 0)
+        _enqueue_discard_from_hand(gs, n)
+        return
+
+    if op == 'retrieve_from_waiting_room':
+        kind = str(rule.get('card_kind', '') or '').upper() or 'ANY'
+        n = int(gd.get('n', 1) or 1)
+        group = str(gd.get('group', '') or '')
+        if kind not in ('LIVE','MEMBER'):
+            gs.log.append('[WARN] retrieve: unsupported kind')
+            return
+        _enqueue_choose_from_green(gs, cards_db, kind=kind, n=n, group=group)
+        return
+
+
+    if op == 'topdeck_from_green':
+        kind = str(rule.get('card_kind', '') or '').upper() or 'ANY'
+        n = int(gd.get('n', 1) or 1)
+        group = str(gd.get('group', '') or '')
+        allow_less = bool(rule.get('allow_less', False))
+        if kind not in ('LIVE','MEMBER'):
+            gs.log.append('[WARN] topdeck: unsupported kind')
+            return
+        _enqueue_topdeck_from_green(gs, cards_db, kind=kind, n=n, group=group, allow_less=allow_less)
+        return
+
+
+
+    if op == 'look_top_choose':
+        k = int(gd.get('k', 0) or 0)
+        _enqueue_choose_from_topk(gs, k)
+        return
+    if op == 'look_top_reorder_keep_any':
+        k = int(gd.get('k', 0) or 0)
+        _enqueue_reorder_from_topk_keep_any(gs, k)
+        return
+
+
+    if op == 'energy_put_wait':
+        n = int(gd.get('n', 1) or 1)
+        n = max(0, n)
+        rem = _energy_remaining_in_deck(gs)
+        add = min(n, rem)
+        if add > 0:
+            gs.energy_wait += add
+            _clamp_energy_zone(gs)
+        gs.log.append(f"[AUTO] energy_put_wait +{add}{' (clipped)' if add<n else ''} (wait={gs.energy_wait})")
+        return
+
+    if op == 'energy_activate':
+        n = int(gd.get('n', 0) or 0)
+        take = min(max(0, n), int(gs.energy_wait or 0))
+        gs.energy_wait -= take
+        gs.energy_active += take
+        gs.log.append(f'[AUTO] energy_activate {n} -> moved {take} (active={gs.energy_active} wait={gs.energy_wait})')
+        return
+
+    if op == 'gain_blade_until_end_live':
+        blades_blob = gd.get('blades', '')
+        b = _count_blade_icons_from_tagblob(blades_blob)
+        pos = str(ctx.get('pos', '') or '').upper()
+        slot = gs.stage.get(pos) if pos in ('L','C','R') else None
+        if not slot:
+            gs.log.append('[WARN] gain_blade: no source slot')
+            return
+        slot.temp_blade += int(b)
+        slot.temp_until = 'end_of_live'
+        gs.log.append(f'[AUTO] {pos}: gain blade +{b} (until end_of_live)')
+        return
+
+    if op == 'activate_stage_member':
+        opts = [p for p in ('L','C','R') if gs.stage.get(p)]
+        if not opts:
+            gs.log.append('[INFO] activate_member: no member on stage')
+            return
+        gs.pending.append({
+            'kind': 'choose_stage_member_to_activate',
+            'text': 'ステージのメンバーを1人までアクティブにする（対象を選択）',
+            'options': opts,
+        })
+        gs.log.append('[PENDING] choose stage member to activate')
+        return
+
+    gs.log.append(f"[WARN] effect op not implemented: {op}")
+
+
+def try_apply_effect_template(gs: 'GameState', rng: random.Random, cards_db: Dict[str, CardInfo], effect_text: str, ctx: Dict[str, Any]) -> bool:
+    m = _match_effect_template(effect_text)
+    if not m:
+        return False
+    rule, gd = m
+    _apply_effect_by_rule(gs, rng, cards_db, rule, gd, ctx)
+    return True
+
+
+def _iter_activated_abilities(ci: Optional[CardInfo]):
+    if not ci or not getattr(ci, 'abilities', None):
+        return []
+    out = []
+    for ab in ci.abilities:
+        if not isinstance(ab, dict):
+            continue
+        at = str(ab.get('ability_type', '') or '')
+        if '起動' not in at:
+            continue
+        out.append(ab)
+    return out
+
+
+def _has_matchable_activated(ci: Optional[CardInfo]) -> bool:
+    if not ci:
+        return False
+    for ab in _iter_activated_abilities(ci):
+        if not isinstance(ab, dict):
+            continue
+        clauses = ab.get('clauses', [])
+        if not isinstance(clauses, list):
+            continue
+        for cl in clauses:
+            if not isinstance(cl, dict):
+                continue
+            eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+            if not eff:
+                continue
+            if _match_effect_template(eff):
+                return True
+    return False
+
+def _iter_triggered_abilities(ci: Optional[CardInfo], trigger_kw: str):
+    if not ci or not getattr(ci, 'abilities', None):
+        return []
+    out = []
+    for ab in ci.abilities:
+        if not isinstance(ab, dict):
+            continue
+        trig = str(ab.get('trigger', '') or '')
+        if trigger_kw not in trig:
+            continue
+        out.append(ab)
+    return out
+
+
+def _ability_has_supported_clause(ci: Optional[CardInfo], trigger_kw: str = '', activated: bool = False) -> bool:
+    if not ci:
+        return False
+    abs_ = _iter_activated_abilities(ci) if activated else (ci.abilities or [])
+    for ab in abs_:
+        if trigger_kw:
+            trig = str(ab.get('trigger', '') or '')
+            if trigger_kw not in trig:
+                continue
+        clauses = ab.get('clauses', [])
+        if not isinstance(clauses, list):
+            continue
+        for cl in clauses:
+            if not isinstance(cl, dict):
+                continue
+            eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+            if not eff:
+                continue
+            if _match_effect_template(eff):
+                return True
+    return False
 @dataclass
 class StageSlot:
     cardnumber: str
     active: bool = True
     temp_blade: int = 0
     temp_until: str = ""  # e.g., end_of_live
+    energy_under: int = 0  # number of energy cards under this member (UI + some effects)
 
 
 @dataclass
@@ -52,6 +576,9 @@ class GameState:
     energy_active: int = 3
     energy_wait: int = 0
 
+    # Energy deck total (fixed at 12)
+    energy_total: int = ENERGY_TOTAL_DEFAULT
+
     stage: Dict[str, Optional[StageSlot]] = field(default_factory=lambda: {"L": None, "C": None, "R": None})
     green_room: List[str] = field(default_factory=list)
     set_zone: List[str] = field(default_factory=list)
@@ -59,6 +586,9 @@ class GameState:
 
     pending: List[Dict[str, Any]] = field(default_factory=list)
     live_start_prompted: bool = False
+
+    # per-turn temporary (compat)
+    turn_blade_bonus: int = 0
 
     # UI-only transient banner (e.g., LIVE success/fail)
     banner_text: str = ""
@@ -68,6 +598,9 @@ class GameState:
     turn: int = 1
     log: List[str] = field(default_factory=list)
     undo_stack: List[Dict[str, Any]] = field(default_factory=list)
+
+    # activation usage tracking (e.g., <ターン1回>)
+    used_this_turn: Dict[str, int] = field(default_factory=dict)
 
 
 def snapshot_state(gs: GameState) -> Dict[str, Any]:
@@ -85,7 +618,7 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
         if slot is None:
             stage_snap[k] = None
         else:
-            stage_snap[k] = {"cardnumber": slot.cardnumber, "active": bool(slot.active), "temp_blade": int(getattr(slot, "temp_blade", 0) or 0), "temp_until": str(getattr(slot, "temp_until", "") or "")}
+            stage_snap[k] = {"cardnumber": slot.cardnumber, "active": bool(slot.active), "temp_blade": int(getattr(slot, "temp_blade", 0) or 0), "temp_until": str(getattr(slot, "temp_until", "") or ""), "energy_under": int(getattr(slot, "energy_under", 0) or 0)}
 
     return {
         "phase": gs.phase,
@@ -93,6 +626,7 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
         "hand": list(gs.hand),
         "energy_active": int(gs.energy_active),
         "energy_wait": int(gs.energy_wait),
+        "energy_total": int(getattr(gs, "energy_total", ENERGY_TOTAL_DEFAULT) or ENERGY_TOTAL_DEFAULT),
         "stage": stage_snap,
         "green_room": list(gs.green_room),
         "set_zone": list(gs.set_zone),
@@ -100,6 +634,7 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
         "pending": json.loads(json.dumps(gs.pending)) if gs.pending else [],
         "live_start_prompted": bool(gs.live_start_prompted),
         "turn": int(gs.turn),
+        "used_this_turn": dict(getattr(gs, "used_this_turn", {}) or {}),
     }
 
 
@@ -110,6 +645,8 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
     gs.hand = list(snap.get("hand", gs.hand))
     gs.energy_active = int(snap.get("energy_active", gs.energy_active))
     gs.energy_wait = int(snap.get("energy_wait", gs.energy_wait))
+    gs.energy_total = int(snap.get("energy_total", getattr(gs, "energy_total", ENERGY_TOTAL_DEFAULT) or ENERGY_TOTAL_DEFAULT) or ENERGY_TOTAL_DEFAULT)
+    _clamp_energy_zone(gs)
 
     stage_in = snap.get("stage", {}) or {}
     stage_new: Dict[str, Optional[StageSlot]] = {"L": None, "C": None, "R": None}
@@ -118,7 +655,7 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
         if v is None:
             stage_new[k] = None
         else:
-            stage_new[k] = StageSlot(cardnumber=str(v.get("cardnumber", "")), active=bool(v.get("active", True)), temp_blade=_safe_int(v.get("temp_blade", 0), 0), temp_until=str(v.get("temp_until", "") or ""))
+            stage_new[k] = StageSlot(cardnumber=str(v.get("cardnumber", "")), active=bool(v.get("active", True)), temp_blade=_safe_int(v.get("temp_blade", 0), 0), temp_until=str(v.get("temp_until", "") or ""), energy_under=_safe_int(v.get("energy_under", 0), 0))
     gs.stage = stage_new
 
     gs.green_room = list(snap.get("green_room", gs.green_room))
@@ -127,6 +664,10 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
     gs.pending = list(snap.get("pending", gs.pending) or [])
     gs.live_start_prompted = bool(snap.get("live_start_prompted", gs.live_start_prompted))
     gs.turn = int(snap.get("turn", gs.turn))
+    try:
+        gs.used_this_turn = {str(k): int(v) for k, v in (snap.get("used_this_turn", {}) or {}).items()}
+    except Exception:
+        gs.used_this_turn = {}
 
 
 
@@ -150,6 +691,11 @@ def trace_write(gs: GameState, msg: str) -> None:
 
 
 def begin_turn(gs: GameState) -> None:
+    # reset per-turn usage
+    try:
+        gs.used_this_turn = {}
+    except Exception:
+        pass
     # Rules order (coarse): ACTIVE -> ENERGY -> DRAW -> MAIN
     gs.phase = "ACTIVE"
     refresh(gs)
@@ -337,6 +883,39 @@ def pay_energy(gs: GameState, cost: int) -> bool:
     return True
 
 
+
+
+def _energy_under_total(gs: 'GameState') -> int:
+    s = 0
+    for slot in (gs.stage or {}).values():
+        if slot:
+            s += int(getattr(slot, 'energy_under', 0) or 0)
+    return int(s)
+
+def _energy_in_play(gs: 'GameState') -> int:
+    return int(gs.energy_active or 0) + int(gs.energy_wait or 0) + _energy_under_total(gs)
+
+def _energy_remaining_in_deck(gs: 'GameState') -> int:
+    total = int(getattr(gs, 'energy_total', ENERGY_TOTAL_DEFAULT) or ENERGY_TOTAL_DEFAULT)
+    return max(0, total - _energy_in_play(gs))
+
+def _clamp_energy_zone(gs: 'GameState') -> None:
+    """Ensure active+wait does not exceed capacity = energy_total - under_total."""
+    total = int(getattr(gs, 'energy_total', ENERGY_TOTAL_DEFAULT) or ENERGY_TOTAL_DEFAULT)
+    cap = max(0, total - _energy_under_total(gs))
+    cur = int(gs.energy_active or 0) + int(gs.energy_wait or 0)
+    if cur <= cap:
+        return
+    over = cur - cap
+    # reduce wait first, then active
+    take_w = min(int(gs.energy_wait or 0), over)
+    gs.energy_wait -= take_w
+    over -= take_w
+    if over > 0:
+        take_a = min(int(gs.energy_active or 0), over)
+        gs.energy_active -= take_a
+
+
 def refresh(gs: GameState) -> None:
     for k in ("L", "C", "R"):
         if gs.stage.get(k):
@@ -346,8 +925,34 @@ def refresh(gs: GameState) -> None:
 
 
 def energy_phase(gs: GameState) -> None:
+    # Add 1 energy from the energy deck if available (total fixed at 12).
+    rem = _energy_remaining_in_deck(gs)
+    if rem <= 0:
+        return
     gs.energy_active += 1
+    _clamp_energy_zone(gs)
 
+def _has_under_energy_blade_bonus(ci: Optional[CardInfo]) -> bool:
+    """Detect 常時: 'このメンバーの下にあるエネルギーカード1枚につき、<(ブレード)>を得る。'"""
+    if not ci or not getattr(ci, 'abilities', None):
+        return False
+    for ab in ci.abilities:
+        if not isinstance(ab, dict):
+            continue
+        at = str(ab.get('ability_type', '') or '')
+        if '常時' not in at:
+            continue
+        clauses = ab.get('clauses', [])
+        if not isinstance(clauses, list):
+            continue
+        for cl in clauses:
+            if not isinstance(cl, dict):
+                continue
+            eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '')
+            blob = _norm_digits_jp(eff)
+            if ('このメンバーの下' in blob) and ('エネルギー' in blob) and ('ブレード' in blob):
+                return True
+    return False
 
 def stage_blade(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
     s = 0
@@ -355,7 +960,10 @@ def stage_blade(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
         if not slot or not slot.active:
             continue
         c = _get_card(cards_db, slot.cardnumber)
-        s += (int(c.blade) if c else 0) + int(getattr(slot, "temp_blade", 0) or 0)
+        base_b = (int(c.blade) if c else 0)
+        temp_b = int(getattr(slot, "temp_blade", 0) or 0)
+        under_b = int(getattr(slot, "energy_under", 0) or 0) if _has_under_energy_blade_bonus(c) else 0
+        s += base_b + temp_b + under_b
     return s
 
 
@@ -384,49 +992,77 @@ def cheer_hearts_from_resolve(gs: GameState, cards_db: Dict[str, CardInfo]) -> D
 
 
 def can_satisfy_req(req: Dict[str, int], owned: Dict[str, int]) -> Tuple[bool, Dict[str, Any]]:
-    pool = {k: int(v) for k, v in (owned or {}).items()}
-    for k in ("red", "green", "blue", "all"):
-        pool.setdefault(k, 0)
+    """Check if owned hearts can satisfy LIVE required hearts.
 
-    alloc = {"use_red": 0, "use_green": 0, "use_blue": 0, "use_all": 0}
+    Notes:
+      - tokv1 uses multiple colors (e.g., blue/pink/purple/red/green/yellow) + 'any'.
+      - Previous implementation was hard-coded to (red/green/blue), which misjudged success.
+      - We treat any key other than {'any','all'} as a concrete color bucket.
+      - 'all' (if present) is treated as a wildcard pool that can satisfy missing colored needs.
+    """
+    req0 = req or {}
+    owned0 = owned or {}
 
-    for color, key in (("red", "use_red"), ("green", "use_green"), ("blue", "use_blue")):
-        need = int(req.get(color, 0) or 0)
-        take = min(pool[color], need)
-        alloc[key] += take
+    # normalize keys (lower)
+    req_l = {str(k).lower(): int(v or 0) for k, v in req0.items()}
+    pool = {str(k).lower(): int(v or 0) for k, v in owned0.items()}
+
+    pool.setdefault("all", 0)
+
+    colors = sorted(set([
+        k for k in list(req_l.keys()) + list(pool.keys())
+        if k not in ("any", "all")
+    ]))
+
+    alloc: Dict[str, Any] = {}
+    for c in colors:
+        alloc[f"use_{c}"] = 0
+    alloc["use_all"] = 0
+
+    # 1) satisfy specific color requirements
+    for c in colors:
+        need = int(req_l.get(c, 0) or 0)
+        if need <= 0:
+            continue
+        have = int(pool.get(c, 0) or 0)
+        take = min(have, need)
+        alloc[f"use_{c}"] += take
+        pool[c] = have - take
         need -= take
         if need > 0:
-            if pool["all"] < need:
-                return (False, {"reason": f"lack {color} and ALL", "need": need, "pool_all": pool["all"]})
+            # use wildcard pool if available
+            if pool.get("all", 0) < need:
+                return (False, {
+                    "reason": f"lack {c} (and ALL)",
+                    "need": need,
+                    "pool_all": int(pool.get("all", 0) or 0),
+                    "pool_color": int(pool.get(c, 0) or 0),
+                })
             alloc["use_all"] += need
             pool["all"] -= need
 
-    need_all = int(req.get("all", 0) or 0)
-    if need_all > 0:
-        if pool["all"] < need_all:
-            return (False, {"reason": "lack ALL", "need_all": need_all, "pool_all": pool["all"]})
-        alloc["use_all"] += need_all
-        pool["all"] -= need_all
-
-    need_any = int(req.get("any", 0) or 0)
+    # 2) satisfy "any" requirement using remaining hearts
+    need_any = int(req_l.get("any", 0) or 0)
     if need_any > 0:
-        total = pool["red"] + pool["green"] + pool["blue"] + pool["all"]
+        total = int(pool.get("all", 0) or 0) + sum(int(pool.get(c, 0) or 0) for c in colors)
         if total < need_any:
             return (False, {"reason": "lack total hearts", "need_any": need_any, "pool_total": total})
-        for k in sorted(("red", "green", "blue", "all"), key=lambda kk: pool[kk], reverse=True):
+        # consume from largest piles first
+        buckets = list(colors) + ["all"]
+        buckets.sort(key=lambda kk: int(pool.get(kk, 0) or 0), reverse=True)
+        for k in buckets:
             if need_any <= 0:
                 break
-            take = min(pool[k], need_any)
-            pool[k] -= take
+            have = int(pool.get(k, 0) or 0)
+            if have <= 0:
+                continue
+            take = min(have, need_any)
+            pool[k] = have - take
             need_any -= take
-            if k == "red":
-                alloc["use_red"] += take
-            elif k == "green":
-                alloc["use_green"] += take
-            elif k == "blue":
-                alloc["use_blue"] += take
-            else:
+            if k == "all":
                 alloc["use_all"] += take
+            else:
+                alloc[f"use_{k}"] = int(alloc.get(f"use_{k}", 0) or 0) + take
 
     return (True, alloc)
 
@@ -505,8 +1141,12 @@ def _has_green_live_take_ability(ci: Optional[CardInfo]) -> bool:
 
 
 def can_activate(ci: Optional[CardInfo]) -> bool:
-    """Whether this card has a supported activated ability in the current engine."""
-    return bool(_has_green_live_take_ability(ci) or _has_green_member_take_ability(ci) or _has_sacrifice_ability(ci))
+    # Legacy hard-coded subset (kept)
+    if _has_green_live_take_ability(ci) or _has_green_member_take_ability(ci) or _has_sacrifice_ability(ci):
+        return True
+    # Generic: any activated ability (起動) that contains a supported effect_template
+    return _ability_has_supported_clause(ci, activated=True)
+
 
 
 def activation_moves_self_to_green(ci: Optional[CardInfo]) -> bool:
@@ -560,19 +1200,34 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                 eff = str(cl.get("effect_template", "") or raw)
                 if "<(E)>" not in cost and "[E]" not in cost and "Ｅ" not in cost and "E" not in cost:
                     continue
+                need_e = _parse_energy_cost(cost)
+                if need_e <= 0:
+                    need_e = 1
+
                 blades = _count_blade_icons(eff)
-                if blades <= 0:
+                if blades > 0 and need_e == 1:
+                    prompts.append({
+                        "kind": "live_start_blade",
+                        "pos": pos,
+                        "cn": ci.cardnumber,
+                        "need_e": 1,
+                        "blades": int(blades),
+                        "text": f"{pos}: {ci.cardnumber} ライブ開始時 [E]1 → ブレード+{blades} (ライブ終了時まで)",
+                        # UI needs explicit choices here.
+                        "options": ["pay", "skip"],
+                    })
                     continue
-                prompts.append({
-                    "kind": "live_start_blade",
-                    "pos": pos,
-                    "cn": ci.cardnumber,
-                    "need_e": 1,
-                    "blades": int(blades),
-                    "text": f"{pos}: {ci.cardnumber} ライブ開始時 [E]1 → ブレード+{blades} (ライブ終了時まで)",
-                    # UI needs explicit choices here.
-                    "options": ["pay", "skip"],
-                })
+
+                if _match_effect_template(eff):
+                    prompts.append({
+                        "kind": "live_start_pay_effect",
+                        "pos": pos,
+                        "cn": ci.cardnumber,
+                        "need_e": int(need_e),
+                        "effect": eff,
+                        "text": f"{pos}: {ci.cardnumber} ライブ開始時 [E]{need_e} → {eff}",
+                        "options": ["pay", "skip"],
+                    })
     if prompts:
         gs.pending.extend(prompts)
         gs.live_start_prompted = True
@@ -605,6 +1260,17 @@ def cmd_play(gs: GameState, cards_db: Dict[str, CardInfo], hand_idx: int, pos: s
         baton_old_cn = existing.cardnumber
         old = _get_card(cards_db, baton_old_cn)
         baton_old_cost = int(old.cost) if old else 0
+        # If the replaced member had energies under it, they return to the energy deck (not to energy zone).
+        old_under = int(getattr(existing, 'energy_under', 0) or 0)
+        if old_under > 0:
+            try:
+                gs.log.append(f"[INFO] {pos}: {baton_old_cn} leaves stage -> return under-energy x{old_under} to energy deck")
+            except Exception:
+                pass
+            try:
+                existing.energy_under = 0
+            except Exception:
+                pass
 
     cn = gs.hand[hand_idx]
     c = _get_card(cards_db, cn)
@@ -635,27 +1301,48 @@ def cmd_play(gs: GameState, cards_db: Dict[str, CardInfo], hand_idx: int, pos: s
 
 
 
-def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn: str) -> None:
-    """Handle [登場] auto abilities for a member that just entered stage.
-
-    Currently implemented:
-    - PL!N-pb1-010 (三船栞子): choose one
-      (A) エネルギーを1枚アクティブにする
-      (B) 控え室の『虹ヶ咲』のライブカードを最大2枚、好きな順でデッキの上に置く
-    """
+def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn: str, rng: Optional[random.Random] = None) -> None:
+    # Handle [登場] auto abilities for a member that just entered stage.
     canon = _canon_cardno(cn)
-    if canon != "PL!N-pb1-010":
+
+    # Hard-coded Shioriko (choice prompt)
+    if canon == "PL!N-pb1-010":
+        gs.pending.append({
+            "kind": "choose_shioriko_enter",
+            "cn": canon,
+            "pos": pos.upper(),
+            "text": "栞子[登場]: 効果を1つ選ぶ（エネルギー+1 / 控え室の虹ヶ咲LIVEを最大2枚デッキ上）",
+            "options": ["energy", "topdeck"],
+        })
+        gs.log.append("[AUTO] 栞子[登場]: choose mode -> pending")
         return
 
-    # Push a choice prompt (mandatory)
-    gs.pending.append({
-        "kind": "choose_shioriko_enter",
-        "cn": canon,
-        "pos": pos.upper(),
-        "text": "栞子[登場]: 効果を1つ選ぶ（エネルギー+1 / 控え室の虹ヶ咲LIVEを最大2枚デッキ上）",
-        "options": ["energy", "topdeck"],
-    })
-    gs.log.append("[AUTO] 栞子[登場]: choose mode -> pending")
+    if rng is None:
+        rng = random.Random(gs.seed)
+
+    ci = _get_card(cards_db, canon)
+    if not ci or not getattr(ci, 'abilities', None):
+        return
+
+    for ab in _iter_triggered_abilities(ci, '登場'):
+        clauses = ab.get('clauses', [])
+        if not isinstance(clauses, list):
+            continue
+        for cl in clauses:
+            if not isinstance(cl, dict):
+                continue
+            cost = str(cl.get('cost_template', '') or '')
+            eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+            if not eff:
+                continue
+            # costless-only for now
+            if _parse_energy_cost(cost) > 0 or _cost_requires_self_to_green(cost):
+                continue
+            ctx = {'pos': pos.upper(), 'source_cn': canon}
+            if try_apply_effect_template(gs, rng, cards_db, eff, ctx):
+                gs.log.append(f"[AUTO] {canon}[登場]: applied {eff}")
+                if gs.pending:
+                    return
 
 
 
@@ -749,6 +1436,38 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
     gs.banner_ts = time.time()
     gs.banner_ttl = 2.5
 
+    # Live success triggers (costless, regex-supported subset)
+    if ok_all:
+        for pos in ('L','C','R'):
+            slot = gs.stage.get(pos)
+            if not slot or not slot.active:
+                continue
+            ci_src = _get_card(cards_db, slot.cardnumber)
+            if not ci_src or not getattr(ci_src, 'abilities', None):
+                continue
+            for ab in _iter_triggered_abilities(ci_src, 'ライブ成功時'):
+                clauses = ab.get('clauses', [])
+                if not isinstance(clauses, list):
+                    continue
+                for cl in clauses:
+                    if not isinstance(cl, dict):
+                        continue
+                    cost = str(cl.get('cost_template', '') or '')
+                    eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+                    if not eff:
+                        continue
+                    if _parse_energy_cost(cost) > 0 or _cost_requires_self_to_green(cost):
+                        continue
+                    ctx = {'pos': pos, 'source_cn': ci_src.cardnumber}
+                    if try_apply_effect_template(gs, rng, cards_db, eff, ctx):
+                        gs.log.append(f"[AUTO] {pos}: {ci_src.cardnumber}[ライブ成功時] applied {eff}")
+                        if gs.pending:
+                            break
+                if gs.pending:
+                    break
+            if gs.pending:
+                break
+
     _clear_end_of_live_buffs(gs)
     gs.live_start_prompted = False
 
@@ -764,7 +1483,8 @@ def cmd_ack(gs: GameState) -> None:
 
 
 
-def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str) -> None:
+def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, rng: Optional[random.Random] = None) -> None:
+    # Activate ability on stage member at pos.
     pos = str(pos or "").upper()
     if pos not in ("L", "C", "R"):
         gs.log.append("[ERR] activate: pos must be L/C/R")
@@ -777,44 +1497,115 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
     if not ci:
         gs.log.append(f"[ERR] activate: card not in DB: {slot.cardnumber}")
         return
-    # Support only a small hard-coded subset of activated abilities.
-    if not (_has_green_live_take_ability(ci) or _has_green_member_take_ability(ci) or _has_sacrifice_ability(ci)):
-        gs.log.append(f"[ERR] activate: no supported 'to green room' ability on {ci.cardnumber}")
+
+    if rng is None:
+        rng = random.Random(gs.seed)
+
+    # 1) Generic activated abilities
+    for ab in _iter_activated_abilities(ci):
+        flags = _ability_usage_flags(ab if isinstance(ab, dict) else {})
+        akey = _ability_key(ci, ab if isinstance(ab, dict) else {}, pos)
+        if flags.get('turn_only') is not None and int(gs.turn or 0) != int(flags['turn_only']):
+            continue
+        if flags.get('once_per_turn'):
+            used = int((getattr(gs, 'used_this_turn', {}) or {}).get(akey, 0) or 0)
+            if used >= 1:
+                gs.log.append(f"[INFO] activate: already used this turn ({akey})")
+                return
+
+        clauses = ab.get('clauses', [])
+        if not isinstance(clauses, list) or not clauses:
+            continue
+
+        gs.log.append(f"[ACT] {pos}: {ci.cardnumber} activated")
+        for cl in clauses:
+            if not isinstance(cl, dict):
+                continue
+            cost = str(cl.get('cost_template', '') or '')
+            eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+            if not eff:
+                continue
+
+            need_e = _parse_energy_cost(cost)
+            if need_e > 0:
+                if not pay_energy(gs, need_e):
+                    gs.log.append(f"[ERR] activate: insufficient energy for [E]{need_e} (have {gs.energy_active})")
+                    return
+                gs.log.append(f"[COST] paid [E]{need_e} (E active={gs.energy_active} wait={gs.energy_wait})")
+
+            # Special cost: move 1 active energy from energy zone under this member
+            if _cost_move_active_energy_to_under(cost):
+                if int(gs.energy_active or 0) < 1:
+                    gs.log.append(f"[ERR] activate: insufficient active energy to place under (have {gs.energy_active})")
+                    return
+                try:
+                    gs.energy_active -= 1
+                except Exception:
+                    pass
+                try:
+                    slot.energy_under = int(getattr(slot, 'energy_under', 0) or 0) + 1
+                except Exception:
+                    pass
+                gs.log.append(f"[COST] moved 1 energy under {pos} (under={int(getattr(slot,'energy_under',0) or 0)}; E active={gs.energy_active} wait={gs.energy_wait})")
+
+            if _cost_requires_self_to_green(cost):
+                gs.green_room.append(slot.cardnumber)
+                gs.stage[pos] = None
+                gs.log.append(f"[COST] {pos}: {slot.cardnumber} -> waiting room")
+
+            # Mark once-per-turn usage after costs are paid (even if effect creates pending)
+            if flags.get('once_per_turn'):
+                try:
+                    gs.used_this_turn[akey] = 1
+                except Exception:
+                    try:
+                        gs.used_this_turn = {akey: 1}
+                    except Exception:
+                        pass
+
+            ctx = {'pos': pos, 'source_cn': ci.cardnumber}
+            matched = try_apply_effect_template(gs, rng, cards_db, eff, ctx)
+            if not matched:
+                gs.log.append(f"[WARN] activate: unsupported effect_template: {eff}")
+
+            if gs.pending:
+                return
+
         return
-    # Cost handling:
-    # - Some cards require putting this member into the green room as part of the activated ability cost.
-    # - Other cards can recover a card from green room without moving themselves.
-    moved_self = False
+
+    # If this card has matchable activated templates, do NOT fall back to legacy heuristics.
+    if _has_matchable_activated(ci):
+        gs.log.append(f"[ERR] activate: no usable activated ability on {ci.cardnumber} (conditions/cost/limit)")
+        return
+
+    # 2) Legacy fallback (kept)
+    if not (_has_green_live_take_ability(ci) or _has_green_member_take_ability(ci) or _has_sacrifice_ability(ci)):
+        gs.log.append(f"[ERR] activate: no supported activated ability on {ci.cardnumber}")
+        return
+
     if _has_sacrifice_ability(ci):
         gs.green_room.append(slot.cardnumber)
         gs.stage[pos] = None
-        gs.log.append(f"[ACT] {pos}: {ci.cardnumber} -> green room (cost)")
-        moved_self = True
-    else:
-        gs.log.append(f"[ACT] {pos}: {ci.cardnumber} activated")
+        gs.log.append(f"[ACT] {pos}: {ci.cardnumber} -> waiting room (cost)")
 
-    # follow-up: take 1 LIVE from green room to hand (supported subset)
     if _has_green_live_take_ability(ci):
         cands = _green_live_candidates(gs, cards_db)
         if not cands:
-            gs.log.append("[ACT] no LIVE in green room to take")
+            gs.log.append("[ACT] no LIVE in waiting room to take")
         elif len(cands) == 1:
             take_cn = cands[0]
             gs.green_room.remove(take_cn)
             gs.hand.append(take_cn)
-            gs.log.append(f"[ACT] took LIVE {take_cn} from green room -> hand")
+            gs.log.append(f"[ACT] took LIVE {take_cn} from waiting room -> hand")
         else:
             gs.pending.append({
                 "kind": "pick_live_from_green",
                 "text": "控え室のライブカードを1枚手札に加える",
                 "options": cands,
             })
-            gs.log.append(f"[PENDING] pick 1 LIVE from green room ({len(cands)} candidates)")
+            gs.log.append(f"[PENDING] pick 1 LIVE from waiting room ({len(cands)} candidates)")
 
-    # follow-up: take 1 MEMBER from green room to hand (PL!N-sd1-006)
     if _has_green_member_take_ability(ci):
-        # CardInfo schema uses field name "type" (db.py). Earlier versions used "cardtype".
-        # Keep this tolerant so compiled DB variants don't crash the UI.
         def _card_type_upper(x: Any) -> str:
             if x is None:
                 return ""
@@ -823,25 +1614,22 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                 t = getattr(x, "cardtype", None)
             return str(t or "").upper()
 
-        cands = [
-            cn
-            for cn in gs.green_room
-            if (_get_card(cards_db, cn) and _card_type_upper(_get_card(cards_db, cn)) == "MEMBER")
-        ]
+        cands = [cn for cn in gs.green_room if (_get_card(cards_db, cn) and _card_type_upper(_get_card(cards_db, cn)) == "MEMBER")]
         if not cands:
-            gs.log.append("[ACT] no MEMBER in green room to take")
+            gs.log.append("[ACT] no MEMBER in waiting room to take")
         elif len(cands) == 1:
             take_cn = cands[0]
             gs.green_room.remove(take_cn)
             gs.hand.append(take_cn)
-            gs.log.append(f"[ACT] took MEMBER {take_cn} from green room -> hand")
+            gs.log.append(f"[ACT] took MEMBER {take_cn} from waiting room -> hand")
         else:
             gs.pending.append({
                 "kind": "pick_member_from_green",
                 "text": "控え室のメンバーカードを1枚手札に加える",
                 "options": cands,
             })
-            gs.log.append(f"[PENDING] pick 1 MEMBER from green room ({len(cands)} candidates)")
+            gs.log.append(f"[PENDING] pick 1 MEMBER from waiting room ({len(cands)} candidates)")
+
 
 
 def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, choice: str) -> None:
@@ -851,6 +1639,240 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
     p = gs.pending.pop(idx)
     kind = str(p.get("kind", "") or "")
     choice_str = str(choice or "").strip()
+
+    # --- Generic effect-engine prompts ---
+
+    if kind == 'discard_from_hand':
+        rem = _safe_int(p.get('remaining', 0), 0)
+        cn = _canon_cardno(choice_str)
+        pick_i = None
+        for i, x in enumerate(list(gs.hand)):
+            if _canon_cardno(x) == cn:
+                pick_i = i
+                break
+        if pick_i is None:
+            gs.log.append(f"[ERR] discard: chosen not in hand {cn}")
+            return
+        moved = gs.hand.pop(pick_i)
+        gs.green_room.append(moved)
+        rem -= 1
+        gs.log.append(f"[ACT] discard 1 -> {moved} (remaining={rem})")
+        if rem > 0:
+            gs.pending.append({
+                'kind': 'discard_from_hand',
+                'remaining': rem,
+                'text': f'手札を{rem}枚控え室に置く',
+                'options': list(gs.hand),
+            })
+        return
+
+    if kind in ('choose_live_from_green','choose_member_from_green'):
+        want_kind = 'LIVE' if kind=='choose_live_from_green' else 'MEMBER'
+        cn = _canon_cardno(choice_str)
+        pick_cn = None
+        if cn in gs.green_room:
+            pick_cn = cn
+        else:
+            for x in _cardno_variants(cn):
+                if x in gs.green_room:
+                    pick_cn = x
+                    break
+        if not pick_cn:
+            gs.log.append(f"[ERR] retrieve: not in waiting room {cn}")
+            return
+        ci2 = _get_card(cards_db, pick_cn)
+        if want_kind=='LIVE' and not _is_live_ci(ci2):
+            gs.log.append(f"[ERR] retrieve: not LIVE {pick_cn}")
+            return
+        if want_kind=='MEMBER' and not _is_member_ci(ci2):
+            gs.log.append(f"[ERR] retrieve: not MEMBER {pick_cn}")
+            return
+        gs.green_room.remove(pick_cn)
+        gs.hand.append(pick_cn)
+        gs.log.append(f"[ACT] retrieved {want_kind} {pick_cn} -> hand")
+        return
+
+    if kind == 'choose_from_topk':
+        pool = list(p.get('pool', []) or [])
+        if not pool:
+            gs.log.append('[ERR] topk: pool missing')
+            return
+        cn = _canon_cardno(choice_str)
+        pick_idx = None
+        for i, x in enumerate(pool):
+            if _canon_cardno(x) == cn:
+                pick_idx = i
+                break
+        if pick_idx is None:
+            gs.log.append(f"[ERR] topk: invalid choice {cn}")
+            gs.deck = pool + gs.deck
+            return
+        pick_cn = pool.pop(pick_idx)
+        gs.hand.append(pick_cn)
+        gs.green_room.extend(pool)
+        gs.log.append(f"[ACT] topk chose {pick_cn} -> hand; rest {len(pool)} -> waiting room")
+        return
+
+
+
+    if kind == 'topdeck_from_green':
+        rem = _safe_int(p.get('remaining', 0), 0)
+        picked = list(p.get('picked', []) or [])
+        want_kind = str(p.get('want_kind', '') or '').upper()
+        want_group = str(p.get('want_group', '') or '')
+        allow_less = bool(p.get('allow_less', False))
+
+        low = choice_str.lower()
+        if allow_less and low in ('skip', '__skip__', 'no', 'n', '0', 'false'):
+            if picked:
+                # picked list is already in desired top order
+                gs.deck = picked + gs.deck
+                gs.log.append(f"[ACT] topdeck_from_green: placed {len(picked)} on top (early finish)")
+            else:
+                gs.log.append("[SKIP] topdeck_from_green: picked 0")
+            return
+
+        # pick card in waiting room (allow variants)
+        cn = _canon_cardno(choice_str)
+        pick_i = None
+        for i, x in enumerate(list(gs.green_room)):
+            if _canon_cardno(x) == cn:
+                pick_i = i
+                break
+        if pick_i is None:
+            gs.log.append(f"[ERR] topdeck_from_green: chosen not in waiting room {cn}")
+            # restore picked back to waiting room (best effort)
+            if picked:
+                gs.green_room.extend(picked)
+            return
+
+        pick_cn = gs.green_room.pop(pick_i)
+        ci2 = _get_card(cards_db, pick_cn)
+        if want_kind == 'LIVE' and not _is_live_ci(ci2):
+            gs.log.append(f"[ERR] topdeck_from_green: not LIVE {pick_cn}")
+            gs.green_room.append(pick_cn)
+            if picked:
+                gs.green_room.extend(picked)
+            return
+        if want_kind == 'MEMBER' and not _is_member_ci(ci2):
+            gs.log.append(f"[ERR] topdeck_from_green: not MEMBER {pick_cn}")
+            gs.green_room.append(pick_cn)
+            if picked:
+                gs.green_room.extend(picked)
+            return
+        if want_group and (want_group not in str(getattr(ci2, 'group', '') or '')):
+            gs.log.append(f"[ERR] topdeck_from_green: group mismatch {pick_cn}")
+            gs.green_room.append(pick_cn)
+            if picked:
+                gs.green_room.extend(picked)
+            return
+
+        picked.append(pick_cn)
+        rem -= 1
+
+        if rem <= 0:
+            gs.deck = picked + gs.deck
+            gs.log.append(f"[ACT] topdeck_from_green: placed {len(picked)} on top")
+            return
+
+        # rebuild candidates
+        cands: List[str] = []
+        for x in list(gs.green_room):
+            ci = _get_card(cards_db, x)
+            if not ci:
+                continue
+            if want_kind == 'LIVE' and not _is_live_ci(ci):
+                continue
+            if want_kind == 'MEMBER' and not _is_member_ci(ci):
+                continue
+            if want_group and (want_group not in str(getattr(ci, 'group', '') or '')):
+                continue
+            cands.append(x)
+
+        if not cands:
+            # no more candidates; finalize with what we have
+            gs.deck = picked + gs.deck
+            gs.log.append(f"[ACT] topdeck_from_green: candidates exhausted; placed {len(picked)} on top")
+            return
+
+        opts = list(cands) + (['skip'] if allow_less else [])
+        gs.pending.append({
+            'kind': 'topdeck_from_green',
+            'text': f'控え室の{want_kind}をデッキ上に置く（残り{rem}枚）/ skipで終了' if allow_less else f'控え室の{want_kind}をデッキ上に置く（残り{rem}枚）',
+            'options': opts,
+            'remaining': rem,
+            'picked': picked,
+            'want_kind': want_kind,
+            'want_group': want_group,
+            'allow_less': allow_less,
+        })
+        gs.log.append(f"[PENDING] topdeck_from_green: picked {pick_cn}; remaining {rem}")
+        return
+
+    if kind == 'reorder_topk_keep_any':
+        pool = list(p.get('pool', []) or [])
+        kept = list(p.get('kept', []) or [])
+        if not pool and not kept:
+            gs.log.append('[ERR] reorder_topk: state missing')
+            return
+
+        low = choice_str.lower()
+        if low in ('skip', '__skip__', 'no', 'n', '0', 'false'):
+            # finalize early
+            if pool:
+                gs.green_room.extend(pool)
+            if kept:
+                gs.deck = kept + gs.deck
+            gs.log.append(f"[ACT] reorder_topk: kept {len(kept)} on top; rest {len(pool)} -> waiting room")
+            return
+
+        cn = _canon_cardno(choice_str)
+        pick_idx = None
+        for i, x in enumerate(pool):
+            if _canon_cardno(x) == cn:
+                pick_idx = i
+                break
+        if pick_idx is None:
+            gs.log.append(f"[ERR] reorder_topk: invalid choice {cn}")
+            # best-effort restore
+            gs.deck = kept + pool + gs.deck
+            return
+
+        pick_cn = pool.pop(pick_idx)
+        kept.append(pick_cn)
+
+        if not pool:
+            # done
+            gs.deck = kept + gs.deck
+            gs.log.append(f"[ACT] reorder_topk: kept {len(kept)} on top; rest 0 -> waiting room")
+            return
+
+        # queue next pick
+        opts = list(pool) + ['skip']
+        gs.pending.append({
+            'kind': 'reorder_topk_keep_any',
+            'text': f'次にデッキ上に置くカードを選択（残り{len(pool)}枚）/ skipで終了',
+            'options': opts,
+            'pool': list(pool),
+            'kept': list(kept),
+            'allow_less': True,
+        })
+        gs.log.append(f"[PENDING] reorder_topk: picked {pick_cn}; remaining {len(pool)}")
+        return
+
+    if kind == 'choose_stage_member_to_activate':
+        pos2 = str(choice_str or '').upper()
+        if pos2 not in ('L','C','R'):
+            gs.log.append(f"[ERR] activate_member: invalid pos {choice_str}")
+            return
+        slot2 = gs.stage.get(pos2)
+        if not slot2:
+            gs.log.append(f"[ERR] activate_member: empty {pos2}")
+            return
+        slot2.active = True
+        gs.log.append(f"[ACT] stage {pos2} set ACTIVE")
+        return
+
 
     # Generic "skip / finish early" for prompts that allow fewer picks than the max.
     # The UI can send __SKIP__ to stop selecting additional cards.
@@ -878,7 +1900,31 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             gs.log.append(f"[SKIP] {pos}: live-start blade ability skipped")
         return
 
-    # 2) Pick 1 LIVE from green room to hand
+    
+    # 1b) Live-start optional payment -> generic effect template (regex engine)
+    if kind == "live_start_pay_effect":
+        pos = str(p.get("pos", "") or "").upper()
+        need_e = _safe_int(p.get("need_e", 1), 1)
+        eff = str(p.get("effect", "") or "").strip()
+        slot = gs.stage.get(pos)
+        if not slot:
+            gs.log.append(f"[SKIP] prompt: stage {pos} empty (ignored)")
+            return
+        if choice_str.lower() in ("pay", "yes", "y", "1", "true"):
+            if not pay_energy(gs, need_e):
+                gs.log.append(f"[ERR] ability: insufficient energy for [E]{need_e} (have {gs.energy_active})")
+                return
+            rng = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
+            ok = try_apply_effect_template(gs, rng, cards_db, eff, {"pos": pos})
+            if ok:
+                gs.log.append(f"[AUTO] {pos}: paid [E]{need_e} -> applied {eff}")
+            else:
+                gs.log.append(f"[WARN] {pos}: paid [E]{need_e} but effect not matchable: {eff}")
+        else:
+            gs.log.append(f"[SKIP] {pos}: live-start ability skipped")
+        return
+
+# 2) Pick 1 LIVE from green room to hand
     if kind == "pick_live_from_green":
         if choice_str.lower() in ("skip", "no", "n", "0", "false"):
             gs.log.append("[SKIP] pick live from green room")
@@ -1137,7 +2183,7 @@ def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], i
         if not gs.set_zone:
             gs.log.append('[INFO] confirm: no LIVE after filtering; skipping live.')
             gs.phase = 'LIVE_RESOLVE'
-            gs.log.append(f'[PHASE] LIVE_RESOLVE (no live) turn={{gs.turn}}')
+            gs.log.append(f'[PHASE] LIVE_RESOLVE (no live) turn={gs.turn}')
             return
 
 
@@ -1155,7 +2201,7 @@ def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], i
         if not gs.set_zone:
             gs.log.append('[INFO] perf: no LIVE in set_zone; skipping cheer/attempt.')
             gs.phase = 'LIVE_RESOLVE'
-            gs.log.append(f'[PHASE] LIVE_RESOLVE (no live) turn={{gs.turn}}')
+            gs.log.append(f'[PHASE] LIVE_RESOLVE (no live) turn={gs.turn}')
             return
 
         cmd_yell(gs, rng, cards_db)

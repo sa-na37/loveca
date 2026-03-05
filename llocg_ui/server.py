@@ -26,6 +26,8 @@ Key goals:
 
 import json
 import time
+import os
+import re
 from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -49,7 +51,8 @@ from .engine import (
     cmd_resolve_pending,
     _get_card,
     _has_sacrifice_ability,
-    can_activate,
+    can_activate_in_state,
+    StageSlot,
 )
 
 APP_VERSION = "clean-ui-v2_8_skip_yell_empty_live"
@@ -80,6 +83,7 @@ class App:
         self.deck_code = str(deck_code)
         self.gs, self.rng = new_game(self.root, self.deck_code, seed=seed, debug=debug)
         self._force_mulligan_start()
+        self._apply_start_overrides_from_env()
         self.save_trace()
 
     def save_trace(self) -> None:
@@ -150,6 +154,399 @@ class App:
 
         try:
             gs.log.append('[PHASE] MULLIGAN (choose cards to redraw)')
+        except Exception:
+            pass
+
+    def _apply_start_overrides_from_env(self) -> None:
+        """Apply debug start overrides from environment variables.
+
+        Supported env vars:
+          - LLOCG_START_HAND: comma/space separated cardnumbers to force into opening hand
+          - LLOCG_START_HAND_SIZE: target hand size after forcing (0 = do not fill)
+          - LLOCG_START_ENERGY_ACTIVE / LLOCG_START_ENERGY_WAIT
+          - LLOCG_START_TURN (int), LLOCG_START_PHASE (e.g. MAIN/MULLIGAN)
+          - LLOCG_START_SHUFFLE: '1' to shuffle deck after removing forced hand
+          - LLOCG_START_DEBUG: '1' to enable gs.debug
+
+        Notes:
+          - Debug-only: mutates GameState directly.
+          - Energy is capped by gs.energy_total (default 12) minus stage under-energy.
+        """
+        env = os.environ
+        gs = self.gs
+
+        preset_s = (env.get('LLOCG_DEBUG_PRESET') or '').strip().lower()
+        effect_card_s = (env.get('LLOCG_DEBUG_EFFECT_CARD') or '').strip()
+
+        hand_spec = (env.get('LLOCG_START_HAND') or '').strip()
+        e_active_s = (env.get('LLOCG_START_ENERGY_ACTIVE') or '').strip()
+        e_wait_s = (env.get('LLOCG_START_ENERGY_WAIT') or '').strip()
+        turn_s = (env.get('LLOCG_START_TURN') or '').strip()
+        phase_s = (env.get('LLOCG_START_PHASE') or '').strip()
+        hand_size_s = (env.get('LLOCG_START_HAND_SIZE') or '').strip()
+        shuffle_s = (env.get('LLOCG_START_SHUFFLE') or '').strip()
+        debug_s = (env.get('LLOCG_START_DEBUG') or '').strip()
+
+        # Optional richer injections for faster effect testing
+        green_spec = (env.get('LLOCG_START_GREEN') or '').strip()        # waiting room
+        decktop_spec = (env.get('LLOCG_START_DECK_TOP') or '').strip()   # put these on top of deck (leftmost = top)
+        resolve_spec = (env.get('LLOCG_START_RESOLVE') or '').strip()    # resolve zone (cheer)
+        stage_spec = (env.get('LLOCG_START_STAGE') or '').strip()        # e.g., "C=CN,L=CN2" or "C:CN"
+        stage_l = (env.get('LLOCG_START_STAGE_L') or '').strip()
+        stage_c = (env.get('LLOCG_START_STAGE_C') or '').strip()
+        stage_r = (env.get('LLOCG_START_STAGE_R') or '').strip()
+
+        if (not hand_spec) and effect_card_s:
+            # Convenience: single card effect test
+            hand_spec = effect_card_s
+
+        any_override = any([
+            preset_s,
+            hand_spec, e_active_s, e_wait_s, turn_s, phase_s, hand_size_s, shuffle_s, debug_s,
+            green_spec, decktop_spec, resolve_spec,
+            stage_spec, stage_l, stage_c, stage_r,
+        ])
+        if not any_override:
+            return
+
+        def _as_int(s: str, default: int) -> int:
+            try:
+                return int(str(s).strip())
+            except Exception:
+                return default
+
+        # Presets (safe defaults for effect implementation/testing)
+        if preset_s == 'effect':
+            # Start directly in MAIN with ample energy, minimal hand fill.
+            if not debug_s:
+                try:
+                    gs.debug = True
+                except Exception:
+                    pass
+            if not phase_s:
+                try:
+                    gs.phase = 'MAIN'
+                except Exception:
+                    pass
+            if not turn_s:
+                try:
+                    gs.turn = 1
+                except Exception:
+                    pass
+            if (not e_active_s) and (not e_wait_s):
+                # default to max active energy (capped later by energy_total - under)
+                e_active_s = '12'
+                e_wait_s = '0'
+            if not hand_size_s:
+                # do not auto-fill unless user asked; keep just forced cards
+                hand_size_s = '0'
+
+        # Phase / turn
+        if turn_s:
+            try:
+                gs.turn = _as_int(turn_s, int(getattr(gs, 'turn', 0) or 0))
+            except Exception:
+                pass
+
+        target_phase = ''
+        if phase_s:
+            target_phase = str(phase_s).strip().upper()
+            try:
+                gs.phase = target_phase
+            except Exception:
+                pass
+        else:
+            try:
+                target_phase = str(getattr(gs, 'phase', '') or '').upper()
+            except Exception:
+                target_phase = ''
+
+        # Hand target size defaults
+        if hand_size_s:
+            target_hand_size = _as_int(hand_size_s, 7)
+        else:
+            target_hand_size = 6 if target_phase == 'MULLIGAN' else 7
+        if target_hand_size < 0:
+            target_hand_size = 0
+
+        # Debug flag
+        if debug_s:
+            try:
+                gs.debug = str(debug_s).strip() in ('1','true','TRUE','yes','YES')
+            except Exception:
+                pass
+
+        def _split_cards(spec: str) -> list[str]:
+            if not spec:
+                return []
+            return [t for t in re.split(r'[\s,]+', spec) if t]
+
+        # Forced hand
+        forced = []
+        if hand_spec:
+            forced = _split_cards(hand_spec)
+
+        if forced:
+            try:
+                deck = list(getattr(gs, 'deck', []) or [])
+            except Exception:
+                deck = []
+            new_hand = []
+            for cn in forced:
+                try:
+                    deck.remove(cn)
+                except ValueError:
+                    pass
+                new_hand.append(cn)
+
+            if shuffle_s.strip() in ('1','true','TRUE','yes','YES'):
+                try:
+                    self.rng.shuffle(deck)
+                except Exception:
+                    pass
+
+            if target_hand_size > 0:
+                while len(new_hand) < target_hand_size and deck:
+                    new_hand.append(deck.pop(0))
+
+            try:
+                gs.deck = deck
+                gs.hand = new_hand
+            except Exception:
+                pass
+        elif hand_size_s:
+            # size change only
+            try:
+                deck = list(getattr(gs, 'deck', []) or [])
+            except Exception:
+                deck = []
+            try:
+                hand = list(getattr(gs, 'hand', []) or [])
+            except Exception:
+                hand = []
+            if target_hand_size > 0:
+                if len(hand) > target_hand_size:
+                    extras = hand[target_hand_size:]
+                    hand = hand[:target_hand_size]
+                    deck = list(extras) + deck
+                while len(hand) < target_hand_size and deck:
+                    hand.append(deck.pop(0))
+                try:
+                    gs.deck = deck
+                    gs.hand = hand
+                except Exception:
+                    pass
+
+        # Energy overrides with cap
+        if e_active_s or e_wait_s:
+            try:
+                active0 = int(getattr(gs, 'energy_active', 0) or 0)
+            except Exception:
+                active0 = 0
+            try:
+                wait0 = int(getattr(gs, 'energy_wait', 0) or 0)
+            except Exception:
+                wait0 = 0
+            active = _as_int(e_active_s, active0) if e_active_s else active0
+            wait = _as_int(e_wait_s, wait0) if e_wait_s else wait0
+            if active < 0: active = 0
+            if wait < 0: wait = 0
+
+            under = 0
+            try:
+                st = getattr(gs, 'stage', None)
+                if isinstance(st, dict):
+                    for v in st.values():
+                        if v is None:
+                            continue
+                        try:
+                            under += int(getattr(v, 'energy_under', 0) or 0)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+            try:
+                total_cap = int(getattr(gs, 'energy_total', 12) or 12)
+            except Exception:
+                total_cap = 12
+            cap = max(0, total_cap - under)
+            total = active + wait
+            if total > cap:
+                overflow = total - cap
+                if wait >= overflow:
+                    wait -= overflow
+                else:
+                    overflow -= wait
+                    wait = 0
+                    active = max(0, active - overflow)
+            try:
+                gs.energy_active = active
+                gs.energy_wait = wait
+            except Exception:
+                pass
+
+        # Stage injection (L/C/R)
+        # Priority: explicit per-slot env > stage_spec
+        st_map: Dict[str, str] = {}
+        if stage_spec:
+            for part in re.split(r'[;,]+', stage_spec):
+                p = part.strip()
+                if not p:
+                    continue
+                if '=' in p:
+                    k, v = p.split('=', 1)
+                elif ':' in p:
+                    k, v = p.split(':', 1)
+                else:
+                    continue
+                kk = str(k).strip().upper()
+                vv = str(v).strip()
+                if kk in ('L','C','R') and vv:
+                    st_map[kk] = vv
+        if stage_l:
+            st_map['L'] = stage_l
+        if stage_c:
+            st_map['C'] = stage_c
+        if stage_r:
+            st_map['R'] = stage_r
+
+        if st_map:
+            # Remove injected cards from zones/deck to avoid accidental duplicates
+            try:
+                deck = list(getattr(gs, 'deck', []) or [])
+            except Exception:
+                deck = []
+            try:
+                hand = list(getattr(gs, 'hand', []) or [])
+            except Exception:
+                hand = []
+            try:
+                gr = list(getattr(gs, 'green_room', []) or [])
+            except Exception:
+                gr = []
+            for pos, cn in st_map.items():
+                # strip one occurrence
+                try:
+                    if cn in deck:
+                        deck.remove(cn)
+                except Exception:
+                    pass
+                try:
+                    if cn in hand:
+                        hand.remove(cn)
+                except Exception:
+                    pass
+                try:
+                    if cn in gr:
+                        gr.remove(cn)
+                except Exception:
+                    pass
+
+                try:
+                    gs.stage[pos] = StageSlot(cardnumber=cn, active=True)
+                except Exception:
+                    pass
+
+            try:
+                gs.deck = deck
+                gs.hand = hand
+                gs.green_room = gr
+            except Exception:
+                pass
+
+        # Green room injection (append)
+        if green_spec:
+            add = _split_cards(green_spec)
+            if add:
+                try:
+                    deck = list(getattr(gs, 'deck', []) or [])
+                except Exception:
+                    deck = []
+                for cn in add:
+                    try:
+                        if cn in deck:
+                            deck.remove(cn)
+                    except Exception:
+                        pass
+                try:
+                    gs.deck = deck
+                except Exception:
+                    pass
+                try:
+                    gs.green_room.extend(add)
+                except Exception:
+                    pass
+
+        # Resolve zone injection (overwrite)
+        if resolve_spec:
+            add = _split_cards(resolve_spec)
+            if add:
+                try:
+                    deck = list(getattr(gs, 'deck', []) or [])
+                except Exception:
+                    deck = []
+                for cn in add:
+                    try:
+                        if cn in deck:
+                            deck.remove(cn)
+                    except Exception:
+                        pass
+                try:
+                    gs.deck = deck
+                except Exception:
+                    pass
+                try:
+                    gs.resolve_zone = list(add)
+                except Exception:
+                    pass
+
+        # Put specified cards on TOP of deck (leftmost = top)
+        if decktop_spec:
+            top_cards = _split_cards(decktop_spec)
+            if top_cards:
+                try:
+                    deck = list(getattr(gs, 'deck', []) or [])
+                except Exception:
+                    deck = []
+                for cn in top_cards:
+                    try:
+                        if cn in deck:
+                            deck.remove(cn)
+                    except Exception:
+                        pass
+                deck = list(top_cards) + deck
+                try:
+                    gs.deck = deck
+                except Exception:
+                    pass
+
+        # Log summary
+        try:
+            e_total = int(getattr(gs, 'energy_total', 12) or 12)
+        except Exception:
+            e_total = 12
+        try:
+            e_a = int(getattr(gs, 'energy_active', 0) or 0)
+        except Exception:
+            e_a = 0
+        try:
+            e_w = int(getattr(gs, 'energy_wait', 0) or 0)
+        except Exception:
+            e_w = 0
+        try:
+            h = list(getattr(gs, 'hand', []) or [])
+        except Exception:
+            h = []
+        try:
+            ph = str(getattr(gs, 'phase', '') or '')
+        except Exception:
+            ph = ''
+        try:
+            tr = int(getattr(gs, 'turn', 0) or 0)
+        except Exception:
+            tr = 0
+        try:
+            gs.log.append(f'[DEBUG_START] phase={ph} turn={tr} hand={len(h)} E={e_a}/{e_total} wait={e_w}')
         except Exception:
             pass
 
@@ -359,7 +756,8 @@ class App:
                         "name": (_get_card(self.cards_db, v.cardnumber).name if _get_card(self.cards_db, v.cardnumber) else ""),
                         "type": (_get_card(self.cards_db, v.cardnumber).type if _get_card(self.cards_db, v.cardnumber) else ""),
                         "has_sac": _has_sacrifice_ability(_get_card(self.cards_db, v.cardnumber)),
-                        "can_activate": can_activate(_get_card(self.cards_db, v.cardnumber)),
+                        "energy_under": int(getattr(v, "energy_under", 0) or 0),
+                        "can_activate": can_activate_in_state(self.gs, self.cards_db, k),
                     }
                     if v
                     else None
@@ -461,6 +859,32 @@ class App:
             idxs = payload.get("indices", [])
             if not isinstance(idxs, list):
                 idxs = []
+            # Convenience: if the only pending is a simple pay/skip (or yes/no) confirm,
+            # allow NEXT to select the default (PAY/YES) without clicking the popup.
+            try:
+                pend = list(getattr(self.gs, 'pending', []) or [])
+            except Exception:
+                pend = []
+            if pend:
+                p0 = pend[0] if isinstance(pend[0], dict) else None
+                opts = []
+                if isinstance(p0, dict):
+                    o = p0.get('options', None)
+                    if isinstance(o, list):
+                        opts = [str(x).strip().lower() for x in o if str(x).strip()]
+                if opts:
+                    s = set(opts)
+                    if s.issubset({'pay','skip','yes','no'}) and len(s) <= 2:
+                        if 'pay' in s:
+                            choice = 'pay'
+                        elif 'yes' in s:
+                            choice = 'yes'
+                        else:
+                            choice = opts[0]
+                        cmd_resolve_pending(self.gs, self.cards_db, 0, choice)
+                        self.save_trace()
+                        return self.state_json()
+
             cmd_next(self.gs, self.rng, self.cards_db, [int(x) for x in idxs])
         elif name == "mulligan_next":
             idxs = payload.get("indices", [])
@@ -548,6 +972,29 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/img":
             qs = parse_qs(u.query)
             cn = unquote((qs.get("cn", [""])[0] or "").strip())
+            # special: energy card back image
+            if cn == "__ENERGY__":
+                cand = []
+                try:
+                    cand.append(Path.cwd() / "energy.jpg")
+                    cand.append(Path.cwd() / "energy.png")
+                    cand.append(Path.cwd() / "energy.jpeg")
+                    cand.append(self.app.root / "energy.jpg")
+                    cand.append(self.app.root / "energy.png")
+                    cand.append(self.app.root / "llocg_db_out_full" / "energy.jpg")
+                except Exception:
+                    pass
+                for p2 in cand:
+                    try:
+                        if p2 and p2.exists():
+                            ctype = "image/jpeg" if str(p2).lower().endswith((".jpg",".jpeg")) else "image/png"
+                            self._send(200, p2.read_bytes(), ctype)
+                            return
+                    except Exception:
+                        pass
+                # fallback: 1x1 transparent PNG
+                self._send(200, bytes.fromhex('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c6360000002000154a24f5d0000000049454e44ae426082'), "image/png")
+                return
             p = self.app.img.find(cn)
             if p and p.exists():
                 ctype = "image/png"
@@ -661,6 +1108,7 @@ HTML = r'''<!doctype html>
   .energyUI .energyText{font-size:14px;line-height:1.2;background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:8px 10px;color:#eee;}
   .energyUI .btn{background:rgba(0,0,0,.65);color:#eee;border:1px solid rgba(255,255,255,.14);padding:10px 10px;border-radius:12px;cursor:pointer;font-size:13px;text-align:center;}
   .energyUI .btn.primary{background:#ffd54a;color:#111;border-color:rgba(0,0,0,.3);}
+  .cardWrap.underEnergy{pointer-events:none;}
 
   /* small activation button on stage card */
   .actBtn{position:absolute;left:6px;right:6px;bottom:6px;padding:6px 6px;border-radius:10px;border:1px solid rgba(255,255,255,.18);
@@ -864,7 +1312,7 @@ HTML = r'''<!doctype html>
     if(orient==='landscape') return {w: ch, h: cw};
     return {w: cw, h: ch};
   }
-  function makeCard(cn, wantOrient, x, y, w, h, capText, onClick, isSelected=false, z=100){
+  function makeCard(cn, wantOrient, x, y, w, h, capText, onClick, isSelected=false, z=100, noHover=false){
     const wrap = document.createElement('div');
     wrap.className = 'cardWrap';
     wrap.style.left = x + 'px';
@@ -916,16 +1364,20 @@ HTML = r'''<!doctype html>
       wrap.appendChild(cap);
     }
 
-    // hover: lift + bring front
-    wrap.addEventListener('mouseenter', ()=>{
-      const lift = Math.max(4, Math.floor(w * 0.05));
-      wrap.style.transform = `translateY(${-lift}px)`;
-      wrap.style.zIndex = '20000';
-    });
-    wrap.addEventListener('mouseleave', ()=>{
-      wrap.style.transform = '';
-      wrap.style.zIndex = wrap.dataset.baseZ || '100';
-    });
+    // hover: lift + bring front (disabled for under-energy cards etc.)
+    if(!noHover){
+      wrap.addEventListener('mouseenter', ()=>{
+        const lift = Math.max(4, Math.floor(w * 0.05));
+        wrap.style.transform = `translateY(${-lift}px)`;
+        wrap.style.zIndex = '20000';
+      });
+      wrap.addEventListener('mouseleave', ()=>{
+        wrap.style.transform = '';
+        wrap.style.zIndex = wrap.dataset.baseZ || '100';
+      });
+    }else{
+      wrap.style.pointerEvents = 'none';
+    }
 
     if(onClick){
       wrap.addEventListener('click', (ev)=>{ ev.stopPropagation(); onClick(); });
@@ -1133,6 +1585,21 @@ HTML = r'''<!doctype html>
     const x = (zoneW - sz.w)/2;
     const y = padTop + Math.max(0, (availH - sz.h)/2);
 
+    // energies under this member (render behind)
+    try{
+      const underN = Number(slotObj.energy_under||0);
+      if(underN > 0){
+        const dx = sz.w * 0.05;
+        const dy = sz.w * 0.05;
+        for(let i=0;i<underN;i++){
+          const ex = x + dx*(i+1);
+          const ey = y + dy*(i+1);
+          const ecard = makeCard('__ENERGY__', 'portrait', ex, ey, sz.w, sz.h, '', null, false, 350+i, true);
+          ecard.classList.add('underEnergy');
+          inner.appendChild(ecard);
+        }
+      }
+    }catch(e){}
     const card = makeCard(cn, 'portrait', x, y, sz.w, sz.h, labelFor(cn), ()=>doPlayHere(), false, 400);
 
     // activation button (if possible)
