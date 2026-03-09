@@ -2100,6 +2100,14 @@ HTML = r'''<!doctype html>
       const dimsP = standardSize('portrait');
       const dimsL = standardSize('landscape');
 
+      const dupCount = {};
+      opts.forEach(o=>{
+        const k = String(o).trim();
+        if(!k) return;
+        dupCount[k] = (dupCount[k]||0) + 1;
+      });
+      const dupSeen = {};
+
       opts.forEach(opt=>{
         const cn = String(opt).trim();
         const intr = intrinsicOrient(cn);
@@ -2116,7 +2124,10 @@ HTML = r'''<!doctype html>
 
         const cap = document.createElement('div');
         cap.className = 'choiceCap';
-        cap.textContent = cn;
+        dupSeen[cn] = (dupSeen[cn]||0)+1;
+        const nth = dupSeen[cn];
+        const tot = dupCount[cn]||0;
+        cap.textContent = (tot>1) ? `${cn} (${nth}/${tot})` : cn;
 
         b.appendChild(img);
         b.appendChild(cap);

@@ -1584,16 +1584,12 @@ def cmd_play(gs: GameState, cards_db: Dict[str, CardInfo], hand_idx: int, pos: s
     # If multiple triggers exist, let the user choose the resolution order.
     triggers = _collect_auto_triggers_on_member_enter(gs, cards_db, entered_pos=pos, entered_cn=cn)
     if len(triggers) >= 2:
-        opts = [t.get('source_cn') for t in triggers if t.get('source_cn')]
-        # de-dup while preserving order
-        seen = set()
-        opts2 = []
-        for x in opts:
-            k = _canon_cardno(str(x))
-            if not k or k in seen:
-                continue
-            seen.add(k)
-            opts2.append(str(x))
+        opts2: List[str] = []
+        for t in triggers:
+            scn = _canon_cardno(str((t or {}).get('source_cn', '') or ''))
+            if scn:
+                # Keep duplicates so that multiple copies (e.g., 2×Ai) can be resolved separately.
+                opts2.append(scn)
         gs.pending.append({
             'kind': 'auto_order',
             'text': '自動効果が複数発生：解決するカードを選択（1つずつ）',
@@ -1680,16 +1676,23 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
                     return
 
 
-def handle_stage_cost10_member_enter(gs: GameState, cards_db: Dict[str, CardInfo], entered_pos: str, entered_cn: str) -> None:
+def handle_stage_cost10_member_enter(gs: GameState, cards_db: Dict[str, CardInfo], entered_pos: str, entered_cn: str, ai_pos: str = '') -> None:
     """Handle auto abilities that trigger when a cost-10 MEMBER enters your stage.
 
-    Currently needed for PL!N-pb1-005 (宮下愛):
+    PL!N-pb1-005 (宮下愛):
       <自動><ターン1回> 自分のステージにコスト10のメンバーが登場したとき、カードを1枚引く。
+
+    NOTE: We resolve *one* Ai instance per trigger so that 2×Ai produces 2 separate triggers
+    that can be ordered and resolved independently (rule-consistent).
     """
     try:
         entered_pos = str(entered_pos or '').upper()
     except Exception:
         entered_pos = 'C'
+    try:
+        ai_pos_u = str(ai_pos or '').upper()
+    except Exception:
+        ai_pos_u = ''
 
     canon_enter = _canon_cardno(entered_cn)
     ci_enter = _get_card(cards_db, canon_enter)
@@ -1702,28 +1705,31 @@ def handle_stage_cost10_member_enter(gs: GameState, cards_db: Dict[str, CardInfo
     if cost != 10:
         return
 
-    # Find all copies of 宮下愛 (PL!N-pb1-005) currently on stage.
-    for p in ("L", "C", "R"):
+    def _resolve_one(p: str) -> None:
         slot = gs.stage.get(p)
         if not slot:
-            continue
+            return
         canon = _canon_cardno(slot.cardnumber)
-        if canon != "PL!N-pb1-005":
-            continue
-
-        # Once per turn
+        if canon != 'PL!N-pb1-005':
+            return
         key = f"{p}:{canon}:auto_cost10_enter"
         used = int((getattr(gs, 'used_this_turn', {}) or {}).get(key, 0) or 0)
         if used >= 1:
-            continue
-
+            return
         drew = draw(gs, 1)
         try:
             gs.used_this_turn[key] = 1
         except Exception:
             gs.used_this_turn = {key: 1}
-        gs.log.append(f"[AUTO] {canon}: cost10 member entered ({canon_enter} @ {entered_pos}) -> drew {drew}")
+        gs.log.append(f"[AUTO] {canon}({p}): cost10 member entered ({canon_enter} @ {entered_pos}) -> drew {drew}")
 
+    if ai_pos_u in ('L', 'C', 'R'):
+        _resolve_one(ai_pos_u)
+        return
+
+    # Fallback: resolve all (legacy behavior)
+    for p in ('L', 'C', 'R'):
+        _resolve_one(p)
 
 def _has_supported_enter_auto(ci: Optional[CardInfo]) -> bool:
     if not ci or not getattr(ci, 'abilities', None):
@@ -1773,19 +1779,20 @@ def _has_supported_enter_auto(ci: Optional[CardInfo]) -> bool:
     return False
 
 
-def _has_active_ai_cost10_trigger(gs: GameState, cards_db: Dict[str, CardInfo], entered_cn: str) -> bool:
+def _list_active_ai_cost10_positions(gs: GameState, cards_db: Dict[str, CardInfo], entered_cn: str) -> List[str]:
+    """Return stage positions of unused 宮下愛(PL!N-pb1-005) that would trigger on cost-10 member enter."""
     canon_enter = _canon_cardno(entered_cn)
     ci_enter = _get_card(cards_db, canon_enter)
     if not ci_enter:
-        return False
+        return []
     try:
         cost = int(getattr(ci_enter, 'cost', 0) or 0)
     except Exception:
         cost = 0
     if cost != 10:
-        return False
-    # Any unused Ai on stage?
-    for p in ("L", "C", "R"):
+        return []
+    out: List[str] = []
+    for p in ('L', 'C', 'R'):
         slot = gs.stage.get(p)
         if not slot:
             continue
@@ -1795,18 +1802,19 @@ def _has_active_ai_cost10_trigger(gs: GameState, cards_db: Dict[str, CardInfo], 
         key = f"{p}:{canon}:auto_cost10_enter"
         used = int((getattr(gs, 'used_this_turn', {}) or {}).get(key, 0) or 0)
         if used < 1:
-            return True
-    return False
+            out.append(p)
+    return out
 
+
+def _has_active_ai_cost10_trigger(gs: GameState, cards_db: Dict[str, CardInfo], entered_cn: str) -> bool:
+    return bool(_list_active_ai_cost10_positions(gs, cards_db, entered_cn))
 
 def _collect_auto_triggers_on_member_enter(gs: GameState, cards_db: Dict[str, CardInfo], entered_pos: str, entered_cn: str) -> List[Dict[str, Any]]:
     """Collect auto triggers that happen when a MEMBER enters your stage.
 
-    We collect (at most) two trigger groups for now:
-      - the entering member's [登場] ability (if supported)
-      - PL!N-pb1-005 (Ai) reacting to cost-10 member entering stage (if applicable)
-
-    If multiple triggers exist, UI will prompt the user to choose resolution order.
+    Triggers are collected as individual instances (not de-duplicated), so that
+    multiple copies of the same card (e.g., 2× 宮下愛) can be resolved separately
+    in the order the player chooses.
     """
     out: List[Dict[str, Any]] = []
 
@@ -1820,16 +1828,17 @@ def _collect_auto_triggers_on_member_enter(gs: GameState, cards_db: Dict[str, Ca
             'cn': entered_cn,
         })
 
-    if _has_active_ai_cost10_trigger(gs, cards_db, entered_cn):
+    # 宮下愛(PL!N-pb1-005): one trigger per unused copy on stage
+    for ai_pos in _list_active_ai_cost10_positions(gs, cards_db, entered_cn):
         out.append({
             'kind': 'ai_cost10_enter',
             'source_cn': 'PL!N-pb1-005',
+            'ai_pos': str(ai_pos).upper(),
             'entered_pos': str(entered_pos or 'C').upper(),
             'entered_cn': entered_cn,
         })
 
     return out
-
 
 def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[str, Any]) -> None:
     kind = str((trig or {}).get('kind', '') or '')
@@ -1839,7 +1848,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         handle_enter_auto(gs, cards_db, pos, cn)
         return
     if kind == 'ai_cost10_enter':
-        handle_stage_cost10_member_enter(gs, cards_db, entered_pos=str(trig.get('entered_pos','C') or 'C'), entered_cn=str(trig.get('entered_cn','') or ''))
+        handle_stage_cost10_member_enter(gs, cards_db, entered_pos=str(trig.get('entered_pos','C') or 'C'), entered_cn=str(trig.get('entered_cn','') or ''), ai_pos=str(trig.get('ai_pos','') or ''))
         return
     # Unknown trigger
     gs.log.append(f"[WARN] auto_trigger: unknown kind={kind}")
@@ -2224,15 +2233,11 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
     choice_str = str(choice or "").strip()
 
     def _auto_queue_to_options(q: List[Dict[str, Any]]) -> List[str]:
-        opts = [t.get('source_cn') for t in q if t.get('source_cn')]
-        seen = set()
         out: List[str] = []
-        for x in opts:
-            k = _canon_cardno(str(x))
-            if not k or k in seen:
-                continue
-            seen.add(k)
-            out.append(str(x))
+        for t in (q or []):
+            scn = _canon_cardno(str((t or {}).get('source_cn', '') or ''))
+            if scn:
+                out.append(scn)
         return out
 
     def _enqueue_auto_order_from_deferred() -> None:
