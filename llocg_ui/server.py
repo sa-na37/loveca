@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 from urllib.parse import urlparse, parse_qs, unquote
 
-from .db import load_cards_db
+from .db import load_cards_db, is_member_type, is_live_type, _get_card as _db_get_card
 from .images import ImageLocator
 from .engine import (
     new_game,
@@ -49,6 +49,7 @@ from .engine import (
     cmd_next,
     cmd_activate_to_green,
     cmd_resolve_pending,
+    post_process,
     _get_card,
     _has_sacrifice_ability,
     can_activate_in_state,
@@ -177,6 +178,7 @@ class App:
 
         preset_s = (env.get('LLOCG_DEBUG_PRESET') or '').strip().lower()
         effect_card_s = (env.get('LLOCG_DEBUG_EFFECT_CARD') or '').strip()
+        debug_energy_cap_s = (env.get('LLOCG_DEBUG_ENERGY_CAP') or '').strip()
 
         hand_spec = (env.get('LLOCG_START_HAND') or '').strip()
         e_active_s = (env.get('LLOCG_START_ENERGY_ACTIVE') or '').strip()
@@ -189,6 +191,7 @@ class App:
 
         # Optional richer injections for faster effect testing
         green_spec = (env.get('LLOCG_START_GREEN') or '').strip()        # waiting room
+        success_spec = (env.get('LLOCG_START_SUCCESS') or '').strip()    # success live storage
         decktop_spec = (env.get('LLOCG_START_DECK_TOP') or '').strip()   # put these on top of deck (leftmost = top)
         resolve_spec = (env.get('LLOCG_START_RESOLVE') or '').strip()    # resolve zone (cheer)
         stage_spec = (env.get('LLOCG_START_STAGE') or '').strip()        # e.g., "C=CN,L=CN2" or "C:CN"
@@ -215,9 +218,20 @@ class App:
             except Exception:
                 return default
 
+        # Debug energy_total override (safe: only affects debug preset / explicit env var)
+        if preset_s == 'effect' or debug_energy_cap_s:
+            cap_v = _as_int(debug_energy_cap_s, 0) if debug_energy_cap_s else 0
+            if cap_v > 0:
+                try:
+                    gs.energy_total = cap_v
+                except Exception:
+                    pass
+
         # Presets (safe defaults for effect implementation/testing)
         if preset_s == 'effect':
-            # Start directly in MAIN with ample energy, minimal hand fill.
+            # Start directly in MAIN with ample energy, and auto-provide cards needed to test the effect quickly.
+            # - Default energy cap is 99 (debug only). Normal rule cap (12) is kept unless preset/evar overrides it.
+            # - Do NOT add random cards to zones; only add what is required / explicitly requested.
             if not debug_s:
                 try:
                     gs.debug = True
@@ -233,14 +247,37 @@ class App:
                     gs.turn = 1
                 except Exception:
                     pass
+
+            # Debug energy cap (default 99) and starting energy
+            if not debug_energy_cap_s:
+                debug_energy_cap_s = '99'
             if (not e_active_s) and (not e_wait_s):
-                # default to max active energy (capped later by energy_total - under)
-                e_active_s = '12'
+                e_active_s = debug_energy_cap_s
                 e_wait_s = '0'
+
+            # Keep only forced cards by default; we'll append required extras later.
             if not hand_size_s:
-                # do not auto-fill unless user asked; keep just forced cards
                 hand_size_s = '0'
 
+            # Clear zones unless explicitly provided by env (avoid confusing random contents).
+            if not green_spec:
+                try:
+                    gs.green_room = []
+                except Exception:
+                    pass
+            if not success_spec:
+                try:
+                    gs.success_zone = []
+                except Exception:
+                    pass
+            if not resolve_spec:
+                try:
+                    gs.resolve_zone = []
+                except Exception:
+                    pass
+            if not decktop_spec:
+                # no-op; keep deck order
+                pass
         # Phase / turn
         if turn_s:
             try:
@@ -336,6 +373,155 @@ class App:
                     gs.hand = hand
                 except Exception:
                     pass
+
+
+        # If using the "effect" preset, auto-provide cards needed to reach/trigger the effect quickly.
+        if preset_s == 'effect':
+            # Helpers to classify cards
+            def _ci(cn: str):
+                try:
+                    return _db_get_card(self.cards_db, cn)
+                except Exception:
+                    return None
+
+            def _is_live(cn: str) -> bool:
+                ci = _ci(cn)
+                try:
+                    return bool(ci) and is_live_type(getattr(ci, 'type', '') or '')
+                except Exception:
+                    return False
+
+            def _is_member(cn: str) -> bool:
+                ci = _ci(cn)
+                try:
+                    return bool(ci) and is_member_type(getattr(ci, 'type', '') or '')
+                except Exception:
+                    return False
+
+            def _pick_from_deck(deck_list: list[str], pred, n: int) -> list[str]:
+                out = []
+                if n <= 0:
+                    return out
+                i = 0
+                # deterministic: keep deck order
+                while i < len(deck_list) and len(out) < n:
+                    cn = deck_list[i]
+                    if pred(cn):
+                        out.append(cn)
+                        deck_list.pop(i)
+                        continue
+                    i += 1
+                return out
+
+            # Extract effect templates from the target effect card to infer required green-room candidates.
+            need_green_members = 0
+            need_green_live = []  # list of (group, n)
+            tgt = effect_card_s.strip()
+            if tgt:
+                ci_t = _ci(tgt)
+                abilities = getattr(ci_t, 'abilities', []) if ci_t else []
+                tpls = []
+                for ab in abilities or []:
+                    if not isinstance(ab, dict):
+                        continue
+                    ar = ab.get('ability_raw')
+                    if isinstance(ar, dict):
+                        clauses = ar.get('clauses')
+                        if isinstance(clauses, list):
+                            for cl in clauses:
+                                if isinstance(cl, dict):
+                                    et = cl.get('effect_template')
+                                    if et:
+                                        tpls.append(str(et))
+                    # fallback: sometimes effect_template sits directly on ability dict
+                    if ab.get('effect_template'):
+                        tpls.append(str(ab.get('effect_template')))
+                for tpl in tpls:
+                    m = re.search(r'控え室にあるメンバーカード(\d+)枚', tpl)
+                    if m:
+                        try:
+                            need_green_members = max(need_green_members, int(m.group(1)))
+                        except Exception:
+                            pass
+                    m0 = re.search(r'控え室からメンバーカードを(\d+)枚手札に加える', tpl)
+                    if m0:
+                        try:
+                            need_green_members = max(need_green_members, int(m0.group(1)))
+                        except Exception:
+                            pass
+                    m2 = re.search(r'控え室にある『([^』]+)』のライブカード(\d+)枚', tpl)
+                    if m2:
+                        g = str(m2.group(1)).strip()
+                        try:
+                            n = int(m2.group(2))
+                        except Exception:
+                            n = 0
+                        if g and n > 0:
+                            need_green_live.append((g, n))
+
+            # Mutate deck/hand/green deterministically.
+            try:
+                deck = list(getattr(gs, 'deck', []) or [])
+            except Exception:
+                deck = []
+            try:
+                hand = list(getattr(gs, 'hand', []) or [])
+            except Exception:
+                hand = []
+            try:
+                green = list(getattr(gs, 'green_room', []) or [])
+            except Exception:
+                green = []
+
+            # Ensure the target effect card is present (if specified but not in hand yet)
+            if tgt and (tgt not in hand) and (tgt in deck):
+                try:
+                    deck.remove(tgt)
+                except Exception:
+                    pass
+                hand.append(tgt)
+
+            # Always give enough LIVE cards to reach live-start abilities quickly.
+            live_min = _as_int(os.environ.get('LLOCG_DEBUG_LIVE_IN_HAND') or '', 3)
+            if live_min <= 0:
+                live_min = 0
+            have_live = sum(1 for cn in hand if _is_live(cn))
+            if have_live < live_min:
+                hand.extend(_pick_from_deck(deck, _is_live, live_min - have_live))
+
+            # Provide extra MEMBER cards to populate stage easily (default 2).
+            mem_min = _as_int(os.environ.get('LLOCG_DEBUG_MEMBER_IN_HAND') or '', 2)
+            if mem_min <= 0:
+                mem_min = 0
+            have_mem = sum(1 for cn in hand if _is_member(cn))
+            if have_mem < mem_min:
+                hand.extend(_pick_from_deck(deck, _is_member, mem_min - have_mem))
+
+            # Green room candidates inferred from effect template (only if user didn't specify LLOCG_START_GREEN)
+            if (not green_spec) and need_green_members > 0:
+                green.extend(_pick_from_deck(deck, _is_member, need_green_members))
+
+            if (not green_spec) and need_green_live:
+                for g, n in need_green_live:
+                    def _pred_live_group(cn: str) -> bool:
+                        ci = _ci(cn)
+                        if not ci:
+                            return False
+                        try:
+                            if not is_live_type(getattr(ci, 'type', '') or ''):
+                                return False
+                            grp = str(getattr(ci, 'group', '') or '')
+                            return grp == g
+                        except Exception:
+                            return False
+                    green.extend(_pick_from_deck(deck, _pred_live_group, n))
+
+            try:
+                gs.deck = deck
+                gs.hand = hand
+                gs.green_room = green
+            except Exception:
+                pass
 
         # Energy overrides with cap
         if e_active_s or e_wait_s:
@@ -476,6 +662,32 @@ class App:
                     gs.green_room.extend(add)
                 except Exception:
                     pass
+
+        # Success live storage injection (append)
+        if success_spec:
+            add = _split_cards(success_spec)
+            if add:
+                try:
+                    deck = list(getattr(gs, 'deck', []) or [])
+                except Exception:
+                    deck = []
+                try:
+                    sz = list(getattr(gs, 'success_zone', []) or [])
+                except Exception:
+                    sz = []
+                for cn in add:
+                    try:
+                        if cn in deck:
+                            deck.remove(cn)
+                    except Exception:
+                        pass
+                    sz.append(cn)
+                try:
+                    gs.deck = deck
+                    gs.success_zone = sz
+                except Exception:
+                    pass
+
 
         # Resolve zone injection (overwrite)
         if resolve_spec:
@@ -745,6 +957,7 @@ class App:
             "green_room": list(self.gs.green_room),
             "set_zone": list(self.gs.set_zone),
             "resolve_zone": list(self.gs.resolve_zone),
+            "success_zone": list(getattr(self.gs, "success_zone", []) or []),
             "pending": list(self.gs.pending),
             "cn2name": self._cn2name(),
             "cn2label": self._cn2label(),
@@ -882,6 +1095,7 @@ class App:
                         else:
                             choice = opts[0]
                         cmd_resolve_pending(self.gs, self.cards_db, 0, choice)
+                        post_process(self.gs)
                         self.save_trace()
                         return self.state_json()
 
@@ -903,6 +1117,9 @@ class App:
             self.gs.log.append(f"[DEBUG] debug={self.gs.debug}")
         else:
             self.gs.log.append(f"[ERR] unknown cmd: {name}")
+
+        # Post-process to resume deferred prompts (e.g., auto trigger order).
+        post_process(self.gs)
 
         self.save_trace()
         return self.state_json()
@@ -1171,6 +1388,8 @@ HTML = r'''<!doctype html>
       deck:    {x: 1235, y:  60, w: 270, h: 180, kind:"deck",    orient:"portrait", label:"DECK"},
       green:   {x: 1235, y: 255, w: 270, h: 260, kind:"green",   orient:"portrait", label:"Waiting room"},
       energy:  {x: 1235, y: 545, w: 270, h: 280, kind:"energy",  orient:"portrait", label:"ENERGY"},
+      // 成功ライブカード置き場（playmat枠に合わせて左側へ）
+      success: {x:   20, y: 210, w: 240, h: 320, kind:"success", orient:"landscape", label:"Success"},
 
       liveset: {x: 300, y: 55, w: 910, h: 210, kind:"fan",     orient:"landscape", label:"LIVE SET"},
       stageL:  {x:  352, y: 280, w: 181, h: 252, kind:"stage",   orient:"portrait",  label:"L", slot:"L"},
@@ -1444,6 +1663,54 @@ HTML = r'''<!doctype html>
     zoneEl.appendChild(badge);
   }
 
+  function renderVertStack(zoneEl, cards, wantOrient, countText, onClick, {overlap=0.70, maxShow=4} = {}){
+    // Stack cards vertically with overlap (e.g., 70% overlap => step=30% height).
+    const inner = zoneEl.querySelector('.zoneInner');
+    inner.style.cursor = onClick ? 'pointer' : 'default';
+    if(onClick){
+      zoneEl.onclick = (ev)=>{ ev.stopPropagation(); onClick(); };
+    }else{
+      zoneEl.onclick = null;
+    }
+
+    const list = Array.isArray(cards) ? cards.slice() : [];
+    const nAll = list.length;
+    const nShow = Math.min(nAll, maxShow);
+    const show = (nShow>0) ? list.slice(-nShow) : [];
+
+    const zoneW = zoneEl.clientWidth;
+    const zoneH = zoneEl.clientHeight;
+    const padTop = 22;
+    const padX = 8;
+    const availW = zoneW - padX*2;
+    const availH = zoneH - padTop - 10;
+
+    if(nShow<=0){
+      renderTopCard(zoneEl, '__BACK__', 'portrait', 0, onClick);
+      return;
+    }
+
+    const stepFrac = Math.max(0.0, Math.min(0.95, 1.0 - overlap));
+    const denom = 1.0 + stepFrac * (nShow - 1);
+    const cardAvailH = availH / denom;
+    const sz = computeDispSize(wantOrient, availW, cardAvailH);
+    const stepY = sz.h * stepFrac;
+    const totalH = sz.h + stepY*(nShow-1);
+    const x = (zoneW - sz.w)/2;
+    const y0 = padTop + Math.max(0, (availH - totalH)/2);
+
+    show.forEach((cn, i)=>{
+      const y = y0 + stepY*i;
+      const card = makeCard(String(cn), wantOrient, x, y, sz.w, sz.h, '', null, false, 200+i);
+      inner.appendChild(card);
+    });
+
+    const badge = document.createElement('div');
+    badge.className = 'countBadge';
+    badge.textContent = String(countText);
+    zoneEl.appendChild(badge);
+  }
+
   function renderHand(zoneEl, cards){
     const inner = zoneEl.querySelector('.zoneInner');
     const zoneW = zoneEl.clientWidth;
@@ -1668,7 +1935,7 @@ HTML = r'''<!doctype html>
     inner.appendChild(wrap);
   }
 
-  function openCardListPopup(title, cards, {closable=true, helperText='', forcePortrait=false } = {}){
+  function openCardListPopup(title, cards, {closable=true, helperText='', forcePortrait=false, forceLandscape=false } = {}){
     let cardsList = cards.slice();
     // sort waiting room cards (spec update): by cardnumber asc, then card type
     try{
@@ -1709,7 +1976,7 @@ HTML = r'''<!doctype html>
     surf.style.minWidth = minW + 'px';
 
     cardsList.forEach((cn, i)=>{
-      const orient = forcePortrait ? 'portrait' : intrinsicOrient(cn);
+      const orient = forceLandscape ? 'landscape' : (forcePortrait ? 'portrait' : intrinsicOrient(cn));
       const d = (orient==='landscape') ? dimsL : dimsP;
       const x = 12 + step*i + (maxW - d.w)/2;
       const y = 6 + (maxH - d.h)/2;
@@ -1725,6 +1992,62 @@ HTML = r'''<!doctype html>
       close.textContent = 'Close';
       close.addEventListener('click', ()=>{ closePopup(); });
       elModalActions.appendChild(close);
+    }
+
+    elMask.style.display = 'block';
+  }
+
+  function openCardPickPopup(title, cards, {helperText='', forcePortrait=false, forceLandscape=false, allowSkip=true } = {}){
+    // Like openCardListPopup, but each card is clickable to resolve pending (idx=0).
+    let cardsList = (Array.isArray(cards) ? cards.slice() : []).filter(c=>!!c);
+    popup = {type:'pending', title, cards: cardsList.slice(), closable:false, helperText};
+
+    elModalTitle.textContent = title;
+    elModalText.textContent = helperText || '';
+    elModalActions.innerHTML = '';
+    elModalCards.innerHTML = '';
+
+    const dimsP = standardSize('portrait');
+    const dimsL = standardSize('landscape');
+    const maxW = Math.max(dimsP.w, dimsL.w);
+    const maxH = Math.max(dimsP.h, dimsL.h);
+
+    const surf = document.createElement('div');
+    surf.className = 'surf';
+    surf.style.height = (maxH + 12) + 'px';
+    const step = maxW * 0.45; // overlap ~55%
+    const minW = (cardsList.length<=1) ? (maxW + 24) : (maxW + step*(cardsList.length-1) + 24);
+    surf.style.minWidth = minW + 'px';
+
+    cardsList.forEach((cn, i)=>{
+      const s = String(cn);
+      const orient = forceLandscape ? 'landscape' : (forcePortrait ? 'portrait' : intrinsicOrient(s));
+      const d = (orient==='landscape') ? dimsL : dimsP;
+      const x = 12 + step*i + (maxW - d.w)/2;
+      const y = 6 + (maxH - d.h)/2;
+      const c = makeCard(s, orient, x, y, d.w, d.h, '', async ()=>{
+        st = await apiCmd('resolve_pending', {idx:0, choice: s});
+        selHand = [];
+        updateTop();
+        render();
+      }, false, 100+i);
+      surf.appendChild(c);
+    });
+
+    elModalCards.appendChild(surf);
+
+    if(allowSkip){
+      const bSkip = document.createElement('button');
+      bSkip.className = 'miniBtn';
+      bSkip.textContent = 'Skip';
+      bSkip.addEventListener('click', async (ev)=>{
+        ev.stopPropagation();
+        st = await apiCmd('resolve_pending', {idx:0, choice:'skip'});
+        selHand = [];
+        updateTop();
+        render();
+      });
+      elModalActions.appendChild(bSkip);
     }
 
     elMask.style.display = 'block';
@@ -1753,11 +2076,20 @@ HTML = r'''<!doctype html>
     elModalTitle.textContent = '選択';
     elModalText.textContent = String((p && (p.text || p.prompt || p.message)) ? (p.text || p.prompt || p.message) : '');
     const pendText = String((p && (p.text || p.prompt || p.message)) ? (p.text || p.prompt || p.message) : '');
-    const allowSkip = /Skip可/i.test(pendText) || /\bskip\b/i.test(pendText) || (p && p.kind && /pick/i.test(String(p.kind)));
+    const kind = (p && p.kind) ? String(p.kind) : '';
+    const allowSkip = /Skip可/i.test(pendText) || /\bskip\b/i.test(pendText) || (kind && /pick/i.test(kind));
     elModalActions.innerHTML = '';
     elModalCards.innerHTML = '';
 
     const opts = (p && (Array.isArray(p.options)?p.options: (Array.isArray(p.candidates)?p.candidates:(Array.isArray(p.cards)?p.cards:(Array.isArray(p.shown)?p.shown:[]))))) || [];
+
+    // Special: 成功ライブカード置き場へ置くカード選択（Skip可）
+    if(kind === 'pick_success_to_store'){
+      // Always render as the standard card-list popup (overlap + scroll), landscape.
+      const cards = opts.filter(o=>looksLikeCardNo(o));
+      openCardPickPopup('成功ライブ', cards, {helperText: pendText || '成功ライブカード置き場に置くカードを選択（Skip可）', forceLandscape:true, allowSkip:true});
+      return;
+    }
     const allCardNo = opts.length && opts.every(o=>looksLikeCardNo(o));
 
     if(allCardNo){
@@ -1898,6 +2230,20 @@ HTML = r'''<!doctype html>
         openCardListPopup('控え室', ['__BACK__'], {closable:true, helperText:'（空）'});
       }
     });
+
+    // Success live storage
+    const sz = Array.isArray(st.success_zone) ? st.success_zone : [];
+    const topS = sz.length ? String(sz[sz.length-1]) : '__BACK__';
+    if(sz.length){
+      renderVertStack(zels.success, sz, 'landscape', sz.length, ()=>{
+        openCardListPopup('成功ライブ', sz, {closable:true, helperText:'', forceLandscape:true});
+      }, {overlap:0.70, maxShow:4});
+    }else{
+      renderTopCard(zels.success, '__BACK__', 'portrait', 0, ()=>{
+        openCardListPopup('成功ライブ', ['__BACK__'], {closable:true, helperText:'（空）'});
+      });
+    }
+
 
     // Energy + UNDO/NEXT
     renderEnergy(zels.energy);
