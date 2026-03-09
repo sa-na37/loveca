@@ -74,14 +74,32 @@ def _match_effect_template(effect_text: str):
 
 
 def _parse_energy_cost(cost_text: str) -> int:
+    """Parse energy cost from cost_template.
+
+    Supports:
+      - Explicit counts like "<(E)> 3" or "[E]3"
+      - Repeated icons like "<(E)><(E)><(E)>" (counts as 3)
+    """
     t = (cost_text or "")
     total = 0
+    # 1) explicit numeric forms
     for m in re.finditer(r"(?:<\(E\)>|\[E\]|Ｅ|E)\s*(\d+)", t):
         try:
             total += int(m.group(1))
         except Exception:
             pass
+    # 2) icon repetition (each icon == 1), only if not already counted
+    if total == 0:
+        try:
+            total += t.count("<(E)>")
+        except Exception:
+            pass
+        try:
+            total += len(re.findall(r"\[E\]", t))
+        except Exception:
+            pass
     return total
+
 
 
 def _cost_requires_self_to_green(cost_text: str) -> bool:
@@ -1188,8 +1206,51 @@ def stage_blade(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
         temp_b = int(getattr(slot, "temp_blade", 0) or 0)
         under_b = int(getattr(slot, "energy_under", 0) or 0) if _has_under_energy_blade_bonus(c) else 0
         s += base_b + temp_b + under_b
+    # Lanzhu (PL!N-bp1-012) live-only bonus: +2 blade per copy when condition met
+    try:
+        n_lz = _lanzhu_bp1_012_live_bonus_count(gs, cards_db)
+    except Exception:
+        n_lz = 0
+    if n_lz > 0:
+        s += 2 * int(n_lz)
     return s
 
+
+
+def _lanzhu_bp1_012_live_bonus_count(gs: "GameState", cards_db: Dict[str, CardInfo]) -> int:
+    """Return how many active Lanzhu (PL!N-bp1-012) provide the live-only bonus now.
+
+    Condition from card text:
+      - If you have 3+ cards in the live card storage (set_zone),
+        and among them there is at least one Nijigasaki LIVE card,
+        gain <(ALL)><(ALL)><(ブレード)><(ブレード)>.
+    """
+    try:
+        live_cards = list(getattr(gs, "set_zone", []) or [])
+    except Exception:
+        live_cards = []
+    if len(live_cards) < 3:
+        return 0
+
+    has_niji_live = False
+    for cn in live_cards:
+        ci = _get_card(cards_db, cn)
+        if not ci:
+            continue
+        if is_live_type(getattr(ci, "type", "")) and ("虹ヶ咲" in str(getattr(ci, "group", "") or "")):
+            has_niji_live = True
+            break
+    if not has_niji_live:
+        return 0
+
+    n = 0
+    for p in ("L", "C", "R"):
+        slot = (gs.stage or {}).get(p)
+        if not slot or not getattr(slot, "active", False):
+            continue
+        if _canon_cardno(getattr(slot, "cardnumber", "") or "") == "PL!N-bp1-012":
+            n += 1
+    return int(n)
 
 def owned_base_hearts(gs: GameState, cards_db: Dict[str, CardInfo]) -> Dict[str, int]:
     pool: Dict[str, int] = {}
@@ -1214,6 +1275,14 @@ def owned_base_hearts(gs: GameState, cards_db: Dict[str, CardInfo]) -> Dict[str,
             n = 0
         if n > 0:
             pool[col] = pool.get(col, 0) + int(n)
+    # Lanzhu (PL!N-bp1-012) live-only bonus: +2 <(ALL)> hearts per copy when condition met
+    try:
+        n_lz = _lanzhu_bp1_012_live_bonus_count(gs, cards_db)
+    except Exception:
+        n_lz = 0
+    if n_lz > 0:
+        pool['all'] = pool.get('all', 0) + 2 * int(n_lz)
+
     return pool
 
 
@@ -1304,6 +1373,240 @@ def can_satisfy_req(req: Dict[str, int], owned: Dict[str, int]) -> Tuple[bool, D
     return (True, alloc)
 
 
+
+def _apply_alloc_to_pool(alloc: Dict[str, Any], pool: Dict[str, int]) -> None:
+    """Consume hearts from pool in-place using alloc returned by can_satisfy_req / solver."""
+    if not alloc or not pool:
+        return
+    # alloc keys are like use_blue, use_purple, use_all
+    for k, v in list(alloc.items()):
+        if not k.startswith("use_"):
+            continue
+        try:
+            take = int(v or 0)
+        except Exception:
+            take = 0
+        if take <= 0:
+            continue
+        col = k[len("use_"):]
+        if col not in pool:
+            pool[col] = 0
+        pool[col] = max(0, int(pool.get(col, 0) or 0) - take)
+
+
+def _enumerate_allocations_for_req(req: Dict[str, int], pool_in: Dict[str, int], colors: List[str]) -> List[Tuple[Dict[str, Any], Dict[str, int]]]:
+    """Enumerate (alloc, pool_after) pairs that satisfy req using pool_in.
+
+    This is used to solve multi-LIVE success correctly: when multiple LIVE cards are set,
+    the same owned-heart pool must be allocated across all of them without reusing icons.
+    """
+    req0 = req or {}
+    pool0 = pool_in or {}
+
+    req_l = {str(k).lower(): int(v or 0) for k, v in req0.items()}
+    pool = {str(k).lower(): int(v or 0) for k, v in pool0.items()}
+    pool.setdefault("all", 0)
+    for c in colors:
+        pool.setdefault(c, 0)
+
+    fixed_need = {c: int(req_l.get(c, 0) or 0) for c in colors}
+    need_any0 = int(req_l.get("any", 0) or 0)
+
+    # quick impossible check by total icons
+    total_pool = int(pool.get("all", 0) or 0) + sum(int(pool.get(c, 0) or 0) for c in colors)
+    total_need = sum(int(v or 0) for v in fixed_need.values()) + int(need_any0 or 0)
+    if total_pool < total_need:
+        return []
+
+    # helper to compute minimum ALL needed for remaining fixed colors
+    def min_all_needed(rem_colors: List[str], pool_now: Dict[str, int]) -> int:
+        need = 0
+        for cc in rem_colors:
+            n = int(fixed_need.get(cc, 0) or 0)
+            have = int(pool_now.get(cc, 0) or 0)
+            if n > have:
+                need += (n - have)
+        return need
+
+    out: List[Tuple[Dict[str, Any], Dict[str, int]]] = []
+
+    # recursion over fixed color requirements (using color + ALL)
+    def rec_fixed(i: int, pool_now: Dict[str, int], alloc_now: Dict[str, Any]) -> None:
+        if i >= len(colors):
+            # allocate ANY using remaining pool
+            need_any = int(need_any0 or 0)
+            if need_any <= 0:
+                out.append((dict(alloc_now), dict(pool_now)))
+                return
+
+            cats = list(colors) + ["all"]  # consume ALL last by default
+            # prune
+            tot = int(pool_now.get("all", 0) or 0) + sum(int(pool_now.get(c, 0) or 0) for c in colors)
+            if tot < need_any:
+                return
+
+            def rec_any(j: int, need_left: int, pool2: Dict[str, int], alloc2: Dict[str, Any]) -> None:
+                if need_left <= 0:
+                    out.append((dict(alloc2), dict(pool2)))
+                    return
+                if j >= len(cats):
+                    return
+                cat = cats[j]
+                have = int(pool2.get(cat, 0) or 0)
+                if have <= 0:
+                    rec_any(j + 1, need_left, pool2, alloc2)
+                    return
+                max_take = min(have, need_left)
+
+                # deterministic enumeration:
+                # - for color buckets, try consuming more first (avoid spending ALL if possible)
+                # - for ALL bucket, try consuming less first (preserve flexibility)
+                if cat == "all":
+                    take_range = range(0, max_take + 1)
+                else:
+                    take_range = range(max_take, -1, -1)
+
+                for take in take_range:
+                    if take <= 0:
+                        rec_any(j + 1, need_left, pool2, alloc2)
+                        continue
+                    pool3 = dict(pool2)
+                    pool3[cat] = have - take
+                    alloc3 = dict(alloc2)
+                    if cat == "all":
+                        alloc3["use_all"] = int(alloc3.get("use_all", 0) or 0) + take
+                    else:
+                        k = f"use_{cat}"
+                        alloc3[k] = int(alloc3.get(k, 0) or 0) + take
+                    rec_any(j + 1, need_left - take, pool3, alloc3)
+
+            rec_any(0, need_any, dict(pool_now), dict(alloc_now))
+            return
+
+        c = colors[i]
+        need = int(fixed_need.get(c, 0) or 0)
+        if need <= 0:
+            rec_fixed(i + 1, pool_now, alloc_now)
+            return
+
+        have_c = int(pool_now.get(c, 0) or 0)
+        have_all = int(pool_now.get("all", 0) or 0)
+
+        # We'll enumerate using as many colored hearts as possible first (minimize ALL usage).
+        # use_from_color in [0..min(need,have_c)]
+        for use_c in range(min(need, have_c), -1, -1):
+            use_all = need - use_c
+            if use_all > have_all:
+                continue
+            pool_next = dict(pool_now)
+            pool_next[c] = have_c - use_c
+            pool_next["all"] = have_all - use_all
+            # prune: ensure remaining ALL can cover remaining fixed shortfalls
+            rem_cols = colors[i + 1:]
+            if pool_next.get("all", 0) < min_all_needed(rem_cols, pool_next):
+                continue
+
+            alloc_next = dict(alloc_now)
+            if use_c > 0:
+                k = f"use_{c}"
+                alloc_next[k] = int(alloc_next.get(k, 0) or 0) + use_c
+            if use_all > 0:
+                alloc_next["use_all"] = int(alloc_next.get("use_all", 0) or 0) + use_all
+
+            rec_fixed(i + 1, pool_next, alloc_next)
+
+    # init alloc with explicit keys for stable logging
+    alloc_init: Dict[str, Any] = {}
+    for c in colors:
+        alloc_init[f"use_{c}"] = 0
+    alloc_init["use_all"] = 0
+
+    # initial prune
+    if pool.get("all", 0) < min_all_needed(colors, pool):
+        return []
+
+    rec_fixed(0, dict(pool), alloc_init)
+
+    # de-duplicate identical resulting pools by keeping the first alloc (deterministic)
+    seen = set()
+    uniq: List[Tuple[Dict[str, Any], Dict[str, int]]] = []
+    for alloc, pool_after in out:
+        key = tuple(int(pool_after.get(c, 0) or 0) for c in colors) + (int(pool_after.get("all", 0) or 0),)
+        if key in seen:
+            continue
+        seen.add(key)
+        uniq.append((alloc, pool_after))
+    return uniq
+
+
+def _solve_multi_live_allocations(lives: List[str], cards_db: Dict[str, CardInfo], owned: Dict[str, int]) -> Tuple[bool, Dict[str, Dict[str, Any]]]:
+    """Find allocations for ALL live cards without reusing hearts.
+
+    Returns:
+      ok_all, alloc_map[cn] = alloc dict (use_* keys).
+    """
+    lives = list(lives or [])
+    pool0 = {str(k).lower(): int(v or 0) for k, v in (owned or {}).items()}
+    pool0.setdefault("all", 0)
+
+    # prefer canonical color order for deterministic state keys
+    canon = ["pink", "red", "yellow", "green", "blue", "purple"]
+    # include any extra keys that may appear (should be none, but safe)
+    extra = sorted([k for k in pool0.keys() if k not in ("any", "all") and k not in canon])
+    colors = [c for c in canon if (c in pool0)] + extra
+    # Also include any colors that appear only in req (rare, but safe)
+    for cn in lives:
+        c = _get_card(cards_db, cn)
+        req = (c.required_hearts if c else {}) or {}
+        for k in req.keys():
+            kk = str(k).lower()
+            if kk in ("any", "all"):
+                continue
+            if kk not in colors:
+                colors.append(kk)
+                pool0.setdefault(kk, 0)
+
+    # normalize pool keys present in colors
+    for c in colors:
+        pool0.setdefault(c, 0)
+
+    # prepare req list
+    reqs = []
+    for cn in lives:
+        ci = _get_card(cards_db, cn)
+        reqs.append((cn, (ci.required_hearts if ci else {}) or {}))
+
+    # try permutations of live card processing order to find any satisfiable plan
+    import itertools
+    for perm in itertools.permutations(reqs, len(reqs)):
+        memo = set()
+
+        def pool_key(pool: Dict[str, int], i: int) -> Tuple[Any, ...]:
+            return (i,) + tuple(int(pool.get(c, 0) or 0) for c in colors) + (int(pool.get("all", 0) or 0),)
+
+        def dfs(i: int, pool_now: Dict[str, int], plan: List[Tuple[str, Dict[str, Any]]]) -> Optional[List[Tuple[str, Dict[str, Any]]]]:
+            key = pool_key(pool_now, i)
+            if key in memo:
+                return None
+            if i >= len(perm):
+                return list(plan)
+            cn, req = perm[i]
+            options = _enumerate_allocations_for_req(req, pool_now, colors)
+            for alloc, pool_after in options:
+                plan.append((cn, alloc))
+                res = dfs(i + 1, pool_after, plan)
+                if res is not None:
+                    return res
+                plan.pop()
+            memo.add(key)
+            return None
+
+        res_plan = dfs(0, dict(pool0), [])
+        if res_plan is not None:
+            alloc_map = {cn: alloc for cn, alloc in res_plan}
+            return True, alloc_map
+
+    return False, {}
 
 def _count_blade_icons(text: str) -> int:
     t = text or ""
@@ -2004,14 +2307,42 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
     for k, v in cheer.items():
         owned[k] = owned.get(k, 0) + int(v)
 
-    ok_all = True
     gs.log.append(f"[ATTEMPT] LIVE={len(lives)} base={base} cheer={cheer} owned={owned}")
-    for cn in lives:
-        c = _get_card(cards_db, cn)
-        req = (c.required_hearts if c else {}) or {}
-        ok, alloc = can_satisfy_req(req, owned)
-        ok_all = ok_all and ok
-        gs.log.append(f"  live: {'OK' if ok else 'NG'} {cn} req={req} alloc={alloc}")
+    ok_all, alloc_map = _solve_multi_live_allocations(lives, cards_db, owned)
+
+    if ok_all:
+        for cn in lives:
+            c = _get_card(cards_db, cn)
+            req = (c.required_hearts if c else {}) or {}
+            alloc = alloc_map.get(cn, {}) or {}
+            gs.log.append(f"  live: OK {cn} req={req} alloc={alloc}")
+    else:
+        # Failure trace (deterministic): consume hearts in current LIVE list order using the same reduction rule (8.3.15.1.2).
+        pool_trace: Dict[str, int] = {str(k).lower(): int(v or 0) for k, v in (owned or {}).items()}
+        pool_trace.setdefault("all", 0)
+        failed_at = None
+        for cn in lives:
+            c = _get_card(cards_db, cn)
+            req = (c.required_hearts if c else {}) or {}
+            ok, alloc = can_satisfy_req(req, pool_trace)
+            gs.log.append(f"  live: {'OK' if ok else 'NG'} {cn} req={req} alloc={alloc}")
+            if ok:
+                _apply_alloc_to_pool(alloc, pool_trace)
+            else:
+                failed_at = cn
+                break
+        # Mark remaining lives (if any) as not attempted in trace
+        if failed_at is not None:
+            seen_fail = False
+            for cn in lives:
+                if cn == failed_at:
+                    seen_fail = True
+                    continue
+                if seen_fail:
+                    c = _get_card(cards_db, cn)
+                    req = (c.required_hearts if c else {}) or {}
+                    gs.log.append(f"  live: NG {cn} req={req} alloc={{'reason': 'not reached'}}")
+
 
     # clear set zone (attempted)
     gs.set_zone = []
