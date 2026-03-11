@@ -2284,7 +2284,9 @@ def cmd_yell(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo]) -
         gs.log.append("[YELL] 0 (no blade on active stage members)")
         return
     revealed = []
-    for _ in range(n):
+    for i in range(n):
+        if not gs.deck:
+            _rule_refresh_main_deck(gs, rng, reason=f'yell@{i}')
         if not gs.deck:
             break
         revealed.append(gs.deck.pop(0))
