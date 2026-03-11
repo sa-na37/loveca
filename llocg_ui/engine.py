@@ -1120,6 +1120,10 @@ def draw(gs: GameState, n: int, rng: Optional[random.Random] = None) -> int:
             break
         gs.hand.append(gs.deck.pop(0))
         k += 1
+        # Rule timing: if the last card was just drawn and deck became empty,
+        # refresh immediately instead of waiting for the next draw/check.
+        if not gs.deck:
+            _rule_refresh_main_deck(gs, rng, reason='draw@exhaust')
     return k
 
 
