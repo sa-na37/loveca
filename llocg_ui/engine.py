@@ -3636,6 +3636,8 @@ def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], i
             if bool(getattr(gs, 'last_attempt_ok', False)) and list(getattr(gs, 'last_attempt_lives', []) or []):
                 lives = list(getattr(gs, 'last_attempt_lives', []) or [])
                 _run_live_success_triggers(gs, rng, cards_db, lives)
+                if (not gs.pending) and _enqueue_next_poppin_prompt(gs):
+                    return
                 if gs.pending:
                     return
 
