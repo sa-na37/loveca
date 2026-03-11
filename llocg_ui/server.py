@@ -193,6 +193,7 @@ class App:
         green_spec = (env.get('LLOCG_START_GREEN') or '').strip()        # waiting room
         success_spec = (env.get('LLOCG_START_SUCCESS') or '').strip()    # success live storage
         decktop_spec = (env.get('LLOCG_START_DECK_TOP') or '').strip()   # put these on top of deck (leftmost = top)
+        deckexact_spec = (env.get('LLOCG_START_DECK_EXACT') or '').strip() # replace deck exactly (leftmost = top)
         resolve_spec = (env.get('LLOCG_START_RESOLVE') or '').strip()    # resolve zone (cheer)
         stage_spec = (env.get('LLOCG_START_STAGE') or '').strip()        # e.g., "C=CN,L=CN2" or "C:CN"
         stage_l = (env.get('LLOCG_START_STAGE_L') or '').strip()
@@ -206,7 +207,7 @@ class App:
         any_override = any([
             preset_s,
             hand_spec, e_active_s, e_wait_s, turn_s, phase_s, hand_size_s, shuffle_s, debug_s,
-            green_spec, decktop_spec, resolve_spec,
+            green_spec, decktop_spec, deckexact_spec, resolve_spec,
             stage_spec, stage_l, stage_c, stage_r,
         ])
         if not any_override:
@@ -711,6 +712,14 @@ class App:
                     gs.resolve_zone = list(add)
                 except Exception:
                     pass
+
+        # Replace deck exactly (leftmost = top). Debug-only convenience.
+        if deckexact_spec:
+            exact_cards = _split_cards(deckexact_spec)
+            try:
+                gs.deck = list(exact_cards)
+            except Exception:
+                pass
 
         # Put specified cards on TOP of deck (leftmost = top)
         if decktop_spec:
