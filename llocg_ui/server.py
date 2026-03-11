@@ -714,10 +714,32 @@ class App:
                     pass
 
         # Replace deck exactly (leftmost = top). Debug-only convenience.
+        # Cards removed from the original deck are moved to waiting room,
+        # so total card count is preserved for refresh tests.
         if deckexact_spec:
             exact_cards = _split_cards(deckexact_spec)
             try:
+                cur_deck = list(getattr(gs, 'deck', []) or [])
+            except Exception:
+                cur_deck = []
+            try:
+                cur_green = list(getattr(gs, 'green_room', []) or [])
+            except Exception:
+                cur_green = []
+
+            rest = list(cur_deck)
+            for cn in exact_cards:
+                try:
+                    rest.remove(cn)
+                except Exception:
+                    pass
+
+            try:
                 gs.deck = list(exact_cards)
+            except Exception:
+                pass
+            try:
+                gs.green_room = list(cur_green) + list(rest)
             except Exception:
                 pass
 
