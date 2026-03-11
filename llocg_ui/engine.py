@@ -351,10 +351,11 @@ def _enqueue_topdeck_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo], 
     })
     gs.log.append(f'[PENDING] topdeck_from_green: kind={kind} n={n} allow_less={allow_less} (cands={len(cands)})')
 
-def _enqueue_choose_from_topk(gs: 'GameState', k: int) -> None:
+def _enqueue_choose_from_topk(gs: 'GameState', k: int, rng: Optional[random.Random] = None) -> None:
     k = int(k or 0)
     if k <= 0:
         return
+    _rule_refresh_for_top_access(gs, rng, k, reason='look_top')
     if not gs.deck:
         gs.log.append('[INFO] look_top: deck empty')
         return
@@ -375,10 +376,11 @@ def _enqueue_choose_from_topk(gs: 'GameState', k: int) -> None:
     gs.log.append(f'[PENDING] choose 1 from top {len(pool)} (rest -> waiting room)')
 
 
-def _enqueue_reorder_from_topk_keep_any(gs: 'GameState', k: int) -> None:
+def _enqueue_reorder_from_topk_keep_any(gs: 'GameState', k: int, rng: Optional[random.Random] = None) -> None:
     k = int(k or 0)
     if k <= 0:
         return
+    _rule_refresh_for_top_access(gs, rng, k, reason='look_top_reorder')
     if not gs.deck:
         gs.log.append('[INFO] look_top_reorder: deck empty')
         return
@@ -406,14 +408,14 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
 
     if op == 'draw':
         n = int(gd.get('n', 0) or 0)
-        got = draw(gs, n)
+        got = draw(gs, n, rng)
         gs.log.append(f'[AUTO] draw {n} -> drew {got}')
         return
 
     if op == 'draw_then_discard':
         n = int(gd.get('n', 0) or 0)
         m = int(gd.get('m', 0) or 0)
-        got = draw(gs, n)
+        got = draw(gs, n, rng)
         gs.log.append(f'[AUTO] draw {n} -> drew {got}; then discard {m}')
         _enqueue_discard_from_hand(gs, m)
         return
@@ -449,11 +451,11 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
 
     if op == 'look_top_choose':
         k = int(gd.get('k', 0) or 0)
-        _enqueue_choose_from_topk(gs, k)
+        _enqueue_choose_from_topk(gs, k, rng)
         return
     if op == 'look_top_reorder_keep_any':
         k = int(gd.get('k', 0) or 0)
-        _enqueue_reorder_from_topk_keep_any(gs, k)
+        _enqueue_reorder_from_topk_keep_any(gs, k, rng)
         return
 
 
@@ -774,6 +776,7 @@ class GameState:
 
     # live-start buff (until end of live): for each card in success storage, gain chosen heart
     success_zone_heart_color: str = ""  # e.g., 'pink'/'yellow'/'purple'
+    deck_refreshed_this_turn: bool = False
 
 
 def post_process(gs: GameState) -> None:
@@ -864,6 +867,7 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
 
         # end-of-live buffs
         "success_zone_heart_color": str(getattr(gs, 'success_zone_heart_color', '') or ''),
+        "deck_refreshed_this_turn": bool(getattr(gs, 'deck_refreshed_this_turn', False)),
     }
 
 
@@ -905,6 +909,7 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
     gs.need_success_store_choice = bool(snap.get('need_success_store_choice', getattr(gs, 'need_success_store_choice', False)))
 
     gs.success_zone_heart_color = str(snap.get('success_zone_heart_color', getattr(gs, 'success_zone_heart_color', '') or '') or '')
+    gs.deck_refreshed_this_turn = bool(snap.get('deck_refreshed_this_turn', getattr(gs, 'deck_refreshed_this_turn', False)))
 
 
 
@@ -927,12 +932,13 @@ def trace_write(gs: GameState, msg: str) -> None:
         pass
 
 
-def begin_turn(gs: GameState) -> None:
+def begin_turn(gs: GameState, rng: Optional[random.Random] = None) -> None:
     # reset per-turn usage
     try:
         gs.used_this_turn = {}
     except Exception:
         pass
+    gs.deck_refreshed_this_turn = False
     # reset last LIVE attempt (timing helpers)
     gs.last_attempt_lives = []
     gs.last_attempt_ok = False
@@ -946,7 +952,7 @@ def begin_turn(gs: GameState) -> None:
     energy_phase(gs)
     trace_write(gs, f"[PHASE] ENERGY (+1) E active={gs.energy_active} wait={gs.energy_wait}")
     gs.phase = "DRAW"
-    d = draw(gs, 1)
+    d = draw(gs, 1, rng)
     trace_write(gs, f"[PHASE] DRAW (draw {d}) hand={len(gs.hand)} deck={len(gs.deck)}")
     gs.phase = "MAIN"
     trace_write(gs, f"[PHASE] MAIN turn={gs.turn}")
@@ -1100,14 +1106,16 @@ def new_game(root: Path, code: str, seed: int, debug: bool) -> Tuple[GameState, 
     trace_write(gs, f"[NEW] code={code} seed={seed} opening_hand=6 turn={gs.turn}")
 
     # Start turn 1 (ACTIVE→ENERGY→DRAW→MAIN) so energy/draw are applied at game start.
-    begin_turn(gs)
+    begin_turn(gs, rng)
 
     return gs, rng
 
 
-def draw(gs: GameState, n: int) -> int:
+def draw(gs: GameState, n: int, rng: Optional[random.Random] = None) -> int:
     k = 0
     for _ in range(n):
+        if not gs.deck:
+            _rule_refresh_main_deck(gs, rng, reason='draw')
         if not gs.deck:
             break
         gs.hand.append(gs.deck.pop(0))
@@ -1164,6 +1172,55 @@ def refresh(gs: GameState) -> None:
             gs.stage[k].active = True
     gs.energy_active += gs.energy_wait
     gs.energy_wait = 0
+
+
+def _rule_refresh_main_deck(gs: GameState, rng: Optional[random.Random], reason: str = '') -> bool:
+    if list(getattr(gs, 'deck', []) or []):
+        return False
+    pool = list(getattr(gs, 'green_room', []) or [])
+    if not pool:
+        return False
+    try:
+        if rng is not None:
+            rng.shuffle(pool)
+        else:
+            import random as _random
+            _random.shuffle(pool)
+    except Exception:
+        import random as _random
+        _random.shuffle(pool)
+    gs.green_room = []
+    gs.deck = list(pool)
+    gs.deck_refreshed_this_turn = True
+    gs.log.append(f"[REFRESH] main deck <- waiting room x{len(pool)}" + (f" ({reason})" if reason else ""))
+    return True
+
+
+def _rule_refresh_for_top_access(gs: GameState, rng: Optional[random.Random], need: int, reason: str = '') -> bool:
+    need = int(need or 0)
+    if need <= 0:
+        return False
+    cur = len(getattr(gs, 'deck', []) or [])
+    if cur >= need:
+        return False
+    pool = list(getattr(gs, 'green_room', []) or [])
+    if not pool:
+        return False
+    keep = list(getattr(gs, 'deck', []) or [])
+    try:
+        if rng is not None:
+            rng.shuffle(pool)
+        else:
+            import random as _random
+            _random.shuffle(pool)
+    except Exception:
+        import random as _random
+        _random.shuffle(pool)
+    gs.green_room = []
+    gs.deck = keep + pool
+    gs.deck_refreshed_this_turn = True
+    gs.log.append(f"[REFRESH] top-access need={need} cur={cur} add_waiting={len(pool)}" + (f" ({reason})" if reason else ""))
+    return True
 
 
 def energy_phase(gs: GameState) -> None:
@@ -2025,7 +2082,7 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
                     return
 
 
-def handle_stage_cost10_member_enter(gs: GameState, cards_db: Dict[str, CardInfo], entered_pos: str, entered_cn: str, ai_pos: str = '') -> None:
+def handle_stage_cost10_member_enter(gs: GameState, cards_db: Dict[str, CardInfo], entered_pos: str, entered_cn: str, ai_pos: str = '', rng: Optional[random.Random] = None) -> None:
     """Handle auto abilities that trigger when a cost-10 MEMBER enters your stage.
 
     PL!N-pb1-005 (宮下愛):
@@ -2065,7 +2122,7 @@ def handle_stage_cost10_member_enter(gs: GameState, cards_db: Dict[str, CardInfo
         used = int((getattr(gs, 'used_this_turn', {}) or {}).get(key, 0) or 0)
         if used >= 1:
             return
-        drew = draw(gs, 1)
+        drew = draw(gs, 1, rng)
         try:
             gs.used_this_turn[key] = 1
         except Exception:
@@ -2197,7 +2254,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         handle_enter_auto(gs, cards_db, pos, cn)
         return
     if kind == 'ai_cost10_enter':
-        handle_stage_cost10_member_enter(gs, cards_db, entered_pos=str(trig.get('entered_pos','C') or 'C'), entered_cn=str(trig.get('entered_cn','') or ''), ai_pos=str(trig.get('ai_pos','') or ''))
+        handle_stage_cost10_member_enter(gs, cards_db, entered_pos=str(trig.get('entered_pos','C') or 'C'), entered_cn=str(trig.get('entered_cn','') or ''), ai_pos=str(trig.get('ai_pos','') or ''), rng=rng)
         return
     # Unknown trigger
     gs.log.append(f"[WARN] auto_trigger: unknown kind={kind}")
@@ -2217,7 +2274,7 @@ def cmd_set(gs: GameState, rng: random.Random, indices: List[int]) -> None:
         picked.append(gs.hand.pop(i))
     picked.reverse()
     gs.set_zone = picked[:]
-    drawn = draw(gs, len(picked))
+    drawn = draw(gs, len(picked), rng)
     gs.log.append(f"[SET] set {len(picked)} cards, drew {drawn}")
 
 
@@ -2249,7 +2306,7 @@ def cmd_yell(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo]) -
         c = _get_card(cards_db, cn)
         if c:
             draw_n += _count_draw_icons(c.blade_heart_tags_json)
-    got = draw(gs, draw_n) if draw_n > 0 else 0
+    got = draw(gs, draw_n, rng) if draw_n > 0 else 0
     gs.log.append(f"[YELL] revealed {len(revealed)} (blade={n}), draw+{draw_n} -> drew {got}")
 
 
@@ -2361,6 +2418,7 @@ _EUTOPIA_CN_CANON = 'PL!N-bp1-029'
 _RISE_UP_HIGH_CN_CANON = 'PL!N-bp4-029'
 
 _POPPIN_UP_CN_CANON = 'PL!N-bp1-026'
+_SOLITUDE_RAIN_CN_CANON = 'PL!N-bp1-027'
 def _live_score_delta_for_attempt(cn_live, lives_count, gs_turn):
     # Eutopia: if 3+ LIVE cards are set in this attempt, score +2 for Eutopia
     # Rise Up High!: if turn==1 live phase, score +1 for this card
@@ -2374,7 +2432,7 @@ def _live_score_delta_for_attempt(cn_live, lives_count, gs_turn):
         return 1
     return 0
 
-def _compute_attempt_score_breakdown(lives, cards_db, gs_turn):
+def _compute_attempt_score_breakdown(lives, cards_db, gs_turn, gs=None):
     lives_count = len(lives or [])
     total = 0
     rows = []
@@ -2382,11 +2440,41 @@ def _compute_attempt_score_breakdown(lives, cards_db, gs_turn):
         ci = _get_card(cards_db, cn)
         base = int(getattr(ci, 'score', 0) or 0) if ci else 0
         delta = int(_live_score_delta_for_attempt(cn, lives_count, gs_turn))
+        if gs is not None:
+            delta += int(_extra_live_score_delta_for_attempt(cn, gs, cards_db))
         eff = base + delta
         total += eff
         rows.append({'cn': cn, 'base': base, 'delta': delta, 'score': eff})
     return total, rows
 
+
+
+
+def _solitude_rain_stage_color_kinds(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
+    cols = set()
+    for pos in ('L', 'C', 'R'):
+        slot = (gs.stage or {}).get(pos)
+        if not slot or not getattr(slot, 'active', False):
+            continue
+        ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+        if not ci:
+            continue
+        if '虹ヶ咲' not in str(getattr(ci, 'group', '') or ''):
+            continue
+        for k, v in ((getattr(ci, 'base_hearts', None) or {}) or {}).items():
+            if k in ('pink', 'red', 'yellow', 'green', 'blue', 'purple') and int(v or 0) > 0:
+                cols.add(k)
+    return int(len(cols))
+
+
+def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
+    try:
+        canon = _canon_cardno(cn_live)
+    except Exception:
+        canon = str(cn_live or '')
+    if canon == _SOLITUDE_RAIN_CN_CANON:
+        return int(_solitude_rain_stage_color_kinds(gs, cards_db))
+    return 0
 
 
 def _enqueue_next_poppin_prompt(gs: GameState) -> bool:
@@ -2496,7 +2584,7 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
 
     # Result & UI banner
     if ok_all:
-        total_score, score_rows = _compute_attempt_score_breakdown(lives, cards_db, int(getattr(gs, 'turn', 0) or 0))
+        total_score, score_rows = _compute_attempt_score_breakdown(lives, cards_db, int(getattr(gs, 'turn', 0) or 0), gs)
         for r in score_rows:
             cn = r.get('cn', '')
             base_s = int(r.get('base', 0) or 0)
@@ -2548,7 +2636,7 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
         gs.live_start_prompted = False
 
 
-def cmd_ack(gs: GameState) -> None:
+def cmd_ack(gs: GameState, rng: Optional[random.Random] = None) -> None:
     if not gs.resolve_zone:
         gs.log.append("[ACK] resolve zone empty")
         return
@@ -2556,6 +2644,7 @@ def cmd_ack(gs: GameState) -> None:
     gs.green_room.extend(gs.resolve_zone)
     gs.resolve_zone = []
     gs.log.append(f"[ACK] moved {n} revealed cards -> green room")
+    _rule_refresh_main_deck(gs, rng, reason='ack')
 
 
 
@@ -3544,7 +3633,7 @@ def cmd_end_turn(gs: GameState, rng: random.Random) -> None:
 
 def _advance_to_next_turn(gs: GameState, rng: random.Random) -> None:
     gs.turn += 1
-    begin_turn(gs)
+    begin_turn(gs, rng)
 
 
 def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], indices: Optional[List[int]] = None) -> None:
@@ -3661,7 +3750,7 @@ def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], i
 
         # 3) ACK revealed cards (resolve zone)
         if gs.resolve_zone:
-            cmd_ack(gs)
+            cmd_ack(gs, rng)
         if gs.resolve_zone:
             gs.log.append("[WARN] next: resolve_zone still not empty after ACK; abort.")
             return
