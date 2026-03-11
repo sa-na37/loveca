@@ -2254,6 +2254,10 @@ def cmd_yell(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo]) -
 
 
 def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], lives: List[str]) -> None:
+    try:
+        setattr(gs, '_poppin_pending_queue', [])
+    except Exception:
+        pass
     """Run <ライブ成功時> triggers at LIVE_RESOLVE timing (before winner-based success storage).
 
     Some LIVE success effects conditionally depend on 成功ライブカード置き場 (e.g., Daydream Mermaid),
@@ -2308,14 +2312,15 @@ def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict
                     if ci2 and ('虹ヶ咲' in str(getattr(ci2, 'group', '') or '')):
                         cands.append(cn2)
                 if cands:
-                    gs.pending.append({
+                    _pp_q = list(getattr(gs, '_poppin_pending_queue', []) or [])
+                    _pp_q.append({
                         'kind': 'pick_poppinup_from_yell',
                         'text': "【Poppin' Up!】ライブ成功時：相手より合計スコアが高い場合、エールで公開された自分の『虹ヶ咲』カードを1枚手札に加える（条件を満たさない場合はSkip可）",
                         'options': list(cands),
                         'source_cn': str(cn_live or ''),
                     })
-                    gs.log.append(f"[PENDING] PoppinUp pick from yell ({len(cands)} candidates)")
-                    return
+                    setattr(gs, '_poppin_pending_queue', _pp_q)
+                    gs.log.append(f"[QUEUE] PoppinUp pick from yell ({len(cands)} candidates)")
                 else:
                     gs.log.append("[INFO] PoppinUp: no Nijigasaki cards among yell reveals")
         except Exception:
@@ -2382,6 +2387,34 @@ def _compute_attempt_score_breakdown(lives, cards_db, gs_turn):
         rows.append({'cn': cn, 'base': base, 'delta': delta, 'score': eff})
     return total, rows
 
+
+
+def _enqueue_next_poppin_prompt(gs: GameState) -> bool:
+    if list(getattr(gs, 'pending', []) or []):
+        return False
+    q = list(getattr(gs, '_poppin_pending_queue', []) or [])
+    while q:
+        p0 = dict(q.pop(0))
+        pool = list(getattr(gs, '_yell_revealed_this_live', []) or [])
+        raw_opts = list(p0.get('options', []) or [])
+        counts: Dict[str, int] = {}
+        for x in pool:
+            cx = _canon_cardno(x)
+            counts[cx] = counts.get(cx, 0) + 1
+        filtered: List[str] = []
+        for x in raw_opts:
+            cx = _canon_cardno(x)
+            if counts.get(cx, 0) > 0:
+                filtered.append(x)
+                counts[cx] -= 1
+        if filtered:
+            p0['options'] = list(filtered)
+            gs.pending.append(p0)
+            setattr(gs, '_poppin_pending_queue', q)
+            gs.log.append(f"[PENDING] PoppinUp queued prompt ({len(filtered)} candidates)")
+            return True
+    setattr(gs, '_poppin_pending_queue', [])
+    return False
 
 def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
     if not gs.set_zone:
@@ -3263,6 +3296,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
     if kind == 'pick_poppinup_from_yell':
         if choice_str.lower() == 'skip':
             gs.log.append("[SKIP] PoppinUp: skipped")
+            _enqueue_next_poppin_prompt(gs)
             return
         cn = _canon_cardno(choice_str)
         opts = list(p.get('options', []) or [])
@@ -3283,6 +3317,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                 break
         if not moved:
             gs.log.append(f"[ERR] PoppinUp: chosen card not found in zones {cn}")
+            _enqueue_next_poppin_prompt(gs)
             return
         gs.hand.append(moved)
         # remove one occurrence from tracker
@@ -3296,6 +3331,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         except Exception:
             pass
         gs.log.append(f"[ACT] PoppinUp: took {moved} -> hand")
+        _enqueue_next_poppin_prompt(gs)
         return
 
 # 2) Pick 1 LIVE from green room to hand
