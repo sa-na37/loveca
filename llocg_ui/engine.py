@@ -1809,6 +1809,52 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                         "text": f"{pos}: {ci.cardnumber} ライブ開始時 [E]{need_e} → {eff}",
                         "options": ["pay", "skip"],
                     })
+    # LIVE-card live-start: Rise Up High! (PL!N-bp4-029)
+    try:
+        if int(getattr(gs, 'turn', 0) or 0) == 1:
+            for cn_live in list(getattr(gs, 'set_zone', []) or []):
+                if _canon_cardno(str(cn_live or '')) != _RISE_UP_HIGH_CN_CANON:
+                    continue
+                # Mark as processed even if no prompt is queued.
+                try:
+                    gs.live_start_prompted = True
+                except Exception:
+                    pass
+                gs.log.append('[AUTO] LIVE: PL!N-bp4-029 live-start: score +1 (turn1)')
+                cands = []
+                for ppos in ('L','C','R'):
+                    slot2 = (gs.stage or {}).get(ppos)
+                    if not slot2 or not getattr(slot2, 'active', False):
+                        continue
+                    ci2 = _get_card(cards_db, getattr(slot2, 'cardnumber', '') or '')
+                    if not ci2:
+                        continue
+                    if '虹ヶ咲' in str(getattr(ci2, 'group', '') or ''):
+                        cands.append(ppos)
+                if cands:
+                    _rise_up_high_opts = []
+                    for _pp in list(cands):
+                        _sl = (gs.stage or {}).get(_pp)
+                        _nm = ''
+                        try:
+                            _ci = _get_card(cards_db, getattr(_sl, 'cardnumber', '') or '') if _sl else None
+                            _nm = str(getattr(_ci, 'name', '') or '') if _ci else ''
+                        except Exception:
+                            _nm = ''
+                        _rise_up_high_opts.append(f"{_pp}: {_nm}" if _nm else str(_pp))
+                    prompts.append({
+                        'kind': 'live_start_rise_up_high_pick',
+                        'cn': _RISE_UP_HIGH_CN_CANON,
+                        'text': '【Rise Up High!】ライブ開始時：『虹ヶ咲』のメンバーを1人選ぶ（このライブ終了時まで、そのメンバーはブレード+1）',
+                        'options': list(_rise_up_high_opts),
+                        'pos_options': list(cands),
+                    })
+                else:
+                    gs.log.append('[INFO] Rise Up High: no Nijigasaki member on stage; blade bonus skipped')
+                break
+    except Exception:
+        pass
+
     if prompts:
         gs.pending.extend(prompts)
         gs.live_start_prompted = True
@@ -2187,6 +2233,17 @@ def cmd_yell(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo]) -
         revealed.append(gs.deck.pop(0))
     gs.resolve_zone.extend(revealed)
 
+    # Track cheer reveals for this live (e.g., Poppin' Up!)
+    try:
+        _lst = list(getattr(gs, '_yell_revealed_this_live', []) or [])
+    except Exception:
+        _lst = []
+    _lst.extend(list(revealed))
+    try:
+        setattr(gs, '_yell_revealed_this_live', _lst)
+    except Exception:
+        pass
+
     draw_n = 0
     for cn in revealed:
         c = _get_card(cards_db, cn)
@@ -2240,6 +2297,29 @@ def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict
     # Live-card success triggers (costless, regex-supported subset)
     for cn_live in list(lives or []):
         ci_live = _get_card(cards_db, cn_live)
+
+        # Special: Poppin' Up! (PL!N-bp1-026)
+        try:
+            if _canon_cardno(str(cn_live or '')) == _POPPIN_UP_CN_CANON:
+                pool = list(getattr(gs, '_yell_revealed_this_live', []) or [])
+                cands = []
+                for cn2 in pool:
+                    ci2 = _get_card(cards_db, cn2)
+                    if ci2 and ('虹ヶ咲' in str(getattr(ci2, 'group', '') or '')):
+                        cands.append(cn2)
+                if cands:
+                    gs.pending.append({
+                        'kind': 'pick_poppinup_from_yell',
+                        'text': "【Poppin' Up!】ライブ成功時：相手より合計スコアが高い場合、エールで公開された自分の『虹ヶ咲』カードを1枚手札に加える（条件を満たさない場合はSkip可）",
+                        'options': list(cands),
+                        'source_cn': str(cn_live or ''),
+                    })
+                    gs.log.append(f"[PENDING] PoppinUp pick from yell ({len(cands)} candidates)")
+                    return
+                else:
+                    gs.log.append("[INFO] PoppinUp: no Nijigasaki cards among yell reveals")
+        except Exception:
+            pass
         if not ci_live or not getattr(ci_live, 'abilities', None):
             continue
         for ab in _iter_triggered_abilities(ci_live, 'ライブ成功時'):
@@ -2267,6 +2347,40 @@ def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict
                 return
         if gs.pending:
             return
+
+
+# ----------------------------
+# Step21: LIVE scoring helpers (UI)
+# ----------------------------
+_EUTOPIA_CN_CANON = 'PL!N-bp1-029'
+_RISE_UP_HIGH_CN_CANON = 'PL!N-bp4-029'
+
+_POPPIN_UP_CN_CANON = 'PL!N-bp1-026'
+def _live_score_delta_for_attempt(cn_live, lives_count, gs_turn):
+    # Eutopia: if 3+ LIVE cards are set in this attempt, score +2 for Eutopia
+    # Rise Up High!: if turn==1 live phase, score +1 for this card
+    try:
+        canon = _canon_cardno(cn_live)
+    except Exception:
+        canon = str(cn_live or '')
+    if canon == _EUTOPIA_CN_CANON and int(lives_count) >= 3:
+        return 2
+    if canon == _RISE_UP_HIGH_CN_CANON and int(gs_turn or 0) == 1:
+        return 1
+    return 0
+
+def _compute_attempt_score_breakdown(lives, cards_db, gs_turn):
+    lives_count = len(lives or [])
+    total = 0
+    rows = []
+    for cn in (lives or []):
+        ci = _get_card(cards_db, cn)
+        base = int(getattr(ci, 'score', 0) or 0) if ci else 0
+        delta = int(_live_score_delta_for_attempt(cn, lives_count, gs_turn))
+        eff = base + delta
+        total += eff
+        rows.append({'cn': cn, 'base': base, 'delta': delta, 'score': eff})
+    return total, rows
 
 
 def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
@@ -2347,13 +2461,28 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
     # clear set zone (attempted)
     gs.set_zone = []
 
-    result_txt = 'SUCCESS' if ok_all else 'FAIL'
-    gs.log.append(f"[ATTEMPT] result={result_txt}")
+    # Result & UI banner
+    if ok_all:
+        total_score, score_rows = _compute_attempt_score_breakdown(lives, cards_db, int(getattr(gs, 'turn', 0) or 0))
+        for r in score_rows:
+            cn = r.get('cn', '')
+            base_s = int(r.get('base', 0) or 0)
+            delta_s = int(r.get('delta', 0) or 0)
+            eff_s = int(r.get('score', 0) or 0)
+            if delta_s:
+                gs.log.append(f"  score: {cn} = {eff_s} ({base_s}+{delta_s})")
+            else:
+                gs.log.append(f"  score: {cn} = {eff_s}")
+        gs.log.append(f"[ATTEMPT] result=SUCCESS total_score={total_score}")
+        result_txt = f"SUCCESS (Score{total_score})"
+    else:
+        gs.log.append("[ATTEMPT] result=FAIL")
+        result_txt = "FAIL"
 
     # UI banner (transient)
     gs.banner_text = result_txt
     gs.banner_ts = time.time()
-    gs.banner_ttl = 2.5
+    gs.banner_ttl = 4.0
 
     # Move attempted LIVE cards: by default they go to waiting room (green_room).
     if lives:
@@ -3111,6 +3240,64 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             gs.log.append(f"[SKIP] {pos}: live-start ability skipped")
         return
 
+
+    # 1c) Live-start Rise Up High: choose 1 Nijigasaki member -> temp blade +1
+    if kind == 'live_start_rise_up_high_pick':
+        raw = str(choice_str or '').strip()
+        pos = (raw[:1].upper() if raw else '')
+        pos_opts = p.get('pos_options', None)
+        if (not isinstance(pos_opts, list)) or (not pos_opts):
+            pos_opts = p.get('options', []) or []
+        if pos not in ('L','C','R') or (isinstance(pos_opts, list) and pos_opts and pos not in pos_opts):
+            gs.log.append(f'[ERR] RiseUpHigh: invalid choice {choice_str}')
+            return
+        slot = (gs.stage or {}).get(pos)
+        if not slot or not getattr(slot, 'active', False):
+            gs.log.append(f'[ERR] RiseUpHigh: stage {pos} empty')
+            return
+        slot.temp_blade += 1
+        slot.temp_until = 'end_of_live'
+        gs.log.append(f'[AUTO] RiseUpHigh: {pos} temp blade +1 (until end of live)')
+        return
+    # 1d) Live-success Poppin' Up!: pick 1 Nijigasaki card among yell reveals -> hand (Skip allowed)
+    if kind == 'pick_poppinup_from_yell':
+        if choice_str.lower() == 'skip':
+            gs.log.append("[SKIP] PoppinUp: skipped")
+            return
+        cn = _canon_cardno(choice_str)
+        opts = list(p.get('options', []) or [])
+        if opts and (not any(_canon_cardno(x) == cn for x in opts)):
+            gs.log.append(f"[ERR] PoppinUp: invalid choice {choice_str}")
+            return
+        moved = None
+        # remove from resolve_zone first, then green_room
+        for zone_name in ('resolve_zone', 'green_room'):
+            z = getattr(gs, zone_name, None)
+            if not isinstance(z, list):
+                continue
+            for i, x in enumerate(list(z)):
+                if _canon_cardno(x) == cn:
+                    moved = z.pop(i)
+                    break
+            if moved:
+                break
+        if not moved:
+            gs.log.append(f"[ERR] PoppinUp: chosen card not found in zones {cn}")
+            return
+        gs.hand.append(moved)
+        # remove one occurrence from tracker
+        try:
+            pool = list(getattr(gs, '_yell_revealed_this_live', []) or [])
+            for i, x in enumerate(list(pool)):
+                if _canon_cardno(x) == cn:
+                    pool.pop(i)
+                    break
+            setattr(gs, '_yell_revealed_this_live', pool)
+        except Exception:
+            pass
+        gs.log.append(f"[ACT] PoppinUp: took {moved} -> hand")
+        return
+
 # 2) Pick 1 LIVE from green room to hand
     if kind == "pick_live_from_green":
         if choice_str.lower() in ("skip", "no", "n", "0", "false"):
@@ -3445,6 +3632,12 @@ def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], i
         if bool(getattr(gs, 'last_attempt_ok', False)) and list(getattr(gs, 'last_attempt_lives', []) or []):
             _clear_end_of_live_buffs(gs)
             gs.live_start_prompted = False
+
+        # Clear per-live cheer reveal tracker
+        try:
+            setattr(gs, '_yell_revealed_this_live', [])
+        except Exception:
+            pass
 
         # Clear last-attempt helpers
         gs.last_attempt_lives = []

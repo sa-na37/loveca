@@ -1531,7 +1531,7 @@ HTML = r'''<!doctype html>
     if(orient==='landscape') return {w: ch, h: cw};
     return {w: cw, h: ch};
   }
-  function makeCard(cn, wantOrient, x, y, w, h, capText, onClick, isSelected=false, z=100, noHover=false){
+  function makeCard(cn, wantOrient, x, y, w, h, capText, onClick, isSelected=false, z=100, noHover=false, forceIntrinsicOrient=null){
     const wrap = document.createElement('div');
     wrap.className = 'cardWrap';
     wrap.style.left = x + 'px';
@@ -1542,7 +1542,7 @@ HTML = r'''<!doctype html>
     wrap.dataset.baseZ = String(z);
     if(isSelected){ wrap.classList.add('selected'); wrap.style.zIndex='18000'; wrap.dataset.baseZ='18000'; }
 
-    const intr = intrinsicOrient(cn);
+    const intr = forceIntrinsicOrient || intrinsicOrient(cn);
     const needsRotate = (intr !== wantOrient);
 
     if(!needsRotate){
@@ -1663,7 +1663,7 @@ HTML = r'''<!doctype html>
     zoneEl.appendChild(badge);
   }
 
-  function renderVertStack(zoneEl, cards, wantOrient, countText, onClick, {overlap=0.70, maxShow=4} = {}){
+  function renderVertStack(zoneEl, cards, wantOrient, countText, onClick, {overlap=0.70, maxShow=4, forceIntrinsicOrient=null} = {}){
     // Stack cards vertically with overlap (e.g., 70% overlap => step=30% height).
     const inner = zoneEl.querySelector('.zoneInner');
     inner.style.cursor = onClick ? 'pointer' : 'default';
@@ -1701,7 +1701,7 @@ HTML = r'''<!doctype html>
 
     show.forEach((cn, i)=>{
       const y = y0 + stepY*i;
-      const card = makeCard(String(cn), wantOrient, x, y, sz.w, sz.h, '', null, false, 200+i);
+      const card = makeCard(String(cn), wantOrient, x, y, sz.w, sz.h, '', null, false, 200+i, false, forceIntrinsicOrient);
       inner.appendChild(card);
     });
 
@@ -2248,7 +2248,7 @@ HTML = r'''<!doctype html>
     if(sz.length){
       renderVertStack(zels.success, sz, 'landscape', sz.length, ()=>{
         openCardListPopup('成功ライブ', sz, {closable:true, helperText:'', forceLandscape:true});
-      }, {overlap:0.70, maxShow:4});
+      }, {overlap:0.70, maxShow:4, forceIntrinsicOrient:'landscape'});
     }else{
       renderTopCard(zels.success, '__BACK__', 'portrait', 0, ()=>{
         openCardListPopup('成功ライブ', ['__BACK__'], {closable:true, helperText:'（空）'});
