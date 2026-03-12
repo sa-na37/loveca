@@ -2419,6 +2419,52 @@ def cmd_yell(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo]) -
     gs.log.append(f"[YELL] revealed {len(revealed)} (blade={n}), draw+{draw_n} -> drew {got}")
 
 
+
+def _has_nijigasaki_member_on_stage(gs: GameState, cards_db: Dict[str, CardInfo]) -> bool:
+    for pos in ('L', 'C', 'R'):
+        slot = (gs.stage or {}).get(pos)
+        if not slot or not getattr(slot, 'cardnumber', ''):
+            continue
+        ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+        if not ci:
+            continue
+        if _is_live_ci(ci):
+            continue
+        if '虹ヶ咲' in str(getattr(ci, 'group', '') or ''):
+            return True
+    return False
+
+
+def _put_wait_energy_from_deck(gs: GameState, n: int, reason: str = '') -> int:
+    n = int(n or 0)
+    if n <= 0:
+        return 0
+    rem = int(_energy_remaining_in_deck(gs))
+    if rem <= 0:
+        gs.log.append("[INFO] energy deck empty" + (f" ({reason})" if reason else ""))
+        return 0
+    add = min(rem, n)
+    gs.energy_wait += add
+    _clamp_energy_zone(gs)
+    gs.log.append(f"[AUTO] energy deck -> WAIT +{add}" + (f" ({reason})" if reason else ""))
+    return int(add)
+
+
+def _la_bella_patria_green_excess(gs: GameState) -> int:
+    try:
+        pool = dict(getattr(gs, 'last_attempt_excess_hearts', {}) or {})
+    except Exception:
+        pool = {}
+    return int(pool.get('green', 0) or 0)
+
+
+def _la_bella_patria_can_trigger(gs: GameState, cards_db: Dict[str, CardInfo]) -> bool:
+    # IMPORTANT: only real green excess counts here. ALL does not satisfy this condition.
+    if int(_la_bella_patria_green_excess(gs)) <= 0:
+        return False
+    return bool(_has_nijigasaki_member_on_stage(gs, cards_db))
+
+
 def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], lives: List[str]) -> None:
     try:
         setattr(gs, '_poppin_pending_queue', [])
@@ -2467,6 +2513,16 @@ def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict
     # Live-card success triggers (costless, regex-supported subset)
     for cn_live in list(lives or []):
         ci_live = _get_card(cards_db, cn_live)
+
+        # Special: La Bella Patria (PL!N-bp3-027)
+        try:
+            if _canon_cardno(str(cn_live or '')) == _LA_BELLA_PATRIA_CN_CANON:
+                if _la_bella_patria_can_trigger(gs, cards_db):
+                    _put_wait_energy_from_deck(gs, 1, reason='La Bella Patria')
+                else:
+                    gs.log.append('[INFO] La Bella Patria: condition not met')
+        except Exception:
+            pass
 
         # Special: Poppin' Up! (PL!N-bp1-026)
         try:
@@ -2533,6 +2589,7 @@ _STARS_WE_CHASE_CN_CANON = 'PL!N-bp4-028'
 _LOVE_U_MY_FRIENDS_CN_CANON = 'PL!N-bp3-030'
 _MONSTER_GIRLS_CN_CANON = 'PL!N-bp3-031'
 _EMOTION_CN_CANON = 'PL!N-bp4-027'
+_LA_BELLA_PATRIA_CN_CANON = 'PL!N-bp3-027'
 _EMMA_BP3_008_CN_CANON = 'PL!N-bp3-008'
 def _live_score_delta_for_attempt(cn_live, lives_count, gs_turn):
     # Eutopia: if 3+ LIVE cards are set in this attempt, score +2 for Eutopia
@@ -2747,6 +2804,7 @@ def _enqueue_next_poppin_prompt(gs: GameState) -> bool:
 
 def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
     if not gs.set_zone:
+        gs.last_attempt_excess_hearts = {}
         gs.log.append("[ATTEMPT] no set cards")
         # clear end-of-live state defensively
         gs.last_attempt_lives = []
@@ -2789,12 +2847,20 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
     globals()['_CURRENT_GS_FOR_ATTEMPT'] = None
 
     if ok_all:
+        try:
+            _excess_pool = {str(k).lower(): int(v or 0) for k, v in (owned or {}).items()}
+            for _cn0 in lives:
+                _apply_alloc_to_pool(alloc_map.get(_cn0, {}) or {}, _excess_pool)
+            gs.last_attempt_excess_hearts = dict(_excess_pool)
+        except Exception:
+            gs.last_attempt_excess_hearts = {}
         for cn in lives:
             c = _get_card(cards_db, cn)
             req = _effective_live_required_hearts(cn, c, gs)
             alloc = alloc_map.get(cn, {}) or {}
             gs.log.append(f"  live: OK {cn} req={req} alloc={alloc}")
     else:
+        gs.last_attempt_excess_hearts = {}
         # Failure trace (deterministic): consume hearts in current LIVE list order using the same reduction rule (8.3.15.1.2).
         pool_trace: Dict[str, int] = {str(k).lower(): int(v or 0) for k, v in (owned or {}).items()}
         pool_trace.setdefault("all", 0)
