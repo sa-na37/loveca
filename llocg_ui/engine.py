@@ -1859,6 +1859,59 @@ def _green_live_candidates(gs: "GameState", cards_db: Dict[str, CardInfo]) -> Li
     return cands
 
 
+
+def _neo_sky_stage_ready(gs: GameState, cards_db: Dict[str, CardInfo]) -> bool:
+    total_cost = 0
+    for pos in ('L', 'C', 'R'):
+        slot = (gs.stage or {}).get(pos)
+        if not slot or not getattr(slot, 'cardnumber', ''):
+            return False
+        ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+        if not ci:
+            return False
+        if not _is_member_ci(ci):
+            return False
+        if '虹ヶ咲' not in str(getattr(ci, 'group', '') or ''):
+            return False
+        try:
+            total_cost += int(getattr(ci, 'cost', 0) or 0)
+        except Exception:
+            total_cost += 0
+    return total_cost >= 20
+
+
+def _enqueue_topdeck_from_hand(gs: 'GameState', n: int, label: str = '') -> None:
+    n = int(n or 0)
+    if n <= 0:
+        return
+    hand = list(getattr(gs, 'hand', []) or [])
+    if not hand:
+        gs.log.append('[INFO] topdeck_from_hand: hand empty')
+        return
+    n = min(n, len(hand))
+    if n <= 0:
+        return
+    if n == 1 and len(hand) == 1:
+        cn = gs.hand.pop(0)
+        gs.deck = [cn] + gs.deck
+        gs.log.append(f'[AUTO] topdeck_from_hand: placed 1 on top ({label})')
+        return
+    prompt = {
+        'kind': 'topdeck_from_hand',
+        'text': f'{label} 手札を{n}枚、好きな順番でデッキ上に置く（1枚目=一番上）',
+        'options': list(hand),
+        'remaining': n,
+        'picked': [],
+        'label': str(label or ''),
+    }
+    # Put this at the front so it resolves before later live-start prompts.
+    try:
+        gs.pending.insert(0, prompt)
+    except Exception:
+        gs.pending.append(prompt)
+    gs.log.append(f'[PENDING] topdeck_from_hand remaining={n} hand={len(hand)} ({label})')
+
+
 def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
     """Queue live-start prompts once per live (until Attempt resolves)."""
     if gs.live_start_prompted:
@@ -2038,6 +2091,27 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                     'cn': _BUTTERFLY_CN_CANON,
                     'text': '【Butterfly】ライブ開始時：エネルギー2枚を支払ってもよい。自分のステージに『虹ヶ咲』のメンバーがいる場合、このカードのスコアを+1する。',
                     'options': ['pay', 'skip'],
+                })
+    except Exception:
+        pass
+
+    # Special: NEO SKY, NEO MAP! (PL!N-bp4-031) live-start
+    try:
+        if _neo_sky_stage_ready(gs, cards_db):
+            _neo_n = 0
+            for _cn0 in list(getattr(gs, 'set_zone', []) or []):
+                try:
+                    _canon0 = _canon_cardno(_cn0)
+                except Exception:
+                    _canon0 = str(_cn0 or '')
+                if _canon0 == _NEO_SKY_CN_CANON:
+                    _neo_n += 1
+            for _i in range(int(_neo_n or 0)):
+                prompts.append({
+                    'kind': 'neo_sky_execute',
+                    'cn': _NEO_SKY_CN_CANON,
+                    'text': '【NEO SKY, NEO MAP!】ライブ開始時：条件達成 → 3枚引き、手札を3枚好きな順番でデッキの上に置く',
+                    'options': ['ok'],
                 })
     except Exception:
         pass
@@ -2619,6 +2693,7 @@ _MONSTER_GIRLS_CN_CANON = 'PL!N-bp3-031'
 _EMOTION_CN_CANON = 'PL!N-bp4-027'
 _LA_BELLA_PATRIA_CN_CANON = 'PL!N-bp3-027'
 _BUTTERFLY_CN_CANON = 'PL!N-bp1-028'
+_NEO_SKY_CN_CANON = 'PL!N-bp4-031'
 _EMMA_BP3_008_CN_CANON = 'PL!N-bp3-008'
 def _live_score_delta_for_attempt(cn_live, lives_count, gs_turn):
     # Eutopia: if 3+ LIVE cards are set in this attempt, score +2 for Eutopia
@@ -3705,6 +3780,55 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         gs.energy_active = max(0, int(getattr(gs, 'energy_active', 0) or 0) - 2)
         gs.butterfly_paid_this_live = int(getattr(gs, 'butterfly_paid_this_live', 0) or 0) + 1
         gs.log.append('[AUTO] Butterfly live-start: paid E2 -> score +1')
+        return
+
+    if kind == 'neo_sky_execute':
+        drew = draw(gs, 3, None)
+        gs.log.append(f'[AUTO] NEO SKY, NEO MAP!: drew {drew}')
+        _enqueue_topdeck_from_hand(gs, 3, 'NEO SKY, NEO MAP!')
+        return
+
+    if kind == 'topdeck_from_hand':
+        rem = int(p.get('remaining', 0) or 0)
+        picked = list(p.get('picked', []) or [])
+        label = str(p.get('label', '') or '')
+        cn = _canon_cardno(choice_str)
+        pick_i = None
+        for i, x in enumerate(list(gs.hand)):
+            if _canon_cardno(x) == cn:
+                pick_i = i
+                break
+        if pick_i is None:
+            gs.log.append(f'[ERR] topdeck_from_hand: chosen not in hand {cn}')
+            return
+        pick_cn = gs.hand.pop(pick_i)
+        picked.append(pick_cn)
+        rem -= 1
+
+        if rem <= 0:
+            gs.deck = picked + gs.deck
+            gs.log.append(f'[ACT] topdeck_from_hand: placed {len(picked)} on top ({label})')
+            return
+
+        opts = list(gs.hand)
+        if not opts:
+            gs.deck = picked + gs.deck
+            gs.log.append(f'[ACT] topdeck_from_hand: hand exhausted; placed {len(picked)} on top ({label})')
+            return
+
+        prompt = {
+            'kind': 'topdeck_from_hand',
+            'text': f'{label} 次にデッキ上に置くカードを選択（残り{rem}枚）',
+            'options': opts,
+            'remaining': rem,
+            'picked': picked,
+            'label': label,
+        }
+        try:
+            gs.pending.insert(0, prompt)
+        except Exception:
+            gs.pending.append(prompt)
+        gs.log.append(f'[PENDING] topdeck_from_hand picked {pick_cn}; remaining {rem} ({label})')
         return
 
     if kind == 'choose_stage_member_to_activate':
