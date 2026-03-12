@@ -787,6 +787,7 @@ class GameState:
     success_zone_heart_color: str = ""  # e.g., 'pink'/'yellow'/'purple'
     deck_refreshed_this_turn: bool = False
     butterfly_paid_this_live: int = 0
+    tsunagaru_connect_bonus_this_live: int = 0
 
 
 def post_process(gs: GameState) -> None:
@@ -879,6 +880,7 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
         "success_zone_heart_color": str(getattr(gs, 'success_zone_heart_color', '') or ''),
         "deck_refreshed_this_turn": bool(getattr(gs, 'deck_refreshed_this_turn', False)),
         "butterfly_paid_this_live": int(getattr(gs, "butterfly_paid_this_live", 0) or 0),
+        "tsunagaru_connect_bonus_this_live": int(getattr(gs, "tsunagaru_connect_bonus_this_live", 0) or 0),
     }
 
 
@@ -922,6 +924,7 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
     gs.success_zone_heart_color = str(snap.get('success_zone_heart_color', getattr(gs, 'success_zone_heart_color', '') or '') or '')
     gs.deck_refreshed_this_turn = bool(snap.get('deck_refreshed_this_turn', getattr(gs, 'deck_refreshed_this_turn', False)))
     gs.butterfly_paid_this_live = int(snap.get('butterfly_paid_this_live', getattr(gs, 'butterfly_paid_this_live', 0) or 0) or 0)
+    gs.tsunagaru_connect_bonus_this_live = int(snap.get('tsunagaru_connect_bonus_this_live', getattr(gs, 'tsunagaru_connect_bonus_this_live', 0) or 0) or 0)
 
 
 
@@ -1912,6 +1915,100 @@ def _enqueue_topdeck_from_hand(gs: 'GameState', n: int, label: str = '') -> None
     gs.log.append(f'[PENDING] topdeck_from_hand remaining={n} hand={len(hand)} ({label})')
 
 
+
+def _count_nijigasaki_members_on_stage(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
+    n = 0
+    for pos in ('L', 'C', 'R'):
+        slot = (gs.stage or {}).get(pos)
+        if not slot or not getattr(slot, 'cardnumber', ''):
+            continue
+        ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+        if not ci:
+            continue
+        if _is_live_ci(ci):
+            continue
+        if '虹ヶ咲' in str(getattr(ci, 'group', '') or ''):
+            n += 1
+    return int(n)
+
+
+def _enqueue_choose_top_keep_one(gs: 'GameState', k: int, label: str = '') -> None:
+    k = int(k or 0)
+    if k <= 0:
+        return
+    _rule_refresh_for_top_access(gs, None, k, reason='tsunagaru_connect')
+    top = list((getattr(gs, 'deck', []) or [])[:k])
+    if not top:
+        gs.log.append('[INFO] choose_top_keep_one: deck empty')
+        return
+    if len(top) == 1:
+        keep = top[0]
+        gs.deck = [keep] + list((getattr(gs, 'deck', []) or [])[1:])
+        gs.log.append(f'[AUTO] choose_top_keep_one: only 1 card kept ({label})')
+        return
+    gs.pending.insert(0, {
+        'kind': 'choose_top_keep_one',
+        'text': f'{label} デッキ上から見たカードのうち1枚をデッキ上に置き、残りを控え室に置く',
+        'options': list(top),
+        'top_cards': list(top),
+        'label': str(label or ''),
+    })
+    gs.log.append(f'[PENDING] choose_top_keep_one top={len(top)} ({label})')
+
+
+def _resolve_choose_top_keep_one(gs: 'GameState', choice_str: str) -> bool:
+    p = gs.pending[0] if list(getattr(gs, 'pending', []) or []) else {}
+    top_cards = list(p.get('top_cards', []) or [])
+    if not top_cards:
+        gs.log.append('[ERR] choose_top_keep_one: no top cards recorded')
+        return False
+    cn = _canon_cardno(choice_str)
+    keep = None
+    for x in top_cards:
+        if _canon_cardno(x) == cn:
+            keep = x
+            break
+    if keep is None:
+        gs.log.append(f'[ERR] choose_top_keep_one: invalid choice {choice_str}')
+        return False
+
+    deck = list(getattr(gs, 'deck', []) or [])
+    removed = []
+    remain = list(top_cards)
+    for x in top_cards:
+        if deck and _canon_cardno(deck[0]) == _canon_cardno(x):
+            removed.append(deck.pop(0))
+        else:
+            # fallback: remove first matching occurrence
+            hit = None
+            for i, y in enumerate(deck):
+                if _canon_cardno(y) == _canon_cardno(x):
+                    hit = i
+                    break
+            if hit is not None:
+                removed.append(deck.pop(hit))
+    rest = []
+    picked_used = False
+    for x in removed:
+        if (not picked_used) and _canon_cardno(x) == _canon_cardno(keep):
+            picked_used = True
+            continue
+        rest.append(x)
+    gs.green_room.extend(rest)
+    gs.deck = [keep] + deck
+
+    # reveal top 1 and set bonus if it is LIVE
+    reveal = gs.deck[0] if list(getattr(gs, 'deck', []) or []) else ''
+    ci = _get_card(cards_db, reveal) if reveal else None
+    if ci and _is_live_ci(ci):
+        gs.tsunagaru_connect_bonus_this_live = 1
+        gs.log.append(f'[AUTO] Tsunagaru Connect: revealed LIVE on top -> score +1 ({reveal})')
+    else:
+        gs.tsunagaru_connect_bonus_this_live = 0
+        gs.log.append(f'[AUTO] Tsunagaru Connect: revealed non-LIVE on top ({reveal})')
+    return True
+
+
 def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
     """Queue live-start prompts once per live (until Attempt resolves)."""
     if gs.live_start_prompted:
@@ -2112,6 +2209,29 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                     'cn': _NEO_SKY_CN_CANON,
                     'text': '【NEO SKY, NEO MAP!】ライブ開始時：条件達成 → 3枚引き、手札を3枚好きな順番でデッキの上に置く',
                     'options': ['ok'],
+                })
+    except Exception:
+        pass
+
+    # Special: ツナガルコネクト (PL!N-bp3-028) live-start
+    try:
+        _niji_n = _count_nijigasaki_members_on_stage(gs, cards_db)
+        if _niji_n > 0:
+            _tc_n = 0
+            for _cn0 in list(getattr(gs, 'set_zone', []) or []):
+                try:
+                    _canon0 = _canon_cardno(_cn0)
+                except Exception:
+                    _canon0 = str(_cn0 or '')
+                if _canon0 == _TSUNAGARU_CONNECT_CN_CANON:
+                    _tc_n += 1
+            for _i in range(int(_tc_n or 0)):
+                prompts.append({
+                    'kind': 'tsunagaru_connect_execute',
+                    'cn': _TSUNAGARU_CONNECT_CN_CANON,
+                    'text': '【ツナガルコネクト】ライブ開始時：ステージの『虹ヶ咲』メンバー数ぶんデッキ上を見る → 1枚をデッキ上、残りを控え室。さらにデッキトップを公開し、ライブカードならスコア+1',
+                    'options': ['ok'],
+                    'k': int(_niji_n),
                 })
     except Exception:
         pass
@@ -2693,6 +2813,7 @@ _MONSTER_GIRLS_CN_CANON = 'PL!N-bp3-031'
 _EMOTION_CN_CANON = 'PL!N-bp4-027'
 _LA_BELLA_PATRIA_CN_CANON = 'PL!N-bp3-027'
 _BUTTERFLY_CN_CANON = 'PL!N-bp1-028'
+_TSUNAGARU_CONNECT_CN_CANON = 'PL!N-bp3-028'
 _NEO_SKY_CN_CANON = 'PL!N-bp4-031'
 _EMMA_BP3_008_CN_CANON = 'PL!N-bp3-008'
 def _live_score_delta_for_attempt(cn_live, lives_count, gs_turn):
@@ -2884,6 +3005,8 @@ def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[s
         return int(_monster_girls_wait_bonus(gs, cards_db))
     if canon == _EMOTION_CN_CANON:
         return 2 * int(_emotion_success_count(gs))
+    if canon == _TSUNAGARU_CONNECT_CN_CANON:
+        return int(getattr(gs, 'tsunagaru_connect_bonus_this_live', 0) or 0)
     return 0
 
 
@@ -2918,6 +3041,7 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
     if not gs.set_zone:
         gs.last_attempt_excess_hearts = {}
         gs.butterfly_paid_this_live = 0
+        gs.tsunagaru_connect_bonus_this_live = 0
         gs.log.append("[ATTEMPT] no set cards")
         # clear end-of-live state defensively
         gs.last_attempt_lives = []
@@ -3829,6 +3953,17 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         except Exception:
             gs.pending.append(prompt)
         gs.log.append(f'[PENDING] topdeck_from_hand picked {pick_cn}; remaining {rem} ({label})')
+        return
+
+    if kind == 'tsunagaru_connect_execute':
+        k = int(p.get('k', 0) or 0)
+        _enqueue_choose_top_keep_one(gs, k, 'ツナガルコネクト')
+        return
+
+    if kind == 'choose_top_keep_one':
+        ok = _resolve_choose_top_keep_one(gs, choice_str)
+        if not ok:
+            return
         return
 
     if kind == 'choose_stage_member_to_activate':
