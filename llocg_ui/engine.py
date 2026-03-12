@@ -2061,6 +2061,20 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
         if not ci or not ci.abilities:
             continue
 
+        # Special-case: 桜坂しずく bp1-003 live-start
+        try:
+            if _canon_cardno(getattr(ci, 'cardnumber', '') or '') == _SHIZUKU_BP1_003_CN_CANON:
+                if int(getattr(gs, 'energy_active', 0) or 0) >= 1:
+                    prompts.append({
+                        'kind': 'live_start_shizuku_bp1_003_pay',
+                        'pos': pos,
+                        'cn': getattr(ci, 'cardnumber', '') or '',
+                        'text': f"{pos}: {getattr(ci, 'cardnumber', '') or ''} ライブ開始時 [E]1 → 好きなハート色を1つ得る (ライブ終了時まで)",
+                        'options': ['pay', 'skip'],
+                    })
+        except Exception:
+            pass
+
         # Special-case: Emma Verde bp3-008 live-start
         try:
             if _canon_cardno(getattr(ci, 'cardnumber', '') or '') == _EMMA_BP3_008_CN_CANON:
@@ -2882,6 +2896,7 @@ _LA_BELLA_PATRIA_CN_CANON = 'PL!N-bp3-027'
 _BUTTERFLY_CN_CANON = 'PL!N-bp1-028'
 _TSUNAGARU_CONNECT_CN_CANON = 'PL!N-bp3-028'
 _VIVID_WORLD_CN_CANON = 'PL!N-bp4-025'
+_SHIZUKU_BP1_003_CN_CANON = 'PL!N-bp1-003'
 _NEO_SKY_CN_CANON = 'PL!N-bp4-031'
 _EMMA_BP3_008_CN_CANON = 'PL!N-bp3-008'
 def _live_score_delta_for_attempt(cn_live, lives_count, gs_turn):
@@ -4036,6 +4051,61 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         ok = _resolve_choose_top_keep_one(gs, p, choice_str, cards_db)
         if not ok:
             return
+        return
+
+    if kind == 'live_start_shizuku_bp1_003_pay':
+        pos = str(p.get('pos', '') or '').upper()
+        slot = gs.stage.get(pos)
+        if not slot:
+            gs.log.append(f"[SKIP] prompt: stage {pos} empty (ignored)")
+            return
+        low = str(choice_str or '').strip().lower()
+        if low in ('skip', '__skip__', 'no', 'n', '0', 'false'):
+            gs.log.append(f"[SKIP] {pos}: Shizuku bp1-003 live-start skipped")
+            return
+        if low not in ('pay', 'yes', 'y', '1', 'true'):
+            gs.log.append(f"[ERR] Shizuku bp1-003 live-start: invalid choice {choice_str}")
+            return
+        if not pay_energy(gs, 1):
+            gs.log.append(f"[ERR] ability: insufficient energy for [E]1 (have {gs.energy_active})")
+            return
+        gs.pending.insert(0, {
+            'kind': 'live_start_shizuku_bp1_003_choose_color',
+            'pos': pos,
+            'cn': str(p.get('cn', '') or ''),
+            'text': f"{pos}: 桜坂しずく ライブ開始時 → 好きなハート色を選ぶ",
+            'options': ['桃', '赤', '黄', '緑', '青', '紫'],
+        })
+        gs.log.append(f"[PENDING] {pos}: Shizuku bp1-003 choose heart color")
+        return
+
+    if kind == 'live_start_shizuku_bp1_003_choose_color':
+        pos = str(p.get('pos', '') or '').upper()
+        slot = gs.stage.get(pos)
+        if not slot:
+            gs.log.append(f"[SKIP] prompt: stage {pos} empty (ignored)")
+            return
+        ch = str(choice_str or '').strip()
+        m = {
+            '桃': 'pink',
+            '赤': 'red',
+            '黄': 'yellow',
+            '緑': 'green',
+            '青': 'blue',
+            '紫': 'purple',
+            'pink': 'pink',
+            'red': 'red',
+            'yellow': 'yellow',
+            'green': 'green',
+            'blue': 'blue',
+            'purple': 'purple',
+        }
+        col = m.get(ch, '')
+        if not col:
+            gs.log.append(f"[ERR] Shizuku bp1-003 choose color: invalid choice '{ch}'")
+            return
+        _grant_temp_heart(slot, col, 1)
+        gs.log.append(f"[AUTO] {pos}: Shizuku bp1-003 -> temp heart +1 {col} (until end of live)")
         return
 
     if kind == 'choose_stage_member_to_activate':
