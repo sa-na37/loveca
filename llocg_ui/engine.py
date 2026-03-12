@@ -176,6 +176,14 @@ def can_activate_in_state(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: s
     if not ci:
         return False
 
+    # Special-case: Emma Verde bp3-008 activated ability
+    if _canon_cardno(getattr(ci, 'cardnumber', '') or '') == _EMMA_BP3_008_CN_CANON:
+        key = f"{pos}:{_EMMA_BP3_008_CN_CANON}:emma_bp3_008_activate"
+        used = int((getattr(gs, 'used_this_turn', {}) or {}).get(key, 0) or 0)
+        if used >= 1:
+            return False
+        return bool(_emma_bp3_008_wait_candidates(gs, cards_db, pos))
+
     # check activated abilities for supported clauses + satisfiable costs + conditions
     for ab in _iter_activated_abilities(ci):
         if not isinstance(ab, dict):
@@ -720,6 +728,7 @@ class StageSlot:
     cardnumber: str
     active: bool = True
     temp_blade: int = 0
+    temp_hearts: Dict[str, int] = field(default_factory=dict)
     temp_until: str = ""  # e.g., end_of_live
     energy_under: int = 0  # number of energy cards under this member (UI + some effects)
 
@@ -842,7 +851,7 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
         if slot is None:
             stage_snap[k] = None
         else:
-            stage_snap[k] = {"cardnumber": slot.cardnumber, "active": bool(slot.active), "temp_blade": int(getattr(slot, "temp_blade", 0) or 0), "temp_until": str(getattr(slot, "temp_until", "") or ""), "energy_under": int(getattr(slot, "energy_under", 0) or 0)}
+            stage_snap[k] = {"cardnumber": slot.cardnumber, "active": bool(slot.active), "temp_blade": int(getattr(slot, "temp_blade", 0) or 0), "temp_hearts": dict(getattr(slot, "temp_hearts", {}) or {}), "temp_until": str(getattr(slot, "temp_until", "") or ""), "energy_under": int(getattr(slot, "energy_under", 0) or 0)}
 
     return {
         "phase": gs.phase,
@@ -888,7 +897,7 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
         if v is None:
             stage_new[k] = None
         else:
-            stage_new[k] = StageSlot(cardnumber=str(v.get("cardnumber", "")), active=bool(v.get("active", True)), temp_blade=_safe_int(v.get("temp_blade", 0), 0), temp_until=str(v.get("temp_until", "") or ""), energy_under=_safe_int(v.get("energy_under", 0), 0))
+            stage_new[k] = StageSlot(cardnumber=str(v.get("cardnumber", "")), active=bool(v.get("active", True)), temp_blade=_safe_int(v.get("temp_blade", 0), 0), temp_hearts=dict(v.get("temp_hearts", {}) or {}), temp_until=str(v.get("temp_until", "") or ""), energy_under=_safe_int(v.get("energy_under", 0), 0))
     gs.stage = stage_new
 
     gs.green_room = list(snap.get("green_room", gs.green_room))
@@ -1323,6 +1332,8 @@ def owned_base_hearts(gs: GameState, cards_db: Dict[str, CardInfo]) -> Dict[str,
             continue
         for k, v in (c.base_hearts or {}).items():
             pool[k] = pool.get(k, 0) + int(v)
+        for k, v in (getattr(slot, 'temp_hearts', {}) or {}).items():
+            pool[k] = pool.get(k, 0) + int(v)
 
     # Live-start buff: gain chosen heart per card in success live storage (until end of live)
     try:
@@ -1346,6 +1357,67 @@ def owned_base_hearts(gs: GameState, cards_db: Dict[str, CardInfo]) -> Dict[str,
 
     return pool
 
+
+
+
+def _stage_pos_label(gs: GameState, cards_db: Dict[str, CardInfo], pos: str) -> str:
+    pos = str(pos or '').upper()
+    slot = (gs.stage or {}).get(pos)
+    if not slot or not getattr(slot, 'cardnumber', ''):
+        return pos
+    ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+    nm = str(getattr(ci, 'cardname', '') or getattr(ci, 'name', '') or getattr(slot, 'cardnumber', '') or '')
+    return f"{pos}: {nm}" if nm else pos
+
+
+def _emma_bp3_008_wait_candidates(gs: GameState, cards_db: Dict[str, CardInfo], src_pos: str) -> List[str]:
+    out: List[str] = []
+    src_pos = str(src_pos or '').upper()
+    for pos in ('L', 'C', 'R'):
+        if pos == src_pos:
+            continue
+        slot = (gs.stage or {}).get(pos)
+        if not slot or not bool(getattr(slot, 'active', False)):
+            continue
+        ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+        if not ci:
+            continue
+        if _is_live_ci(ci):
+            continue
+        if '虹ヶ咲' not in str(getattr(ci, 'group', '') or ''):
+            continue
+        out.append(pos)
+    return out
+
+
+def _emma_bp3_008_live_start_candidates(gs: GameState, cards_db: Dict[str, CardInfo], src_pos: str) -> List[str]:
+    out: List[str] = []
+    src_pos = str(src_pos or '').upper()
+    for pos in ('L', 'C', 'R'):
+        if pos == src_pos:
+            continue
+        slot = (gs.stage or {}).get(pos)
+        if not slot or bool(getattr(slot, 'active', False)):
+            continue
+        ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+        if not ci:
+            continue
+        if _is_live_ci(ci):
+            continue
+        if '虹ヶ咲' not in str(getattr(ci, 'group', '') or ''):
+            continue
+        out.append(pos)
+    return out
+
+
+def _grant_temp_heart(slot: StageSlot, color: str, n: int = 1) -> None:
+    color = str(color or '').lower().strip()
+    if not color:
+        return
+    th = dict(getattr(slot, 'temp_hearts', {}) or {})
+    th[color] = int(th.get(color, 0) or 0) + int(n or 0)
+    slot.temp_hearts = th
+    slot.temp_until = 'end_of_live'
 
 
 def _count_all_from_blade_tags(tags_json: str) -> int:
@@ -1796,6 +1868,24 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
         ci = _get_card(cards_db, slot.cardnumber)
         if not ci or not ci.abilities:
             continue
+
+        # Special-case: Emma Verde bp3-008 live-start
+        try:
+            if _canon_cardno(getattr(ci, 'cardnumber', '') or '') == _EMMA_BP3_008_CN_CANON:
+                cands0 = _emma_bp3_008_live_start_candidates(gs, cards_db, pos)
+                if cands0 and len(list(getattr(gs, 'hand', []) or [])) >= 2:
+                    prompts.append({
+                        'kind': 'emma_bp3_008_live_start_pay',
+                        'pos': pos,
+                        'cn': getattr(ci, 'cardnumber', '') or '',
+                        'text': '【エマ・ヴェルデ】ライブ開始時：手札を2枚控え室に置いてもよい → このメンバー以外のウェイト状態の『虹ヶ咲』メンバー1人をアクティブにする。そうした場合、そのメンバーとこのメンバーはライブ終了時まで緑ハート+1',
+                        'options': ['pay', 'skip'],
+                        'pos_options': list(cands0),
+                    })
+            # continue to normal scan as well
+        except Exception:
+            pass
+
         for ab in ci.abilities:
             if not isinstance(ab, dict):
                 continue
@@ -1942,6 +2032,7 @@ def _clear_end_of_live_buffs(gs: GameState) -> None:
             continue
         if getattr(slot, "temp_until", "") == "end_of_live":
             slot.temp_blade = 0
+            slot.temp_hearts = {}
             slot.temp_until = ""
 
     # clear global end-of-live buffs
@@ -2441,6 +2532,7 @@ _PSYCHO_HEART_CN_CANON = 'PL!N-bp3-026'
 _STARS_WE_CHASE_CN_CANON = 'PL!N-bp4-028'
 _LOVE_U_MY_FRIENDS_CN_CANON = 'PL!N-bp3-030'
 _MONSTER_GIRLS_CN_CANON = 'PL!N-bp3-031'
+_EMMA_BP3_008_CN_CANON = 'PL!N-bp3-008'
 def _live_score_delta_for_attempt(cn_live, lives_count, gs_turn):
     # Eutopia: if 3+ LIVE cards are set in this attempt, score +2 for Eutopia
     # Rise Up High!: if turn==1 live phase, score +1 for this card
@@ -2794,6 +2886,30 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
 
     if rng is None:
         rng = random.Random(gs.seed)
+
+    # Special-case: Emma Verde bp3-008
+    if _canon_cardno(getattr(ci, 'cardnumber', '') or '') == _EMMA_BP3_008_CN_CANON:
+        key = f"{pos}:{_EMMA_BP3_008_CN_CANON}:emma_bp3_008_activate"
+        used = int((getattr(gs, 'used_this_turn', {}) or {}).get(key, 0) or 0)
+        if used >= 1:
+            gs.log.append(f"[INFO] activate: already used this turn ({key})")
+            return
+        cands = _emma_bp3_008_wait_candidates(gs, cards_db, pos)
+        if not cands:
+            gs.log.append("[INFO] エマ・ヴェルデ: ウェイトにできる『虹ヶ咲』メンバーがいない")
+            return
+        opts = [_stage_pos_label(gs, cards_db, pp) for pp in cands]
+        gs.pending.append({
+            'kind': 'emma_bp3_008_wait_pick',
+            'text': '【エマ・ヴェルデ】起動：このメンバー以外の『虹ヶ咲』メンバー1人をウェイト状態にする → カードを1枚引く',
+            'options': list(opts),
+            'pos_options': list(cands),
+            'source_pos': pos,
+            'source_cn': getattr(ci, 'cardnumber', '') or '',
+            'ability_key': key,
+        })
+        gs.log.append(f"[PENDING] Emma bp3-008: choose 1 Nijigasaki member to set WAIT ({len(cands)} candidates)")
+        return
 
     # 1) Generic activated abilities
     for ab in _iter_activated_abilities(ci):
@@ -3438,6 +3554,75 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             return
         slot2.active = True
         gs.log.append(f"[ACT] stage {pos2} set ACTIVE")
+        return
+
+    if kind == 'emma_bp3_008_wait_pick':
+        raw = str(choice_str or '').strip()
+        pos2 = (raw[:1].upper() if raw else '')
+        pos_opts = list(p.get('pos_options', []) or [])
+        src_pos = str(p.get('source_pos', '') or '').upper()
+        key = str(p.get('ability_key', '') or '')
+        if pos2 not in ('L','C','R') or (pos_opts and pos2 not in pos_opts):
+            gs.log.append(f"[ERR] Emma bp3-008: invalid target {choice_str}")
+            return
+        slot2 = (gs.stage or {}).get(pos2)
+        if not slot2:
+            gs.log.append(f"[ERR] Emma bp3-008: empty stage {pos2}")
+            return
+        slot2.active = False
+        rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
+        drew = draw(gs, 1, rng2)
+        if key:
+            try:
+                gs.used_this_turn[key] = 1
+            except Exception:
+                gs.used_this_turn = {key: 1}
+        gs.log.append(f"[ACT] Emma bp3-008: {pos2} set WAIT -> drew {drew}")
+        return
+
+    if kind == 'emma_bp3_008_live_start_pay':
+        src_pos = str(p.get('pos', '') or '').upper()
+        pos_opts = list(p.get('pos_options', []) or [])
+        if choice_str.lower() not in ('pay', 'yes', 'y', '1', 'true'):
+            gs.log.append('[SKIP] Emma bp3-008 live-start skipped')
+            return
+        if len(list(getattr(gs, 'hand', []) or [])) < 2:
+            gs.log.append('[ERR] Emma bp3-008 live-start: not enough cards in hand for discard 2')
+            return
+        opts = [_stage_pos_label(gs, cards_db, pp) for pp in pos_opts]
+        resume = {
+            'kind': 'emma_bp3_008_live_start_pick',
+            'text': '【エマ・ヴェルデ】ライブ開始時：アクティブにする『虹ヶ咲』メンバーを選ぶ',
+            'options': list(opts),
+            'pos_options': list(pos_opts),
+            'source_pos': src_pos,
+        }
+        gs.pending.append({
+            'kind': 'discard_from_hand',
+            'remaining': 2,
+            'text': '手札を2枚控え室に置く',
+            'options': list(gs.hand),
+            '_resume': resume,
+        })
+        return
+
+    if kind == 'emma_bp3_008_live_start_pick':
+        raw = str(choice_str or '').strip()
+        pos2 = (raw[:1].upper() if raw else '')
+        pos_opts = list(p.get('pos_options', []) or [])
+        src_pos = str(p.get('source_pos', '') or '').upper()
+        if pos2 not in ('L','C','R') or (pos_opts and pos2 not in pos_opts):
+            gs.log.append(f"[ERR] Emma bp3-008 live-start: invalid target {choice_str}")
+            return
+        src_slot = (gs.stage or {}).get(src_pos)
+        slot2 = (gs.stage or {}).get(pos2)
+        if not src_slot or not slot2:
+            gs.log.append('[ERR] Emma bp3-008 live-start: source/target missing')
+            return
+        slot2.active = True
+        _grant_temp_heart(src_slot, 'green', 1)
+        _grant_temp_heart(slot2, 'green', 1)
+        gs.log.append(f"[AUTO] Emma bp3-008 live-start: {pos2} set ACTIVE; {src_pos} and {pos2} gain green +1 until end of live")
         return
 
 
