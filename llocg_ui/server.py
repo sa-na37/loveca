@@ -1366,9 +1366,25 @@ HTML = r'''<!doctype html>
   .actBtn{position:absolute;left:6px;right:6px;bottom:6px;padding:6px 6px;border-radius:10px;border:1px solid rgba(255,255,255,.18);
           background:rgba(0,0,0,.6);color:#fff;font-size:12px;cursor:pointer;}
   .actBtn:hover{background:rgba(0,0,0,.74);}
-  .toggleBtn{position:absolute;left:6px;right:6px;top:6px;padding:6px 6px;border-radius:10px;border:1px solid rgba(255,255,255,.18);
-          background:rgba(0,0,0,.6);color:#fff;font-size:12px;cursor:pointer;}
-  .toggleBtn:hover{background:rgba(0,0,0,.74);}
+  .toggleBtn{
+    position:absolute;
+    top:-8px;
+    right:-8px;
+    width:22px;
+    height:22px;
+    padding:0;
+    border-radius:999px;
+    border:1px solid rgba(255,255,255,.22);
+    background:rgba(0,0,0,.52);
+    color:#fff;
+    font-size:13px;
+    line-height:20px;
+    text-align:center;
+    cursor:pointer;
+    z-index:30;
+    box-shadow:0 1px 4px rgba(0,0,0,.28);
+  }
+  .toggleBtn:hover{background:rgba(0,0,0,.72);}
 
   /* popups */
   #mask{position:absolute;left:0;top:0;bottom:0;right:var(--sideW);background:rgba(0,0,0,.55);display:none;z-index:9000;}
@@ -1913,7 +1929,9 @@ HTML = r'''<!doctype html>
     try{
       const b2 = document.createElement('button');
       b2.className = 'toggleBtn';
-      b2.textContent = isActive ? 'ウェイト' : 'アクティブ';
+      b2.textContent = '↻';
+      b2.title = isActive ? 'ウェイトにする' : 'アクティブにする';
+      b2.setAttribute('aria-label', b2.title);
       b2.addEventListener('click', async (ev)=>{
         ev.stopPropagation();
         st = await apiCmd('toggle_stage_active', {pos: slotKey});
