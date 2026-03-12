@@ -1956,9 +1956,8 @@ def _enqueue_choose_top_keep_one(gs: 'GameState', k: int, label: str = '') -> No
     gs.log.append(f'[PENDING] choose_top_keep_one top={len(top)} ({label})')
 
 
-def _resolve_choose_top_keep_one(gs: 'GameState', choice_str: str) -> bool:
-    p = gs.pending[0] if list(getattr(gs, 'pending', []) or []) else {}
-    top_cards = list(p.get('top_cards', []) or [])
+def _resolve_choose_top_keep_one(gs: 'GameState', p: Dict[str, Any], choice_str: str, cards_db: Dict[str, CardInfo]) -> bool:
+    top_cards = list((p or {}).get('top_cards', []) or [])
     if not top_cards:
         gs.log.append('[ERR] choose_top_keep_one: no top cards recorded')
         return False
@@ -1974,12 +1973,10 @@ def _resolve_choose_top_keep_one(gs: 'GameState', choice_str: str) -> bool:
 
     deck = list(getattr(gs, 'deck', []) or [])
     removed = []
-    remain = list(top_cards)
     for x in top_cards:
         if deck and _canon_cardno(deck[0]) == _canon_cardno(x):
             removed.append(deck.pop(0))
         else:
-            # fallback: remove first matching occurrence
             hit = None
             for i, y in enumerate(deck):
                 if _canon_cardno(y) == _canon_cardno(x):
@@ -1987,6 +1984,7 @@ def _resolve_choose_top_keep_one(gs: 'GameState', choice_str: str) -> bool:
                     break
             if hit is not None:
                 removed.append(deck.pop(hit))
+
     rest = []
     picked_used = False
     for x in removed:
@@ -1994,10 +1992,10 @@ def _resolve_choose_top_keep_one(gs: 'GameState', choice_str: str) -> bool:
             picked_used = True
             continue
         rest.append(x)
+
     gs.green_room.extend(rest)
     gs.deck = [keep] + deck
 
-    # reveal top 1 and set bonus if it is LIVE
     reveal = gs.deck[0] if list(getattr(gs, 'deck', []) or []) else ''
     ci = _get_card(cards_db, reveal) if reveal else None
     if ci and _is_live_ci(ci):
@@ -3961,7 +3959,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         return
 
     if kind == 'choose_top_keep_one':
-        ok = _resolve_choose_top_keep_one(gs, choice_str)
+        ok = _resolve_choose_top_keep_one(gs, p, choice_str, cards_db)
         if not ok:
             return
         return
