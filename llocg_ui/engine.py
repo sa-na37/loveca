@@ -786,6 +786,7 @@ class GameState:
     # live-start buff (until end of live): for each card in success storage, gain chosen heart
     success_zone_heart_color: str = ""  # e.g., 'pink'/'yellow'/'purple'
     deck_refreshed_this_turn: bool = False
+    butterfly_paid_this_live: int = 0
 
 
 def post_process(gs: GameState) -> None:
@@ -877,6 +878,7 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
         # end-of-live buffs
         "success_zone_heart_color": str(getattr(gs, 'success_zone_heart_color', '') or ''),
         "deck_refreshed_this_turn": bool(getattr(gs, 'deck_refreshed_this_turn', False)),
+        "butterfly_paid_this_live": int(getattr(gs, "butterfly_paid_this_live", 0) or 0),
     }
 
 
@@ -919,6 +921,7 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
 
     gs.success_zone_heart_color = str(snap.get('success_zone_heart_color', getattr(gs, 'success_zone_heart_color', '') or '') or '')
     gs.deck_refreshed_this_turn = bool(snap.get('deck_refreshed_this_turn', getattr(gs, 'deck_refreshed_this_turn', False)))
+    gs.butterfly_paid_this_live = int(snap.get('butterfly_paid_this_live', getattr(gs, 'butterfly_paid_this_live', 0) or 0) or 0)
 
 
 
@@ -2018,6 +2021,27 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
     except Exception:
         pass
 
+    # Special: Butterfly (PL!N-bp1-028) live-start
+    try:
+        if int(getattr(gs, 'energy_active', 0) or 0) >= 2 and _has_nijigasaki_member_on_stage(gs, cards_db):
+            _bf_n = 0
+            for _cn0 in list(getattr(gs, 'set_zone', []) or []):
+                try:
+                    _canon0 = _canon_cardno(_cn0)
+                except Exception:
+                    _canon0 = str(_cn0 or '')
+                if _canon0 == _BUTTERFLY_CN_CANON:
+                    _bf_n += 1
+            for _i in range(int(_bf_n or 0)):
+                prompts.append({
+                    'kind': 'live_start_butterfly_pay',
+                    'cn': _BUTTERFLY_CN_CANON,
+                    'text': '【Butterfly】ライブ開始時：エネルギー2枚を支払ってもよい。自分のステージに『虹ヶ咲』のメンバーがいる場合、このカードのスコアを+1する。',
+                    'options': ['pay', 'skip'],
+                })
+    except Exception:
+        pass
+
     if prompts:
         gs.pending.extend(prompts)
         gs.live_start_prompted = True
@@ -2038,6 +2062,10 @@ def _clear_end_of_live_buffs(gs: GameState) -> None:
     # clear global end-of-live buffs
     try:
         gs.success_zone_heart_color = ""
+    except Exception:
+        pass
+    try:
+        gs.butterfly_paid_this_live = 0
     except Exception:
         pass
 
@@ -2590,6 +2618,7 @@ _LOVE_U_MY_FRIENDS_CN_CANON = 'PL!N-bp3-030'
 _MONSTER_GIRLS_CN_CANON = 'PL!N-bp3-031'
 _EMOTION_CN_CANON = 'PL!N-bp4-027'
 _LA_BELLA_PATRIA_CN_CANON = 'PL!N-bp3-027'
+_BUTTERFLY_CN_CANON = 'PL!N-bp1-028'
 _EMMA_BP3_008_CN_CANON = 'PL!N-bp3-008'
 def _live_score_delta_for_attempt(cn_live, lives_count, gs_turn):
     # Eutopia: if 3+ LIVE cards are set in this attempt, score +2 for Eutopia
@@ -2608,12 +2637,20 @@ def _compute_attempt_score_breakdown(lives, cards_db, gs_turn, gs=None):
     lives_count = len(lives or [])
     total = 0
     rows = []
+    _butterfly_paid_remaining = int(getattr(gs, 'butterfly_paid_this_live', 0) or 0) if gs is not None else 0
     for cn in (lives or []):
         ci = _get_card(cards_db, cn)
         base = int(getattr(ci, 'score', 0) or 0) if ci else 0
         delta = int(_live_score_delta_for_attempt(cn, lives_count, gs_turn))
         if gs is not None:
             delta += int(_extra_live_score_delta_for_attempt(cn, gs, cards_db))
+        try:
+            canon = _canon_cardno(cn)
+        except Exception:
+            canon = str(cn or '')
+        if canon == _BUTTERFLY_CN_CANON and _butterfly_paid_remaining > 0:
+            delta += 1
+            _butterfly_paid_remaining -= 1
         eff = base + delta
         total += eff
         rows.append({'cn': cn, 'base': base, 'delta': delta, 'score': eff})
@@ -2805,6 +2842,7 @@ def _enqueue_next_poppin_prompt(gs: GameState) -> bool:
 def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
     if not gs.set_zone:
         gs.last_attempt_excess_hearts = {}
+        gs.butterfly_paid_this_live = 0
         gs.log.append("[ATTEMPT] no set cards")
         # clear end-of-live state defensively
         gs.last_attempt_lives = []
@@ -3648,6 +3686,25 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             'allow_less': True,
         })
         gs.log.append(f"[PENDING] reorder_topk: picked {pick_cn}; remaining {len(pool)}")
+        return
+
+    if kind == 'live_start_butterfly_pay':
+        low = str(choice_str or '').strip().lower()
+        if low in ('skip', '__skip__', 'no', 'n', '0', 'false'):
+            gs.log.append('[SKIP] Butterfly live-start skipped')
+            return
+        if low not in ('pay', 'yes', 'y', '1', 'true'):
+            gs.log.append(f'[ERR] Butterfly live-start: invalid choice {choice_str}')
+            return
+        if int(getattr(gs, 'energy_active', 0) or 0) < 2:
+            gs.log.append('[ERR] Butterfly live-start: not enough active energy')
+            return
+        if not _has_nijigasaki_member_on_stage(gs, cards_db):
+            gs.log.append('[INFO] Butterfly live-start: no Nijigasaki member on stage')
+            return
+        gs.energy_active = max(0, int(getattr(gs, 'energy_active', 0) or 0) - 2)
+        gs.butterfly_paid_this_live = int(getattr(gs, 'butterfly_paid_this_live', 0) or 0) + 1
+        gs.log.append('[AUTO] Butterfly live-start: paid E2 -> score +1')
         return
 
     if kind == 'choose_stage_member_to_activate':
