@@ -788,6 +788,8 @@ class GameState:
     deck_refreshed_this_turn: bool = False
     butterfly_paid_this_live: int = 0
     tsunagaru_connect_bonus_this_live: int = 0
+    vivid_world_blue_mode_this_live: bool = False
+    vivid_world_bonus_this_live: int = 0
 
 
 def post_process(gs: GameState) -> None:
@@ -881,6 +883,8 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
         "deck_refreshed_this_turn": bool(getattr(gs, 'deck_refreshed_this_turn', False)),
         "butterfly_paid_this_live": int(getattr(gs, "butterfly_paid_this_live", 0) or 0),
         "tsunagaru_connect_bonus_this_live": int(getattr(gs, "tsunagaru_connect_bonus_this_live", 0) or 0),
+        "vivid_world_blue_mode_this_live": bool(getattr(gs, "vivid_world_blue_mode_this_live", False)),
+        "vivid_world_bonus_this_live": int(getattr(gs, "vivid_world_bonus_this_live", 0) or 0),
     }
 
 
@@ -925,6 +929,8 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
     gs.deck_refreshed_this_turn = bool(snap.get('deck_refreshed_this_turn', getattr(gs, 'deck_refreshed_this_turn', False)))
     gs.butterfly_paid_this_live = int(snap.get('butterfly_paid_this_live', getattr(gs, 'butterfly_paid_this_live', 0) or 0) or 0)
     gs.tsunagaru_connect_bonus_this_live = int(snap.get('tsunagaru_connect_bonus_this_live', getattr(gs, 'tsunagaru_connect_bonus_this_live', 0) or 0) or 0)
+    gs.vivid_world_blue_mode_this_live = bool(snap.get('vivid_world_blue_mode_this_live', getattr(gs, 'vivid_world_blue_mode_this_live', False)))
+    gs.vivid_world_bonus_this_live = int(snap.get('vivid_world_bonus_this_live', getattr(gs, 'vivid_world_bonus_this_live', 0) or 0) or 0)
 
 
 
@@ -1442,11 +1448,17 @@ def cheer_hearts_from_resolve(gs: GameState, cards_db: Dict[str, CardInfo]) -> D
             continue
         for k, v in (c.blade_hearts or {}).items():
             pool[k] = pool.get(k, 0) + int(v)
-        n_all = _count_all_from_blade_tags(getattr(c, 'blade_heart_tags_json', '') or '')
+        try:
+            txt = str(getattr(c, 'blade_heart_tags_json', '') or '')
+        except Exception:
+            txt = ''
+        n_all = txt.count('(ALL)')
         if n_all > 0:
             pool['all'] = pool.get('all', 0) + int(n_all)
-    return pool
 
+    if bool(getattr(gs, 'vivid_world_blue_mode_this_live', False)):
+        pool = _apply_vivid_world_blue_mode(pool)
+    return pool
 
 def can_satisfy_req(req: Dict[str, int], owned: Dict[str, int]) -> Tuple[bool, Dict[str, Any]]:
     """Check if owned hearts can satisfy LIVE required hearts.
@@ -2007,6 +2019,35 @@ def _resolve_choose_top_keep_one(gs: 'GameState', p: Dict[str, Any], choice_str:
     return True
 
 
+
+def _apply_vivid_world_blue_mode(pool: Dict[str, int]) -> Dict[str, int]:
+    out = {str(k).lower(): int(v or 0) for k, v in (pool or {}).items()}
+    moved = 0
+    for k in ('pink', 'red', 'yellow', 'green', 'purple', 'all'):
+        moved += int(out.get(k, 0) or 0)
+        if k in out:
+            out.pop(k, None)
+    if moved > 0:
+        out['blue'] = int(out.get('blue', 0) or 0) + moved
+    return out
+
+
+def _vivid_world_revealed_niji_has_all_six(gs: GameState, cards_db: Dict[str, CardInfo]) -> bool:
+    cols = set()
+    for cn in list(getattr(gs, '_yell_revealed_this_live', []) or []):
+        ci = _get_card(cards_db, cn)
+        if not ci:
+            continue
+        if not _is_member_ci(ci):
+            continue
+        if '虹ヶ咲' not in str(getattr(ci, 'group', '') or ''):
+            continue
+        for k, v in ((getattr(ci, 'base_hearts', None) or {}) or {}).items():
+            if k in ('pink', 'red', 'yellow', 'green', 'blue', 'purple') and int(v or 0) > 0:
+                cols.add(k)
+    return len(cols) == 6
+
+
 def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
     """Queue live-start prompts once per live (until Attempt resolves)."""
     if gs.live_start_prompted:
@@ -2231,6 +2272,22 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                     'options': ['ok'],
                     'k': int(_niji_n),
                 })
+    except Exception:
+        pass
+
+    # Special: VIVID WORLD (PL!N-bp4-025) live-start
+    try:
+        _vw_n = 0
+        for _cn0 in list(getattr(gs, 'set_zone', []) or []):
+            try:
+                _canon0 = _canon_cardno(_cn0)
+            except Exception:
+                _canon0 = str(_cn0 or '')
+            if _canon0 == _VIVID_WORLD_CN_CANON:
+                _vw_n += 1
+        if _vw_n > 0:
+            gs.vivid_world_blue_mode_this_live = True
+            gs.log.append('[AUTO] VIVID WORLD live-start: cheer pink/red/yellow/green/purple/all -> blue until end of live')
     except Exception:
         pass
 
@@ -2630,6 +2687,18 @@ def cmd_yell(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo]) -
     except Exception:
         pass
 
+    try:
+        if bool(getattr(gs, 'vivid_world_blue_mode_this_live', False)):
+            gs.vivid_world_bonus_this_live = 1 if _vivid_world_revealed_niji_has_all_six(gs, cards_db) else 0
+            if int(getattr(gs, 'vivid_world_bonus_this_live', 0) or 0) > 0:
+                gs.log.append('[AUTO] VIVID WORLD: revealed Nijigasaki members contain all six colors -> score +1')
+            else:
+                gs.log.append('[AUTO] VIVID WORLD: revealed Nijigasaki members do not contain all six colors')
+        else:
+            gs.vivid_world_bonus_this_live = 0
+    except Exception:
+        gs.vivid_world_bonus_this_live = 0
+
     draw_n = 0
     for cn in revealed:
         c = _get_card(cards_db, cn)
@@ -2812,6 +2881,7 @@ _EMOTION_CN_CANON = 'PL!N-bp4-027'
 _LA_BELLA_PATRIA_CN_CANON = 'PL!N-bp3-027'
 _BUTTERFLY_CN_CANON = 'PL!N-bp1-028'
 _TSUNAGARU_CONNECT_CN_CANON = 'PL!N-bp3-028'
+_VIVID_WORLD_CN_CANON = 'PL!N-bp4-025'
 _NEO_SKY_CN_CANON = 'PL!N-bp4-031'
 _EMMA_BP3_008_CN_CANON = 'PL!N-bp3-008'
 def _live_score_delta_for_attempt(cn_live, lives_count, gs_turn):
@@ -3005,6 +3075,8 @@ def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[s
         return 2 * int(_emotion_success_count(gs))
     if canon == _TSUNAGARU_CONNECT_CN_CANON:
         return int(getattr(gs, 'tsunagaru_connect_bonus_this_live', 0) or 0)
+    if canon == _VIVID_WORLD_CN_CANON:
+        return int(getattr(gs, 'vivid_world_bonus_this_live', 0) or 0)
     return 0
 
 
@@ -3040,6 +3112,8 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
         gs.last_attempt_excess_hearts = {}
         gs.butterfly_paid_this_live = 0
         gs.tsunagaru_connect_bonus_this_live = 0
+        gs.vivid_world_blue_mode_this_live = False
+        gs.vivid_world_bonus_this_live = 0
         gs.log.append("[ATTEMPT] no set cards")
         # clear end-of-live state defensively
         gs.last_attempt_lives = []
