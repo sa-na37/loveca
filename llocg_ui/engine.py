@@ -2440,6 +2440,7 @@ _SOLITUDE_RAIN_CN_CANON = 'PL!N-bp1-027'
 _PSYCHO_HEART_CN_CANON = 'PL!N-bp3-026'
 _STARS_WE_CHASE_CN_CANON = 'PL!N-bp4-028'
 _LOVE_U_MY_FRIENDS_CN_CANON = 'PL!N-bp3-030'
+_MONSTER_GIRLS_CN_CANON = 'PL!N-bp3-031'
 def _live_score_delta_for_attempt(cn_live, lives_count, gs_turn):
     # Eutopia: if 3+ LIVE cards are set in this attempt, score +2 for Eutopia
     # Rise Up High!: if turn==1 live phase, score +1 for this card
@@ -2547,6 +2548,27 @@ def _love_u_my_friends_success_bonus(gs: GameState, cards_db: Dict[str, CardInfo
     return 0
 
 
+
+def _monster_girls_wait_bonus(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
+    n = 0
+    for pos in ('L', 'C', 'R'):
+        slot = (gs.stage or {}).get(pos)
+        if not slot:
+            continue
+        cn = str(getattr(slot, 'cardnumber', '') or '')
+        if not cn:
+            continue
+        ci = _get_card(cards_db, cn)
+        if not ci:
+            continue
+        if _is_live_ci(ci):
+            continue
+        if bool(getattr(slot, 'active', False)):
+            continue
+        n += 1
+    return int(n)
+
+
 def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
     try:
         canon = _canon_cardno(cn_live)
@@ -2560,6 +2582,8 @@ def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[s
         return int(_stars_we_chase_waiting_bonus(gs, cards_db))
     if canon == _LOVE_U_MY_FRIENDS_CN_CANON:
         return int(_love_u_my_friends_success_bonus(gs, cards_db))
+    if canon == _MONSTER_GIRLS_CN_CANON:
+        return int(_monster_girls_wait_bonus(gs, cards_db))
     return 0
 
 
