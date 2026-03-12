@@ -1347,6 +1347,15 @@ def owned_base_hearts(gs: GameState, cards_db: Dict[str, CardInfo]) -> Dict[str,
     return pool
 
 
+
+def _count_all_from_blade_tags(tags_json: str) -> int:
+    try:
+        txt = str(tags_json or '')
+    except Exception:
+        txt = ''
+    # tokv1 normalized tags are typically like ["(ALL)", "(DRAW)"]
+    return txt.count('(ALL)')
+
 def cheer_hearts_from_resolve(gs: GameState, cards_db: Dict[str, CardInfo]) -> Dict[str, int]:
     pool: Dict[str, int] = {}
     for cn in gs.resolve_zone:
@@ -1355,6 +1364,9 @@ def cheer_hearts_from_resolve(gs: GameState, cards_db: Dict[str, CardInfo]) -> D
             continue
         for k, v in (c.blade_hearts or {}).items():
             pool[k] = pool.get(k, 0) + int(v)
+        n_all = _count_all_from_blade_tags(getattr(c, 'blade_heart_tags_json', '') or '')
+        if n_all > 0:
+            pool['all'] = pool.get('all', 0) + int(n_all)
     return pool
 
 
@@ -2425,6 +2437,7 @@ _RISE_UP_HIGH_CN_CANON = 'PL!N-bp4-029'
 
 _POPPIN_UP_CN_CANON = 'PL!N-bp1-026'
 _SOLITUDE_RAIN_CN_CANON = 'PL!N-bp1-027'
+_PSYCHO_HEART_CN_CANON = 'PL!N-bp3-026'
 def _live_score_delta_for_attempt(cn_live, lives_count, gs_turn):
     # Eutopia: if 3+ LIVE cards are set in this attempt, score +2 for Eutopia
     # Rise Up High!: if turn==1 live phase, score +1 for this card
@@ -2473,6 +2486,26 @@ def _solitude_rain_stage_color_kinds(gs: GameState, cards_db: Dict[str, CardInfo
     return int(len(cols))
 
 
+
+def _psycho_heart_success_bonus(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
+    has1 = False
+    has5 = False
+    for cn in list(getattr(gs, 'success_zone', []) or []):
+        ci = _get_card(cards_db, cn)
+        if not ci:
+            continue
+        sc = int(getattr(ci, 'score', 0) or 0)
+        if sc == 1:
+            has1 = True
+        elif sc == 5:
+            has5 = True
+    if has1 and has5:
+        return 2
+    if has1 or has5:
+        return 1
+    return 0
+
+
 def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
     try:
         canon = _canon_cardno(cn_live)
@@ -2480,6 +2513,8 @@ def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[s
         canon = str(cn_live or '')
     if canon == _SOLITUDE_RAIN_CN_CANON:
         return int(_solitude_rain_stage_color_kinds(gs, cards_db))
+    if canon == _PSYCHO_HEART_CN_CANON:
+        return int(_psycho_heart_success_bonus(gs, cards_db))
     return 0
 
 
