@@ -786,11 +786,20 @@ class GameState:
     # live-start buff (until end of live): for each card in success storage, gain chosen heart
     success_zone_heart_color: str = ""  # e.g., 'pink'/'yellow'/'purple'
     deck_refreshed_this_turn: bool = False
-    butterfly_paid_this_live: int = 0
-    tsunagaru_connect_bonus_this_live: int = 0
-    vivid_world_blue_mode_this_live: bool = False
-    vivid_world_bonus_this_live: int = 0
 
+
+def _auto_trigger_option_text(t: Dict[str, Any]) -> str:
+    try:
+        lbl = str((t or {}).get('label', '') or '').strip()
+    except Exception:
+        lbl = ''
+    if lbl:
+        return lbl
+    try:
+        cn = str((t or {}).get('source_cn', '') or '').strip()
+    except Exception:
+        cn = ''
+    return cn
 
 def post_process(gs: GameState) -> None:
     """Post-process hook to keep UI prompts consistent.
@@ -811,30 +820,21 @@ def post_process(gs: GameState) -> None:
     opts = []
     try:
         for t in list(q):
-            cn = str((t or {}).get('source_cn', '') or '').strip()
-            if not cn:
+            txt = _auto_trigger_option_text(t)
+            if not txt:
                 continue
-            opts.append(cn)
+            opts.append(txt)
     except Exception:
         opts = []
 
-    # de-dup (canon) while preserving order
-    seen = set()
-    opts2: List[str] = []
-    for x in opts:
-        k = _canon_cardno(str(x))
-        if not k or k in seen:
-            continue
-        seen.add(k)
-        opts2.append(str(x))
-    if not opts2:
+    if not opts:
         setattr(gs, '_deferred_auto_queue', [])
         return
 
     gs.pending.append({
         'kind': 'auto_order',
         'text': str(getattr(gs, '_deferred_auto_text', '') or '自動効果が複数発生：解決するカードを選択（1つずつ）'),
-        'options': opts2,
+        'options': opts,
         'queue': list(q),
     })
     setattr(gs, '_deferred_auto_queue', [])
@@ -881,10 +881,6 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
         # end-of-live buffs
         "success_zone_heart_color": str(getattr(gs, 'success_zone_heart_color', '') or ''),
         "deck_refreshed_this_turn": bool(getattr(gs, 'deck_refreshed_this_turn', False)),
-        "butterfly_paid_this_live": int(getattr(gs, "butterfly_paid_this_live", 0) or 0),
-        "tsunagaru_connect_bonus_this_live": int(getattr(gs, "tsunagaru_connect_bonus_this_live", 0) or 0),
-        "vivid_world_blue_mode_this_live": bool(getattr(gs, "vivid_world_blue_mode_this_live", False)),
-        "vivid_world_bonus_this_live": int(getattr(gs, "vivid_world_bonus_this_live", 0) or 0),
     }
 
 
@@ -927,10 +923,6 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
 
     gs.success_zone_heart_color = str(snap.get('success_zone_heart_color', getattr(gs, 'success_zone_heart_color', '') or '') or '')
     gs.deck_refreshed_this_turn = bool(snap.get('deck_refreshed_this_turn', getattr(gs, 'deck_refreshed_this_turn', False)))
-    gs.butterfly_paid_this_live = int(snap.get('butterfly_paid_this_live', getattr(gs, 'butterfly_paid_this_live', 0) or 0) or 0)
-    gs.tsunagaru_connect_bonus_this_live = int(snap.get('tsunagaru_connect_bonus_this_live', getattr(gs, 'tsunagaru_connect_bonus_this_live', 0) or 0) or 0)
-    gs.vivid_world_blue_mode_this_live = bool(snap.get('vivid_world_blue_mode_this_live', getattr(gs, 'vivid_world_blue_mode_this_live', False)))
-    gs.vivid_world_bonus_this_live = int(snap.get('vivid_world_bonus_this_live', getattr(gs, 'vivid_world_bonus_this_live', 0) or 0) or 0)
 
 
 
@@ -1448,17 +1440,11 @@ def cheer_hearts_from_resolve(gs: GameState, cards_db: Dict[str, CardInfo]) -> D
             continue
         for k, v in (c.blade_hearts or {}).items():
             pool[k] = pool.get(k, 0) + int(v)
-        try:
-            txt = str(getattr(c, 'blade_heart_tags_json', '') or '')
-        except Exception:
-            txt = ''
-        n_all = txt.count('(ALL)')
+        n_all = _count_all_from_blade_tags(getattr(c, 'blade_heart_tags_json', '') or '')
         if n_all > 0:
             pool['all'] = pool.get('all', 0) + int(n_all)
-
-    if bool(getattr(gs, 'vivid_world_blue_mode_this_live', False)):
-        pool = _apply_vivid_world_blue_mode(pool)
     return pool
+
 
 def can_satisfy_req(req: Dict[str, int], owned: Dict[str, int]) -> Tuple[bool, Dict[str, Any]]:
     """Check if owned hearts can satisfy LIVE required hearts.
@@ -1874,185 +1860,24 @@ def _green_live_candidates(gs: "GameState", cards_db: Dict[str, CardInfo]) -> Li
     return cands
 
 
-
-def _neo_sky_stage_ready(gs: GameState, cards_db: Dict[str, CardInfo]) -> bool:
-    total_cost = 0
-    for pos in ('L', 'C', 'R'):
-        slot = (gs.stage or {}).get(pos)
-        if not slot or not getattr(slot, 'cardnumber', ''):
-            return False
-        ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
-        if not ci:
-            return False
-        if not _is_member_ci(ci):
-            return False
-        if '虹ヶ咲' not in str(getattr(ci, 'group', '') or ''):
-            return False
-        try:
-            total_cost += int(getattr(ci, 'cost', 0) or 0)
-        except Exception:
-            total_cost += 0
-    return total_cost >= 20
-
-
-def _enqueue_topdeck_from_hand(gs: 'GameState', n: int, label: str = '') -> None:
-    n = int(n or 0)
-    if n <= 0:
-        return
-    hand = list(getattr(gs, 'hand', []) or [])
-    if not hand:
-        gs.log.append('[INFO] topdeck_from_hand: hand empty')
-        return
-    n = min(n, len(hand))
-    if n <= 0:
-        return
-    if n == 1 and len(hand) == 1:
-        cn = gs.hand.pop(0)
-        gs.deck = [cn] + gs.deck
-        gs.log.append(f'[AUTO] topdeck_from_hand: placed 1 on top ({label})')
-        return
-    prompt = {
-        'kind': 'topdeck_from_hand',
-        'text': f'{label} 手札を{n}枚、好きな順番でデッキ上に置く（1枚目=一番上）',
-        'options': list(hand),
-        'remaining': n,
-        'picked': [],
-        'label': str(label or ''),
-    }
-    # Put this at the front so it resolves before later live-start prompts.
-    try:
-        gs.pending.insert(0, prompt)
-    except Exception:
-        gs.pending.append(prompt)
-    gs.log.append(f'[PENDING] topdeck_from_hand remaining={n} hand={len(hand)} ({label})')
-
-
-
-def _count_nijigasaki_members_on_stage(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
-    n = 0
-    for pos in ('L', 'C', 'R'):
-        slot = (gs.stage or {}).get(pos)
-        if not slot or not getattr(slot, 'cardnumber', ''):
-            continue
-        ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
-        if not ci:
-            continue
-        if _is_live_ci(ci):
-            continue
-        if '虹ヶ咲' in str(getattr(ci, 'group', '') or ''):
-            n += 1
-    return int(n)
-
-
-def _enqueue_choose_top_keep_one(gs: 'GameState', k: int, label: str = '') -> None:
-    k = int(k or 0)
-    if k <= 0:
-        return
-    _rule_refresh_for_top_access(gs, None, k, reason='tsunagaru_connect')
-    top = list((getattr(gs, 'deck', []) or [])[:k])
-    if not top:
-        gs.log.append('[INFO] choose_top_keep_one: deck empty')
-        return
-    if len(top) == 1:
-        keep = top[0]
-        gs.deck = [keep] + list((getattr(gs, 'deck', []) or [])[1:])
-        gs.log.append(f'[AUTO] choose_top_keep_one: only 1 card kept ({label})')
-        return
-    gs.pending.insert(0, {
-        'kind': 'choose_top_keep_one',
-        'text': f'{label} デッキ上から見たカードのうち1枚をデッキ上に置き、残りを控え室に置く',
-        'options': list(top),
-        'top_cards': list(top),
-        'label': str(label or ''),
-    })
-    gs.log.append(f'[PENDING] choose_top_keep_one top={len(top)} ({label})')
-
-
-def _resolve_choose_top_keep_one(gs: 'GameState', p: Dict[str, Any], choice_str: str, cards_db: Dict[str, CardInfo]) -> bool:
-    top_cards = list((p or {}).get('top_cards', []) or [])
-    if not top_cards:
-        gs.log.append('[ERR] choose_top_keep_one: no top cards recorded')
-        return False
-    cn = _canon_cardno(choice_str)
-    keep = None
-    for x in top_cards:
-        if _canon_cardno(x) == cn:
-            keep = x
-            break
-    if keep is None:
-        gs.log.append(f'[ERR] choose_top_keep_one: invalid choice {choice_str}')
-        return False
-
-    deck = list(getattr(gs, 'deck', []) or [])
-    removed = []
-    for x in top_cards:
-        if deck and _canon_cardno(deck[0]) == _canon_cardno(x):
-            removed.append(deck.pop(0))
-        else:
-            hit = None
-            for i, y in enumerate(deck):
-                if _canon_cardno(y) == _canon_cardno(x):
-                    hit = i
-                    break
-            if hit is not None:
-                removed.append(deck.pop(hit))
-
-    rest = []
-    picked_used = False
-    for x in removed:
-        if (not picked_used) and _canon_cardno(x) == _canon_cardno(keep):
-            picked_used = True
-            continue
-        rest.append(x)
-
-    gs.green_room.extend(rest)
-    gs.deck = [keep] + deck
-
-    reveal = gs.deck[0] if list(getattr(gs, 'deck', []) or []) else ''
-    ci = _get_card(cards_db, reveal) if reveal else None
-    if ci and _is_live_ci(ci):
-        gs.tsunagaru_connect_bonus_this_live = 1
-        gs.log.append(f'[AUTO] Tsunagaru Connect: revealed LIVE on top -> score +1 ({reveal})')
-    else:
-        gs.tsunagaru_connect_bonus_this_live = 0
-        gs.log.append(f'[AUTO] Tsunagaru Connect: revealed non-LIVE on top ({reveal})')
-    return True
-
-
-
-def _apply_vivid_world_blue_mode(pool: Dict[str, int]) -> Dict[str, int]:
-    out = {str(k).lower(): int(v or 0) for k, v in (pool or {}).items()}
-    moved = 0
-    for k in ('pink', 'red', 'yellow', 'green', 'purple', 'all'):
-        moved += int(out.get(k, 0) or 0)
-        if k in out:
-            out.pop(k, None)
-    if moved > 0:
-        out['blue'] = int(out.get('blue', 0) or 0) + moved
-    return out
-
-
-def _vivid_world_revealed_niji_has_all_six(gs: GameState, cards_db: Dict[str, CardInfo]) -> bool:
-    cols = set()
-    for cn in list(getattr(gs, '_yell_revealed_this_live', []) or []):
-        ci = _get_card(cards_db, cn)
-        if not ci:
-            continue
-        if not _is_member_ci(ci):
-            continue
-        if '虹ヶ咲' not in str(getattr(ci, 'group', '') or ''):
-            continue
-        for k, v in ((getattr(ci, 'base_hearts', None) or {}) or {}).items():
-            if k in ('pink', 'red', 'yellow', 'green', 'blue', 'purple') and int(v or 0) > 0:
-                cols.add(k)
-    return len(cols) == 6
-
-
 def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
-    """Queue live-start prompts once per live (until Attempt resolves)."""
+    """Collect live-start auto effects and, if needed, let the user choose resolution order."""
     if gs.live_start_prompted:
         return 0
-    prompts: List[Dict[str, Any]] = []
+
+    triggers: List[Dict[str, Any]] = []
+
+    def _append_prompt(prompt: Dict[str, Any], label: str = '') -> None:
+        pr = dict(prompt or {})
+        txt = str(label or pr.get('text', '') or '')
+        cn = str(pr.get('cn', '') or '')
+        triggers.append({
+            'kind': 'enqueue_pending_prompt',
+            'source_cn': cn,
+            'label': txt,
+            'prompt': pr,
+        })
+
     for pos in ("L", "C", "R"):
         slot = gs.stage.get(pos)
         if not slot or not slot.active:
@@ -2065,13 +1890,14 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
         try:
             if _canon_cardno(getattr(ci, 'cardnumber', '') or '') == _SHIZUKU_BP1_003_CN_CANON:
                 if int(getattr(gs, 'energy_active', 0) or 0) >= 1:
-                    prompts.append({
+                    pr = {
                         'kind': 'live_start_shizuku_bp1_003_pay',
                         'pos': pos,
                         'cn': getattr(ci, 'cardnumber', '') or '',
                         'text': f"{pos}: {getattr(ci, 'cardnumber', '') or ''} ライブ開始時 [E]1 → 好きなハート色を1つ得る (ライブ終了時まで)",
                         'options': ['pay', 'skip'],
-                    })
+                    }
+                    _append_prompt(pr, pr['text'])
         except Exception:
             pass
 
@@ -2080,15 +1906,15 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
             if _canon_cardno(getattr(ci, 'cardnumber', '') or '') == _EMMA_BP3_008_CN_CANON:
                 cands0 = _emma_bp3_008_live_start_candidates(gs, cards_db, pos)
                 if cands0 and len(list(getattr(gs, 'hand', []) or [])) >= 2:
-                    prompts.append({
+                    pr = {
                         'kind': 'emma_bp3_008_live_start_pay',
                         'pos': pos,
                         'cn': getattr(ci, 'cardnumber', '') or '',
                         'text': '【エマ・ヴェルデ】ライブ開始時：手札を2枚控え室に置いてもよい → このメンバー以外のウェイト状態の『虹ヶ咲』メンバー1人をアクティブにする。そうした場合、そのメンバーとこのメンバーはライブ終了時まで緑ハート+1',
                         'options': ['pay', 'skip'],
                         'pos_options': list(cands0),
-                    })
-            # continue to normal scan as well
+                    }
+                    _append_prompt(pr, f"{pos}: {getattr(ci, 'cardnumber', '') or ''} ライブ開始時")
         except Exception:
             pass
 
@@ -2103,8 +1929,6 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                 continue
             # Special-case (ability-level): live-start ability that asks to choose one heart color among (桃)/(黄)/(紫)
             # and grants that heart per card in success live storage until end of live.
-            # In compiled abilities this pattern is often split across multiple clauses like:
-            #   <(桃)> / か<(黄)> / か<(紫)> / のうち、1つを選ぶ…成功ライブカード置き場…選んだハート…
             if (not str(getattr(gs, 'success_zone_heart_color', '') or '').strip()):
                 try:
                     blob_all = ''.join([str((cl0.get('raw') or cl0.get('effect_template') or '') ) for cl0 in clauses if isinstance(cl0, dict)])
@@ -2117,14 +1941,14 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                 ):
                     opts = [c for c in ['桃', '黄', '紫'] if f"<({c})>" in blob_all]
                     if len(opts) >= 2:
-                        prompts.append({
+                        pr = {
                             'kind': 'live_start_success_heart_by_success',
                             'pos': pos,
                             'cn': ci.cardnumber,
                             'text': f"{pos}: {ci.cardnumber} ライブ開始時 → ({'/'.join(opts)})から1つ選ぶ：成功ライブ置き場1枚につき選んだハート+1 (ライブ終了時まで)",
                             'options': opts,
-                        })
-                        # Do not process the split icon clauses individually.
+                        }
+                        _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
                         continue
 
             for cl in clauses:
@@ -2133,22 +1957,21 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                 raw = str(cl.get("raw", "") or "")
                 cost = str(cl.get("cost_template", "") or raw)
                 eff = str(cl.get("effect_template", "") or raw)
-                # Costless live-start choices
                 if "<(E)>" not in cost and "[E]" not in cost and "Ｅ" not in cost and "E" not in cost:
-                    # Example: choose one of (桃)/(黄)/(紫) then gain that heart per card in success live storage.
                     blob = str(eff or "")
                     if (not str(getattr(gs, 'success_zone_heart_color', '') or '').strip()) and (
                         ('成功ライブカード置き場' in blob) and ('選んだハート' in blob) and
                         ('<(桃)>' in blob) and ('<(黄)>' in blob) and ('<(紫)>' in blob) and
                         ('1つを選ぶ' in blob)
                     ):
-                        prompts.append({
+                        pr = {
                             'kind': 'live_start_success_heart_by_success',
                             'pos': pos,
                             'cn': ci.cardnumber,
                             'text': f"{pos}: {ci.cardnumber} ライブ開始時 → (桃/黄/紫)を選ぶ：成功ライブ置き場1枚につき選んだハート+1 (ライブ終了時まで)",
                             'options': ['桃', '黄', '紫'],
-                        })
+                        }
+                        _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
                     continue
                 need_e = _parse_energy_cost(cost)
                 if need_e <= 0:
@@ -2156,20 +1979,20 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
 
                 blades = _count_blade_icons(eff)
                 if blades > 0 and need_e == 1:
-                    prompts.append({
+                    pr = {
                         "kind": "live_start_blade",
                         "pos": pos,
                         "cn": ci.cardnumber,
                         "need_e": 1,
                         "blades": int(blades),
                         "text": f"{pos}: {ci.cardnumber} ライブ開始時 [E]1 → ブレード+{blades} (ライブ終了時まで)",
-                        # UI needs explicit choices here.
                         "options": ["pay", "skip"],
-                    })
+                    }
+                    _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
                     continue
 
                 if _match_effect_template(eff):
-                    prompts.append({
+                    pr = {
                         "kind": "live_start_pay_effect",
                         "pos": pos,
                         "cn": ci.cardnumber,
@@ -2177,19 +2000,15 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                         "effect": eff,
                         "text": f"{pos}: {ci.cardnumber} ライブ開始時 [E]{need_e} → {eff}",
                         "options": ["pay", "skip"],
-                    })
+                    }
+                    _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
+
     # LIVE-card live-start: Rise Up High! (PL!N-bp4-029)
     try:
         if int(getattr(gs, 'turn', 0) or 0) == 1:
             for cn_live in list(getattr(gs, 'set_zone', []) or []):
                 if _canon_cardno(str(cn_live or '')) != _RISE_UP_HIGH_CN_CANON:
                     continue
-                # Mark as processed even if no prompt is queued.
-                try:
-                    gs.live_start_prompted = True
-                except Exception:
-                    pass
-                gs.log.append('[AUTO] LIVE: PL!N-bp4-029 live-start: score +1 (turn1)')
                 cands = []
                 for ppos in ('L','C','R'):
                     slot2 = (gs.stage or {}).get(ppos)
@@ -2211,13 +2030,14 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                         except Exception:
                             _nm = ''
                         _rise_up_high_opts.append(f"{_pp}: {_nm}" if _nm else str(_pp))
-                    prompts.append({
+                    pr = {
                         'kind': 'live_start_rise_up_high_pick',
                         'cn': _RISE_UP_HIGH_CN_CANON,
                         'text': '【Rise Up High!】ライブ開始時：『虹ヶ咲』のメンバーを1人選ぶ（このライブ終了時まで、そのメンバーはブレード+1）',
                         'options': list(_rise_up_high_opts),
                         'pos_options': list(cands),
-                    })
+                    }
+                    _append_prompt(pr, 'PL!N-bp4-029 ライブ開始時')
                 else:
                     gs.log.append('[INFO] Rise Up High: no Nijigasaki member on stage; blade bonus skipped')
                 break
@@ -2236,12 +2056,13 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                 if _canon0 == _BUTTERFLY_CN_CANON:
                     _bf_n += 1
             for _i in range(int(_bf_n or 0)):
-                prompts.append({
+                pr = {
                     'kind': 'live_start_butterfly_pay',
                     'cn': _BUTTERFLY_CN_CANON,
                     'text': '【Butterfly】ライブ開始時：エネルギー2枚を支払ってもよい。自分のステージに『虹ヶ咲』のメンバーがいる場合、このカードのスコアを+1する。',
                     'options': ['pay', 'skip'],
-                })
+                }
+                _append_prompt(pr, 'PL!N-bp1-028 ライブ開始時')
     except Exception:
         pass
 
@@ -2257,12 +2078,13 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                 if _canon0 == _NEO_SKY_CN_CANON:
                     _neo_n += 1
             for _i in range(int(_neo_n or 0)):
-                prompts.append({
+                pr = {
                     'kind': 'neo_sky_execute',
                     'cn': _NEO_SKY_CN_CANON,
                     'text': '【NEO SKY, NEO MAP!】ライブ開始時：条件達成 → 3枚引き、手札を3枚好きな順番でデッキの上に置く',
                     'options': ['ok'],
-                })
+                }
+                _append_prompt(pr, 'PL!N-bp4-031 ライブ開始時')
     except Exception:
         pass
 
@@ -2279,13 +2101,14 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                 if _canon0 == _TSUNAGARU_CONNECT_CN_CANON:
                     _tc_n += 1
             for _i in range(int(_tc_n or 0)):
-                prompts.append({
+                pr = {
                     'kind': 'tsunagaru_connect_execute',
                     'cn': _TSUNAGARU_CONNECT_CN_CANON,
                     'text': '【ツナガルコネクト】ライブ開始時：ステージの『虹ヶ咲』メンバー数ぶんデッキ上を見る → 1枚をデッキ上、残りを控え室。さらにデッキトップを公開し、ライブカードならスコア+1',
                     'options': ['ok'],
                     'k': int(_niji_n),
-                })
+                }
+                _append_prompt(pr, 'PL!N-bp3-028 ライブ開始時')
     except Exception:
         pass
 
@@ -2299,18 +2122,33 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                 _canon0 = str(_cn0 or '')
             if _canon0 == _VIVID_WORLD_CN_CANON:
                 _vw_n += 1
-        if _vw_n > 0:
-            gs.vivid_world_blue_mode_this_live = True
-            gs.log.append('[AUTO] VIVID WORLD live-start: cheer pink/red/yellow/green/purple/all -> blue until end of live')
+        for _i in range(int(_vw_n or 0)):
+            triggers.append({
+                'kind': 'live_start_vivid_world_auto',
+                'source_cn': _VIVID_WORLD_CN_CANON,
+                'label': 'PL!N-bp4-025 ライブ開始時',
+            })
     except Exception:
         pass
 
-    if prompts:
-        gs.pending.extend(prompts)
-        gs.live_start_prompted = True
-        gs.log.append(f"[PROMPT] live-start abilities queued: {len(prompts)}")
-    return len(prompts)
+    n = len(triggers)
+    if n <= 0:
+        return 0
 
+    gs.live_start_prompted = True
+    if n == 1:
+        _exec_auto_trigger(gs, cards_db, triggers[0])
+        gs.log.append(f"[PROMPT] live-start abilities queued: {n}")
+        return n
+
+    gs.pending.append({
+        'kind': 'auto_order',
+        'text': 'ライブ開始時効果が複数発生：解決するカードを選択（1つずつ）',
+        'options': _auto_queue_to_options(triggers) if False else [ _auto_trigger_option_text(t) for t in triggers if _auto_trigger_option_text(t) ],
+        'queue': list(triggers),
+    })
+    gs.log.append(f"[PROMPT] live-start abilities queued: {n}")
+    return n
 
 def _clear_end_of_live_buffs(gs: GameState) -> None:
     for pos in ("L", "C", "R"):
@@ -2325,10 +2163,6 @@ def _clear_end_of_live_buffs(gs: GameState) -> None:
     # clear global end-of-live buffs
     try:
         gs.success_zone_heart_color = ""
-    except Exception:
-        pass
-    try:
-        gs.butterfly_paid_this_live = 0
     except Exception:
         pass
 
@@ -2654,6 +2488,15 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
     if kind == 'ai_cost10_enter':
         handle_stage_cost10_member_enter(gs, cards_db, entered_pos=str(trig.get('entered_pos','C') or 'C'), entered_cn=str(trig.get('entered_cn','') or ''), ai_pos=str(trig.get('ai_pos','') or ''), rng=rng)
         return
+    if kind == 'enqueue_pending_prompt':
+        prm = dict((trig or {}).get('prompt', {}) or {})
+        if prm:
+            gs.pending.append(prm)
+        return
+    if kind == 'live_start_vivid_world_auto':
+        gs.vivid_world_blue_mode_this_live = True
+        gs.log.append('[AUTO] VIVID WORLD live-start: cheer pink/red/yellow/green/purple/all -> blue until end of live')
+        return
     # Unknown trigger
     gs.log.append(f"[WARN] auto_trigger: unknown kind={kind}")
 
@@ -2700,18 +2543,6 @@ def cmd_yell(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo]) -
         setattr(gs, '_yell_revealed_this_live', _lst)
     except Exception:
         pass
-
-    try:
-        if bool(getattr(gs, 'vivid_world_blue_mode_this_live', False)):
-            gs.vivid_world_bonus_this_live = 1 if _vivid_world_revealed_niji_has_all_six(gs, cards_db) else 0
-            if int(getattr(gs, 'vivid_world_bonus_this_live', 0) or 0) > 0:
-                gs.log.append('[AUTO] VIVID WORLD: revealed Nijigasaki members contain all six colors -> score +1')
-            else:
-                gs.log.append('[AUTO] VIVID WORLD: revealed Nijigasaki members do not contain all six colors')
-        else:
-            gs.vivid_world_bonus_this_live = 0
-    except Exception:
-        gs.vivid_world_bonus_this_live = 0
 
     draw_n = 0
     for cn in revealed:
@@ -2893,11 +2724,6 @@ _LOVE_U_MY_FRIENDS_CN_CANON = 'PL!N-bp3-030'
 _MONSTER_GIRLS_CN_CANON = 'PL!N-bp3-031'
 _EMOTION_CN_CANON = 'PL!N-bp4-027'
 _LA_BELLA_PATRIA_CN_CANON = 'PL!N-bp3-027'
-_BUTTERFLY_CN_CANON = 'PL!N-bp1-028'
-_TSUNAGARU_CONNECT_CN_CANON = 'PL!N-bp3-028'
-_VIVID_WORLD_CN_CANON = 'PL!N-bp4-025'
-_SHIZUKU_BP1_003_CN_CANON = 'PL!N-bp1-003'
-_NEO_SKY_CN_CANON = 'PL!N-bp4-031'
 _EMMA_BP3_008_CN_CANON = 'PL!N-bp3-008'
 def _live_score_delta_for_attempt(cn_live, lives_count, gs_turn):
     # Eutopia: if 3+ LIVE cards are set in this attempt, score +2 for Eutopia
@@ -2916,20 +2742,12 @@ def _compute_attempt_score_breakdown(lives, cards_db, gs_turn, gs=None):
     lives_count = len(lives or [])
     total = 0
     rows = []
-    _butterfly_paid_remaining = int(getattr(gs, 'butterfly_paid_this_live', 0) or 0) if gs is not None else 0
     for cn in (lives or []):
         ci = _get_card(cards_db, cn)
         base = int(getattr(ci, 'score', 0) or 0) if ci else 0
         delta = int(_live_score_delta_for_attempt(cn, lives_count, gs_turn))
         if gs is not None:
             delta += int(_extra_live_score_delta_for_attempt(cn, gs, cards_db))
-        try:
-            canon = _canon_cardno(cn)
-        except Exception:
-            canon = str(cn or '')
-        if canon == _BUTTERFLY_CN_CANON and _butterfly_paid_remaining > 0:
-            delta += 1
-            _butterfly_paid_remaining -= 1
         eff = base + delta
         total += eff
         rows.append({'cn': cn, 'base': base, 'delta': delta, 'score': eff})
@@ -3088,10 +2906,6 @@ def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[s
         return int(_monster_girls_wait_bonus(gs, cards_db))
     if canon == _EMOTION_CN_CANON:
         return 2 * int(_emotion_success_count(gs))
-    if canon == _TSUNAGARU_CONNECT_CN_CANON:
-        return int(getattr(gs, 'tsunagaru_connect_bonus_this_live', 0) or 0)
-    if canon == _VIVID_WORLD_CN_CANON:
-        return int(getattr(gs, 'vivid_world_bonus_this_live', 0) or 0)
     return 0
 
 
@@ -3125,10 +2939,6 @@ def _enqueue_next_poppin_prompt(gs: GameState) -> bool:
 def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
     if not gs.set_zone:
         gs.last_attempt_excess_hearts = {}
-        gs.butterfly_paid_this_live = 0
-        gs.tsunagaru_connect_bonus_this_live = 0
-        gs.vivid_world_blue_mode_this_live = False
-        gs.vivid_world_bonus_this_live = 0
         gs.log.append("[ATTEMPT] no set cards")
         # clear end-of-live state defensively
         gs.last_attempt_lives = []
@@ -3493,9 +3303,9 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
     def _auto_queue_to_options(q: List[Dict[str, Any]]) -> List[str]:
         out: List[str] = []
         for t in (q or []):
-            scn = _canon_cardno(str((t or {}).get('source_cn', '') or ''))
-            if scn:
-                out.append(scn)
+            txt = _auto_trigger_option_text(t)
+            if txt:
+                out.append(txt)
         return out
 
     def _enqueue_auto_order_from_deferred() -> None:
@@ -3532,6 +3342,10 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         cn_choice = _canon_cardno(choice_str)
         pick_i = None
         for i, t in enumerate(queue):
+            txt = _auto_trigger_option_text(t)
+            if txt and txt == choice_str:
+                pick_i = i
+                break
             if _canon_cardno(str(t.get('source_cn', '') or '')) == cn_choice:
                 pick_i = i
                 break
@@ -3972,140 +3786,6 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             'allow_less': True,
         })
         gs.log.append(f"[PENDING] reorder_topk: picked {pick_cn}; remaining {len(pool)}")
-        return
-
-    if kind == 'live_start_butterfly_pay':
-        low = str(choice_str or '').strip().lower()
-        if low in ('skip', '__skip__', 'no', 'n', '0', 'false'):
-            gs.log.append('[SKIP] Butterfly live-start skipped')
-            return
-        if low not in ('pay', 'yes', 'y', '1', 'true'):
-            gs.log.append(f'[ERR] Butterfly live-start: invalid choice {choice_str}')
-            return
-        if int(getattr(gs, 'energy_active', 0) or 0) < 2:
-            gs.log.append('[ERR] Butterfly live-start: not enough active energy')
-            return
-        if not _has_nijigasaki_member_on_stage(gs, cards_db):
-            gs.log.append('[INFO] Butterfly live-start: no Nijigasaki member on stage')
-            return
-        gs.energy_active = max(0, int(getattr(gs, 'energy_active', 0) or 0) - 2)
-        gs.butterfly_paid_this_live = int(getattr(gs, 'butterfly_paid_this_live', 0) or 0) + 1
-        gs.log.append('[AUTO] Butterfly live-start: paid E2 -> score +1')
-        return
-
-    if kind == 'neo_sky_execute':
-        drew = draw(gs, 3, None)
-        gs.log.append(f'[AUTO] NEO SKY, NEO MAP!: drew {drew}')
-        _enqueue_topdeck_from_hand(gs, 3, 'NEO SKY, NEO MAP!')
-        return
-
-    if kind == 'topdeck_from_hand':
-        rem = int(p.get('remaining', 0) or 0)
-        picked = list(p.get('picked', []) or [])
-        label = str(p.get('label', '') or '')
-        cn = _canon_cardno(choice_str)
-        pick_i = None
-        for i, x in enumerate(list(gs.hand)):
-            if _canon_cardno(x) == cn:
-                pick_i = i
-                break
-        if pick_i is None:
-            gs.log.append(f'[ERR] topdeck_from_hand: chosen not in hand {cn}')
-            return
-        pick_cn = gs.hand.pop(pick_i)
-        picked.append(pick_cn)
-        rem -= 1
-
-        if rem <= 0:
-            gs.deck = picked + gs.deck
-            gs.log.append(f'[ACT] topdeck_from_hand: placed {len(picked)} on top ({label})')
-            return
-
-        opts = list(gs.hand)
-        if not opts:
-            gs.deck = picked + gs.deck
-            gs.log.append(f'[ACT] topdeck_from_hand: hand exhausted; placed {len(picked)} on top ({label})')
-            return
-
-        prompt = {
-            'kind': 'topdeck_from_hand',
-            'text': f'{label} 次にデッキ上に置くカードを選択（残り{rem}枚）',
-            'options': opts,
-            'remaining': rem,
-            'picked': picked,
-            'label': label,
-        }
-        try:
-            gs.pending.insert(0, prompt)
-        except Exception:
-            gs.pending.append(prompt)
-        gs.log.append(f'[PENDING] topdeck_from_hand picked {pick_cn}; remaining {rem} ({label})')
-        return
-
-    if kind == 'tsunagaru_connect_execute':
-        k = int(p.get('k', 0) or 0)
-        _enqueue_choose_top_keep_one(gs, k, 'ツナガルコネクト')
-        return
-
-    if kind == 'choose_top_keep_one':
-        ok = _resolve_choose_top_keep_one(gs, p, choice_str, cards_db)
-        if not ok:
-            return
-        return
-
-    if kind == 'live_start_shizuku_bp1_003_pay':
-        pos = str(p.get('pos', '') or '').upper()
-        slot = gs.stage.get(pos)
-        if not slot:
-            gs.log.append(f"[SKIP] prompt: stage {pos} empty (ignored)")
-            return
-        low = str(choice_str or '').strip().lower()
-        if low in ('skip', '__skip__', 'no', 'n', '0', 'false'):
-            gs.log.append(f"[SKIP] {pos}: Shizuku bp1-003 live-start skipped")
-            return
-        if low not in ('pay', 'yes', 'y', '1', 'true'):
-            gs.log.append(f"[ERR] Shizuku bp1-003 live-start: invalid choice {choice_str}")
-            return
-        if not pay_energy(gs, 1):
-            gs.log.append(f"[ERR] ability: insufficient energy for [E]1 (have {gs.energy_active})")
-            return
-        gs.pending.insert(0, {
-            'kind': 'live_start_shizuku_bp1_003_choose_color',
-            'pos': pos,
-            'cn': str(p.get('cn', '') or ''),
-            'text': f"{pos}: 桜坂しずく ライブ開始時 → 好きなハート色を選ぶ",
-            'options': ['桃', '赤', '黄', '緑', '青', '紫'],
-        })
-        gs.log.append(f"[PENDING] {pos}: Shizuku bp1-003 choose heart color")
-        return
-
-    if kind == 'live_start_shizuku_bp1_003_choose_color':
-        pos = str(p.get('pos', '') or '').upper()
-        slot = gs.stage.get(pos)
-        if not slot:
-            gs.log.append(f"[SKIP] prompt: stage {pos} empty (ignored)")
-            return
-        ch = str(choice_str or '').strip()
-        m = {
-            '桃': 'pink',
-            '赤': 'red',
-            '黄': 'yellow',
-            '緑': 'green',
-            '青': 'blue',
-            '紫': 'purple',
-            'pink': 'pink',
-            'red': 'red',
-            'yellow': 'yellow',
-            'green': 'green',
-            'blue': 'blue',
-            'purple': 'purple',
-        }
-        col = m.get(ch, '')
-        if not col:
-            gs.log.append(f"[ERR] Shizuku bp1-003 choose color: invalid choice '{ch}'")
-            return
-        _grant_temp_heart(slot, col, 1)
-        gs.log.append(f"[AUTO] {pos}: Shizuku bp1-003 -> temp heart +1 {col} (until end of live)")
         return
 
     if kind == 'choose_stage_member_to_activate':
