@@ -1702,7 +1702,7 @@ def _solve_multi_live_allocations(lives: List[str], cards_db: Dict[str, CardInfo
     # Also include any colors that appear only in req (rare, but safe)
     for cn in lives:
         c = _get_card(cards_db, cn)
-        req = (c.required_hearts if c else {}) or {}
+        req = _effective_live_required_hearts(cn, c, globals().get('_CURRENT_GS_FOR_ATTEMPT'))
         for k in req.keys():
             kk = str(k).lower()
             if kk in ("any", "all"):
@@ -1719,7 +1719,7 @@ def _solve_multi_live_allocations(lives: List[str], cards_db: Dict[str, CardInfo
     reqs = []
     for cn in lives:
         ci = _get_card(cards_db, cn)
-        reqs.append((cn, (ci.required_hearts if ci else {}) or {}))
+        reqs.append((cn, _effective_live_required_hearts(cn, ci, globals().get('_CURRENT_GS_FOR_ATTEMPT'))))
 
     # try permutations of live card processing order to find any satisfiable plan
     import itertools
@@ -2532,6 +2532,7 @@ _PSYCHO_HEART_CN_CANON = 'PL!N-bp3-026'
 _STARS_WE_CHASE_CN_CANON = 'PL!N-bp4-028'
 _LOVE_U_MY_FRIENDS_CN_CANON = 'PL!N-bp3-030'
 _MONSTER_GIRLS_CN_CANON = 'PL!N-bp3-031'
+_EMOTION_CN_CANON = 'PL!N-bp4-027'
 _EMMA_BP3_008_CN_CANON = 'PL!N-bp3-008'
 def _live_score_delta_for_attempt(cn_live, lives_count, gs_turn):
     # Eutopia: if 3+ LIVE cards are set in this attempt, score +2 for Eutopia
@@ -2661,6 +2662,42 @@ def _monster_girls_wait_bonus(gs: GameState, cards_db: Dict[str, CardInfo]) -> i
     return int(n)
 
 
+
+def _emotion_success_count(gs: GameState) -> int:
+    if gs is None:
+        return 0
+    n = 0
+    for cn in list(getattr(gs, 'success_zone', []) or []):
+        try:
+            canon = _canon_cardno(cn)
+        except Exception:
+            canon = str(cn or '')
+        if canon == _EMOTION_CN_CANON:
+            n += 1
+    return int(n)
+
+
+def _emotion_required_any_bonus(cn_live, gs: GameState) -> int:
+    try:
+        canon = _canon_cardno(cn_live)
+    except Exception:
+        canon = str(cn_live or '')
+    if canon != _EMOTION_CN_CANON:
+        return 0
+    return 3 * int(_emotion_success_count(gs))
+
+
+def _effective_live_required_hearts(cn_live, ci, gs: GameState) -> Dict[str, int]:
+    req = dict((getattr(ci, 'required_hearts', {}) if ci else {}) or {})
+    try:
+        extra_any = int(_emotion_required_any_bonus(cn_live, gs))
+    except Exception:
+        extra_any = 0
+    if extra_any > 0:
+        req['any'] = int(req.get('any', 0) or 0) + extra_any
+    return req
+
+
 def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
     try:
         canon = _canon_cardno(cn_live)
@@ -2676,6 +2713,8 @@ def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[s
         return int(_love_u_my_friends_success_bonus(gs, cards_db))
     if canon == _MONSTER_GIRLS_CN_CANON:
         return int(_monster_girls_wait_bonus(gs, cards_db))
+    if canon == _EMOTION_CN_CANON:
+        return 2 * int(_emotion_success_count(gs))
     return 0
 
 
@@ -2745,12 +2784,14 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
         owned[k] = owned.get(k, 0) + int(v)
 
     gs.log.append(f"[ATTEMPT] LIVE={len(lives)} base={base} cheer={cheer} owned={owned}")
+    globals()['_CURRENT_GS_FOR_ATTEMPT'] = gs
     ok_all, alloc_map = _solve_multi_live_allocations(lives, cards_db, owned)
+    globals()['_CURRENT_GS_FOR_ATTEMPT'] = None
 
     if ok_all:
         for cn in lives:
             c = _get_card(cards_db, cn)
-            req = (c.required_hearts if c else {}) or {}
+            req = _effective_live_required_hearts(cn, c, gs)
             alloc = alloc_map.get(cn, {}) or {}
             gs.log.append(f"  live: OK {cn} req={req} alloc={alloc}")
     else:
@@ -2760,7 +2801,7 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
         failed_at = None
         for cn in lives:
             c = _get_card(cards_db, cn)
-            req = (c.required_hearts if c else {}) or {}
+            req = _effective_live_required_hearts(cn, c, gs)
             ok, alloc = can_satisfy_req(req, pool_trace)
             gs.log.append(f"  live: {'OK' if ok else 'NG'} {cn} req={req} alloc={alloc}")
             if ok:
@@ -2777,7 +2818,7 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
                     continue
                 if seen_fail:
                     c = _get_card(cards_db, cn)
-                    req = (c.required_hearts if c else {}) or {}
+                    req = _effective_live_required_hearts(cn, c, gs)
                     gs.log.append(f"  live: NG {cn} req={req} alloc={{'reason': 'not reached'}}")
 
 
