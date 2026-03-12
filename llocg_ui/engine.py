@@ -2438,6 +2438,8 @@ _RISE_UP_HIGH_CN_CANON = 'PL!N-bp4-029'
 _POPPIN_UP_CN_CANON = 'PL!N-bp1-026'
 _SOLITUDE_RAIN_CN_CANON = 'PL!N-bp1-027'
 _PSYCHO_HEART_CN_CANON = 'PL!N-bp3-026'
+_STARS_WE_CHASE_CN_CANON = 'PL!N-bp4-028'
+_LOVE_U_MY_FRIENDS_CN_CANON = 'PL!N-bp3-030'
 def _live_score_delta_for_attempt(cn_live, lives_count, gs_turn):
     # Eutopia: if 3+ LIVE cards are set in this attempt, score +2 for Eutopia
     # Rise Up High!: if turn==1 live phase, score +1 for this card
@@ -2506,6 +2508,45 @@ def _psycho_heart_success_bonus(gs: GameState, cards_db: Dict[str, CardInfo]) ->
     return 0
 
 
+
+def _stars_we_chase_waiting_bonus(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
+    names = set()
+    for cn in list(getattr(gs, 'green_room', []) or []):
+        ci = _get_card(cards_db, cn)
+        if not ci:
+            continue
+        if not _is_live_ci(ci):
+            continue
+        if '虹ヶ咲' not in str(getattr(ci, 'group', '') or ''):
+            continue
+        nm = str(
+            getattr(ci, 'name', '') or
+            getattr(ci, 'cardname', '') or
+            getattr(ci, 'title', '') or
+            cn
+        )
+        if nm:
+            names.add(nm)
+    n = len(names)
+    if n >= 6:
+        return 2
+    if n >= 4:
+        return 1
+    return 0
+
+
+
+def _love_u_my_friends_success_bonus(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
+    for cn in list(getattr(gs, '_yell_revealed_this_live', []) or []):
+        ci = _get_card(cards_db, cn)
+        if not ci:
+            continue
+        txt = str(getattr(ci, 'blade_heart_tags_json', '') or '')
+        if '(ALL)' in txt:
+            return 1
+    return 0
+
+
 def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
     try:
         canon = _canon_cardno(cn_live)
@@ -2515,6 +2556,10 @@ def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[s
         return int(_solitude_rain_stage_color_kinds(gs, cards_db))
     if canon == _PSYCHO_HEART_CN_CANON:
         return int(_psycho_heart_success_bonus(gs, cards_db))
+    if canon == _STARS_WE_CHASE_CN_CANON:
+        return int(_stars_we_chase_waiting_bonus(gs, cards_db))
+    if canon == _LOVE_U_MY_FRIENDS_CN_CANON:
+        return int(_love_u_my_friends_success_bonus(gs, cards_db))
     return 0
 
 
