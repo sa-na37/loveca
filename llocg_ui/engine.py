@@ -2758,6 +2758,25 @@ def cmd_ack(gs: GameState, rng: Optional[random.Random] = None) -> None:
 
 
 
+
+def cmd_toggle_stage_active(gs: GameState, cards_db: Dict[str, CardInfo], pos: str) -> None:
+    pos = str(pos or '').upper()
+    if pos not in ('L', 'C', 'R'):
+        gs.log.append(f"[ERR] toggle_stage_active: invalid pos={pos}")
+        return
+    slot = (gs.stage or {}).get(pos)
+    if not slot or not getattr(slot, 'cardnumber', ''):
+        gs.log.append(f"[ERR] toggle_stage_active: empty stage {pos}")
+        return
+    ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+    if ci and _is_live_ci(ci):
+        gs.log.append(f"[ERR] toggle_stage_active: not a member at {pos}")
+        return
+    slot.active = (not bool(getattr(slot, 'active', False)))
+    state = 'ACTIVE' if bool(slot.active) else 'WAIT'
+    gs.log.append(f"[STATE] {pos} -> {state} ({getattr(slot, 'cardnumber', '')})")
+
+
 def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, rng: Optional[random.Random] = None) -> None:
     # Activate ability on stage member at pos.
     pos = str(pos or "").upper()

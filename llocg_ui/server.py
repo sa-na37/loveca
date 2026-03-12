@@ -48,6 +48,7 @@ from .engine import (
     cmd_end_turn,
     cmd_next,
     cmd_activate_to_green,
+    cmd_toggle_stage_active,
     cmd_resolve_pending,
     post_process,
     _get_card,
@@ -1070,6 +1071,7 @@ class App:
             "end_turn",
             "toggle_debug",
             "activate_to_green",
+            "toggle_stage_active",
             "resolve_pending",
             "next",
             "mulligan_next",
@@ -1092,6 +1094,8 @@ class App:
             cmd_ack(self.gs)
         elif name == "activate_to_green":
             cmd_activate_to_green(self.gs, self.cards_db, str(payload.get("pos", "")))
+        elif name == "toggle_stage_active":
+            cmd_toggle_stage_active(self.gs, self.cards_db, str(payload.get("pos", "")))
         elif name == "resolve_pending":
             cmd_resolve_pending(
                 self.gs,
@@ -1362,6 +1366,9 @@ HTML = r'''<!doctype html>
   .actBtn{position:absolute;left:6px;right:6px;bottom:6px;padding:6px 6px;border-radius:10px;border:1px solid rgba(255,255,255,.18);
           background:rgba(0,0,0,.6);color:#fff;font-size:12px;cursor:pointer;}
   .actBtn:hover{background:rgba(0,0,0,.74);}
+  .toggleBtn{position:absolute;left:6px;right:6px;top:6px;padding:6px 6px;border-radius:10px;border:1px solid rgba(255,255,255,.18);
+          background:rgba(0,0,0,.6);color:#fff;font-size:12px;cursor:pointer;}
+  .toggleBtn:hover{background:rgba(0,0,0,.74);}
 
   /* popups */
   #mask{position:absolute;left:0;top:0;bottom:0;right:var(--sideW);background:rgba(0,0,0,.55);display:none;z-index:9000;}
@@ -1876,7 +1883,9 @@ HTML = r'''<!doctype html>
     const padTop = 22;
     const availW = zoneW - 10;
     const availH = zoneH - padTop - 10;
-    const sz = computeDispSize('portrait', availW, availH);
+    const isActive = !(slotObj && slotObj.active===false);
+    const mainOrient = isActive ? 'portrait' : 'landscape';
+    const sz = computeDispSize(mainOrient, availW, availH);
     // cache standard card size from hand area
     stdPortrait = {w: sz.w, h: sz.h};
     stdLandscape = {w: sz.h, h: sz.w};
@@ -1898,7 +1907,21 @@ HTML = r'''<!doctype html>
         }
       }
     }catch(e){}
-    const card = makeCard(cn, 'portrait', x, y, sz.w, sz.h, labelFor(cn), ()=>doPlayHere(), false, 400);
+    const card = makeCard(cn, mainOrient, x, y, sz.w, sz.h, labelFor(cn), ()=>doPlayHere(), false, 400);
+
+    // manual wait/active toggle button (debug convenience)
+    try{
+      const b2 = document.createElement('button');
+      b2.className = 'toggleBtn';
+      b2.textContent = isActive ? 'ウェイト' : 'アクティブ';
+      b2.addEventListener('click', async (ev)=>{
+        ev.stopPropagation();
+        st = await apiCmd('toggle_stage_active', {pos: slotKey});
+        updateTop();
+        render();
+      });
+      card.appendChild(b2);
+    }catch(e){}
 
     // activation button (if possible)
     try{
