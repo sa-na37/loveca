@@ -1883,7 +1883,7 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
         if not slot or not slot.active:
             continue
         ci = _get_card(cards_db, slot.cardnumber)
-        if not ci or not ci.abilities:
+        if not ci:
             continue
 
         # Special-case: 桜坂しずく bp1-003 live-start
@@ -1917,6 +1917,9 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                     _append_prompt(pr, f"{pos}: {getattr(ci, 'cardnumber', '') or ''} ライブ開始時")
         except Exception:
             pass
+
+        if not ci.abilities:
+            continue
 
         for ab in ci.abilities:
             if not isinstance(ab, dict):
