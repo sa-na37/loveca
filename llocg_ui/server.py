@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: stage_wait_landscape_ccw_20260319
+# BUILD_TAG: stage_wait_landscape_dupfix_20260319
 from __future__ import annotations
 
 """llocg_ui.server
@@ -2106,7 +2106,6 @@ HTML = r'''<!doctype html>
         }
       }
     }catch(e){}
-    const isWait = slotObj && (slotObj.active === false);
     const card = makeCard(cn, dispOrient, x, y, sz.w, sz.h, labelFor(cn), ()=>doPlayHere(), false, 400);
 
     // activation button (if possible)
