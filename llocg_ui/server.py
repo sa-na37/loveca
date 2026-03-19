@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: stage_toggle_active_restore_20260319
+# BUILD_TAG: stage_toggle_active_pushundo_fix_20260319
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1095,7 +1095,7 @@ class App:
         elif name == "activate_to_green":
             cmd_activate_to_green(self.gs, self.cards_db, str(payload.get("pos", "")))
         elif name == "toggle_stage_active":
-            push_undo(self.gs)
+            push_undo(self.gs, self.rng)
             cmd_toggle_stage_active(self.gs, self.cards_db, str(payload.get("pos", "")))
         elif name == "resolve_pending":
             cmd_resolve_pending(
