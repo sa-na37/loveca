@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: topk_display_cards_20260319
+# BUILD_TAG: topk_split_ui_20260319
 from __future__ import annotations
 
 """llocg_ui.server
@@ -2551,35 +2551,13 @@ HTML = r'''<!doctype html>
     // デッキ上K枚公開 → フィルタ不一致（全カード控え室へ）確認ポップアップ
     if(kind === 'view_topk_no_match'){
       const displayCards = Array.isArray(p.display_cards) ? p.display_cards : [];
+      // openCardListPopup のレンダリングロジックをそのまま利用
+      openCardListPopup('デッキ公開', displayCards, {
+        closable: false,
+        helperText: '条件に一致するカードがありません。全カードを控え室へ送ります。'
+      });
+      // popup種別を pending に上書き（resolve_pending を送るため）
       popup = {type:'pending', closable:false};
-      elModalTitle.textContent = 'デッキ公開';
-      elModalText.textContent = '条件に一致するカードがありません。全カードを控え室へ送ります。';
-      elModalCards.innerHTML = '';
-      elModalActions.innerHTML = '';
-
-      if(displayCards.length > 0){
-        const dimsP = standardSize('portrait');
-        const dimsL = standardSize('landscape');
-        const maxW = Math.max(dimsP.w, dimsL.w);
-        const maxH = Math.max(dimsP.h, dimsL.h);
-        const surf = document.createElement('div');
-        surf.className = 'surf';
-        surf.style.height = (maxH + 12) + 'px';
-        const step = maxW * 0.45;
-        const minW = (displayCards.length<=1) ? (maxW + 24) : (maxW + step*(displayCards.length-1) + 24);
-        surf.style.minWidth = minW + 'px';
-        displayCards.forEach((cn, i) => {
-          const s = String(cn).trim();
-          const orient = intrinsicOrient(s);
-          const d = (orient==='landscape') ? dimsL : dimsP;
-          const x = 12 + step*i + (maxW - d.w)/2;
-          const y = 6 + (maxH - d.h)/2;
-          const c = makeCard(s, orient, x, y, d.w, d.h, '', null, false, 100+i);
-          surf.appendChild(c);
-        });
-        elModalCards.appendChild(surf);
-      }
-
       const btnOk = document.createElement('button');
       btnOk.className = 'miniBtn';
       btnOk.textContent = '確認';
@@ -2594,11 +2572,10 @@ HTML = r'''<!doctype html>
         render();
       });
       elModalActions.appendChild(btnOk);
-      elMask.style.display = 'block';
       return;
     }
 
-    // デッキ上K枚公開 → candidatesのみ選択可（それ以外はグレーアウト）
+    // デッキ上K枚公開 → 候補(左)／その他(右) の左右分割選択UI
     if(kind === 'choose_from_topk'){
       const displayCards = Array.isArray(p.display_cards) ? p.display_cards
                          : (Array.isArray(p.options) ? p.options : []);
@@ -2606,7 +2583,8 @@ HTML = r'''<!doctype html>
       const optional   = (p.optional === true || p.optional === 'true' || candidates.length === 0);
       const helperText = String((p && (p.text || p.prompt || p.message))
                          ? (p.text || p.prompt || p.message)
-                         : (candidates.length > 0 ? '候補カードを選択してください' : '該当カードなし'));
+                         : (candidates.length > 0 ? '候補カードをクリックして選択' : '該当カードなし'));
+
       popup = {type:'pending', closable:false};
       elModalTitle.textContent = 'デッキ公開';
       elModalText.textContent = helperText;
@@ -2614,32 +2592,30 @@ HTML = r'''<!doctype html>
       elModalActions.innerHTML = '';
 
       const candidateSet = new Set(candidates.map(c => String(c).trim()));
+      const leftCards  = displayCards.filter(c => candidateSet.has(String(c).trim()));
+      const rightCards = displayCards.filter(c => !candidateSet.has(String(c).trim()));
 
-      if(displayCards.length > 0){
-        const dimsP = standardSize('portrait');
-        const dimsL = standardSize('landscape');
-        const maxW = Math.max(dimsP.w, dimsL.w);
-        const maxH = Math.max(dimsP.h, dimsL.h);
+      const dimsP = standardSize('portrait');
+      const dimsL = standardSize('landscape');
+      const maxW  = Math.max(dimsP.w, dimsL.w);
+      const maxH  = Math.max(dimsP.h, dimsL.h);
+
+      // surf（カード列）を生成するヘルパー
+      function makeSplitSurf(cards, clickable){
         const surf = document.createElement('div');
         surf.className = 'surf';
         surf.style.height = (maxH + 12) + 'px';
         const step = maxW * 0.45;
-        const minW = (displayCards.length<=1) ? (maxW + 24) : (maxW + step*(displayCards.length-1) + 24);
+        const minW = (cards.length <= 1) ? (maxW + 24) : (maxW + step*(cards.length-1) + 24);
         surf.style.minWidth = minW + 'px';
-
-        // 同名候補の重複を追跡（クリック時に正しいCNを送れるよう1回ずつ消費）
-        const candRemaining = candidates.map(c => String(c).trim());
-
-        displayCards.forEach((cn, i) => {
+        cards.forEach((cn, i) => {
           const s = String(cn).trim();
-          const isCandidate = candidateSet.has(s);
           const orient = intrinsicOrient(s);
-          const d = (orient==='landscape') ? dimsL : dimsP;
+          const d = (orient === 'landscape') ? dimsL : dimsP;
           const x = 12 + step*i + (maxW - d.w)/2;
-          const y = 6 + (maxH - d.h)/2;
-
+          const y = 6  + (maxH - d.h)/2;
           let clickFn = null;
-          if(isCandidate){
+          if(clickable){
             clickFn = async () => {
               st = await apiCmd('resolve_pending', {idx:0, choice: s});
               selHand = [];
@@ -2648,15 +2624,49 @@ HTML = r'''<!doctype html>
             };
           }
           const c = makeCard(s, orient, x, y, d.w, d.h, '', clickFn, false, 100+i);
-          if(!isCandidate){
+          if(!clickable){
             c.style.opacity = '0.35';
             c.style.filter  = 'grayscale(80%)';
             c.style.cursor  = 'default';
           }
           surf.appendChild(c);
         });
-        elModalCards.appendChild(surf);
+        return surf;
       }
+
+      // 左右分割ラッパー
+      const splitWrap = document.createElement('div');
+      splitWrap.style.cssText = 'display:flex;gap:0;align-items:flex-start;';
+
+      if(leftCards.length > 0){
+        const col = document.createElement('div');
+        col.style.cssText = 'flex:0 0 auto;';
+        const lbl = document.createElement('div');
+        lbl.style.cssText = 'color:#ffe066;font-size:11px;margin-bottom:3px;text-align:center;padding:0 12px;';
+        lbl.textContent = '▼ 候補（クリックで選択）';
+        col.appendChild(lbl);
+        col.appendChild(makeSplitSurf(leftCards, true));
+        splitWrap.appendChild(col);
+      }
+
+      if(leftCards.length > 0 && rightCards.length > 0){
+        const sep = document.createElement('div');
+        sep.style.cssText = 'width:2px;background:#444;align-self:stretch;flex-shrink:0;margin:0 8px;';
+        splitWrap.appendChild(sep);
+      }
+
+      if(rightCards.length > 0){
+        const col = document.createElement('div');
+        col.style.cssText = 'flex:0 0 auto;';
+        const lbl = document.createElement('div');
+        lbl.style.cssText = 'color:#777;font-size:11px;margin-bottom:3px;text-align:center;padding:0 12px;';
+        lbl.textContent = 'その他（選択不可）';
+        col.appendChild(lbl);
+        col.appendChild(makeSplitSurf(rightCards, false));
+        splitWrap.appendChild(col);
+      }
+
+      elModalCards.appendChild(splitWrap);
 
       if(optional){
         const bSkip = document.createElement('button');
