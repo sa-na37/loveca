@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: stage_wait_rotate_inplace_20260319
+# BUILD_TAG: stage_wait_landscape_sizefix_20260319
 from __future__ import annotations
 
 """llocg_ui.server
@@ -2083,12 +2083,11 @@ HTML = r'''<!doctype html>
     const availW = zoneW - 10;
     const availH = zoneH - padTop - 10;
     const isWait = slotObj && (slotObj.active === false);
-    // always size by portrait (spec: rotate in place, keep same pixel footprint)
+    // wait → landscape size + CCW rotation; active → portrait (spec 基本サイズ 451×630 / 630×451)
     const dispOrient = isWait ? 'landscape' : 'portrait';
-    const sz = computeDispSize('portrait', availW, availH);
-    // cache standard card size from hand area
-    stdPortrait = {w: sz.w, h: sz.h};
-    stdLandscape = {w: sz.h, h: sz.w};
+    const sz = computeDispSize(dispOrient, availW, availH);
+    // cache portrait reference for other areas (only update when portrait slot rendered)
+    if(!isWait){ stdPortrait = {w: sz.w, h: sz.h}; stdLandscape = {w: sz.h, h: sz.w}; }
     const x = (zoneW - sz.w)/2;
     const y = padTop + Math.max(0, (availH - sz.h)/2);
 
