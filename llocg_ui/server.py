@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: stage_wait_landscape_dupfix_20260319
+# BUILD_TAG: stage_wait_rotate_inplace_20260319
 from __future__ import annotations
 
 """llocg_ui.server
@@ -2083,11 +2083,12 @@ HTML = r'''<!doctype html>
     const availW = zoneW - 10;
     const availH = zoneH - padTop - 10;
     const isWait = slotObj && (slotObj.active === false);
-    // wait state: member card shown landscape (CCW -90° per spec)
+    // always size by portrait (spec: rotate in place, keep same pixel footprint)
     const dispOrient = isWait ? 'landscape' : 'portrait';
-    const sz = computeDispSize(dispOrient, availW, availH);
-    // cache standard card size from hand area (always use portrait reference)
-    if(!isWait){ stdPortrait = {w: sz.w, h: sz.h}; stdLandscape = {w: sz.h, h: sz.w}; }
+    const sz = computeDispSize('portrait', availW, availH);
+    // cache standard card size from hand area
+    stdPortrait = {w: sz.w, h: sz.h};
+    stdLandscape = {w: sz.h, h: sz.w};
     const x = (zoneW - sz.w)/2;
     const y = padTop + Math.max(0, (availH - sz.h)/2);
 
