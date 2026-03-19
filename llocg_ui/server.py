@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: cardno_regex_fix_20260319
+# BUILD_TAG: stage_toggle_active_restore_20260319
 from __future__ import annotations
 
 """llocg_ui.server
@@ -49,6 +49,7 @@ from .engine import (
     cmd_end_turn,
     cmd_next,
     cmd_activate_to_green,
+    cmd_toggle_stage_active,
     cmd_resolve_pending,
     post_process,
     _get_card,
@@ -1093,6 +1094,9 @@ class App:
             cmd_ack(self.gs)
         elif name == "activate_to_green":
             cmd_activate_to_green(self.gs, self.cards_db, str(payload.get("pos", "")))
+        elif name == "toggle_stage_active":
+            push_undo(self.gs)
+            cmd_toggle_stage_active(self.gs, self.cards_db, str(payload.get("pos", "")))
         elif name == "resolve_pending":
             cmd_resolve_pending(
                 self.gs,
@@ -1441,6 +1445,9 @@ HTML = r'''<!doctype html>
   .actBtn{position:absolute;left:6px;right:6px;bottom:6px;padding:6px 6px;border-radius:10px;border:1px solid rgba(255,255,255,.18);
           background:rgba(0,0,0,.6);color:#fff;font-size:12px;cursor:pointer;}
   .actBtn:hover{background:rgba(0,0,0,.74);}
+  .toggleActiveBtn{position:absolute;top:4px;left:4px;width:24px;height:24px;border-radius:50%;border:1px solid rgba(255,255,255,.4);
+                   background:rgba(0,0,0,.55);color:#fff;font-size:14px;line-height:22px;text-align:center;cursor:pointer;padding:0;z-index:10;}
+  .toggleActiveBtn:hover{background:rgba(80,180,255,.7);}
 
   /* popups */
   #mask{position:absolute;left:0;top:0;bottom:0;right:var(--sideW);background:rgba(0,0,0,.55);display:none;z-index:9000;}
@@ -2116,6 +2123,22 @@ HTML = r'''<!doctype html>
         });
         card.appendChild(b);
       }
+    }catch(e){}
+
+    // manual active/wait toggle button (top-left ↻)
+    try{
+      const isActive = slotObj && slotObj.active;
+      const tb = document.createElement('button');
+      tb.className = 'toggleActiveBtn';
+      tb.title = isActive ? 'ウェイトにする' : 'アクティブにする';
+      tb.textContent = '↻';
+      tb.addEventListener('click', async (ev)=>{
+        ev.stopPropagation();
+        st = await apiCmd('toggle_stage_active', {pos: slotKey});
+        updateTop();
+        render();
+      });
+      card.appendChild(tb);
     }catch(e){}
 
     inner.appendChild(card);
