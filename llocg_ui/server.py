@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: reorder_dnd_ui_20260317
+# BUILD_TAG: named_cards_cost_multi_ui_20260319
 from __future__ import annotations
 
 """llocg_ui.server
@@ -49,6 +49,7 @@ from .engine import (
     cmd_end_turn,
     cmd_next,
     cmd_activate_to_green,
+    cmd_toggle_stage_active,
     cmd_resolve_pending,
     post_process,
     _get_card,
@@ -1093,6 +1094,9 @@ class App:
             cmd_ack(self.gs)
         elif name == "activate_to_green":
             cmd_activate_to_green(self.gs, self.cards_db, str(payload.get("pos", "")))
+        elif name == "toggle_stage_active":
+            push_undo(self.gs, self.rng)
+            cmd_toggle_stage_active(self.gs, self.cards_db, str(payload.get("pos", "")))
         elif name == "resolve_pending":
             cmd_resolve_pending(
                 self.gs,
@@ -1216,6 +1220,84 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/state":
             data = json.dumps(self.app.state_json(), ensure_ascii=False).encode("utf-8")
             self._send(200, data, "application/json; charset=utf-8")
+            return
+
+        if u.path == "/cardinfo":
+            qs = parse_qs(u.query)
+            cn = unquote((qs.get("cn", [""])[0] or "").strip())
+            ci = _db_get_card(self.app.cards_db, cn) if cn else None
+            if not ci:
+                self._send(404, json.dumps({"error": "not found"}).encode(), "application/json")
+                return
+            abilities_text = []
+            for ab in (getattr(ci, 'abilities', None) or []):
+                if not isinstance(ab, dict):
+                    continue
+                trig      = str(ab.get('trigger', '')       or '')
+                ab_type   = str(ab.get('ability_type', '')  or '')
+                cond      = str(ab.get('conditions', '')     or '')
+                clauses   = ab.get('clauses', []) or []
+                # BODY trigger with empty clauses = DBの断片エントリ → スキップ
+                if trig == 'BODY' and not clauses:
+                    continue
+                # BODY trigger with clauses: ability_typeをヘッダに使う（例：常時）
+                header = trig if trig and trig != 'BODY' else (ab_type if ab_type and ab_type != 'UNKNOWN' else '')
+                parts = []
+                if header:
+                    parts.append(f'<{header}>')
+                if cond:
+                    parts.append(f'【{cond}】')
+                clause_texts = []
+                for cl in clauses:
+                    if not isinstance(cl, dict):
+                        continue
+                    cost = str(cl.get('cost_template', '') or '')
+                    eff  = str(cl.get('effect_template', '') or cl.get('raw', '') or '')
+                    # cost と eff を "コスト：効果" 形式で結合
+                    if cost and eff:
+                        clause_texts.append(f'{cost}：{eff}')
+                    elif eff:
+                        clause_texts.append(eff)
+                    elif cost:
+                        clause_texts.append(cost)
+                if not clause_texts:
+                    continue  # 内容のない断片エントリはスキップ
+                parts.extend(clause_texts)
+                abilities_text.append('\n'.join(parts))
+            # base hearts (MEMBER)
+            hearts = {}
+            try:
+                bh = getattr(ci, 'base_hearts', None) or {}
+                hearts = {k: v for k, v in bh.items() if v and int(v) > 0}
+            except Exception:
+                pass
+            # required hearts + score (LIVE)
+            required_hearts = {}
+            try:
+                rh = getattr(ci, 'required_hearts', None) or {}
+                required_hearts = {k: v for k, v in rh.items() if v and int(v) > 0}
+            except Exception:
+                pass
+            score = ''
+            try:
+                sv = getattr(ci, 'score', None)
+                if sv is not None:
+                    score = str(int(sv))
+            except Exception:
+                pass
+            info = {
+                "cn": cn,
+                "name":            str(getattr(ci, 'name',  '') or ''),
+                "type":            str(getattr(ci, 'type',  '') or ''),
+                "group":           str(getattr(ci, 'group', '') or ''),
+                "cost":            str(getattr(ci, 'cost',  '') or ''),
+                "blade":           str(getattr(ci, 'blade', '') or ''),
+                "hearts":          hearts,
+                "required_hearts": required_hearts,
+                "score":           score,
+                "abilities":       abilities_text,
+            }
+            self._send(200, json.dumps(info, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
             return
 
         if u.path == "/img":
@@ -1363,6 +1445,9 @@ HTML = r'''<!doctype html>
   .actBtn{position:absolute;left:6px;right:6px;bottom:6px;padding:6px 6px;border-radius:10px;border:1px solid rgba(255,255,255,.18);
           background:rgba(0,0,0,.6);color:#fff;font-size:12px;cursor:pointer;}
   .actBtn:hover{background:rgba(0,0,0,.74);}
+  .toggleActiveBtn{position:absolute;top:4px;left:4px;width:24px;height:24px;border-radius:50%;border:1px solid rgba(255,255,255,.4);
+                   background:rgba(0,0,0,.55);color:#fff;font-size:14px;line-height:22px;text-align:center;cursor:pointer;padding:0;z-index:10;}
+  .toggleActiveBtn:hover{background:rgba(80,180,255,.7);}
 
   /* popups */
   #mask{position:absolute;left:0;top:0;bottom:0;right:var(--sideW);background:rgba(0,0,0,.55);display:none;z-index:9000;}
@@ -1391,6 +1476,17 @@ HTML = r'''<!doctype html>
   .reorderCard img{width:100%;height:100%;object-fit:cover;display:block;border-radius:10px;}
   .reorderCard .idxBadge{position:absolute;top:4px;left:4px;background:rgba(0,0,0,.7);color:#f9a;font-size:11px;font-weight:700;padding:2px 6px;border-radius:6px;pointer-events:none;}
   .reorderCard .cnCap{position:absolute;left:0;right:0;bottom:0;font-size:10px;padding:3px 5px;background:linear-gradient(to top,rgba(0,0,0,.65),rgba(0,0,0,.0));color:#fff;border-bottom-left-radius:10px;border-bottom-right-radius:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;}
+  /* card detail panel */
+  #cardDetail{position:fixed;z-index:19000;background:#1a1a1a;border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:0;box-shadow:0 16px 60px rgba(0,0,0,.75);display:none;width:340px;max-height:80vh;overflow:hidden;flex-direction:row;}
+  #cardDetail.visible{display:flex;}
+  #cdImg{width:140px;min-width:140px;flex-shrink:0;position:relative;}
+  #cdImg img{width:100%;height:100%;object-fit:cover;border-radius:14px 0 0 14px;display:block;}
+  #cdBody{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:8px;}
+  #cdName{font-size:14px;font-weight:700;color:#fff;line-height:1.3;}
+  #cdMeta{font-size:11px;color:#aaa;display:flex;flex-wrap:wrap;gap:4px;}
+  #cdMeta span{background:rgba(255,255,255,.08);padding:2px 7px;border-radius:6px;}
+  #cdAbilities{font-size:11px;color:#ddd;line-height:1.55;white-space:pre-wrap;}
+  #cdClose{position:absolute;top:6px;right:8px;background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:50%;width:22px;height:22px;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:1;}
 </style>
 </head>
 <body>
@@ -1417,6 +1513,16 @@ HTML = r'''<!doctype html>
       </div>
     </div>
   </div>
+</div>
+
+<div id="cardDetail">
+  <div id="cdImg"><img id="cdImgEl" src="" alt=""/></div>
+  <div id="cdBody">
+    <div id="cdName"></div>
+    <div id="cdMeta"></div>
+    <div id="cdAbilities"></div>
+  </div>
+  <button id="cdClose">×</button>
 </div>
 
 <script>
@@ -1467,6 +1573,83 @@ HTML = r'''<!doctype html>
   let bannerTimer = null;
   let stdPortrait = null;
   let stdLandscape = null;
+
+  // ── Card detail panel ──
+  const elCardDetail  = document.getElementById('cardDetail');
+  const elCdImg       = document.getElementById('cdImgEl');
+  const elCdName      = document.getElementById('cdName');
+  const elCdMeta      = document.getElementById('cdMeta');
+  const elCdAbilities = document.getElementById('cdAbilities');
+  const elCdClose     = document.getElementById('cdClose');
+
+  elCdClose.addEventListener('click', ()=>{ elCardDetail.classList.remove('visible'); });
+  document.addEventListener('keydown', ev=>{ if(ev.key==='Escape') elCardDetail.classList.remove('visible'); });
+  document.addEventListener('click', ev=>{
+    if(elCardDetail.classList.contains('visible') && !elCardDetail.contains(ev.target)){
+      elCardDetail.classList.remove('visible');
+    }
+  });
+
+  async function showCardDetail(cn, anchorEl){
+    if(!cn) return;
+    elCdImg.src = imgUrl(cn);
+    elCdName.textContent = cn;
+    elCdMeta.innerHTML = '';
+    elCdAbilities.textContent = '読み込み中…';
+    elCardDetail.classList.add('visible');
+
+    // Position near the anchor element
+    if(anchorEl){
+      const rect = anchorEl.getBoundingClientRect();
+      let left = rect.right + 8;
+      let top  = rect.top;
+      // keep inside viewport
+      if(left + 350 > window.innerWidth)  left = rect.left - 350;
+      if(top  + 400 > window.innerHeight) top  = window.innerHeight - 410;
+      elCardDetail.style.left = Math.max(4, left) + 'px';
+      elCardDetail.style.top  = Math.max(4, top)  + 'px';
+    } else {
+      elCardDetail.style.left = '50%';
+      elCardDetail.style.top  = '50%';
+      elCardDetail.style.transform = 'translate(-50%,-50%)';
+    }
+
+    try {
+      const r = await fetch(`/cardinfo?cn=${encodeURIComponent(cn)}`, {cache:'no-store'});
+      if(!r.ok){ elCdAbilities.textContent = '（情報なし）'; return; }
+      const info = await r.json();
+      elCdName.textContent = info.name ? `${info.name}（${cn}）` : cn;
+
+      // meta chips
+      elCdMeta.innerHTML = '';
+      const chips = [];
+      if(info.type)  chips.push(info.type);
+      if(info.group) chips.push(info.group);
+      if(info.cost)  chips.push(`コスト${info.cost}`);
+      if(info.blade) chips.push(`ブレード${info.blade}`);
+      if(info.score) chips.push(`スコア${info.score}`);
+      if(info.hearts && Object.keys(info.hearts).length){
+        const jpMap = {pink:'桃',red:'赤',yellow:'黄',green:'緑',blue:'青',purple:'紫'};
+        const hStr = Object.entries(info.hearts).map(([k,v])=>`${jpMap[k]||k}×${v}`).join(' ');
+        chips.push(hStr);
+      }
+      if(info.required_hearts && Object.keys(info.required_hearts).length){
+        const jpMap = {pink:'桃',red:'赤',yellow:'黄',green:'緑',blue:'青',purple:'紫',any:'無色'};
+        const rStr = '必要: ' + Object.entries(info.required_hearts).map(([k,v])=>`${jpMap[k]||k}×${v}`).join(' ');
+        chips.push(rStr);
+      }
+      chips.forEach(c=>{ const s=document.createElement('span'); s.textContent=c; elCdMeta.appendChild(s); });
+
+      // abilities
+      if(info.abilities && info.abilities.length){
+        elCdAbilities.textContent = info.abilities.join('\n\n');
+      } else {
+        elCdAbilities.textContent = '（効果なし）';
+      }
+    } catch(e) {
+      elCdAbilities.textContent = '（取得失敗）';
+    }
+  }
 
   function cssScale(){
     const pad = 12;
@@ -1646,6 +1829,17 @@ HTML = r'''<!doctype html>
     }else{
       wrap.addEventListener('click', (ev)=>{ ev.stopPropagation(); });
     }
+
+    // 右クリックでカード詳細
+    const detailCn = (cn && cn !== '__BACK__' && cn !== '__ENERGY__') ? cn : null;
+    if(detailCn){
+      wrap.addEventListener('contextmenu', ev=>{
+        ev.preventDefault();
+        ev.stopPropagation();
+        showCardDetail(detailCn, wrap);
+      });
+    }
+
     return wrap;
   }
 
@@ -1888,10 +2082,16 @@ HTML = r'''<!doctype html>
     const padTop = 22;
     const availW = zoneW - 10;
     const availH = zoneH - padTop - 10;
-    const sz = computeDispSize('portrait', availW, availH);
-    // cache standard card size from hand area
-    stdPortrait = {w: sz.w, h: sz.h};
-    stdLandscape = {w: sz.h, h: sz.w};
+    const isWait = slotObj && (slotObj.active === false);
+    // spec: same scale for all cards; portrait is reference scale
+    const szPortrait = computeDispSize('portrait', availW, availH);
+    stdPortrait = {w: szPortrait.w, h: szPortrait.h};
+    stdLandscape = {w: szPortrait.h, h: szPortrait.w};
+    // wait → rotate in place at same scale (swap w/h, render as landscape)
+    const sz = isWait ? {w: szPortrait.h, h: szPortrait.w} : szPortrait;
+    const dispOrient = isWait ? 'landscape' : 'portrait';
+    // wait card is wider than zone → allow overflow so it's not clipped
+    inner.style.overflow = isWait ? 'visible' : 'hidden';
     const x = (zoneW - sz.w)/2;
     const y = padTop + Math.max(0, (availH - sz.h)/2);
 
@@ -1910,7 +2110,7 @@ HTML = r'''<!doctype html>
         }
       }
     }catch(e){}
-    const card = makeCard(cn, 'portrait', x, y, sz.w, sz.h, labelFor(cn), ()=>doPlayHere(), false, 400);
+    const card = makeCard(cn, dispOrient, x, y, sz.w, sz.h, labelFor(cn), ()=>doPlayHere(), false, 400);
 
     // activation button (if possible)
     try{
@@ -1929,6 +2129,22 @@ HTML = r'''<!doctype html>
         });
         card.appendChild(b);
       }
+    }catch(e){}
+
+    // manual active/wait toggle button (top-left ↻)
+    try{
+      const isActive = slotObj && slotObj.active;
+      const tb = document.createElement('button');
+      tb.className = 'toggleActiveBtn';
+      tb.title = isActive ? 'ウェイトにする' : 'アクティブにする';
+      tb.textContent = '↻';
+      tb.addEventListener('click', async (ev)=>{
+        ev.stopPropagation();
+        st = await apiCmd('toggle_stage_active', {pos: slotKey});
+        updateTop();
+        render();
+      });
+      card.appendChild(tb);
     }catch(e){}
 
     inner.appendChild(card);
@@ -2105,150 +2321,210 @@ HTML = r'''<!doctype html>
   }
 
   function showReorderPopup(p){
-    // Drag-and-drop card order picker for reorder_topk_keep_any.
-    // kept: already-fixed cards (prepended, greyed). pool: still to order (draggable).
-    const pool  = Array.isArray(p.pool)  ? p.pool.slice()  : [];
-    const kept  = Array.isArray(p.kept)  ? p.kept.slice()  : [];
-    // Full order to show = kept (fixed) + pool (draggable)
-    // We only let the user reorder pool; kept are shown as locked.
+    const pool = Array.isArray(p.pool) ? p.pool.slice() : [];
+    const kept = Array.isArray(p.kept) ? p.kept.slice() : [];
+
     popup = {type:'pending', closable:false};
     elModalTitle.textContent = 'カード順番を決める';
     elModalActions.innerHTML = '';
     elModalCards.innerHTML = '';
-
-    // hint bar
-    const hint = document.createElement('div');
-    hint.className = 'reorderHint';
-    hint.innerHTML = '<span class="arrow">←</span><span>左が山札の一番上</span><span style="margin-left:8px;color:#888;">｜ドラッグで並び替え ｜ 不要なカードはSkipで控え室へ</span>';
     elModalText.innerHTML = '';
-    elModalText.appendChild(hint);
 
     const dimsP = standardSize('portrait');
     const dimsL = standardSize('landscape');
 
-    // draggable order array (indices into pool)
-    let order = pool.slice(); // mutable ordering
+    let deckList    = pool.slice();
+    let discardList = [];
+    let dragSrc = null; // {list:'deck'|'discard', idx:number}
 
-    const row = document.createElement('div');
-    row.className = 'reorderRow';
+    // ── DOM ──
+    const cols = document.createElement('div');
+    cols.style.cssText = 'display:flex;gap:12px;align-items:stretch;overflow:hidden;';
 
-    let dragSrcIdx = null; // index in `order`
+    const leftWrap = document.createElement('div');
+    leftWrap.style.cssText = 'flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;';
+    const leftLabel = document.createElement('div');
+    leftLabel.style.cssText = 'font-size:12px;color:#f9a;font-weight:700;padding:2px 0;';
+    leftLabel.textContent = '← 山札に残す（左が一番上）';
+    const leftRow = document.createElement('div');
+    leftRow.className = 'reorderRow';
+    leftRow.style.cssText = 'flex-wrap:wrap;min-height:80px;border:1px dashed rgba(249,170,200,.3);border-radius:10px;padding:8px;';
+    leftWrap.appendChild(leftLabel);
+    leftWrap.appendChild(leftRow);
+
+    const rightWrap = document.createElement('div');
+    rightWrap.style.cssText = 'flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;';
+    const rightLabel = document.createElement('div');
+    rightLabel.style.cssText = 'font-size:12px;color:#aaa;font-weight:700;padding:2px 0;';
+    rightLabel.textContent = '控え室へ送る';
+    const rightRow = document.createElement('div');
+    rightRow.className = 'reorderRow';
+    rightRow.style.cssText = 'flex-wrap:wrap;min-height:80px;border:1px dashed rgba(180,180,180,.25);border-radius:10px;padding:8px;';
+    rightWrap.appendChild(rightLabel);
+    rightWrap.appendChild(rightRow);
+
+    cols.appendChild(leftWrap);
+    cols.appendChild(rightWrap);
+    elModalCards.appendChild(cols);
+
+    function getList(listName){ return listName === 'deck' ? deckList : discardList; }
+
+    // ── 中央化されたドロップ処理（インデックスずれを正しく補正）──
+    function handleDrop(dstListName, dstIdx){
+      if(!dragSrc) return;
+      const {list: srcListName, idx: srcIdx} = dragSrc;
+      dragSrc = null;
+
+      const srcList = getList(srcListName);
+      const dstList = getList(dstListName);
+
+      // srcListから取り出す
+      if(srcIdx < 0 || srcIdx >= srcList.length) return; // 安全チェック
+      const [moved] = srcList.splice(srcIdx, 1);
+
+      if(srcListName === dstListName){
+        // 同一リスト内並び替え：splice後にインデックスがずれるので補正
+        const adjustedDst = (srcIdx < dstIdx) ? dstIdx - 1 : dstIdx;
+        const clampedDst  = Math.max(0, Math.min(adjustedDst, dstList.length));
+        dstList.splice(clampedDst, 0, moved);
+      } else {
+        // 別リストへ移動
+        const clampedDst = Math.max(0, Math.min(dstIdx, dstList.length));
+        dstList.splice(clampedDst, 0, moved);
+      }
+      rebuild();
+    }
+
+    function makeCard(cn, listName, idx){
+      const intr = intrinsicOrient(cn);
+      const d = intr==='landscape' ? dimsL : dimsP;
+      const wrap = document.createElement('div');
+      wrap.className = 'reorderCard';
+      wrap.style.width  = d.w+'px';
+      wrap.style.height = d.h+'px';
+      wrap.draggable = true;
+
+      const img = document.createElement('img');
+      img.src = imgUrl(cn); img.alt = cn; img.draggable = false;
+
+      const badge = document.createElement('div');
+      badge.className = 'idxBadge';
+      if(listName === 'deck'){
+        badge.textContent = (kept.length + idx + 1)+'番目';
+        badge.style.background = 'rgba(249,100,160,.8)';
+      } else {
+        badge.textContent = '控え室';
+        badge.style.background = 'rgba(100,100,100,.8)';
+      }
+      const cap = document.createElement('div');
+      cap.className = 'cnCap'; cap.textContent = cn;
+
+      wrap.appendChild(img); wrap.appendChild(badge); wrap.appendChild(cap);
+
+      wrap.addEventListener('dragstart', ev=>{
+        dragSrc = {list: listName, idx};
+        wrap.classList.add('dragging');
+        ev.stopPropagation();
+      });
+      wrap.addEventListener('dragend', ()=>{
+        wrap.classList.remove('dragging');
+      });
+      wrap.addEventListener('dragover', ev=>{
+        ev.preventDefault();
+        ev.stopPropagation();
+        wrap.classList.add('dragover');
+      });
+      wrap.addEventListener('dragleave', ()=> wrap.classList.remove('dragover'));
+      wrap.addEventListener('drop', ev=>{
+        ev.preventDefault();
+        ev.stopPropagation();
+        wrap.classList.remove('dragover');
+        handleDrop(listName, idx);
+      });
+
+      return wrap;
+    }
 
     function rebuild(){
-      row.innerHTML = '';
-      // locked kept cards first
+      leftRow.innerHTML  = '';
+      rightRow.innerHTML = '';
+
+      // 確定済みカード（ロック表示、左列）
       kept.forEach((cn, ki)=>{
         const intr = intrinsicOrient(cn);
         const d = intr==='landscape' ? dimsL : dimsP;
         const wrap = document.createElement('div');
         wrap.className = 'reorderCard';
-        wrap.style.width = d.w+'px';
-        wrap.style.height = d.h+'px';
-        wrap.style.opacity = '0.5';
-        wrap.style.cursor = 'default';
-        wrap.title = '確定済み';
+        wrap.style.cssText = `width:${d.w}px;height:${d.h}px;opacity:.45;cursor:default;`;
         const img = document.createElement('img');
-        img.src = imgUrl(cn); img.alt = cn;
+        img.src = imgUrl(cn); img.alt = cn; img.draggable = false;
         const badge = document.createElement('div');
         badge.className = 'idxBadge';
-        badge.textContent = String(ki+1)+'番目';
+        badge.textContent = (ki+1)+'番目（確定）';
         const cap = document.createElement('div');
         cap.className = 'cnCap'; cap.textContent = cn;
         wrap.appendChild(img); wrap.appendChild(badge); wrap.appendChild(cap);
-        row.appendChild(wrap);
+        leftRow.appendChild(wrap);
       });
 
-      // draggable pool cards
-      order.forEach((cn, oi)=>{
-        const pos = kept.length + oi + 1;
-        const intr = intrinsicOrient(cn);
-        const d = intr==='landscape' ? dimsL : dimsP;
-        const wrap = document.createElement('div');
-        wrap.className = 'reorderCard';
-        wrap.style.width = d.w+'px';
-        wrap.style.height = d.h+'px';
-        wrap.draggable = true;
-        wrap.dataset.oi = String(oi);
-
-        const img = document.createElement('img');
-        img.src = imgUrl(cn); img.alt = cn;
-        img.draggable = false;
-
-        const badge = document.createElement('div');
-        badge.className = 'idxBadge';
-        badge.textContent = String(pos)+'番目';
-
-        const cap = document.createElement('div');
-        cap.className = 'cnCap'; cap.textContent = cn;
-
-        wrap.appendChild(img); wrap.appendChild(badge); wrap.appendChild(cap);
-
-        wrap.addEventListener('dragstart', ()=>{
-          dragSrcIdx = oi;
-          wrap.classList.add('dragging');
-        });
-        wrap.addEventListener('dragend', ()=>{
-          wrap.classList.remove('dragging');
-          dragSrcIdx = null;
-        });
-        wrap.addEventListener('dragover', ev=>{
-          ev.preventDefault();
-          wrap.classList.add('dragover');
-        });
-        wrap.addEventListener('dragleave', ()=>{
-          wrap.classList.remove('dragover');
-        });
-        wrap.addEventListener('drop', ev=>{
-          ev.preventDefault();
-          wrap.classList.remove('dragover');
-          if(dragSrcIdx === null || dragSrcIdx === oi) return;
-          // swap
-          const tmp = order[dragSrcIdx];
-          order[dragSrcIdx] = order[oi];
-          order[oi] = tmp;
-          rebuild();
-        });
-
-        row.appendChild(wrap);
+      deckList.forEach((cn, i)=>{
+        leftRow.appendChild(makeCard(cn, 'deck', i));
+      });
+      discardList.forEach((cn, i)=>{
+        rightRow.appendChild(makeCard(cn, 'discard', i));
       });
     }
 
-    rebuild();
-    elModalCards.appendChild(row);
+    // ── 行エリアのドロップゾーン（末尾追加）──1回だけ設定 ──
+    function setupRowDrop(row, listName){
+      row.addEventListener('dragover', ev=>{
+        // カード上でのdragoverはカード側で処理済み（stopPropagation）
+        // ここに来るのは行の空白部分のみ
+        ev.preventDefault();
+        row.style.outline = '2px solid rgba(255,255,255,.15)';
+      });
+      row.addEventListener('dragleave', ev=>{
+        if(!row.contains(ev.relatedTarget)) row.style.outline = '';
+      });
+      row.addEventListener('drop', ev=>{
+        ev.preventDefault();
+        row.style.outline = '';
+        // カードへのドロップはstopPropagationで止められているのでここは空白部分のみ
+        handleDrop(listName, getList(listName).length);
+      });
+    }
 
-    // Confirm button: send kept+order one by one, then skip
+    // ★ setupRowDrop は rebuild() の外で1回だけ呼ぶ
+    setupRowDrop(leftRow,  'deck');
+    setupRowDrop(rightRow, 'discard');
+
+    rebuild();
+
+    // ── ボタン ──
     const bConfirm = document.createElement('button');
     bConfirm.className = 'miniBtn';
-    bConfirm.style.background = 'rgba(249,170,200,.25)';
-    bConfirm.style.fontWeight = '700';
+    bConfirm.style.cssText = 'background:rgba(249,170,200,.25);font-weight:700;';
     bConfirm.textContent = '確定';
     bConfirm.addEventListener('click', async ()=>{
       bConfirm.disabled = true;
-      // Submit each card in order (kept are already submitted; only pool is pending)
-      for(const cn of order){
+      for(const cn of deckList){
         st = await apiCmd('resolve_pending', {idx:0, choice: cn});
       }
-      // Skip remaining (send skip to finalize; engine discards pool if any left)
       st = await apiCmd('resolve_pending', {idx:0, choice: 'skip'});
-      selHand = [];
-      updateTop();
-      render();
+      selHand = []; updateTop(); render();
     });
 
-    // Skip all: send skip immediately (all remaining go to green_room)
-    const bSkip = document.createElement('button');
-    bSkip.className = 'miniBtn';
-    bSkip.textContent = '全て控え室へ';
-    bSkip.addEventListener('click', async ()=>{
-      bSkip.disabled = true;
+    const bSkipAll = document.createElement('button');
+    bSkipAll.className = 'miniBtn';
+    bSkipAll.textContent = '全て控え室へ';
+    bSkipAll.addEventListener('click', async ()=>{
+      bSkipAll.disabled = true;
       st = await apiCmd('resolve_pending', {idx:0, choice: 'skip'});
-      selHand = [];
-      updateTop();
-      render();
+      selHand = []; updateTop(); render();
     });
 
     elModalActions.appendChild(bConfirm);
-    elModalActions.appendChild(bSkip);
+    elModalActions.appendChild(bSkipAll);
     elMask.style.display = 'block';
   }
 
@@ -2259,7 +2535,8 @@ HTML = r'''<!doctype html>
     const s = String(x).trim();
     if(!s) return false;
     // Exact cardnumber only. Labels like "C: PL!N-bp1-003 ライブ開始時" must NOT match.
-    return /^PL![A-Za-z0-9]+-(?:bp\d|pb\d|sd\d|PR|P\d)-\d{3}$/i.test(s);
+    // Prefixes: PL!, PL!N, PL!S, PL!SP, PL!HS, LL (series suffix optional after !)
+    return /^(?:PL!|LL)[A-Za-z0-9]*-(?:bp\d+|pb\d+|sd\d+|PR|P\d+)-\d{3}$/i.test(s);
   }
 
   function showPending(p){
@@ -2268,6 +2545,138 @@ HTML = r'''<!doctype html>
     // Drag-and-drop reorder UI
     if(kind === 'reorder_topk_keep_any'){
       showReorderPopup(p);
+      return;
+    }
+
+    // Multi-select: named_cards_cost_multi（控え室からN枚選択→デッキ下へ）
+    if(kind === 'named_cards_cost_multi'){
+      const total = (p && p.total) ? parseInt(p.total) : 0;
+      const opts = (p && Array.isArray(p.options)) ? p.options : [];
+      const title = String((p && (p.text || p.prompt || p.message)) ? (p.text || p.prompt || p.message) : `控え室から${total}枚選択`);
+
+      popup = {type:'pending', closable:false};
+      elModalTitle.textContent = '選択';
+      elModalText.textContent = title;
+      elModalCards.innerHTML = '';
+      elModalActions.innerHTML = '';
+
+      // Track selected card indices (allow duplicates by index)
+      const selected = [];  // array of indices into opts
+
+      const dimsP = standardSize('portrait');
+      const row = document.createElement('div');
+      row.className = 'choiceRow';
+
+      // Counter display
+      const counter = document.createElement('div');
+      counter.style.cssText = 'width:100%;text-align:center;color:#fff;font-size:13px;margin-bottom:4px;padding:2px 0;';
+      counter.textContent = `選択: 0 / ${total}`;
+
+      const doneBtn = document.createElement('button');
+      doneBtn.className = 'miniBtn';
+      doneBtn.textContent = `確定 (0/${total})`;
+      doneBtn.disabled = true;
+      doneBtn.style.opacity = '0.5';
+
+      // Track highlight per button (may need to pick same card twice)
+      const btnMap = {};  // index -> button element
+      const pickCount = {};  // cardnumber -> how many times picked
+
+      function updateCounter(){
+        const n = selected.length;
+        counter.textContent = `選択: ${n} / ${total}`;
+        doneBtn.textContent = `確定 (${n}/${total})`;
+        doneBtn.disabled = (n !== total);
+        doneBtn.style.opacity = (n === total) ? '1' : '0.5';
+
+        // Update all button highlights
+        const seen = {};
+        opts.forEach((cn, i) => {
+          const k = String(cn).trim();
+          seen[k] = (seen[k]||0);
+        });
+        const selCount = {};
+        selected.forEach(idx => {
+          const k = String(opts[idx]).trim();
+          selCount[k] = (selCount[k]||0) + 1;
+        });
+
+        opts.forEach((cn, i) => {
+          const b = btnMap[i];
+          if(!b) return;
+          const k = String(cn).trim();
+          // How many times is this specific index selected?
+          const timesThisIdx = selected.filter(x => x === i).length;
+          if(timesThisIdx > 0){
+            b.style.outline = `3px solid #ffe066`;
+            b.style.outlineOffset = '-3px';
+            const cap = b.querySelector('.choiceCap');
+            if(cap) cap.textContent = k + (timesThisIdx > 1 ? ` ×${timesThisIdx}` : ' ✓');
+          } else {
+            b.style.outline = '';
+            b.style.outlineOffset = '';
+            // restore original caption with dup count
+            const dup = opts.filter(x => String(x).trim() === k).length;
+            const nth = opts.slice(0, i).filter(x => String(x).trim() === k).length + 1;
+            const cap = b.querySelector('.choiceCap');
+            if(cap) cap.textContent = (dup > 1) ? `${k} (${nth}/${dup})` : k;
+          }
+        });
+      }
+
+      const dupCount = {};
+      opts.forEach(o => { const k=String(o).trim(); dupCount[k]=(dupCount[k]||0)+1; });
+      const dupSeen = {};
+
+      opts.forEach((opt, i) => {
+        const cn = String(opt).trim();
+        const b = document.createElement('button');
+        b.className = 'choiceBtn';
+        b.style.width = dimsP.w + 'px';
+        b.style.height = dimsP.h + 'px';
+
+        const img = document.createElement('img');
+        img.src = imgUrl(cn);
+        img.alt = cn;
+        b.appendChild(img);
+
+        const cap = document.createElement('div');
+        cap.className = 'choiceCap';
+        dupSeen[cn] = (dupSeen[cn]||0) + 1;
+        cap.textContent = (dupCount[cn] > 1) ? `${cn} (${dupSeen[cn]}/${dupCount[cn]})` : cn;
+        b.appendChild(cap);
+
+        btnMap[i] = b;
+
+        b.addEventListener('click', ev => {
+          ev.stopPropagation();
+          const alreadyIdx = selected.lastIndexOf(i);
+          if(alreadyIdx >= 0){
+            // deselect one instance
+            selected.splice(alreadyIdx, 1);
+          } else if(selected.length < total){
+            selected.push(i);
+          }
+          updateCounter();
+        });
+
+        row.appendChild(b);
+      });
+
+      doneBtn.addEventListener('click', async ev => {
+        ev.stopPropagation();
+        if(selected.length !== total) return;
+        const choiceStr = selected.map(i => String(opts[i]).trim()).join(',');
+        st = await apiCmd('resolve_pending', {idx:0, choice: choiceStr});
+        selHand = [];
+        updateTop();
+        render();
+      });
+
+      elModalCards.appendChild(counter);
+      elModalCards.appendChild(row);
+      elModalActions.appendChild(doneBtn);
+      elMask.style.display = 'block';
       return;
     }
 
@@ -2283,7 +2692,6 @@ HTML = r'''<!doctype html>
 
     // Special: 成功ライブカード置き場へ置くカード選択（Skip可）
     if(kind === 'pick_success_to_store'){
-      // Always render as the standard card-list popup (overlap + scroll), landscape.
       const cards = opts.filter(o=>looksLikeCardNo(o));
       openCardPickPopup('成功ライブ', cards, {helperText: pendText || '成功ライブカード置き場に置くカードを選択（Skip可）', forceLandscape:true, allowSkip:true});
       return;
@@ -2346,6 +2754,52 @@ HTML = r'''<!doctype html>
     }
 
     const allCardNo = opts.length && opts.every(o=>looksLikeCardNo(o));
+
+    // Stage position options (L/C/R のみ) → ステージカード画像で表示
+    const allStagePos = opts.length && opts.every(o=>['L','C','R'].includes(String(o).toUpperCase()));
+    if(allStagePos){
+      const row = document.createElement('div');
+      row.className = 'choiceRow';
+      const dimsP = standardSize('portrait');
+      opts.forEach(pos=>{
+        const posU = String(pos).toUpperCase();
+        const stage = (st && st.stage) ? st.stage : {};
+        const slotData = stage[posU];
+        const cn = slotData ? String(slotData.cardnumber || '') : '';
+        const b = document.createElement('button');
+        b.className = 'choiceBtn';
+        b.style.width  = dimsP.w + 'px';
+        b.style.height = dimsP.h + 'px';
+        if(cn && looksLikeCardNo(cn)){
+          const img = document.createElement('img');
+          img.src = imgUrl(cn); img.alt = cn;
+          b.appendChild(img);
+        }
+        const cap = document.createElement('div');
+        cap.className = 'choiceCap';
+        cap.textContent = posU + (cn ? `: ${cn}` : '（空）');
+        b.appendChild(cap);
+        b.addEventListener('click', async ev=>{
+          ev.stopPropagation();
+          st = await apiCmd('resolve_pending', {idx:0, choice: posU});
+          selHand=[]; updateTop(); render();
+        });
+        row.appendChild(b);
+      });
+      elModalCards.appendChild(row);
+      if(allowSkip){
+        const bSkip = document.createElement('button');
+        bSkip.className = 'miniBtn'; bSkip.textContent = 'Skip';
+        bSkip.addEventListener('click', async ev=>{
+          ev.stopPropagation();
+          st = await apiCmd('resolve_pending', {idx:0, choice:'skip'});
+          selHand=[]; updateTop(); render();
+        });
+        elModalActions.appendChild(bSkip);
+      }
+      elMask.style.display = 'block';
+      return;
+    }
 
     if(allCardNo){
       // Render as image list (clickable) in modalCards; keep card size unified
