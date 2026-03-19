@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: named_cards_cost_multi_ui_20260319
+# BUILD_TAG: named_cards_cost_multi_ui2_20260319
 from __future__ import annotations
 
 """llocg_ui.server
@@ -2663,9 +2663,12 @@ HTML = r'''<!doctype html>
         row.appendChild(b);
       });
 
+      let submitting = false;
       doneBtn.addEventListener('click', async ev => {
         ev.stopPropagation();
         if(selected.length !== total) return;
+        if(submitting) return;
+        submitting = true;
         const choiceStr = selected.map(i => String(opts[i]).trim()).join(',');
         st = await apiCmd('resolve_pending', {idx:0, choice: choiceStr});
         selHand = [];
