@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: stage_toggle_active_pushundo_fix_20260319
+# BUILD_TAG: stage_wait_rotate_cw_20260319
 from __future__ import annotations
 
 """llocg_ui.server
@@ -2104,7 +2104,8 @@ HTML = r'''<!doctype html>
         }
       }
     }catch(e){}
-    const card = makeCard(cn, 'portrait', x, y, sz.w, sz.h, labelFor(cn), ()=>doPlayHere(), false, 400);
+    const isWait = slotObj && slotObj.active === false;
+    const card = makeCard(cn, 'portrait', x, y, sz.w, sz.h, labelFor(cn), ()=>doPlayHere(), false, 400, false, isWait ? 'landscape' : null);
 
     // activation button (if possible)
     try{
