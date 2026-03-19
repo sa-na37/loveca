@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: topk_split_ui_20260319
+# BUILD_TAG: topk_split_empty_zone_20260319
 from __future__ import annotations
 
 """llocg_ui.server
@@ -909,6 +909,7 @@ class App:
                 _add(item.get("candidates"))
                 _add(item.get("cards"))
                 _add(item.get("shown"))
+                _add(item.get("display_cards"))
         except Exception:
             pass
 
@@ -1872,6 +1873,23 @@ HTML = r'''<!doctype html>
     inner.appendChild(box);
   }
 
+  // 空ゾーン：カードなし・バッジだけ表示（クリックがあれば登録）
+  function renderEmptyZone(zoneEl, countText, onClick){
+    const inner = zoneEl.querySelector('.zoneInner');
+    inner.style.cursor = onClick ? 'pointer' : 'default';
+    if(onClick){
+      zoneEl.onclick = (ev)=>{ ev.stopPropagation(); onClick(); };
+    }else{
+      zoneEl.onclick = null;
+    }
+    if(countText !== undefined && countText !== null){
+      const badge = document.createElement('div');
+      badge.className = 'countBadge';
+      badge.textContent = String(countText);
+      zoneEl.appendChild(badge);
+    }
+  }
+
   function renderTopCard(zoneEl, cn, wantOrient, countText, onClick){
     const inner = zoneEl.querySelector('.zoneInner');
     inner.style.cursor = onClick ? 'pointer' : 'default';
@@ -1923,7 +1941,7 @@ HTML = r'''<!doctype html>
     const availH = zoneH - padTop - 10;
 
     if(nShow<=0){
-      renderTopCard(zoneEl, '__BACK__', 'portrait', 0, onClick);
+      renderEmptyZone(zoneEl, 0, onClick);
       return;
     }
 
@@ -3080,32 +3098,32 @@ HTML = r'''<!doctype html>
       if(z.kind==='log') renderLog(zd, st.log || []);
     }
 
-    // DECK (always back)
+    // DECK: 山札あり→裏面表示、なし→何も表示しない
     const deckCount = (st.deck||[]).length;
-    renderTopCard(zels.deck, '__BACK__', 'portrait', deckCount, null);
+    if(deckCount > 0){
+      renderTopCard(zels.deck, '__BACK__', 'portrait', deckCount, null);
+    }else{
+      renderEmptyZone(zels.deck, 0, null);
+    }
 
-    // Waiting room (show top card if exists)
+    // Waiting room: カードあり→最後尾を表示、なし→何も表示しない
     const gr = Array.isArray(st.green_room) ? st.green_room : [];
-    const top = gr.length ? String(gr[gr.length-1]) : '__BACK__';
-    renderTopCard(zels.green, top, 'portrait', gr.length, ()=>{
-      if(gr.length){
+    if(gr.length){
+      renderTopCard(zels.green, String(gr[gr.length-1]), 'portrait', gr.length, ()=>{
         openCardListPopup('控え室', gr, {closable:true, helperText:''});
-      }else{
-        openCardListPopup('控え室', ['__BACK__'], {closable:true, helperText:'（空）'});
-      }
-    });
+      });
+    }else{
+      renderEmptyZone(zels.green, 0, null);
+    }
 
-    // Success live storage
+    // Success live storage: カードあり→縦スタック表示、なし→何も表示しない
     const sz = Array.isArray(st.success_zone) ? st.success_zone : [];
-    const topS = sz.length ? String(sz[sz.length-1]) : '__BACK__';
     if(sz.length){
       renderVertStack(zels.success, sz, 'landscape', sz.length, ()=>{
         openCardListPopup('成功ライブ', sz, {closable:true, helperText:'', forceLandscape:true});
       }, {overlap:0.70, maxShow:4, forceIntrinsicOrient:'landscape'});
     }else{
-      renderTopCard(zels.success, '__BACK__', 'portrait', 0, ()=>{
-        openCardListPopup('成功ライブ', ['__BACK__'], {closable:true, helperText:'（空）'});
-      });
+      renderEmptyZone(zels.success, null, null);
     }
 
 
