@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: wait_effects_20260319
+# BUILD_TAG: look_top_filtered_20260319
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -76,6 +76,17 @@ _EFFECT_RULES = [
     {"id": "set_opponent_wait_all_cost", "pattern": r"^相手のステージにいるすべてのコスト(?P<cost>\d+)以下のメンバーをウェイトにする。$", "op": "set_opponent_wait"},
     # Opponent self-choice wait
     {"id": "set_opponent_wait_self_choice", "pattern": r"^相手は、?自身のステージにいるアクティブ状態のメンバー1人をウェイトにする。$", "op": "set_opponent_wait_self_choice"},
+    # look_top with optional pick + type/group filter
+    # e.g. "デッキ上5枚見る。その中からライブカードを1枚公開して手札に加えてもよい。残り控え室"
+    {"id": "look_top_k_optional_type", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から(?P<kind>ライブ|メンバー)カードを1枚(?:まで)?公開して手札に加えてもよい。残りを控え室に置く。$", "op": "look_top_choose_filtered", "optional": True},
+    # with group filter: "その中から『G』のカードを1枚公開して手札に加えてもよい"
+    {"id": "look_top_k_optional_group", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から『(?P<group>[^』]+)』のカードを1枚(?:まで)?公開して手札に加えてもよい。残りを控え室に置く。$", "op": "look_top_choose_filtered", "optional": True},
+    # with group+type: "その中から『G』のライブカードを1枚公開して..."
+    {"id": "look_top_k_optional_group_type", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から『(?P<group>[^』]+)』の(?P<kind>ライブ|メンバー)カードを1枚(?:まで)?公開して手札に加えてもよい。残りを控え室に置く。$", "op": "look_top_choose_filtered", "optional": True},
+    # with name filter: "その中から「名前A」か「名前B」のメンバーカードを1枚公開して..."
+    {"id": "look_top_k_optional_names_type", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から(?P<names>(?:「[^」]+」(?:か「[^」]+」)*)の)?(?P<kind>ライブ|メンバー)カードを1枚公開して手札に加えてもよい。残りを控え室に置く。$", "op": "look_top_choose_filtered", "optional": True},
+    # 3-way split: 1->hand, 1->deck top, 1->green
+    {"id": "look_top_3_split", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から1枚を手札に加え、1枚をデッキの上に置き、1枚を控え室に置く。$", "op": "look_top_3way_split"},
 ]
 
 _EFFECT_RULES_COMPILED = [{**r, "re": re.compile(r["pattern"])} for r in _EFFECT_RULES]
@@ -468,6 +479,114 @@ def _enqueue_choose_from_topk(gs: 'GameState', k: int, rng: Optional[random.Rand
     gs.log.append(f'[PENDING] choose 1 from top {len(pool)} (rest -> waiting room)')
 
 
+def _enqueue_choose_from_topk_filtered(
+    gs: 'GameState', k: int, rng: Optional[random.Random],
+    cards_db: Dict[str, 'CardInfo'],
+    filter_kind: str = '',   # 'LIVE' or 'MEMBER' or ''
+    filter_group: str = '',  # group name or ''
+    filter_names: List[str] = None,  # card name list or []
+    optional: bool = False,
+) -> None:
+    """Look at top-k cards, let user pick 1 matching filter (optionally), rest to green."""
+    filter_names = filter_names or []
+    k = int(k or 0)
+    if k <= 0:
+        return
+    _rule_refresh_for_top_access(gs, rng, k, reason='look_top_filtered')
+    if not gs.deck:
+        gs.log.append('[INFO] look_top_filtered: deck empty')
+        return
+    pool = [gs.deck.pop(0) for _ in range(min(k, len(gs.deck)))]
+
+    # determine which cards satisfy the filter
+    def _matches(cn: str) -> bool:
+        ci = _get_card(cards_db, cn)
+        if not ci:
+            return False
+        if filter_kind:
+            t = str(getattr(ci, 'type', '') or '').upper()
+            if filter_kind == 'LIVE' and 'LIVE' not in t:
+                return False
+            if filter_kind == 'MEMBER' and 'MEMBER' not in t:
+                return False
+        if filter_group:
+            if filter_group not in str(getattr(ci, 'group', '') or ''):
+                return False
+        if filter_names:
+            name = str(getattr(ci, 'name', '') or getattr(ci, 'cardname', '') or cn)
+            if not any(n in name for n in filter_names):
+                return False
+        return True
+
+    candidates = [cn for cn in pool if _matches(cn)]
+
+    if not candidates:
+        gs.green_room.extend(pool)
+        gs.log.append(f'[AUTO] look_top_filtered: no match in pool {pool} -> all to waiting room')
+        return
+
+    if not optional and len(candidates) == 1:
+        pick = candidates[0]
+        rest = [c for c in pool if c != pick]
+        gs.hand.append(pick)
+        gs.green_room.extend(rest)
+        gs.log.append(f'[AUTO] look_top_filtered: only match {pick} -> hand; {len(rest)} -> waiting room')
+        return
+
+    label_parts = []
+    if filter_kind:
+        label_parts.append({'LIVE': 'ライブカード', 'MEMBER': 'メンバーカード'}.get(filter_kind, filter_kind))
+    if filter_group:
+        label_parts.append(f'『{filter_group}』')
+    if filter_names:
+        label_parts.append('・'.join(f'「{n}」' for n in filter_names))
+    label = '・'.join(label_parts) if label_parts else 'カード'
+    suffix = '（スキップ可）' if optional else ''
+
+    opts = list(candidates)
+    if optional:
+        opts.append('skip')
+
+    gs.pending.append({
+        'kind': 'choose_from_topk',
+        'text': f'デッキ上{len(pool)}枚から{label}を1枚手札へ{suffix}',
+        'options': opts,
+        'pool': list(pool),
+        'candidates': list(candidates),
+        'optional': optional,
+    })
+    gs.log.append(f'[PENDING] look_top_filtered: pool={len(pool)} candidates={len(candidates)} optional={optional}')
+
+
+def _enqueue_look_top_3way_split(
+    gs: 'GameState', k: int, rng: Optional[random.Random],
+) -> None:
+    """Look at k cards, user places 1->hand, 1->deck top, 1->green."""
+    k = int(k or 0)
+    if k <= 0:
+        return
+    _rule_refresh_for_top_access(gs, rng, k, reason='look_top_3way')
+    if not gs.deck:
+        gs.log.append('[INFO] look_top_3way: deck empty')
+        return
+    pool = [gs.deck.pop(0) for _ in range(min(k, len(gs.deck)))]
+    if len(pool) < 3:
+        # not enough cards: put all to hand (graceful fallback)
+        gs.hand.extend(pool)
+        gs.log.append(f'[AUTO] look_top_3way: only {len(pool)} cards -> all to hand')
+        return
+    gs.pending.append({
+        'kind': 'look_top_3way_step',
+        'text': f'デッキ上{len(pool)}枚から1枚を手札へ、1枚をデッキ上へ、1枚を控え室へ（順に選択）',
+        'options': list(pool),
+        'pool': list(pool),
+        'step': 'hand',   # hand -> topdeck -> green (auto)
+        'picked_hand': '',
+        'picked_top': '',
+    })
+    gs.log.append(f'[PENDING] look_top_3way: pool={pool}')
+
+
 def _enqueue_reorder_from_topk_keep_any(gs: 'GameState', k: int, rng: Optional[random.Random] = None) -> None:
     k = int(k or 0)
     if k <= 0:
@@ -544,6 +663,25 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
     if op == 'look_top_choose':
         k = int(gd.get('k', 0) or 0)
         _enqueue_choose_from_topk(gs, k, rng)
+        return
+
+    if op == 'look_top_choose_filtered':
+        k = int(gd.get('k', 0) or 0)
+        kind_jp = str(gd.get('kind', '') or '')
+        kind = {'ライブ': 'LIVE', 'メンバー': 'MEMBER'}.get(kind_jp, '')
+        group = str(gd.get('group', '') or rule.get('group', '') or '')
+        optional = bool(rule.get('optional', False))
+        # parse names like 「名前A」か「名前B」
+        names_raw = str(gd.get('names', '') or '')
+        names = re.findall(r'「([^」]+)」', names_raw) if names_raw else []
+        _enqueue_choose_from_topk_filtered(gs, k, rng, cards_db,
+                                           filter_kind=kind, filter_group=group,
+                                           filter_names=names, optional=optional)
+        return
+
+    if op == 'look_top_3way_split':
+        k = int(gd.get('k', 0) or 0)
+        _enqueue_look_top_3way_split(gs, k, rng)
         return
     if op == 'look_top_reorder_keep_any':
         k = int(gd.get('k', 0) or 0)
@@ -4190,10 +4328,26 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         if not pool:
             gs.log.append('[ERR] topk: pool missing')
             return
+        optional = bool(p.get('optional', False))
+        # skip: put all pool cards to waiting room
+        if choice_str.strip().lower() in ('skip', 'スキップ', '__skip__'):
+            if optional:
+                gs.green_room.extend(pool)
+                gs.log.append(f'[ACT] topk: skip chosen -> {len(pool)} cards to waiting room')
+            else:
+                gs.log.append('[ERR] topk: skip not allowed (not optional)')
+                gs.deck = pool + gs.deck
+            return
         cn = _canon_cardno(choice_str)
         pick_idx = None
+        candidates = list(p.get('candidates', pool) or pool)
         for i, x in enumerate(pool):
             if _canon_cardno(x) == cn:
+                # validate against candidates if filtered
+                if candidates and cn not in [_canon_cardno(c) for c in candidates]:
+                    gs.log.append(f'[ERR] topk: {cn} not in filtered candidates')
+                    gs.deck = pool + gs.deck
+                    return
                 pick_idx = i
                 break
         if pick_idx is None:
@@ -4205,6 +4359,50 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         gs.green_room.extend(pool)
         gs.log.append(f"[ACT] topk chose {pick_cn} -> hand; rest {len(pool)} -> waiting room")
         return
+
+    if kind == 'look_top_3way_step':
+        pool = list(p.get('pool', []) or [])
+        step = str(p.get('step', 'hand') or 'hand')
+        if not pool:
+            gs.log.append('[ERR] look_top_3way: pool missing')
+            return
+        cn = _canon_cardno(choice_str)
+        match_idx = None
+        for i, x in enumerate(pool):
+            if _canon_cardno(x) == cn:
+                match_idx = i
+                break
+        if match_idx is None:
+            gs.log.append(f'[ERR] look_top_3way: {cn} not in pool {pool}')
+            gs.deck = pool + gs.deck
+            return
+        picked = pool.pop(match_idx)
+        if step == 'hand':
+            gs.hand.append(picked)
+            gs.log.append(f'[ACT] look_top_3way: {picked} -> hand')
+            if len(pool) >= 2:
+                remaining = list(pool)
+                gs.pending.append({
+                    'kind': 'look_top_3way_step',
+                    'text': f'残り{len(remaining)}枚からデッキ上に置く1枚を選ぶ（残りは控え室）',
+                    'options': remaining,
+                    'pool': remaining,
+                    'step': 'topdeck',
+                    'picked_hand': picked,
+                    'picked_top': '',
+                })
+            else:
+                # only 1 left -> goes to deck top, none to green
+                if pool:
+                    gs.deck.insert(0, pool[0])
+                    gs.log.append(f'[AUTO] look_top_3way: {pool[0]} -> deck top (only card left)')
+        elif step == 'topdeck':
+            gs.deck.insert(0, picked)
+            gs.log.append(f'[ACT] look_top_3way: {picked} -> deck top')
+            gs.green_room.extend(pool)
+            gs.log.append(f'[AUTO] look_top_3way: {pool} -> waiting room')
+        return
+
 
 
 
