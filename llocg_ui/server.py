@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: stage_wait_landscape_sizefix_20260319
+# BUILD_TAG: stage_wait_samescale_20260319
 from __future__ import annotations
 
 """llocg_ui.server
@@ -2083,11 +2083,13 @@ HTML = r'''<!doctype html>
     const availW = zoneW - 10;
     const availH = zoneH - padTop - 10;
     const isWait = slotObj && (slotObj.active === false);
-    // wait → landscape size + CCW rotation; active → portrait (spec 基本サイズ 451×630 / 630×451)
+    // spec: same scale for all cards; portrait is reference scale
+    const szPortrait = computeDispSize('portrait', availW, availH);
+    stdPortrait = {w: szPortrait.w, h: szPortrait.h};
+    stdLandscape = {w: szPortrait.h, h: szPortrait.w};
+    // wait → rotate in place at same scale (swap w/h, render as landscape)
+    const sz = isWait ? {w: szPortrait.h, h: szPortrait.w} : szPortrait;
     const dispOrient = isWait ? 'landscape' : 'portrait';
-    const sz = computeDispSize(dispOrient, availW, availH);
-    // cache portrait reference for other areas (only update when portrait slot rendered)
-    if(!isWait){ stdPortrait = {w: sz.w, h: sz.h}; stdLandscape = {w: sz.h, h: sz.w}; }
     const x = (zoneW - sz.w)/2;
     const y = padTop + Math.max(0, (availH - sz.h)/2);
 
