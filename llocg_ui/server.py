@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: named_cards_cost_multi_ui2_20260319
+# BUILD_TAG: topk_display_cards_20260319
 from __future__ import annotations
 
 """llocg_ui.server
@@ -2545,6 +2545,137 @@ HTML = r'''<!doctype html>
     // Drag-and-drop reorder UI
     if(kind === 'reorder_topk_keep_any'){
       showReorderPopup(p);
+      return;
+    }
+
+    // デッキ上K枚公開 → フィルタ不一致（全カード控え室へ）確認ポップアップ
+    if(kind === 'view_topk_no_match'){
+      const displayCards = Array.isArray(p.display_cards) ? p.display_cards : [];
+      popup = {type:'pending', closable:false};
+      elModalTitle.textContent = 'デッキ公開';
+      elModalText.textContent = '条件に一致するカードがありません。全カードを控え室へ送ります。';
+      elModalCards.innerHTML = '';
+      elModalActions.innerHTML = '';
+
+      if(displayCards.length > 0){
+        const dimsP = standardSize('portrait');
+        const dimsL = standardSize('landscape');
+        const maxW = Math.max(dimsP.w, dimsL.w);
+        const maxH = Math.max(dimsP.h, dimsL.h);
+        const surf = document.createElement('div');
+        surf.className = 'surf';
+        surf.style.height = (maxH + 12) + 'px';
+        const step = maxW * 0.45;
+        const minW = (displayCards.length<=1) ? (maxW + 24) : (maxW + step*(displayCards.length-1) + 24);
+        surf.style.minWidth = minW + 'px';
+        displayCards.forEach((cn, i) => {
+          const s = String(cn).trim();
+          const orient = intrinsicOrient(s);
+          const d = (orient==='landscape') ? dimsL : dimsP;
+          const x = 12 + step*i + (maxW - d.w)/2;
+          const y = 6 + (maxH - d.h)/2;
+          const c = makeCard(s, orient, x, y, d.w, d.h, '', null, false, 100+i);
+          surf.appendChild(c);
+        });
+        elModalCards.appendChild(surf);
+      }
+
+      const btnOk = document.createElement('button');
+      btnOk.className = 'miniBtn';
+      btnOk.textContent = '確認';
+      let _vtSubmitting = false;
+      btnOk.addEventListener('click', async ev => {
+        ev.stopPropagation();
+        if(_vtSubmitting) return;
+        _vtSubmitting = true;
+        st = await apiCmd('resolve_pending', {idx:0, choice:'ok'});
+        selHand = [];
+        updateTop();
+        render();
+      });
+      elModalActions.appendChild(btnOk);
+      elMask.style.display = 'block';
+      return;
+    }
+
+    // デッキ上K枚公開 → candidatesのみ選択可（それ以外はグレーアウト）
+    if(kind === 'choose_from_topk'){
+      const displayCards = Array.isArray(p.display_cards) ? p.display_cards
+                         : (Array.isArray(p.options) ? p.options : []);
+      const candidates = Array.isArray(p.candidates) ? p.candidates : [];
+      const optional   = (p.optional === true || p.optional === 'true' || candidates.length === 0);
+      const helperText = String((p && (p.text || p.prompt || p.message))
+                         ? (p.text || p.prompt || p.message)
+                         : (candidates.length > 0 ? '候補カードを選択してください' : '該当カードなし'));
+      popup = {type:'pending', closable:false};
+      elModalTitle.textContent = 'デッキ公開';
+      elModalText.textContent = helperText;
+      elModalCards.innerHTML = '';
+      elModalActions.innerHTML = '';
+
+      const candidateSet = new Set(candidates.map(c => String(c).trim()));
+
+      if(displayCards.length > 0){
+        const dimsP = standardSize('portrait');
+        const dimsL = standardSize('landscape');
+        const maxW = Math.max(dimsP.w, dimsL.w);
+        const maxH = Math.max(dimsP.h, dimsL.h);
+        const surf = document.createElement('div');
+        surf.className = 'surf';
+        surf.style.height = (maxH + 12) + 'px';
+        const step = maxW * 0.45;
+        const minW = (displayCards.length<=1) ? (maxW + 24) : (maxW + step*(displayCards.length-1) + 24);
+        surf.style.minWidth = minW + 'px';
+
+        // 同名候補の重複を追跡（クリック時に正しいCNを送れるよう1回ずつ消費）
+        const candRemaining = candidates.map(c => String(c).trim());
+
+        displayCards.forEach((cn, i) => {
+          const s = String(cn).trim();
+          const isCandidate = candidateSet.has(s);
+          const orient = intrinsicOrient(s);
+          const d = (orient==='landscape') ? dimsL : dimsP;
+          const x = 12 + step*i + (maxW - d.w)/2;
+          const y = 6 + (maxH - d.h)/2;
+
+          let clickFn = null;
+          if(isCandidate){
+            clickFn = async () => {
+              st = await apiCmd('resolve_pending', {idx:0, choice: s});
+              selHand = [];
+              updateTop();
+              render();
+            };
+          }
+          const c = makeCard(s, orient, x, y, d.w, d.h, '', clickFn, false, 100+i);
+          if(!isCandidate){
+            c.style.opacity = '0.35';
+            c.style.filter  = 'grayscale(80%)';
+            c.style.cursor  = 'default';
+          }
+          surf.appendChild(c);
+        });
+        elModalCards.appendChild(surf);
+      }
+
+      if(optional){
+        const bSkip = document.createElement('button');
+        bSkip.className = 'miniBtn';
+        bSkip.textContent = 'Skip';
+        let _cfSubmitting = false;
+        bSkip.addEventListener('click', async ev => {
+          ev.stopPropagation();
+          if(_cfSubmitting) return;
+          _cfSubmitting = true;
+          st = await apiCmd('resolve_pending', {idx:0, choice:'skip'});
+          selHand = [];
+          updateTop();
+          render();
+        });
+        elModalActions.appendChild(bSkip);
+      }
+
+      elMask.style.display = 'block';
       return;
     }
 
