@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: named_cards_cost_rng_fix_20260319
+# BUILD_TAG: wait_effects_20260319
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -68,6 +68,14 @@ _EFFECT_RULES = [
     {"id": "activate_all_stage_members", "pattern": r"^自分のステージにいるすべてのメンバーをアクティブにする。$", "op": "activate_all_stage_members"},
     # Energy activate up to n
     {"id": "energy_activate_upto_n", "pattern": r"^エネルギーを(?P<n>\d+)枚までアクティブにする。$", "op": "energy_activate_upto"},
+    # Self-wait (as effect): "このメンバーをウェイトにする。"
+    {"id": "set_self_wait_member", "pattern": r"^このメンバーをウェイトにする。$", "op": "set_self_wait"},
+    # Opponent wait: "相手のステージにいるコストN以下のメンバーをM人までウェイトにする。"
+    {"id": "set_opponent_wait_upto_n", "pattern": r"^相手のステージにいるコスト(?P<cost>\d+)以下のメンバーを(?P<max_n>\d+)人までウェイト(?:状態に)?にする。$", "op": "set_opponent_wait"},
+    # Opponent wait all: "相手のステージにいるすべてのコストN以下のメンバーをウェイトにする。"
+    {"id": "set_opponent_wait_all_cost", "pattern": r"^相手のステージにいるすべてのコスト(?P<cost>\d+)以下のメンバーをウェイトにする。$", "op": "set_opponent_wait"},
+    # Opponent self-choice wait
+    {"id": "set_opponent_wait_self_choice", "pattern": r"^相手は、?自身のステージにいるアクティブ状態のメンバー1人をウェイトにする。$", "op": "set_opponent_wait_self_choice"},
 ]
 
 _EFFECT_RULES_COMPILED = [{**r, "re": re.compile(r["pattern"])} for r in _EFFECT_RULES]
@@ -139,6 +147,15 @@ def _cost_requires_self_to_green(cost_text: str) -> bool:
     t = (cost_text or "")
     return ("このメンバー" in t) and ("控え室" in t) and ("置" in t)
 
+
+def _cost_requires_self_wait(cost_text: str) -> bool:
+    """Return True if cost requires this member to become WAIT (but NOT sent to green)."""
+    t = str(cost_text or '').strip()
+    if 'ウェイトにする' in t and 'このメンバー' in t:
+        # Exclude self-to-green costs ("このメンバーをステージから控え室に置く")
+        if '控え室' not in t and 'ステージから' not in t:
+            return True
+    return False
 
 
 def _norm_digits_jp(s: str) -> str:
@@ -281,6 +298,9 @@ def can_activate_in_state(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: s
                                  for n in _names)]
                 if len(_cands) < _total:
                     continue
+            # self-wait cost check: member must currently be active
+            if _cost_requires_self_wait(cost) and not slot.active:
+                continue
             ok_any = True
         if ok_any:
             return True
@@ -660,6 +680,26 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
             gs.energy_wait -= actual
             gs.energy_active += actual
         gs.log.append(f'[AUTO] energy activate up to {n}: activated {actual} (wait={gs.energy_wait} active={gs.energy_active})')
+        return
+
+    if op == 'set_self_wait':
+        pos2 = str((ctx or {}).get('pos', '') or '').upper()
+        slot2 = gs.stage.get(pos2) if pos2 in ('L', 'C', 'R') else None
+        if slot2:
+            slot2.active = False
+            gs.log.append(f'[AUTO] {pos2}: {slot2.cardnumber} -> WAIT')
+        else:
+            gs.log.append(f'[WARN] set_self_wait: no member at pos={pos2}')
+        return
+
+    if op == 'set_opponent_wait':
+        cost_lim = int(gd.get('cost', 99) or 99)
+        max_n = int(gd.get('max_n', gd.get('n', 1)) or 1)
+        gs.log.append(f'[MANUAL] 相手のステージにいるコスト{cost_lim}以下のメンバーを{max_n}人までウェイトにする（手動で処理してください）')
+        return
+
+    if op == 'set_opponent_wait_self_choice':
+        gs.log.append('[MANUAL] 相手は自身のステージのアクティブメンバー1人をウェイトにする（手動で処理してください）')
         return
 
     gs.log.append(f"[WARN] effect op not implemented: {op}")
@@ -3676,6 +3716,11 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                 gs.green_room.append(slot.cardnumber)
                 gs.stage[pos] = None
                 gs.log.append(f"[COST] {pos}: {slot.cardnumber} -> waiting room")
+
+            # Cost: self-wait (member stays on stage but becomes WAIT)
+            if _cost_requires_self_wait(cost) and not _cost_requires_self_to_green(cost):
+                slot.active = False
+                gs.log.append(f"[COST] {pos}: {slot.cardnumber} -> WAIT (self-wait cost)")
 
             # Cost: pick named cards from green room, shuffle to deck bottom
             named_cost = _cost_named_cards_to_deck_bottom(cost)
