@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: abilities_effects_expand_20260317
+# BUILD_TAG: named_cards_cost_rng_fix_20260319
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -198,6 +198,26 @@ def _cost_move_active_energy_to_under(cost_text: str) -> bool:
     return bool(re.search(r"エネルギー.*?\d+枚.*?このメンバーの下", t))
 
 
+def _cost_named_cards_to_deck_bottom(cost_text: str) -> Dict[str, Any]:
+    """Parse cost like「園田海未」と「津島善子」と...合計N枚をシャッフルしてデッキの一番下に置く.
+
+    Returns {'names': [...], 'total': N} or {} if not matched.
+    """
+    t = (cost_text or '')
+    if 'デッキの一番下' not in t:
+        return {}
+    if 'シャッフル' not in t:
+        return {}
+    # extract 「名前」 patterns
+    names = re.findall(r'「([^」]+)」', t)
+    if not names:
+        return {}
+    # extract total count
+    m = re.search(r'合計\s*(\d+)\s*枚', _norm_digits_jp(t))
+    total = int(m.group(1)) if m else len(names)
+    return {'names': names, 'total': total}
+
+
 def can_activate_in_state(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: str) -> bool:
     pos = str(pos or '').upper()
     if pos not in ('L','C','R'):
@@ -250,6 +270,17 @@ def can_activate_in_state(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: s
             # special cost: move active energy to under
             if _cost_move_active_energy_to_under(cost) and int(gs.energy_active or 0) < 1:
                 continue
+            # named_cards_to_deck_bottom cost check: need enough matching cards in green room
+            named_cost = _cost_named_cards_to_deck_bottom(cost)
+            if named_cost:
+                _names = named_cost['names']
+                _total = named_cost['total']
+                _cands = [gcn for gcn in (gs.green_room or [])
+                          if any(n in str(getattr(_get_card(cards_db, gcn), 'name', '') or
+                                         getattr(_get_card(cards_db, gcn), 'cardname', '') or gcn)
+                                 for n in _names)]
+                if len(_cands) < _total:
+                    continue
             ok_any = True
         if ok_any:
             return True
@@ -2277,6 +2308,33 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                             'options': ['桃', '黄', '紫'],
                         }
                         _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
+                        continue
+                    # Optional hand-discard cost（「手札をN枚控え室に置いてもよい」「手札のXを1枚控え室に置いてもよい」）
+                    if '控え室に置いてもよい' in cost and _match_effect_template(eff):
+                        # 手札のライブカードを捨てるコスト
+                        m_live = re.search(r'手札のライブカードを(\d+)枚控え室に置いてもよい', cost)
+                        m_hand = re.search(r'手札を(\d+)枚控え室に置いてもよい', cost)
+                        if m_live:
+                            cost_kind = 'discard_live_from_hand'
+                            cost_n = int(m_live.group(1))
+                        elif m_hand:
+                            cost_kind = 'discard_from_hand'
+                            cost_n = int(m_hand.group(1))
+                        else:
+                            cost_kind = 'discard_from_hand'
+                            cost_n = 1
+                        pr = {
+                            'kind': 'live_start_pay_effect',
+                            'pos': pos,
+                            'cn': ci.cardnumber,
+                            'need_e': 0,
+                            'cost_kind': cost_kind,
+                            'cost_n': cost_n,
+                            'effect': eff,
+                            'text': f"{pos}: {ci.cardnumber} ライブ開始時 [{cost}] → {eff}",
+                            'options': ['pay', 'skip'],
+                        }
+                        _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
                     continue
                 need_e = _parse_energy_cost(cost)
                 if need_e <= 0:
@@ -3619,6 +3677,44 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                 gs.stage[pos] = None
                 gs.log.append(f"[COST] {pos}: {slot.cardnumber} -> waiting room")
 
+            # Cost: pick named cards from green room, shuffle to deck bottom
+            named_cost = _cost_named_cards_to_deck_bottom(cost)
+            if named_cost:
+                names = named_cost['names']
+                total = named_cost['total']
+                # candidates: cards in green room whose name contains any target name
+                cands = []
+                for gcn in list(gs.green_room):
+                    gci = _get_card(cards_db, gcn)
+                    gname = str(getattr(gci, 'name', '') or getattr(gci, 'cardname', '') or gcn)
+                    if any(n in gname for n in names):
+                        cands.append(gcn)
+                if len(cands) < total:
+                    gs.log.append(f"[ERR] named_cards_cost: コスト支払い不可。必要{total}枚、控え室に{len(cands)}枚（{names}）")
+                    # 消費済みコスト（エネルギー・自己控え室）を巻き戻す余裕はないので警告のみ
+                    return
+                else:
+                    # Mark once-per-turn before suspending
+                    if flags.get('once_per_turn'):
+                        try:
+                            gs.used_this_turn[akey] = 1
+                        except Exception:
+                            try:
+                                gs.used_this_turn = {akey: 1}
+                            except Exception:
+                                pass
+                    gs.pending.append({
+                        'kind': 'named_cards_cost_multi',
+                        'text': f'控え室から合計{total}枚を選択してデッキの一番下へ（{"・".join(names)}）',
+                        'options': cands,
+                        'total': total,
+                        'resume_effect': eff,
+                        'resume_pos': pos,
+                        'resume_source_cn': ci.cardnumber,
+                    })
+                    gs.log.append(f"[PENDING] named_cards_cost_multi: total={total} cands={cands}")
+                    return
+
             # Mark once-per-turn usage after costs are paid (even if effect creates pending)
             if flags.get('once_per_turn'):
                 try:
@@ -3698,10 +3794,12 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
 
 
 
-def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, choice: str) -> None:
+def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, choice: str, rng: Optional[random.Random] = None) -> None:
     if idx < 0 or idx >= len(gs.pending):
         gs.log.append("[ERR] resolve_pending: invalid idx")
         return
+    if rng is None:
+        rng = random.Random(gs.seed)
     p = gs.pending.pop(idx)
     kind = str(p.get("kind", "") or "")
     choice_str = str(choice or "").strip()
@@ -4064,6 +4162,54 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         return
 
 
+
+    if kind == 'named_cards_cost_multi':
+        total = int(p.get('total', 0) or 0)
+        options = list(p.get('options', []) or [])
+        resume_eff = str(p.get('resume_effect', '') or '')
+        resume_pos = str(p.get('resume_pos', '') or '')
+        resume_src = str(p.get('resume_source_cn', '') or '')
+
+        # choice_str はカンマ区切りの cardnumber リスト（server.py から送信）
+        raw_picks = [s.strip() for s in choice_str.split(',')
+                     if s.strip() and s.strip().lower() not in ('__done__', 'done', 'skip')]
+
+        if len(raw_picks) != total:
+            gs.log.append(f"[ERR] named_cards_cost_multi: 枚数不一致（必要{total}枚、選択{len(raw_picks)}枚）")
+            gs.pending.insert(0, p)  # 再度選択させる
+            return
+
+        picks_canon = [_canon_cardno(x) for x in raw_picks]
+        green_copy = list(gs.green_room)
+        picked = []
+        ok = True
+        for cn in picks_canon:
+            found = False
+            for i, gcn in enumerate(green_copy):
+                if _canon_cardno(gcn) == cn and gcn in options:
+                    picked.append(green_copy.pop(i))
+                    found = True
+                    break
+            if not found:
+                gs.log.append(f"[ERR] named_cards_cost_multi: {cn} が控え室/選択肢に見つからない")
+                ok = False
+                break
+
+        if not ok:
+            return
+
+        gs.green_room = green_copy
+        rng_local = random.Random(gs.seed)
+        rng_local.shuffle(picked)
+        gs.deck = gs.deck + picked
+        gs.log.append(f"[COST] named_cards_cost_multi: {picked} → デッキ下（シャッフル済）")
+
+        if resume_eff:
+            ctx = {'pos': resume_pos, 'source_cn': resume_src}
+            matched = try_apply_effect_template(gs, rng, cards_db, resume_eff, ctx)
+            if not matched:
+                gs.log.append(f"[WARN] named_cards_cost_multi: 効果テンプレート非対応: {resume_eff}")
+        return
 
     if kind == 'topdeck_from_green':
         rem = _safe_int(p.get('remaining', 0), 0)
@@ -4464,22 +4610,60 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
     # 1b) Live-start optional payment -> generic effect template (regex engine)
     if kind == "live_start_pay_effect":
         pos = str(p.get("pos", "") or "").upper()
-        need_e = _safe_int(p.get("need_e", 1), 1)
+        need_e = _safe_int(p.get("need_e", 0), 0)
+        cost_kind = str(p.get("cost_kind", "") or "")
+        cost_n = _safe_int(p.get("cost_n", 0), 0)
         eff = str(p.get("effect", "") or "").strip()
         slot = gs.stage.get(pos)
         if not slot:
             gs.log.append(f"[SKIP] prompt: stage {pos} empty (ignored)")
             return
         if choice_str.lower() in ("pay", "yes", "y", "1", "true"):
-            if not pay_energy(gs, need_e):
-                gs.log.append(f"[ERR] ability: insufficient energy for [E]{need_e} (have {gs.energy_active})")
+            # エネルギーコスト（即時支払い）
+            if need_e > 0:
+                if not pay_energy(gs, need_e):
+                    gs.log.append(f"[ERR] ability: insufficient energy for [E]{need_e} (have {gs.energy_active})")
+                    return
+            src_cn = str(p.get("cn", "") or "")
+            after_ctx = {"pos": pos, "source_cn": src_cn}
+            # 手札のライブカードを捨てるコスト → ユーザーに選ばせる
+            if cost_kind == 'discard_live_from_hand' and cost_n > 0:
+                live_in_hand = [c for c in list(gs.hand) if _is_live(_get_card(cards_db, c))]
+                if len(live_in_hand) < cost_n:
+                    gs.log.append(f"[ERR] live_start_pay_effect: not enough live cards in hand (need {cost_n}, have {len(live_in_hand)})")
+                    return
+                gs.pending.append({
+                    'kind': 'discard_from_hand',
+                    'remaining': cost_n,
+                    'text': f'手札のライブカードを{cost_n}枚控え室に置く',
+                    'options': live_in_hand,
+                    'after_effect_template': eff,
+                    'after_ctx': after_ctx,
+                    'after_source_cn': src_cn,
+                })
                 return
+            # 手札を捨てるコスト（汎用）→ ユーザーに選ばせる
+            if cost_kind == 'discard_from_hand' and cost_n > 0:
+                if len(gs.hand) < cost_n:
+                    gs.log.append(f"[ERR] live_start_pay_effect: not enough cards in hand (need {cost_n})")
+                    return
+                gs.pending.append({
+                    'kind': 'discard_from_hand',
+                    'remaining': cost_n,
+                    'text': f'手札を{cost_n}枚控え室に置く',
+                    'options': list(gs.hand),
+                    'after_effect_template': eff,
+                    'after_ctx': after_ctx,
+                    'after_source_cn': src_cn,
+                })
+                return
+            # コストなし（エネルギーのみ or コストなし）→ 即時効果適用
             rng = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
-            ok = try_apply_effect_template(gs, rng, cards_db, eff, {"pos": pos})
+            ok = try_apply_effect_template(gs, rng, cards_db, eff, after_ctx)
             if ok:
-                gs.log.append(f"[AUTO] {pos}: paid [E]{need_e} -> applied {eff}")
+                gs.log.append(f"[AUTO] {pos}: paid cost -> applied {eff}")
             else:
-                gs.log.append(f"[WARN] {pos}: paid [E]{need_e} but effect not matchable: {eff}")
+                gs.log.append(f"[WARN] {pos}: paid cost but effect not matchable: {eff}")
         else:
             gs.log.append(f"[SKIP] {pos}: live-start ability skipped")
         return
