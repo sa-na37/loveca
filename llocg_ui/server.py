@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: stage_wait_rotate_cw_20260319
+# BUILD_TAG: stage_wait_landscape_ccw_20260319
 from __future__ import annotations
 
 """llocg_ui.server
@@ -2082,10 +2082,12 @@ HTML = r'''<!doctype html>
     const padTop = 22;
     const availW = zoneW - 10;
     const availH = zoneH - padTop - 10;
-    const sz = computeDispSize('portrait', availW, availH);
-    // cache standard card size from hand area
-    stdPortrait = {w: sz.w, h: sz.h};
-    stdLandscape = {w: sz.h, h: sz.w};
+    const isWait = slotObj && (slotObj.active === false);
+    // wait state: member card shown landscape (CCW -90° per spec)
+    const dispOrient = isWait ? 'landscape' : 'portrait';
+    const sz = computeDispSize(dispOrient, availW, availH);
+    // cache standard card size from hand area (always use portrait reference)
+    if(!isWait){ stdPortrait = {w: sz.w, h: sz.h}; stdLandscape = {w: sz.h, h: sz.w}; }
     const x = (zoneW - sz.w)/2;
     const y = padTop + Math.max(0, (availH - sz.h)/2);
 
@@ -2104,8 +2106,8 @@ HTML = r'''<!doctype html>
         }
       }
     }catch(e){}
-    const isWait = slotObj && slotObj.active === false;
-    const card = makeCard(cn, 'portrait', x, y, sz.w, sz.h, labelFor(cn), ()=>doPlayHere(), false, 400, false, isWait ? 'landscape' : null);
+    const isWait = slotObj && (slotObj.active === false);
+    const card = makeCard(cn, dispOrient, x, y, sz.w, sz.h, labelFor(cn), ()=>doPlayHere(), false, 400);
 
     // activation button (if possible)
     try{
