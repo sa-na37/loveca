@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_start_discard_cost_select_20260319
+# BUILD_TAG: named_cards_cost_deck_bottom_20260319
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -196,6 +196,26 @@ def _cost_move_active_energy_to_under(cost_text: str) -> bool:
         return True
     # fallback: 'エネルギーカードを1枚' variants
     return bool(re.search(r"エネルギー.*?\d+枚.*?このメンバーの下", t))
+
+
+def _cost_named_cards_to_deck_bottom(cost_text: str) -> Dict[str, Any]:
+    """Parse cost like「園田海未」と「津島善子」と...合計N枚をシャッフルしてデッキの一番下に置く.
+
+    Returns {'names': [...], 'total': N} or {} if not matched.
+    """
+    t = (cost_text or '')
+    if 'デッキの一番下' not in t:
+        return {}
+    if 'シャッフル' not in t:
+        return {}
+    # extract 「名前」 patterns
+    names = re.findall(r'「([^」]+)」', t)
+    if not names:
+        return {}
+    # extract total count
+    m = re.search(r'合計\s*(\d+)\s*枚', _norm_digits_jp(t))
+    total = int(m.group(1)) if m else len(names)
+    return {'names': names, 'total': total}
 
 
 def can_activate_in_state(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: str) -> bool:
@@ -3646,6 +3666,42 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                 gs.stage[pos] = None
                 gs.log.append(f"[COST] {pos}: {slot.cardnumber} -> waiting room")
 
+            # Cost: pick named cards from green room, shuffle to deck bottom
+            named_cost = _cost_named_cards_to_deck_bottom(cost)
+            if named_cost:
+                names = named_cost['names']
+                total = named_cost['total']
+                # candidates: cards in green room whose name contains any target name
+                cands = []
+                for gcn in list(gs.green_room):
+                    gci = _get_card(cards_db, gcn)
+                    gname = str(getattr(gci, 'name', '') or getattr(gci, 'cardname', '') or gcn)
+                    if any(n in gname for n in names):
+                        cands.append(gcn)
+                if not cands:
+                    gs.log.append(f"[COST] named_cards_to_deck_bottom: no matching cards in green room ({names})")
+                else:
+                    # Mark once-per-turn before suspending
+                    if flags.get('once_per_turn'):
+                        try:
+                            gs.used_this_turn[akey] = 1
+                        except Exception:
+                            try:
+                                gs.used_this_turn = {akey: 1}
+                            except Exception:
+                                pass
+                    gs.pending.append({
+                        'kind': 'named_cards_to_deck_bottom',
+                        'text': f'控え室から合計{total}枚をデッキの一番下へ（{"・".join(names)}）',
+                        'options': cands,
+                        'total': total,
+                        'resume_effect': eff,
+                        'resume_pos': pos,
+                        'resume_source_cn': ci.cardnumber,
+                    })
+                    gs.log.append(f"[PENDING] named_cards_to_deck_bottom: pick up to {total} from {cands}")
+                    return
+
             # Mark once-per-turn usage after costs are paid (even if effect creates pending)
             if flags.get('once_per_turn'):
                 try:
@@ -4091,6 +4147,75 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         return
 
 
+
+    if kind == 'named_cards_to_deck_bottom':
+        total = int(p.get('total', 0) or 0)
+        options = list(p.get('options', []) or [])
+        resume_eff = str(p.get('resume_effect', '') or '')
+        resume_pos = str(p.get('resume_pos', '') or '')
+        resume_src = str(p.get('resume_source_cn', '') or '')
+        picked = list(p.get('picked', []) or [])
+        remaining = int(p.get('remaining', total) or total)
+
+        low = choice_str.lower()
+        # __done__ / skip → finish with however many picked
+        if low in ('__done__', 'skip', 'done') or remaining <= 0:
+            if picked:
+                rng_local = random.Random(gs.seed)
+                rng_local.shuffle(picked)
+                gs.deck = gs.deck + picked
+                gs.log.append(f"[COST] named_cards_to_deck_bottom: sent {picked} to deck bottom (shuffled)")
+            # resume effect
+            if resume_eff:
+                ctx = {'pos': resume_pos, 'source_cn': resume_src}
+                matched = try_apply_effect_template(gs, rng, cards_db, resume_eff, ctx)
+                if not matched:
+                    gs.log.append(f"[WARN] named_cards_to_deck_bottom: resume effect not matched: {resume_eff}")
+            return
+
+        # pick one card
+        cn = _canon_cardno(choice_str)
+        pick_i = None
+        for i, gcn in enumerate(list(gs.green_room)):
+            if _canon_cardno(gcn) == cn and gcn in options:
+                pick_i = i
+                break
+        if pick_i is None:
+            gs.log.append(f"[ERR] named_cards_to_deck_bottom: {cn} not found in options {options}")
+            return
+
+        pick_cn = gs.green_room.pop(pick_i)
+        picked.append(pick_cn)
+        new_remaining = remaining - 1
+        new_options = [o for o in options if o != pick_cn]
+        gs.log.append(f"[COST] named_cards_to_deck_bottom: picked {pick_cn} ({len(picked)}/{total})")
+
+        if new_remaining <= 0 or not new_options:
+            # done: flush
+            rng_local = random.Random(gs.seed)
+            rng_local.shuffle(picked)
+            gs.deck = gs.deck + picked
+            gs.log.append(f"[COST] named_cards_to_deck_bottom: sent {picked} to deck bottom (shuffled)")
+            if resume_eff:
+                ctx = {'pos': resume_pos, 'source_cn': resume_src}
+                matched = try_apply_effect_template(gs, rng, cards_db, resume_eff, ctx)
+                if not matched:
+                    gs.log.append(f"[WARN] named_cards_to_deck_bottom: resume effect not matched: {resume_eff}")
+            return
+
+        # continue selecting
+        gs.pending.insert(0, {
+            'kind': 'named_cards_to_deck_bottom',
+            'text': f'控え室から合計{total}枚をデッキの一番下へ（あと{new_remaining}枚、またはSkipで確定）',
+            'options': new_options + ['__done__'],
+            'total': total,
+            'remaining': new_remaining,
+            'picked': picked,
+            'resume_effect': resume_eff,
+            'resume_pos': resume_pos,
+            'resume_source_cn': resume_src,
+        })
+        return
 
     if kind == 'topdeck_from_green':
         rem = _safe_int(p.get('remaining', 0), 0)
