@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: stage_wait_samescale_20260319
+# BUILD_TAG: stage_wait_overflow_visible_20260319
 from __future__ import annotations
 
 """llocg_ui.server
@@ -2090,6 +2090,8 @@ HTML = r'''<!doctype html>
     // wait → rotate in place at same scale (swap w/h, render as landscape)
     const sz = isWait ? {w: szPortrait.h, h: szPortrait.w} : szPortrait;
     const dispOrient = isWait ? 'landscape' : 'portrait';
+    // wait card is wider than zone → allow overflow so it's not clipped
+    inner.style.overflow = isWait ? 'visible' : 'hidden';
     const x = (zoneW - sz.w)/2;
     const y = padTop + Math.max(0, (availH - sz.h)/2);
 
