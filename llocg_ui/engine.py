@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: look_top_filtered_20260319
+# BUILD_TAG: look_top_popup_20260319
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -475,6 +475,7 @@ def _enqueue_choose_from_topk(gs: 'GameState', k: int, rng: Optional[random.Rand
         'text': f'デッキ上から{len(pool)}枚を見る：その中から1枚を手札に加え、残りを控え室に置く',
         'options': list(pool),
         'pool': list(pool),
+        'display_cards': list(pool),
     })
     gs.log.append(f'[PENDING] choose 1 from top {len(pool)} (rest -> waiting room)')
 
@@ -520,9 +521,25 @@ def _enqueue_choose_from_topk_filtered(
 
     candidates = [cn for cn in pool if _matches(cn)]
 
+    label_parts = []
+    if filter_kind:
+        label_parts.append({'LIVE': 'ライブカード', 'MEMBER': 'メンバーカード'}.get(filter_kind, filter_kind))
+    if filter_group:
+        label_parts.append(f'『{filter_group}』')
+    if filter_names:
+        label_parts.append('・'.join(f'「{n}」' for n in filter_names))
+    label = '・'.join(label_parts) if label_parts else 'カード'
+
     if not candidates:
-        gs.green_room.extend(pool)
-        gs.log.append(f'[AUTO] look_top_filtered: no match in pool {pool} -> all to waiting room')
+        # Show pool as popup even when no match; user confirms to send all to green
+        gs.pending.append({
+            'kind': 'view_topk_no_match',
+            'text': f'デッキ上{len(pool)}枚を公開（{label}なし）→ 全て控え室へ',
+            'options': ['確認'],
+            'pool': list(pool),
+            'display_cards': list(pool),
+        })
+        gs.log.append(f'[PENDING] look_top_filtered: no match, showing pool={pool} for confirmation')
         return
 
     if not optional and len(candidates) == 1:
@@ -533,14 +550,6 @@ def _enqueue_choose_from_topk_filtered(
         gs.log.append(f'[AUTO] look_top_filtered: only match {pick} -> hand; {len(rest)} -> waiting room')
         return
 
-    label_parts = []
-    if filter_kind:
-        label_parts.append({'LIVE': 'ライブカード', 'MEMBER': 'メンバーカード'}.get(filter_kind, filter_kind))
-    if filter_group:
-        label_parts.append(f'『{filter_group}』')
-    if filter_names:
-        label_parts.append('・'.join(f'「{n}」' for n in filter_names))
-    label = '・'.join(label_parts) if label_parts else 'カード'
     suffix = '（スキップ可）' if optional else ''
 
     opts = list(candidates)
@@ -552,6 +561,7 @@ def _enqueue_choose_from_topk_filtered(
         'text': f'デッキ上{len(pool)}枚から{label}を1枚手札へ{suffix}',
         'options': opts,
         'pool': list(pool),
+        'display_cards': list(pool),
         'candidates': list(candidates),
         'optional': optional,
     })
@@ -580,6 +590,7 @@ def _enqueue_look_top_3way_split(
         'text': f'デッキ上{len(pool)}枚から1枚を手札へ、1枚をデッキ上へ、1枚を控え室へ（順に選択）',
         'options': list(pool),
         'pool': list(pool),
+        'display_cards': list(pool),
         'step': 'hand',   # hand -> topdeck -> green (auto)
         'picked_hand': '',
         'picked_top': '',
@@ -4321,6 +4332,13 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         _r = p.get('_resume') if isinstance(p, dict) else None
         if _r:
             gs.pending.append(_r)
+        return
+
+    if kind == 'view_topk_no_match':
+        # User confirmed viewing the pool; send all to green room
+        pool = list(p.get('pool', []) or [])
+        gs.green_room.extend(pool)
+        gs.log.append(f'[ACT] view_topk_no_match: confirmed -> {len(pool)} cards to waiting room')
         return
 
     if kind == 'choose_from_topk':
