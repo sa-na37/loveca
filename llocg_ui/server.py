@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: stage_select_wait_badge_fix_20260323
+# BUILD_TAG: stage_select_wait_rotate_badge_20260323
 from __future__ import annotations
 
 """llocg_ui.server
@@ -2932,12 +2932,24 @@ HTML = r'''<!doctype html>
         const isWait = slotData && (slotData.active === false);
         const b = document.createElement('button');
         b.className = 'choiceBtn';
-        b.style.width  = dimsP.w + 'px';
-        b.style.height = dimsP.h + 'px';
+        b.style.width    = dimsP.w + 'px';
+        b.style.height   = dimsP.h + 'px';
         b.style.position = 'relative';
+        b.style.overflow = 'hidden';
         if(cn && looksLikeCardNo(cn)){
           const img = document.createElement('img');
           img.src = imgUrl(cn); img.alt = cn;
+          if(isWait){
+            // WAIT: ボタン内でセンタリングしつつ -90度回転
+            // imgをlandscapeサイズ(w=dimsP.h, h=dimsP.w)にしてtranslate+rotateで中央配置
+            img.style.width           = dimsP.h + 'px';
+            img.style.height          = dimsP.w + 'px';
+            img.style.position        = 'absolute';
+            img.style.top             = '50%';
+            img.style.left            = '50%';
+            img.style.transform       = 'translate(-50%, -50%) rotate(-90deg)';
+            img.style.transformOrigin = 'center center';
+          }
           b.appendChild(img);
         }
         // WAITバッジ（右上オーバーレイ）
