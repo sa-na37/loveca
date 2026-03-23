@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: stage_select_wait_rotate_badge_20260323
+# BUILD_TAG: stage_select_wait_landscape_20260323
 from __future__ import annotations
 
 """llocg_ui.server
@@ -2930,20 +2930,22 @@ HTML = r'''<!doctype html>
         const slotData = stage[posU];
         const cn = slotData ? String(slotData.cardnumber || '') : '';
         const isWait = slotData && (slotData.active === false);
+        // WAITカードは枠ごとlandscape（横向き）にする
+        const btnDims = isWait ? dimsL : dimsP;
         const b = document.createElement('button');
         b.className = 'choiceBtn';
-        b.style.width    = dimsP.w + 'px';
-        b.style.height   = dimsP.h + 'px';
+        b.style.width    = btnDims.w + 'px';
+        b.style.height   = btnDims.h + 'px';
         b.style.position = 'relative';
         b.style.overflow = 'hidden';
         if(cn && looksLikeCardNo(cn)){
           const img = document.createElement('img');
           img.src = imgUrl(cn); img.alt = cn;
           if(isWait){
-            // WAIT: ボタン内でセンタリングしつつ -90度回転
-            // imgをlandscapeサイズ(w=dimsP.h, h=dimsP.w)にしてtranslate+rotateで中央配置
-            img.style.width           = dimsP.h + 'px';
-            img.style.height          = dimsP.w + 'px';
+            // WAIT: portrait画像をlandscape枠の中央に -90度回転して表示
+            // 回転後に枠にフィットするよう幅=枠h, 高さ=枠w にしてからtranslate+rotate
+            img.style.width           = btnDims.h + 'px';
+            img.style.height          = btnDims.w + 'px';
             img.style.position        = 'absolute';
             img.style.top             = '50%';
             img.style.left            = '50%';
