@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: topk_split_empty_zone_20260319
+# BUILD_TAG: stage_select_wait_badge_20260323
 from __future__ import annotations
 
 """llocg_ui.server
@@ -2923,23 +2923,43 @@ HTML = r'''<!doctype html>
       const row = document.createElement('div');
       row.className = 'choiceRow';
       const dimsP = standardSize('portrait');
+      const dimsL = standardSize('landscape');
       opts.forEach(pos=>{
         const posU = String(pos).toUpperCase();
         const stage = (st && st.stage) ? st.stage : {};
         const slotData = stage[posU];
         const cn = slotData ? String(slotData.cardnumber || '') : '';
+        const isWait = slotData && (slotData.active === false);
+        // WAITはステージ表示と同様に横向き（landscape）で表示
+        const dims = isWait ? dimsL : dimsP;
         const b = document.createElement('button');
         b.className = 'choiceBtn';
-        b.style.width  = dimsP.w + 'px';
-        b.style.height = dimsP.h + 'px';
+        b.style.width  = dims.w + 'px';
+        b.style.height = dims.h + 'px';
         if(cn && looksLikeCardNo(cn)){
           const img = document.createElement('img');
           img.src = imgUrl(cn); img.alt = cn;
+          if(isWait){
+            // WAIT: ステージと同じく反時計回り90度回転
+            img.style.transform = 'rotate(-90deg)';
+            img.style.transformOrigin = 'center center';
+            img.style.width = dims.h + 'px';
+            img.style.height = dims.w + 'px';
+            img.style.position = 'absolute';
+            img.style.top = '0'; img.style.left = '0';
+          }
           b.appendChild(img);
+        }
+        // WAITバッジ
+        if(isWait){
+          const badge = document.createElement('div');
+          badge.style.cssText = 'position:absolute;top:6px;right:6px;background:rgba(220,120,0,.88);color:#fff;font-size:10px;font-weight:bold;padding:2px 6px;border-radius:4px;pointer-events:none;z-index:10;';
+          badge.textContent = 'WAIT';
+          b.appendChild(badge);
         }
         const cap = document.createElement('div');
         cap.className = 'choiceCap';
-        cap.textContent = posU + (cn ? `: ${cn}` : '（空）');
+        cap.textContent = posU + (cn ? `: ${cn}` : '（空）') + (isWait ? ' [WAIT]' : '');
         b.appendChild(cap);
         b.addEventListener('click', async ev=>{
           ev.stopPropagation();
