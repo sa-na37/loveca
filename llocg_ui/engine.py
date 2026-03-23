@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_start_imgsel_selfwait_20260323
+# BUILD_TAG: topdeck_any_cond_draw_20260323
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -51,6 +51,7 @@ _EFFECT_RULES = [
     {"id": "retrieve_waiting_live_group_n", "pattern": r"^自分の控え室から『(?P<group>[^』]+)』のライブカードを(?P<n>\d+)枚手札に加える。$", "op": "retrieve_from_waiting_room", "card_kind": "LIVE"},
     {"id": "look_top_k_choose_1_rest_waiting", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から1枚を手札に加え、残りを控え室に置く。$", "op": "look_top_choose"},
         {"id": "look_top_k_reorder_keep_any_rest_waiting", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から好きな枚数を好きな順番でデッキの上に置き、残りを控え室に置く。$", "op": "look_top_reorder_keep_any"},
+    {"id": "topdeck_green_any_upto1", "pattern": r"^自分の控え室からカードを1枚までデッキの一番上に置く。$", "op": "topdeck_from_green", "card_kind": "ANY", "allow_less": True},
     {"id": "topdeck_green_member_n", "pattern": r"^自分の控え室にあるメンバーカード(?P<n>\d+)枚を好きな順番でデッキの一番上に置く。$", "op": "topdeck_from_green", "card_kind": "MEMBER", "allow_less": False},
     {"id": "topdeck_green_live_group_upto_n", "pattern": r"^自分の控え室にある『(?P<group>[^』]+)』のライブカードを(?P<n>\d+)枚まで好きな順番でデッキの上に置く。$", "op": "topdeck_from_green", "card_kind": "LIVE", "allow_less": True},
     {"id": "energy_put_wait_n", "pattern": r"^自分のエネルギーデッキから、エネルギーカードを(?P<n>\d+)枚ウェイト状態で置く。$", "op": "energy_put_wait"},
@@ -68,6 +69,11 @@ _EFFECT_RULES = [
     {"id": "activate_all_stage_members", "pattern": r"^自分のステージにいるすべてのメンバーをアクティブにする。$", "op": "activate_all_stage_members"},
     # Energy activate up to n
     {"id": "energy_activate_upto_n", "pattern": r"^エネルギーを(?P<n>\d+)枚までアクティブにする。$", "op": "energy_activate_upto"},
+    # Conditional draw
+    {"id": "draw_if_energy_gte", "pattern": r"^自分のエネルギーが(?P<n>\d+)枚以上ある場合、カードを1枚引く。$", "op": "draw_if", "cond": "energy_gte"},
+    {"id": "draw_if_stage_cost_gte", "pattern": r"^自分のステージにコスト(?P<n>\d+)以上のメンバーがいる場合、カードを1枚引く。$", "op": "draw_if", "cond": "stage_member_cost_gte"},
+    {"id": "draw_if_success_nonempty", "pattern": r"^自分の成功ライブカード置き場にカードがある場合、カードを1枚引く。$", "op": "draw_if", "cond": "success_nonempty"},
+    {"id": "draw_if_green_size_gte", "pattern": r"^自分の控え室にカードが(?P<n>\d+)枚以上ある場合、カードを1枚引く。$", "op": "draw_if", "cond": "green_size_gte"},
     # Self-wait (as effect): "このメンバーをウェイトにする。"
     {"id": "set_self_wait_member", "pattern": r"^このメンバーをウェイトにする。$", "op": "set_self_wait"},
     # Opponent wait: "相手のステージにいるコストN以下のメンバーをM人までウェイトにする。"
@@ -429,6 +435,7 @@ def _enqueue_topdeck_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo], 
             continue
         if kind == 'MEMBER' and not _is_member_ci(ci):
             continue
+        # ANY: no type filter
         if group and group not in str(getattr(ci, 'group', '') or ''):
             continue
         cands.append(cn)
@@ -663,7 +670,7 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         n = int(gd.get('n', 1) or 1)
         group = str(gd.get('group', '') or '')
         allow_less = bool(rule.get('allow_less', False))
-        if kind not in ('LIVE','MEMBER'):
+        if kind not in ('LIVE','MEMBER','ANY'):
             gs.log.append('[WARN] topdeck: unsupported kind')
             return
         _enqueue_topdeck_from_green(gs, cards_db, kind=kind, n=n, group=group, allow_less=allow_less)
@@ -849,6 +856,44 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
 
     if op == 'set_opponent_wait_self_choice':
         gs.log.append('[MANUAL] 相手は自身のステージのアクティブメンバー1人をウェイトにする（手動で処理してください）')
+        return
+
+    if op == 'draw_if':
+        cond = str(rule.get('cond', '') or '')
+        n = int(gd.get('n', 0) or 0)
+        group = str(gd.get('group', '') or rule.get('group', '') or '')
+        name = str(gd.get('name', '') or rule.get('name', '') or '')
+        met = False
+        if cond == 'energy_gte':
+            met = (int(gs.energy_active or 0) + int(gs.energy_wait or 0)) >= n
+        elif cond == 'stage_member_cost_gte':
+            for slot in gs.stage.values():
+                if slot:
+                    ci2 = _get_card(cards_db, slot.cardnumber)
+                    if ci2 and int(getattr(ci2, 'cost', 0) or 0) >= n:
+                        met = True; break
+        elif cond == 'success_nonempty':
+            met = len(gs.success_pile) > 0
+        elif cond == 'green_size_gte':
+            met = len(gs.green_room) >= n
+        elif cond == 'stage_has_other_group_member':
+            trigger_cn = str(getattr(gs, '_trigger_cn', '') or '')
+            for slot in gs.stage.values():
+                if slot and slot.cardnumber != trigger_cn:
+                    ci2 = _get_card(cards_db, slot.cardnumber)
+                    if ci2 and group and group in str(getattr(ci2, 'group', '') or ''):
+                        met = True; break
+        elif cond == 'stage_has_named_member':
+            for slot in gs.stage.values():
+                if slot:
+                    ci2 = _get_card(cards_db, slot.cardnumber)
+                    if ci2 and name and name in str(getattr(ci2, 'name', '') or ''):
+                        met = True; break
+        if met:
+            drew = draw(gs, 1, rng)
+            gs.log.append(f'[AUTO] draw_if ({cond}): condition met -> drew {drew}')
+        else:
+            gs.log.append(f'[AUTO] draw_if ({cond}): condition not met -> skip')
         return
 
     gs.log.append(f"[WARN] effect op not implemented: {op}")
@@ -2542,10 +2587,10 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                                         'cn': ci.cardnumber,
                                         'op': op_free,
                                         'op_params': gd_free,
-                                        'text': f"{pos}: {ci.cardnumber} ライブ開始時 \u2192 {eff}\uff08Skip\u53ef\uff09",
-                                        'options': opts_act,
+                                        'text': f"{pos}: {ci.cardnumber} ライブ開始時 → {eff}",
+                                        'options': ['do', 'skip'],
                                     }
-                                    _append_prompt(pr, f"{pos}: {ci.cardnumber} \u30e9\u30a4\u30d6\u958b\u59cb\u6642")
+                                    _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
                     continue
                 need_e = _parse_energy_cost(cost)
                 if need_e <= 0:
@@ -3853,8 +3898,12 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                 continue
             cost = str(cl.get('cost_template', '') or '')
             eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
-            # effが空でもself-waitコストだけ適用してcontinue
+            # コストのみのclause（effect_templateが空）も処理する
+            # 例：「このメンバーをウェイトにする：カードを1枚引き、手札を1枚控え室に置く。」
+            # の場合、cost_template="このメンバーをウェイトにする" / effect_template="" のclauseが
+            # 先に来ることがあるため、コストだけ適用してcontinueする
             if not eff:
+                # effが空でもコスト（self-wait）だけ処理してcontinue
                 if _cost_requires_self_wait(cost) and not _cost_requires_self_to_green(cost):
                     if slot and slot.active:
                         slot.active = False
@@ -4548,6 +4597,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             if picked:
                 gs.green_room.extend(picked)
             return
+        # want_kind == 'ANY': no type check
         if want_group and (want_group not in str(getattr(ci2, 'group', '') or '')):
             gs.log.append(f"[ERR] topdeck_from_green: group mismatch {pick_cn}")
             gs.green_room.append(pick_cn)
@@ -4573,6 +4623,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                 continue
             if want_kind == 'MEMBER' and not _is_member_ci(ci):
                 continue
+            # want_kind == 'ANY': no type filter
             if want_group and (want_group not in str(getattr(ci, 'group', '') or '')):
                 continue
             cands.append(x)
@@ -4879,19 +4930,9 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         if not slot:
             gs.log.append(f"[SKIP] live_start_free_effect: stage {pos} empty")
             return
-        if choice_str.upper() in ("L", "C", "R"):
-            # server側のallStagePosブランチからポジション直接選択
+        if choice_str.lower() in ("do", "yes", "y", "1", "true"):
             if op_free == "activate_stage_member":
-                target = choice_str.upper()
-                target_slot = gs.stage.get(target)
-                if target_slot and not target_slot.active:
-                    target_slot.active = True
-                    gs.log.append(f"[AUTO] {pos}: live_start activate → {target} set ACTIVE")
-                else:
-                    gs.log.append(f"[WARN] live_start_free_effect: {target} is already active or empty")
-        elif choice_str.lower() in ("do", "yes", "y", "1", "true"):
-            # 旧フォーマット互換
-            if op_free == "activate_stage_member":
+                # ウェイト状態のメンバーから選択させる
                 wait_opts = [p2 for p2 in ('L','C','R') if gs.stage.get(p2) and not gs.stage[p2].active]
                 if not wait_opts:
                     gs.log.append(f"[INFO] live_start_free_effect: no wait member to activate")
