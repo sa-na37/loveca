@@ -2407,8 +2407,10 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
 
     for pos in ("L", "C", "R"):
         slot = gs.stage.get(pos)
-        if not slot or not slot.active:
+        if not slot:
             continue
+        # ウェイト状態でもライブ開始時効果は発火する（ただし後続の能力チェックで
+        # コスト「このメンバーをウェイトにする」系はすでにウェイトなのでスキップ）
         ci = _get_card(cards_db, slot.cardnumber)
         if not ci or not ci.abilities:
             continue
@@ -3117,6 +3119,10 @@ def cmd_set(gs: GameState, rng: random.Random, indices: List[int]) -> None:
 
 
 def cmd_yell(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo]) -> None:
+    # ライブ開始時プロンプトが未処理なら先に処理させる（ブレード変化が確定してからYELL）
+    if _enqueue_live_start_prompts(gs, cards_db) > 0:
+        gs.log.append("[INFO] yell: live-start prompts queued, resolve them first.")
+        return
     n = stage_blade(gs, cards_db)
     if n <= 0:
         gs.log.append("[YELL] 0 (no blade on active stage members)")
