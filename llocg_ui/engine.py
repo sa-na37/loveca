@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: look_top_popup_20260319
+# BUILD_TAG: live_start_free_effect_20260319
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -2524,6 +2524,26 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                             'options': ['pay', 'skip'],
                         }
                         _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
+                        continue
+                    # コストなし・フリー効果（activate_stage_member等）
+                    if not cost.strip() or cost.strip() == eff.strip():
+                        m_free = _match_effect_template(eff)
+                        if m_free:
+                            r_free, gd_free = m_free
+                            op_free = r_free.get('op', '')
+                            if op_free == 'activate_stage_member':
+                                opts_act = [p2 for p2 in ('L','C','R') if gs.stage.get(p2) and not gs.stage[p2].active]
+                                if opts_act:
+                                    pr = {
+                                        'kind': 'live_start_free_effect',
+                                        'pos': pos,
+                                        'cn': ci.cardnumber,
+                                        'op': op_free,
+                                        'op_params': gd_free,
+                                        'text': f"{pos}: {ci.cardnumber} ライブ開始時 → {eff}",
+                                        'options': ['do', 'skip'],
+                                    }
+                                    _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
                     continue
                 need_e = _parse_energy_cost(cost)
                 if need_e <= 0:
@@ -4841,6 +4861,35 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         return
 
     # 1) Live-start optional payment -> temp blade
+    if kind == "live_start_free_effect":
+        pos = str(p.get("pos", "") or "").upper()
+        op_free = str(p.get("op", "") or "")
+        slot = gs.stage.get(pos)
+        if not slot:
+            gs.log.append(f"[SKIP] live_start_free_effect: stage {pos} empty")
+            return
+        if choice_str.lower() in ("do", "yes", "y", "1", "true"):
+            if op_free == "activate_stage_member":
+                # ウェイト状態のメンバーから選択させる
+                wait_opts = [p2 for p2 in ('L','C','R') if gs.stage.get(p2) and not gs.stage[p2].active]
+                if not wait_opts:
+                    gs.log.append(f"[INFO] live_start_free_effect: no wait member to activate")
+                    return
+                if len(wait_opts) == 1:
+                    target = wait_opts[0]
+                    gs.stage[target].active = True
+                    gs.log.append(f"[AUTO] {pos}: live_start activate → {target} set ACTIVE")
+                else:
+                    gs.pending.append({
+                        'kind': 'choose_stage_member_to_activate',
+                        'text': f'{pos}: ステージのメンバーを1人アクティブにする（対象を選択）',
+                        'options': wait_opts,
+                    })
+                    gs.log.append(f"[PENDING] {pos}: live_start activate member choice")
+        else:
+            gs.log.append(f"[SKIP] {pos}: live_start_free_effect ({op_free}) skipped")
+        return
+
     if kind == "live_start_blade":
         pos = str(p.get("pos", "") or "").upper()
         need_e = _safe_int(p.get("need_e", 1), 1)
