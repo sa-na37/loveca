@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_start_free_effect_20260319
+# BUILD_TAG: abilities_effects_expand_20260317
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -68,25 +68,6 @@ _EFFECT_RULES = [
     {"id": "activate_all_stage_members", "pattern": r"^自分のステージにいるすべてのメンバーをアクティブにする。$", "op": "activate_all_stage_members"},
     # Energy activate up to n
     {"id": "energy_activate_upto_n", "pattern": r"^エネルギーを(?P<n>\d+)枚までアクティブにする。$", "op": "energy_activate_upto"},
-    # Self-wait (as effect): "このメンバーをウェイトにする。"
-    {"id": "set_self_wait_member", "pattern": r"^このメンバーをウェイトにする。$", "op": "set_self_wait"},
-    # Opponent wait: "相手のステージにいるコストN以下のメンバーをM人までウェイトにする。"
-    {"id": "set_opponent_wait_upto_n", "pattern": r"^相手のステージにいるコスト(?P<cost>\d+)以下のメンバーを(?P<max_n>\d+)人までウェイト(?:状態に)?にする。$", "op": "set_opponent_wait"},
-    # Opponent wait all: "相手のステージにいるすべてのコストN以下のメンバーをウェイトにする。"
-    {"id": "set_opponent_wait_all_cost", "pattern": r"^相手のステージにいるすべてのコスト(?P<cost>\d+)以下のメンバーをウェイトにする。$", "op": "set_opponent_wait"},
-    # Opponent self-choice wait
-    {"id": "set_opponent_wait_self_choice", "pattern": r"^相手は、?自身のステージにいるアクティブ状態のメンバー1人をウェイトにする。$", "op": "set_opponent_wait_self_choice"},
-    # look_top with optional pick + type/group filter
-    # e.g. "デッキ上5枚見る。その中からライブカードを1枚公開して手札に加えてもよい。残り控え室"
-    {"id": "look_top_k_optional_type", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から(?P<kind>ライブ|メンバー)カードを1枚(?:まで)?公開して手札に加えてもよい。残りを控え室に置く。$", "op": "look_top_choose_filtered", "optional": True},
-    # with group filter: "その中から『G』のカードを1枚公開して手札に加えてもよい"
-    {"id": "look_top_k_optional_group", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から『(?P<group>[^』]+)』のカードを1枚(?:まで)?公開して手札に加えてもよい。残りを控え室に置く。$", "op": "look_top_choose_filtered", "optional": True},
-    # with group+type: "その中から『G』のライブカードを1枚公開して..."
-    {"id": "look_top_k_optional_group_type", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から『(?P<group>[^』]+)』の(?P<kind>ライブ|メンバー)カードを1枚(?:まで)?公開して手札に加えてもよい。残りを控え室に置く。$", "op": "look_top_choose_filtered", "optional": True},
-    # with name filter: "その中から「名前A」か「名前B」のメンバーカードを1枚公開して..."
-    {"id": "look_top_k_optional_names_type", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から(?P<names>(?:「[^」]+」(?:か「[^」]+」)*)の)?(?P<kind>ライブ|メンバー)カードを1枚公開して手札に加えてもよい。残りを控え室に置く。$", "op": "look_top_choose_filtered", "optional": True},
-    # 3-way split: 1->hand, 1->deck top, 1->green
-    {"id": "look_top_3_split", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から1枚を手札に加え、1枚をデッキの上に置き、1枚を控え室に置く。$", "op": "look_top_3way_split"},
 ]
 
 _EFFECT_RULES_COMPILED = [{**r, "re": re.compile(r["pattern"])} for r in _EFFECT_RULES]
@@ -159,15 +140,6 @@ def _cost_requires_self_to_green(cost_text: str) -> bool:
     return ("このメンバー" in t) and ("控え室" in t) and ("置" in t)
 
 
-def _cost_requires_self_wait(cost_text: str) -> bool:
-    """Return True if cost requires this member to become WAIT (but NOT sent to green)."""
-    t = str(cost_text or '').strip()
-    if 'ウェイトにする' in t and 'このメンバー' in t:
-        # Exclude self-to-green costs ("このメンバーをステージから控え室に置く")
-        if '控え室' not in t and 'ステージから' not in t:
-            return True
-    return False
-
 
 def _norm_digits_jp(s: str) -> str:
     if s is None:
@@ -226,26 +198,6 @@ def _cost_move_active_energy_to_under(cost_text: str) -> bool:
     return bool(re.search(r"エネルギー.*?\d+枚.*?このメンバーの下", t))
 
 
-def _cost_named_cards_to_deck_bottom(cost_text: str) -> Dict[str, Any]:
-    """Parse cost like「園田海未」と「津島善子」と...合計N枚をシャッフルしてデッキの一番下に置く.
-
-    Returns {'names': [...], 'total': N} or {} if not matched.
-    """
-    t = (cost_text or '')
-    if 'デッキの一番下' not in t:
-        return {}
-    if 'シャッフル' not in t:
-        return {}
-    # extract 「名前」 patterns
-    names = re.findall(r'「([^」]+)」', t)
-    if not names:
-        return {}
-    # extract total count
-    m = re.search(r'合計\s*(\d+)\s*枚', _norm_digits_jp(t))
-    total = int(m.group(1)) if m else len(names)
-    return {'names': names, 'total': total}
-
-
 def can_activate_in_state(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: str) -> bool:
     pos = str(pos or '').upper()
     if pos not in ('L','C','R'):
@@ -297,20 +249,6 @@ def can_activate_in_state(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: s
                 continue
             # special cost: move active energy to under
             if _cost_move_active_energy_to_under(cost) and int(gs.energy_active or 0) < 1:
-                continue
-            # named_cards_to_deck_bottom cost check: need enough matching cards in green room
-            named_cost = _cost_named_cards_to_deck_bottom(cost)
-            if named_cost:
-                _names = named_cost['names']
-                _total = named_cost['total']
-                _cands = [gcn for gcn in (gs.green_room or [])
-                          if any(n in str(getattr(_get_card(cards_db, gcn), 'name', '') or
-                                         getattr(_get_card(cards_db, gcn), 'cardname', '') or gcn)
-                                 for n in _names)]
-                if len(_cands) < _total:
-                    continue
-            # self-wait cost check: member must currently be active
-            if _cost_requires_self_wait(cost) and not slot.active:
                 continue
             ok_any = True
         if ok_any:
@@ -475,127 +413,8 @@ def _enqueue_choose_from_topk(gs: 'GameState', k: int, rng: Optional[random.Rand
         'text': f'デッキ上から{len(pool)}枚を見る：その中から1枚を手札に加え、残りを控え室に置く',
         'options': list(pool),
         'pool': list(pool),
-        'display_cards': list(pool),
     })
     gs.log.append(f'[PENDING] choose 1 from top {len(pool)} (rest -> waiting room)')
-
-
-def _enqueue_choose_from_topk_filtered(
-    gs: 'GameState', k: int, rng: Optional[random.Random],
-    cards_db: Dict[str, 'CardInfo'],
-    filter_kind: str = '',   # 'LIVE' or 'MEMBER' or ''
-    filter_group: str = '',  # group name or ''
-    filter_names: List[str] = None,  # card name list or []
-    optional: bool = False,
-) -> None:
-    """Look at top-k cards, let user pick 1 matching filter (optionally), rest to green."""
-    filter_names = filter_names or []
-    k = int(k or 0)
-    if k <= 0:
-        return
-    _rule_refresh_for_top_access(gs, rng, k, reason='look_top_filtered')
-    if not gs.deck:
-        gs.log.append('[INFO] look_top_filtered: deck empty')
-        return
-    pool = [gs.deck.pop(0) for _ in range(min(k, len(gs.deck)))]
-
-    # determine which cards satisfy the filter
-    def _matches(cn: str) -> bool:
-        ci = _get_card(cards_db, cn)
-        if not ci:
-            return False
-        if filter_kind:
-            t = str(getattr(ci, 'type', '') or '').upper()
-            if filter_kind == 'LIVE' and 'LIVE' not in t:
-                return False
-            if filter_kind == 'MEMBER' and 'MEMBER' not in t:
-                return False
-        if filter_group:
-            if filter_group not in str(getattr(ci, 'group', '') or ''):
-                return False
-        if filter_names:
-            name = str(getattr(ci, 'name', '') or getattr(ci, 'cardname', '') or cn)
-            if not any(n in name for n in filter_names):
-                return False
-        return True
-
-    candidates = [cn for cn in pool if _matches(cn)]
-
-    label_parts = []
-    if filter_kind:
-        label_parts.append({'LIVE': 'ライブカード', 'MEMBER': 'メンバーカード'}.get(filter_kind, filter_kind))
-    if filter_group:
-        label_parts.append(f'『{filter_group}』')
-    if filter_names:
-        label_parts.append('・'.join(f'「{n}」' for n in filter_names))
-    label = '・'.join(label_parts) if label_parts else 'カード'
-
-    if not candidates:
-        # Show pool as popup even when no match; user confirms to send all to green
-        gs.pending.append({
-            'kind': 'view_topk_no_match',
-            'text': f'デッキ上{len(pool)}枚を公開（{label}なし）→ 全て控え室へ',
-            'options': ['確認'],
-            'pool': list(pool),
-            'display_cards': list(pool),
-        })
-        gs.log.append(f'[PENDING] look_top_filtered: no match, showing pool={pool} for confirmation')
-        return
-
-    if not optional and len(candidates) == 1:
-        pick = candidates[0]
-        rest = [c for c in pool if c != pick]
-        gs.hand.append(pick)
-        gs.green_room.extend(rest)
-        gs.log.append(f'[AUTO] look_top_filtered: only match {pick} -> hand; {len(rest)} -> waiting room')
-        return
-
-    suffix = '（スキップ可）' if optional else ''
-
-    opts = list(candidates)
-    if optional:
-        opts.append('skip')
-
-    gs.pending.append({
-        'kind': 'choose_from_topk',
-        'text': f'デッキ上{len(pool)}枚から{label}を1枚手札へ{suffix}',
-        'options': opts,
-        'pool': list(pool),
-        'display_cards': list(pool),
-        'candidates': list(candidates),
-        'optional': optional,
-    })
-    gs.log.append(f'[PENDING] look_top_filtered: pool={len(pool)} candidates={len(candidates)} optional={optional}')
-
-
-def _enqueue_look_top_3way_split(
-    gs: 'GameState', k: int, rng: Optional[random.Random],
-) -> None:
-    """Look at k cards, user places 1->hand, 1->deck top, 1->green."""
-    k = int(k or 0)
-    if k <= 0:
-        return
-    _rule_refresh_for_top_access(gs, rng, k, reason='look_top_3way')
-    if not gs.deck:
-        gs.log.append('[INFO] look_top_3way: deck empty')
-        return
-    pool = [gs.deck.pop(0) for _ in range(min(k, len(gs.deck)))]
-    if len(pool) < 3:
-        # not enough cards: put all to hand (graceful fallback)
-        gs.hand.extend(pool)
-        gs.log.append(f'[AUTO] look_top_3way: only {len(pool)} cards -> all to hand')
-        return
-    gs.pending.append({
-        'kind': 'look_top_3way_step',
-        'text': f'デッキ上{len(pool)}枚から1枚を手札へ、1枚をデッキ上へ、1枚を控え室へ（順に選択）',
-        'options': list(pool),
-        'pool': list(pool),
-        'display_cards': list(pool),
-        'step': 'hand',   # hand -> topdeck -> green (auto)
-        'picked_hand': '',
-        'picked_top': '',
-    })
-    gs.log.append(f'[PENDING] look_top_3way: pool={pool}')
 
 
 def _enqueue_reorder_from_topk_keep_any(gs: 'GameState', k: int, rng: Optional[random.Random] = None) -> None:
@@ -674,25 +493,6 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
     if op == 'look_top_choose':
         k = int(gd.get('k', 0) or 0)
         _enqueue_choose_from_topk(gs, k, rng)
-        return
-
-    if op == 'look_top_choose_filtered':
-        k = int(gd.get('k', 0) or 0)
-        kind_jp = str(gd.get('kind', '') or '')
-        kind = {'ライブ': 'LIVE', 'メンバー': 'MEMBER'}.get(kind_jp, '')
-        group = str(gd.get('group', '') or rule.get('group', '') or '')
-        optional = bool(rule.get('optional', False))
-        # parse names like 「名前A」か「名前B」
-        names_raw = str(gd.get('names', '') or '')
-        names = re.findall(r'「([^」]+)」', names_raw) if names_raw else []
-        _enqueue_choose_from_topk_filtered(gs, k, rng, cards_db,
-                                           filter_kind=kind, filter_group=group,
-                                           filter_names=names, optional=optional)
-        return
-
-    if op == 'look_top_3way_split':
-        k = int(gd.get('k', 0) or 0)
-        _enqueue_look_top_3way_split(gs, k, rng)
         return
     if op == 'look_top_reorder_keep_any':
         k = int(gd.get('k', 0) or 0)
@@ -829,26 +629,6 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
             gs.energy_wait -= actual
             gs.energy_active += actual
         gs.log.append(f'[AUTO] energy activate up to {n}: activated {actual} (wait={gs.energy_wait} active={gs.energy_active})')
-        return
-
-    if op == 'set_self_wait':
-        pos2 = str((ctx or {}).get('pos', '') or '').upper()
-        slot2 = gs.stage.get(pos2) if pos2 in ('L', 'C', 'R') else None
-        if slot2:
-            slot2.active = False
-            gs.log.append(f'[AUTO] {pos2}: {slot2.cardnumber} -> WAIT')
-        else:
-            gs.log.append(f'[WARN] set_self_wait: no member at pos={pos2}')
-        return
-
-    if op == 'set_opponent_wait':
-        cost_lim = int(gd.get('cost', 99) or 99)
-        max_n = int(gd.get('max_n', gd.get('n', 1)) or 1)
-        gs.log.append(f'[MANUAL] 相手のステージにいるコスト{cost_lim}以下のメンバーを{max_n}人までウェイトにする（手動で処理してください）')
-        return
-
-    if op == 'set_opponent_wait_self_choice':
-        gs.log.append('[MANUAL] 相手は自身のステージのアクティブメンバー1人をウェイトにする（手動で処理してください）')
         return
 
     gs.log.append(f"[WARN] effect op not implemented: {op}")
@@ -2407,10 +2187,8 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
 
     for pos in ("L", "C", "R"):
         slot = gs.stage.get(pos)
-        if not slot:
+        if not slot or not slot.active:
             continue
-        # ウェイト状態でもライブ開始時効果は発火する（ただし後続の能力チェックで
-        # コスト「このメンバーをウェイトにする」系はすでにウェイトなのでスキップ）
         ci = _get_card(cards_db, slot.cardnumber)
         if not ci or not ci.abilities:
             continue
@@ -2499,53 +2277,6 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                             'options': ['桃', '黄', '紫'],
                         }
                         _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
-                        continue
-                    # Optional hand-discard cost（「手札をN枚控え室に置いてもよい」「手札のXを1枚控え室に置いてもよい」）
-                    if '控え室に置いてもよい' in cost and _match_effect_template(eff):
-                        # 手札のライブカードを捨てるコスト
-                        m_live = re.search(r'手札のライブカードを(\d+)枚控え室に置いてもよい', cost)
-                        m_hand = re.search(r'手札を(\d+)枚控え室に置いてもよい', cost)
-                        if m_live:
-                            cost_kind = 'discard_live_from_hand'
-                            cost_n = int(m_live.group(1))
-                        elif m_hand:
-                            cost_kind = 'discard_from_hand'
-                            cost_n = int(m_hand.group(1))
-                        else:
-                            cost_kind = 'discard_from_hand'
-                            cost_n = 1
-                        pr = {
-                            'kind': 'live_start_pay_effect',
-                            'pos': pos,
-                            'cn': ci.cardnumber,
-                            'need_e': 0,
-                            'cost_kind': cost_kind,
-                            'cost_n': cost_n,
-                            'effect': eff,
-                            'text': f"{pos}: {ci.cardnumber} ライブ開始時 [{cost}] → {eff}",
-                            'options': ['pay', 'skip'],
-                        }
-                        _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
-                        continue
-                    # コストなし・フリー効果（activate_stage_member等）
-                    if not cost.strip() or cost.strip() == eff.strip():
-                        m_free = _match_effect_template(eff)
-                        if m_free:
-                            r_free, gd_free = m_free
-                            op_free = r_free.get('op', '')
-                            if op_free == 'activate_stage_member':
-                                opts_act = [p2 for p2 in ('L','C','R') if gs.stage.get(p2) and not gs.stage[p2].active]
-                                if opts_act:
-                                    pr = {
-                                        'kind': 'live_start_free_effect',
-                                        'pos': pos,
-                                        'cn': ci.cardnumber,
-                                        'op': op_free,
-                                        'op_params': gd_free,
-                                        'text': f"{pos}: {ci.cardnumber} ライブ開始時 → {eff}",
-                                        'options': ['do', 'skip'],
-                                    }
-                                    _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
                     continue
                 need_e = _parse_energy_cost(cost)
                 if need_e <= 0:
@@ -3119,10 +2850,6 @@ def cmd_set(gs: GameState, rng: random.Random, indices: List[int]) -> None:
 
 
 def cmd_yell(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo]) -> None:
-    # ライブ開始時プロンプトが未処理なら先に処理させる（ブレード変化が確定してからYELL）
-    if _enqueue_live_start_prompts(gs, cards_db) > 0:
-        gs.log.append("[INFO] yell: live-start prompts queued, resolve them first.")
-        return
     n = stage_blade(gs, cards_db)
     if n <= 0:
         gs.log.append("[YELL] 0 (no blade on active stage members)")
@@ -3892,49 +3619,6 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                 gs.stage[pos] = None
                 gs.log.append(f"[COST] {pos}: {slot.cardnumber} -> waiting room")
 
-            # Cost: self-wait (member stays on stage but becomes WAIT)
-            if _cost_requires_self_wait(cost) and not _cost_requires_self_to_green(cost):
-                slot.active = False
-                gs.log.append(f"[COST] {pos}: {slot.cardnumber} -> WAIT (self-wait cost)")
-
-            # Cost: pick named cards from green room, shuffle to deck bottom
-            named_cost = _cost_named_cards_to_deck_bottom(cost)
-            if named_cost:
-                names = named_cost['names']
-                total = named_cost['total']
-                # candidates: cards in green room whose name contains any target name
-                cands = []
-                for gcn in list(gs.green_room):
-                    gci = _get_card(cards_db, gcn)
-                    gname = str(getattr(gci, 'name', '') or getattr(gci, 'cardname', '') or gcn)
-                    if any(n in gname for n in names):
-                        cands.append(gcn)
-                if len(cands) < total:
-                    gs.log.append(f"[ERR] named_cards_cost: コスト支払い不可。必要{total}枚、控え室に{len(cands)}枚（{names}）")
-                    # 消費済みコスト（エネルギー・自己控え室）を巻き戻す余裕はないので警告のみ
-                    return
-                else:
-                    # Mark once-per-turn before suspending
-                    if flags.get('once_per_turn'):
-                        try:
-                            gs.used_this_turn[akey] = 1
-                        except Exception:
-                            try:
-                                gs.used_this_turn = {akey: 1}
-                            except Exception:
-                                pass
-                    gs.pending.append({
-                        'kind': 'named_cards_cost_multi',
-                        'text': f'控え室から合計{total}枚を選択してデッキの一番下へ（{"・".join(names)}）',
-                        'options': cands,
-                        'total': total,
-                        'resume_effect': eff,
-                        'resume_pos': pos,
-                        'resume_source_cn': ci.cardnumber,
-                    })
-                    gs.log.append(f"[PENDING] named_cards_cost_multi: total={total} cands={cands}")
-                    return
-
             # Mark once-per-turn usage after costs are paid (even if effect creates pending)
             if flags.get('once_per_turn'):
                 try:
@@ -4014,12 +3698,10 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
 
 
 
-def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, choice: str, rng: Optional[random.Random] = None) -> None:
+def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, choice: str) -> None:
     if idx < 0 or idx >= len(gs.pending):
         gs.log.append("[ERR] resolve_pending: invalid idx")
         return
-    if rng is None:
-        rng = random.Random(gs.seed)
     p = gs.pending.pop(idx)
     kind = str(p.get("kind", "") or "")
     choice_str = str(choice or "").strip()
@@ -4360,38 +4042,15 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             gs.pending.append(_r)
         return
 
-    if kind == 'view_topk_no_match':
-        # User confirmed viewing the pool; send all to green room
-        pool = list(p.get('pool', []) or [])
-        gs.green_room.extend(pool)
-        gs.log.append(f'[ACT] view_topk_no_match: confirmed -> {len(pool)} cards to waiting room')
-        return
-
     if kind == 'choose_from_topk':
         pool = list(p.get('pool', []) or [])
         if not pool:
             gs.log.append('[ERR] topk: pool missing')
             return
-        optional = bool(p.get('optional', False))
-        # skip: put all pool cards to waiting room
-        if choice_str.strip().lower() in ('skip', 'スキップ', '__skip__'):
-            if optional:
-                gs.green_room.extend(pool)
-                gs.log.append(f'[ACT] topk: skip chosen -> {len(pool)} cards to waiting room')
-            else:
-                gs.log.append('[ERR] topk: skip not allowed (not optional)')
-                gs.deck = pool + gs.deck
-            return
         cn = _canon_cardno(choice_str)
         pick_idx = None
-        candidates = list(p.get('candidates', pool) or pool)
         for i, x in enumerate(pool):
             if _canon_cardno(x) == cn:
-                # validate against candidates if filtered
-                if candidates and cn not in [_canon_cardno(c) for c in candidates]:
-                    gs.log.append(f'[ERR] topk: {cn} not in filtered candidates')
-                    gs.deck = pool + gs.deck
-                    return
                 pick_idx = i
                 break
         if pick_idx is None:
@@ -4404,99 +4063,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         gs.log.append(f"[ACT] topk chose {pick_cn} -> hand; rest {len(pool)} -> waiting room")
         return
 
-    if kind == 'look_top_3way_step':
-        pool = list(p.get('pool', []) or [])
-        step = str(p.get('step', 'hand') or 'hand')
-        if not pool:
-            gs.log.append('[ERR] look_top_3way: pool missing')
-            return
-        cn = _canon_cardno(choice_str)
-        match_idx = None
-        for i, x in enumerate(pool):
-            if _canon_cardno(x) == cn:
-                match_idx = i
-                break
-        if match_idx is None:
-            gs.log.append(f'[ERR] look_top_3way: {cn} not in pool {pool}')
-            gs.deck = pool + gs.deck
-            return
-        picked = pool.pop(match_idx)
-        if step == 'hand':
-            gs.hand.append(picked)
-            gs.log.append(f'[ACT] look_top_3way: {picked} -> hand')
-            if len(pool) >= 2:
-                remaining = list(pool)
-                gs.pending.append({
-                    'kind': 'look_top_3way_step',
-                    'text': f'残り{len(remaining)}枚からデッキ上に置く1枚を選ぶ（残りは控え室）',
-                    'options': remaining,
-                    'pool': remaining,
-                    'step': 'topdeck',
-                    'picked_hand': picked,
-                    'picked_top': '',
-                })
-            else:
-                # only 1 left -> goes to deck top, none to green
-                if pool:
-                    gs.deck.insert(0, pool[0])
-                    gs.log.append(f'[AUTO] look_top_3way: {pool[0]} -> deck top (only card left)')
-        elif step == 'topdeck':
-            gs.deck.insert(0, picked)
-            gs.log.append(f'[ACT] look_top_3way: {picked} -> deck top')
-            gs.green_room.extend(pool)
-            gs.log.append(f'[AUTO] look_top_3way: {pool} -> waiting room')
-        return
 
-
-
-
-    if kind == 'named_cards_cost_multi':
-        total = int(p.get('total', 0) or 0)
-        options = list(p.get('options', []) or [])
-        resume_eff = str(p.get('resume_effect', '') or '')
-        resume_pos = str(p.get('resume_pos', '') or '')
-        resume_src = str(p.get('resume_source_cn', '') or '')
-
-        # choice_str はカンマ区切りの cardnumber リスト（server.py から送信）
-        raw_picks = [s.strip() for s in choice_str.split(',')
-                     if s.strip() and s.strip().lower() not in ('__done__', 'done', 'skip')]
-
-        if len(raw_picks) != total:
-            gs.log.append(f"[ERR] named_cards_cost_multi: 枚数不一致（必要{total}枚、選択{len(raw_picks)}枚）")
-            gs.pending.insert(0, p)  # 再度選択させる
-            return
-
-        picks_canon = [_canon_cardno(x) for x in raw_picks]
-        green_copy = list(gs.green_room)
-        picked = []
-        ok = True
-        for cn in picks_canon:
-            found = False
-            for i, gcn in enumerate(green_copy):
-                if _canon_cardno(gcn) == cn and gcn in options:
-                    picked.append(green_copy.pop(i))
-                    found = True
-                    break
-            if not found:
-                gs.log.append(f"[ERR] named_cards_cost_multi: {cn} が控え室/選択肢に見つからない")
-                ok = False
-                break
-
-        if not ok:
-            return
-
-        gs.green_room = green_copy
-        rng_local = random.Random(gs.seed)
-        rng_local.shuffle(picked)
-        gs.deck = gs.deck + picked
-        gs.log.append(f"[COST] named_cards_cost_multi: {picked} → デッキ下（シャッフル済）")
-
-        if resume_eff:
-            ctx = {'pos': resume_pos, 'source_cn': resume_src}
-            matched = try_apply_effect_template(gs, rng, cards_db, resume_eff, ctx)
-            if not matched:
-                gs.log.append(f"[WARN] named_cards_cost_multi: 効果テンプレート非対応: {resume_eff}")
-        return
 
     if kind == 'topdeck_from_green':
         rem = _safe_int(p.get('remaining', 0), 0)
@@ -4867,35 +4434,6 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         return
 
     # 1) Live-start optional payment -> temp blade
-    if kind == "live_start_free_effect":
-        pos = str(p.get("pos", "") or "").upper()
-        op_free = str(p.get("op", "") or "")
-        slot = gs.stage.get(pos)
-        if not slot:
-            gs.log.append(f"[SKIP] live_start_free_effect: stage {pos} empty")
-            return
-        if choice_str.lower() in ("do", "yes", "y", "1", "true"):
-            if op_free == "activate_stage_member":
-                # ウェイト状態のメンバーから選択させる
-                wait_opts = [p2 for p2 in ('L','C','R') if gs.stage.get(p2) and not gs.stage[p2].active]
-                if not wait_opts:
-                    gs.log.append(f"[INFO] live_start_free_effect: no wait member to activate")
-                    return
-                if len(wait_opts) == 1:
-                    target = wait_opts[0]
-                    gs.stage[target].active = True
-                    gs.log.append(f"[AUTO] {pos}: live_start activate → {target} set ACTIVE")
-                else:
-                    gs.pending.append({
-                        'kind': 'choose_stage_member_to_activate',
-                        'text': f'{pos}: ステージのメンバーを1人アクティブにする（対象を選択）',
-                        'options': wait_opts,
-                    })
-                    gs.log.append(f"[PENDING] {pos}: live_start activate member choice")
-        else:
-            gs.log.append(f"[SKIP] {pos}: live_start_free_effect ({op_free}) skipped")
-        return
-
     if kind == "live_start_blade":
         pos = str(p.get("pos", "") or "").upper()
         need_e = _safe_int(p.get("need_e", 1), 1)
@@ -4926,60 +4464,22 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
     # 1b) Live-start optional payment -> generic effect template (regex engine)
     if kind == "live_start_pay_effect":
         pos = str(p.get("pos", "") or "").upper()
-        need_e = _safe_int(p.get("need_e", 0), 0)
-        cost_kind = str(p.get("cost_kind", "") or "")
-        cost_n = _safe_int(p.get("cost_n", 0), 0)
+        need_e = _safe_int(p.get("need_e", 1), 1)
         eff = str(p.get("effect", "") or "").strip()
         slot = gs.stage.get(pos)
         if not slot:
             gs.log.append(f"[SKIP] prompt: stage {pos} empty (ignored)")
             return
         if choice_str.lower() in ("pay", "yes", "y", "1", "true"):
-            # エネルギーコスト（即時支払い）
-            if need_e > 0:
-                if not pay_energy(gs, need_e):
-                    gs.log.append(f"[ERR] ability: insufficient energy for [E]{need_e} (have {gs.energy_active})")
-                    return
-            src_cn = str(p.get("cn", "") or "")
-            after_ctx = {"pos": pos, "source_cn": src_cn}
-            # 手札のライブカードを捨てるコスト → ユーザーに選ばせる
-            if cost_kind == 'discard_live_from_hand' and cost_n > 0:
-                live_in_hand = [c for c in list(gs.hand) if _is_live(_get_card(cards_db, c))]
-                if len(live_in_hand) < cost_n:
-                    gs.log.append(f"[ERR] live_start_pay_effect: not enough live cards in hand (need {cost_n}, have {len(live_in_hand)})")
-                    return
-                gs.pending.append({
-                    'kind': 'discard_from_hand',
-                    'remaining': cost_n,
-                    'text': f'手札のライブカードを{cost_n}枚控え室に置く',
-                    'options': live_in_hand,
-                    'after_effect_template': eff,
-                    'after_ctx': after_ctx,
-                    'after_source_cn': src_cn,
-                })
+            if not pay_energy(gs, need_e):
+                gs.log.append(f"[ERR] ability: insufficient energy for [E]{need_e} (have {gs.energy_active})")
                 return
-            # 手札を捨てるコスト（汎用）→ ユーザーに選ばせる
-            if cost_kind == 'discard_from_hand' and cost_n > 0:
-                if len(gs.hand) < cost_n:
-                    gs.log.append(f"[ERR] live_start_pay_effect: not enough cards in hand (need {cost_n})")
-                    return
-                gs.pending.append({
-                    'kind': 'discard_from_hand',
-                    'remaining': cost_n,
-                    'text': f'手札を{cost_n}枚控え室に置く',
-                    'options': list(gs.hand),
-                    'after_effect_template': eff,
-                    'after_ctx': after_ctx,
-                    'after_source_cn': src_cn,
-                })
-                return
-            # コストなし（エネルギーのみ or コストなし）→ 即時効果適用
             rng = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
-            ok = try_apply_effect_template(gs, rng, cards_db, eff, after_ctx)
+            ok = try_apply_effect_template(gs, rng, cards_db, eff, {"pos": pos})
             if ok:
-                gs.log.append(f"[AUTO] {pos}: paid cost -> applied {eff}")
+                gs.log.append(f"[AUTO] {pos}: paid [E]{need_e} -> applied {eff}")
             else:
-                gs.log.append(f"[WARN] {pos}: paid cost but effect not matchable: {eff}")
+                gs.log.append(f"[WARN] {pos}: paid [E]{need_e} but effect not matchable: {eff}")
         else:
             gs.log.append(f"[SKIP] {pos}: live-start ability skipped")
         return
