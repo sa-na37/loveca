@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: self_wait_cost_fix_20260323
+# BUILD_TAG: live_start_imgsel_selfwait_20260323
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -2542,10 +2542,10 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                                         'cn': ci.cardnumber,
                                         'op': op_free,
                                         'op_params': gd_free,
-                                        'text': f"{pos}: {ci.cardnumber} ライブ開始時 → {eff}",
-                                        'options': ['do', 'skip'],
+                                        'text': f"{pos}: {ci.cardnumber} ライブ開始時 \u2192 {eff}\uff08Skip\u53ef\uff09",
+                                        'options': opts_act,
                                     }
-                                    _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
+                                    _append_prompt(pr, f"{pos}: {ci.cardnumber} \u30e9\u30a4\u30d6\u958b\u59cb\u6642")
                     continue
                 need_e = _parse_energy_cost(cost)
                 if need_e <= 0:
@@ -3853,12 +3853,8 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                 continue
             cost = str(cl.get('cost_template', '') or '')
             eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
-            # コストのみのclause（effect_templateが空）も処理する
-            # 例：「このメンバーをウェイトにする：カードを1枚引き、手札を1枚控え室に置く。」
-            # の場合、cost_template="このメンバーをウェイトにする" / effect_template="" のclauseが
-            # 先に来ることがあるため、コストだけ適用してcontinueする
+            # effが空でもself-waitコストだけ適用してcontinue
             if not eff:
-                # effが空でもコスト（self-wait）だけ処理してcontinue
                 if _cost_requires_self_wait(cost) and not _cost_requires_self_to_green(cost):
                     if slot and slot.active:
                         slot.active = False
@@ -4883,9 +4879,19 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         if not slot:
             gs.log.append(f"[SKIP] live_start_free_effect: stage {pos} empty")
             return
-        if choice_str.lower() in ("do", "yes", "y", "1", "true"):
+        if choice_str.upper() in ("L", "C", "R"):
+            # server側のallStagePosブランチからポジション直接選択
             if op_free == "activate_stage_member":
-                # ウェイト状態のメンバーから選択させる
+                target = choice_str.upper()
+                target_slot = gs.stage.get(target)
+                if target_slot and not target_slot.active:
+                    target_slot.active = True
+                    gs.log.append(f"[AUTO] {pos}: live_start activate → {target} set ACTIVE")
+                else:
+                    gs.log.append(f"[WARN] live_start_free_effect: {target} is already active or empty")
+        elif choice_str.lower() in ("do", "yes", "y", "1", "true"):
+            # 旧フォーマット互換
+            if op_free == "activate_stage_member":
                 wait_opts = [p2 for p2 in ('L','C','R') if gs.stage.get(p2) and not gs.stage[p2].active]
                 if not wait_opts:
                     gs.log.append(f"[INFO] live_start_free_effect: no wait member to activate")
