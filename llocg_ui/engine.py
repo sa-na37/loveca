@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: topdeck_any_cond_draw_20260323
+# BUILD_TAG: yell_retrieve_heart_replace_20260325
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -93,6 +93,16 @@ _EFFECT_RULES = [
     {"id": "look_top_k_optional_names_type", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から(?P<names>(?:「[^」]+」(?:か「[^」]+」)*)の)?(?P<kind>ライブ|メンバー)カードを1枚公開して手札に加えてもよい。残りを控え室に置く。$", "op": "look_top_choose_filtered", "optional": True},
     # 3-way split: 1->hand, 1->deck top, 1->green
     {"id": "look_top_3_split", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から1枚を手札に加え、1枚をデッキの上に置き、1枚を控え室に置く。$", "op": "look_top_3way_split"},
+    # Retrieve from yell reveals: group-filtered
+    {"id": "retrieve_yell_group_any", "pattern": r"^エールにより公開された自分のカードの中から、『(?P<group>[^』]+)』のカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "ANY"},
+    # Retrieve from yell reveals: type-filtered (LIVE or MEMBER)
+    {"id": "retrieve_yell_live", "pattern": r"^エールにより公開された自分のカードの中から、ライブカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "LIVE"},
+    {"id": "retrieve_yell_member", "pattern": r"^エールにより公開された自分のカードの中から、メンバーカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "MEMBER"},
+    # Retrieve from yell reveals: group+type (e.g. 『μ's』のメンバーカード)
+    {"id": "retrieve_yell_group_member", "pattern": r"^エールにより公開された自分のカードの中から、『(?P<group>[^』]+)』のメンバーカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "MEMBER"},
+    {"id": "retrieve_yell_group_live", "pattern": r"^エールにより公開された自分のカードの中から、『(?P<group>[^』]+)』のライブカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "LIVE"},
+    # Retrieve from yell reveals: cost2-member OR score2-live (e.g. PL!HS-PR-027, PL!N-PR-021, PL!SP-PR-016)
+    {"id": "retrieve_yell_cost2member_or_score2live", "pattern": r"^エールにより公開された自分のカードの中から、コスト(?P<cost_lim>\d+)以下のメンバーカードか、スコア(?P<score_lim>\d+)以下のライブカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "COST_MEMBER_OR_SCORE_LIVE"},
 ]
 
 _EFFECT_RULES_COMPILED = [{**r, "re": re.compile(r["pattern"])} for r in _EFFECT_RULES]
@@ -858,6 +868,67 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         gs.log.append('[MANUAL] 相手は自身のステージのアクティブメンバー1人をウェイトにする（手動で処理してください）')
         return
 
+    if op == 'retrieve_from_yell':
+        kind = str(rule.get('card_kind', '') or '').upper() or 'ANY'
+        group = str(gd.get('group', '') or '')
+        cost_lim = int(gd.get('cost_lim', 99) or 99)
+        score_lim = int(gd.get('score_lim', 99) or 99)
+        src = str((ctx or {}).get('source_cn', '') or '')
+        pool = list(getattr(gs, '_yell_revealed_this_live', []) or [])
+        # collect candidates from resolve_zone first, then green_room (already sent there by ack)
+        cands: List[str] = []
+        seen: set = set()
+        for zone_name in ('resolve_zone', 'green_room'):
+            z = getattr(gs, zone_name, None)
+            if not isinstance(z, list):
+                continue
+            for cn2 in z:
+                canon2 = _canon_cardno(str(cn2 or ''))
+                if canon2 in seen:
+                    continue
+                # only consider cards that were part of yell reveals this live
+                if canon2 not in [_canon_cardno(x) for x in pool]:
+                    continue
+                ci2 = _get_card(cards_db, cn2)
+                if not ci2:
+                    continue
+                if kind == 'LIVE' and not _is_live_ci(ci2):
+                    continue
+                if kind == 'MEMBER' and not _is_member_ci(ci2):
+                    continue
+                if kind == 'COST_MEMBER_OR_SCORE_LIVE':
+                    ok2 = False
+                    if _is_member_ci(ci2) and int(getattr(ci2, 'cost', 0) or 0) <= cost_lim:
+                        ok2 = True
+                    if _is_live_ci(ci2) and int(getattr(ci2, 'score', 0) or 0) <= score_lim:
+                        ok2 = True
+                    if not ok2:
+                        continue
+                if group and (group not in str(getattr(ci2, 'group', '') or '')):
+                    continue
+                seen.add(canon2)
+                cands.append(cn2)
+        if not cands:
+            gs.log.append(f'[INFO] retrieve_from_yell: no matching card in yell reveals (kind={kind} group={group})')
+            return
+        label = f'{src}[ライブ成功時]: エールで公開されたカードから1枚手札に加える'
+        if kind == 'LIVE':
+            label += '（ライブカード）'
+        elif kind == 'MEMBER':
+            label += '（メンバーカード）'
+        elif kind == 'COST_MEMBER_OR_SCORE_LIVE':
+            label += f'（コスト{cost_lim}以下のメンバーかスコア{score_lim}以下のライブ）'
+        if group:
+            label += f'（{group}）'
+        gs.pending.append({
+            'kind': 'pick_from_yell',
+            'text': label,
+            'options': list(cands),
+            'source_cn': src,
+        })
+        gs.log.append(f'[PENDING] retrieve_from_yell: {len(cands)} candidates')
+        return
+
     if op == 'draw_if':
         cond = str(rule.get('cond', '') or '')
         n = int(gd.get('n', 0) or 0)
@@ -1115,6 +1186,7 @@ class StageSlot:
     temp_hearts: Dict[str, int] = field(default_factory=dict)
     temp_until: str = ""  # e.g., end_of_live
     energy_under: int = 0  # number of energy cards under this member (UI + some effects)
+    heart_replace_color: str = ""  # 元々持つハートを置換する色（ライブ終了時まで）。空=無効
 
 
 @dataclass
@@ -1239,7 +1311,7 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
         if slot is None:
             stage_snap[k] = None
         else:
-            stage_snap[k] = {"cardnumber": slot.cardnumber, "active": bool(slot.active), "temp_blade": int(getattr(slot, "temp_blade", 0) or 0), "temp_hearts": dict(getattr(slot, "temp_hearts", {}) or {}), "temp_until": str(getattr(slot, "temp_until", "") or ""), "energy_under": int(getattr(slot, "energy_under", 0) or 0)}
+            stage_snap[k] = {"cardnumber": slot.cardnumber, "active": bool(slot.active), "temp_blade": int(getattr(slot, "temp_blade", 0) or 0), "temp_hearts": dict(getattr(slot, "temp_hearts", {}) or {}), "temp_until": str(getattr(slot, "temp_until", "") or ""), "energy_under": int(getattr(slot, "energy_under", 0) or 0), "heart_replace_color": str(getattr(slot, "heart_replace_color", "") or "")}
 
     return {
         "phase": gs.phase,
@@ -1289,7 +1361,7 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
         if v is None:
             stage_new[k] = None
         else:
-            stage_new[k] = StageSlot(cardnumber=str(v.get("cardnumber", "")), active=bool(v.get("active", True)), temp_blade=_safe_int(v.get("temp_blade", 0), 0), temp_hearts=dict(v.get("temp_hearts", {}) or {}), temp_until=str(v.get("temp_until", "") or ""), energy_under=_safe_int(v.get("energy_under", 0), 0))
+            stage_new[k] = StageSlot(cardnumber=str(v.get("cardnumber", "")), active=bool(v.get("active", True)), temp_blade=_safe_int(v.get("temp_blade", 0), 0), temp_hearts=dict(v.get("temp_hearts", {}) or {}), temp_until=str(v.get("temp_until", "") or ""), energy_under=_safe_int(v.get("energy_under", 0), 0), heart_replace_color=str(v.get("heart_replace_color", "") or ""))
     gs.stage = stage_new
 
     gs.green_room = list(snap.get("green_room", gs.green_room))
@@ -1726,8 +1798,16 @@ def owned_base_hearts(gs: GameState, cards_db: Dict[str, CardInfo]) -> Dict[str,
         c = _get_card(cards_db, slot.cardnumber)
         if not c:
             continue
-        for k, v in (c.base_hearts or {}).items():
-            pool[k] = pool.get(k, 0) + int(v)
+        replace_col = str(getattr(slot, 'heart_replace_color', '') or '').lower().strip()
+        if replace_col:
+            # 元々持つハートをすべて replace_col に置換（ライブ終了時まで）
+            # 合計数を計算して、置換後の色に付与
+            orig_total = sum(int(v) for v in (c.base_hearts or {}).values())
+            if orig_total > 0:
+                pool[replace_col] = pool.get(replace_col, 0) + orig_total
+        else:
+            for k, v in (c.base_hearts or {}).items():
+                pool[k] = pool.get(k, 0) + int(v)
         for k, v in (getattr(slot, 'temp_hearts', {}) or {}).items():
             pool[k] = pool.get(k, 0) + int(v)
 
@@ -2545,6 +2625,29 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                         }
                         _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
                         continue
+                    # ハート変換（元々持つハートは選んだハートになる）
+                    if '元々持つハートは選んだハートになる' in blob and '選ぶ' in blob:
+                        opts_hr = re.findall(r'<\(([^)]+)\)>', blob)
+                        color_opts = []
+                        for jp in opts_hr:
+                            col = _HEART_JP_MAP.get(jp, '')
+                            if col and col not in color_opts:
+                                color_opts.append(col)
+                        if color_opts:
+                            opts_disp = [{'桃':'桃','red':'赤','yellow':'黄','green':'緑','blue':'青','purple':'紫','pink':'桃'}.get(c, c) for c in color_opts]
+                            opts_disp_jp = [c for c in re.findall(r'<\(([^)]+)\)>', blob) if c in ('桃','赤','黄','緑','青','紫')]
+                            if not opts_disp_jp:
+                                opts_disp_jp = opts_disp
+                            pr = {
+                                'kind': 'live_start_heart_replace',
+                                'pos': pos,
+                                'cn': ci.cardnumber,
+                                'text': f"{pos}: {ci.cardnumber} ライブ開始時 → 元々持つハートを選んだハートに変換 (ライブ終了時まで)",
+                                'options': opts_disp_jp,
+                                'color_map': {jp: _HEART_JP_MAP.get(jp, jp) for jp in opts_disp_jp},
+                            }
+                            _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
+                            continue
                     # Optional hand-discard cost（「手札をN枚控え室に置いてもよい」「手札のXを1枚控え室に置いてもよい」）
                     if '控え室に置いてもよい' in cost and _match_effect_template(eff):
                         # 手札のライブカードを捨てるコスト
@@ -2785,6 +2888,11 @@ def _clear_end_of_live_buffs(gs: GameState) -> None:
             slot.temp_blade = 0
             slot.temp_hearts = {}
             slot.temp_until = ""
+        # Always clear heart_replace_color at end of live (it's always "until end of live")
+        try:
+            slot.heart_replace_color = ""
+        except Exception:
+            pass
 
     # clear global end-of-live buffs
     try:
@@ -3312,6 +3420,24 @@ def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict
                     continue
                 if _parse_energy_cost(cost) > 0 or _cost_requires_self_to_green(cost):
                     continue
+                # Optional hand-discard cost for retrieve_from_yell effects
+                m_opt = re.search(r'手札を(\d+)枚控え室に置いてもよい', cost)
+                if m_opt and _match_effect_template(eff) and 'retrieve_from_yell' == (_match_effect_template(eff) or [{}])[0].get('op', ''):
+                    cost_n = int(m_opt.group(1))
+                    gs.pending.append({
+                        'kind': 'live_success_pay_effect',
+                        'pos': pos,
+                        'cn': ci_src.cardnumber,
+                        'cost_kind': 'discard_from_hand',
+                        'cost_n': cost_n,
+                        'effect': eff,
+                        'text': f"{pos}: {ci_src.cardnumber}[ライブ成功時] 手札を{cost_n}枚控え室に置いてもよい → {eff}",
+                        'options': ['pay', 'skip'],
+                        'source_cn': ci_src.cardnumber,
+                        'ctx': {'pos': pos, 'source_cn': ci_src.cardnumber},
+                    })
+                    gs.log.append(f"[PENDING] {pos}: {ci_src.cardnumber}[ライブ成功時] pay_or_skip -> {eff}")
+                    return
                 ctx = {'pos': pos, 'source_cn': ci_src.cardnumber}
                 if try_apply_effect_template(gs, rng, cards_db, eff, ctx):
                     gs.log.append(f"[AUTO] {pos}: {ci_src.cardnumber}[ライブ成功時] applied {eff}")
@@ -4313,6 +4439,25 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         gs.log.append(f"[ACT] live_start_success_heart: choose={col} (per success card, until end_of_live)")
         return
 
+    if kind == 'live_start_heart_replace':
+        pos2 = str(p.get('pos', '') or '').upper()
+        cn2 = str(p.get('cn', '') or '')
+        ch = str(choice_str or '').strip()
+        color_map = dict(p.get('color_map', {}) or {})
+        # ch may be Japanese color name
+        col = _HEART_JP_MAP.get(ch, '') or color_map.get(ch, '') or ''
+        if not col:
+            gs.log.append(f"[ERR] live_start_heart_replace: invalid choice '{ch}' for {cn2}")
+            gs.pending.append(p)
+            return
+        slot2 = gs.stage.get(pos2)
+        if not slot2:
+            gs.log.append(f"[SKIP] live_start_heart_replace: {pos2} empty")
+            return
+        slot2.heart_replace_color = col
+        gs.log.append(f"[ACT] {pos2}: {cn2} 元々持つハートを'{col}'に変換 (ライブ終了時まで)")
+        return
+
     if kind == 'choose_effects':
         remaining = list(p.get('remaining', []) or [])
         picked = list(p.get('picked', []) or [])
@@ -5099,6 +5244,76 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             pass
         gs.log.append(f"[ACT] PoppinUp: took {moved} -> hand")
         _enqueue_next_poppin_prompt(gs)
+        return
+
+    # 1e) Generic yell-retrieve: pick 1 card from yell reveals -> hand
+    if kind == 'pick_from_yell':
+        opts = list(p.get('options', []) or [])
+        if choice_str.lower() in ('skip', '__skip__', 'no', 'n', '0', 'false'):
+            gs.log.append('[SKIP] pick_from_yell: skipped')
+            return
+        cn = _canon_cardno(choice_str)
+        if opts and not any(_canon_cardno(x) == cn for x in opts):
+            gs.log.append(f'[ERR] pick_from_yell: invalid choice {choice_str}')
+            return
+        moved = None
+        for zone_name in ('resolve_zone', 'green_room'):
+            z = getattr(gs, zone_name, None)
+            if not isinstance(z, list):
+                continue
+            for i, x in enumerate(list(z)):
+                if _canon_cardno(x) == cn:
+                    moved = z.pop(i)
+                    break
+            if moved:
+                break
+        if not moved:
+            gs.log.append(f'[ERR] pick_from_yell: chosen card not found in zones {cn}')
+            return
+        gs.hand.append(moved)
+        # remove from tracker
+        try:
+            pool = list(getattr(gs, '_yell_revealed_this_live', []) or [])
+            for i, x in enumerate(list(pool)):
+                if _canon_cardno(x) == cn:
+                    pool.pop(i)
+                    break
+            setattr(gs, '_yell_revealed_this_live', pool)
+        except Exception:
+            pass
+        gs.log.append(f'[ACT] pick_from_yell: took {moved} -> hand')
+        return
+
+    # 1f) live-success optional-cost pay/skip (hand discard -> retrieve_from_yell)
+    if kind == 'live_success_pay_effect':
+        low = str(choice_str or '').strip().lower()
+        pos2 = str(p.get('pos', '') or '').upper()
+        src_cn = str(p.get('source_cn', '') or '')
+        eff = str(p.get('effect', '') or '')
+        cost_kind = str(p.get('cost_kind', '') or '')
+        cost_n = int(p.get('cost_n', 0) or 0)
+        ctx2 = dict(p.get('ctx', {}) or {})
+        if low in ('skip', '__skip__', 'no', 'n', '0', 'false'):
+            gs.log.append(f'[SKIP] {src_cn}[ライブ成功時] optional cost skipped')
+            return
+        if low not in ('pay', 'yes', 'y', '1', 'true'):
+            gs.log.append(f'[ERR] live_success_pay_effect: invalid choice {choice_str}')
+            return
+        if cost_kind == 'discard_from_hand':
+            if len(gs.hand) < cost_n:
+                gs.log.append(f'[ERR] live_success_pay_effect: not enough hand cards to discard')
+                return
+            # enqueue discard first; after_effect_template fires when discard completes
+            gs.pending.append({
+                'kind': 'discard_from_hand',
+                'remaining': cost_n,
+                'text': f'{src_cn}[ライブ成功時] 手札を{cost_n}枚控え室に置く',
+                'options': list(gs.hand),
+                'after_effect_template': eff,
+                'after_ctx': ctx2,
+                'after_source_cn': src_cn,
+            })
+            gs.log.append(f'[PENDING] {src_cn}[ライブ成功時] discard {cost_n} then {eff}')
         return
 
 # 2) Pick 1 LIVE from green room to hand
