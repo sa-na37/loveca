@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: activate_member_onestep_20260326
+# BUILD_TAG: activate_member_onestep_b_20260326
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -2683,19 +2683,13 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                             op_free = r_free.get('op', '')
                             if op_free == 'activate_stage_member':
                                 opts_act = [p2 for p2 in ('L','C','R') if gs.stage.get(p2) and not gs.stage[p2].active]
-                                if len(opts_act) == 1:
-                                    # ウェイト1人 → 自動でアクティブ（確認不要）
-                                    target = opts_act[0]
-                                    gs.stage[target].active = True
-                                    gs.log.append(f"[AUTO] {pos}: {ci.cardnumber} ライブ開始時 → {target} set ACTIVE (auto)")
-                                elif len(opts_act) >= 2:
-                                    # ウェイト複数 → 画像選択ポップアップ一発（do/skip段階なし）
-                                    # カード画像で選択、またはskipも可
+                                if opts_act:
+                                    # may効果なので1人でも複数でも必ず画像選択ポップアップ一発（skip可）
                                     wait_cns = [gs.stage[p2].cardnumber for p2 in opts_act if gs.stage.get(p2)]
                                     pr = {
                                         'kind': 'choose_stage_member_to_activate',
-                                        'text': f"{pos}: {ci.cardnumber} ライブ開始時 → ステージのメンバーを1人アクティブにする（スキップ可）",
-                                        'options': opts_act,
+                                        'text': f"{pos}: {ci.cardnumber} ライブ開始時 → ステージのメンバーを1人までアクティブにする（スキップ可）",
+                                        'options': opts_act + ['skip'],
                                         'card_options': wait_cns,
                                         'allow_skip': True,
                                         'source_pos': pos,
