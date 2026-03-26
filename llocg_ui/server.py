@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: topdeck_img_cond_draw_fix_20260323
+# BUILD_TAG: stage_select_wait_landscape_20260323
 from __future__ import annotations
 
 """llocg_ui.server
@@ -2974,55 +2974,6 @@ HTML = r'''<!doctype html>
       });
       elModalCards.appendChild(row);
       if(allowSkip){
-        const bSkip = document.createElement('button');
-        bSkip.className = 'miniBtn'; bSkip.textContent = 'Skip';
-        bSkip.addEventListener('click', async ev=>{
-          ev.stopPropagation();
-          st = await apiCmd('resolve_pending', {idx:0, choice:'skip'});
-          selHand=[]; updateTop(); render();
-        });
-        elModalActions.appendChild(bSkip);
-      }
-      elMask.style.display = 'block';
-      return;
-    }
-
-    // topdeck_from_green: card images + optional Skip button
-    if(kind === 'topdeck_from_green'){
-      const cardOpts = opts.filter(o => looksLikeCardNo(String(o)));
-      const hasSkip  = opts.some(o => String(o).toLowerCase() === 'skip');
-      const row = document.createElement('div');
-      row.className = 'choiceRow';
-      const dimsP = standardSize('portrait');
-      const dimsL = standardSize('landscape');
-      const dupCount = {};
-      cardOpts.forEach(o=>{ const k=String(o).trim(); dupCount[k]=(dupCount[k]||0)+1; });
-      const dupSeen = {};
-      cardOpts.forEach(cn=>{
-        cn = String(cn).trim();
-        const intr = intrinsicOrient(cn);
-        const d = (intr==='landscape') ? dimsL : dimsP;
-        const b = document.createElement('button');
-        b.className = 'choiceBtn';
-        b.style.width = d.w + 'px';
-        b.style.height = d.h + 'px';
-        const img = document.createElement('img');
-        img.src = imgUrl(cn); img.alt = cn;
-        dupSeen[cn] = (dupSeen[cn]||0)+1;
-        const nth = dupSeen[cn]; const tot = dupCount[cn]||0;
-        const cap = document.createElement('div');
-        cap.className = 'choiceCap';
-        cap.textContent = (tot>1) ? `${cn} (${nth}/${tot})` : cn;
-        b.appendChild(img); b.appendChild(cap);
-        b.addEventListener('click', async ev=>{
-          ev.stopPropagation();
-          st = await apiCmd('resolve_pending', {idx:0, choice: cn});
-          selHand=[]; updateTop(); render();
-        });
-        row.appendChild(b);
-      });
-      elModalCards.appendChild(row);
-      if(hasSkip){
         const bSkip = document.createElement('button');
         bSkip.className = 'miniBtn'; bSkip.textContent = 'Skip';
         bSkip.addEventListener('click', async ev=>{
