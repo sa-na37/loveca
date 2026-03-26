@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: yell_retrieve_heart_replace_20260325
+# BUILD_TAG: activate_member_onestep_20260326
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -2683,17 +2683,26 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                             op_free = r_free.get('op', '')
                             if op_free == 'activate_stage_member':
                                 opts_act = [p2 for p2 in ('L','C','R') if gs.stage.get(p2) and not gs.stage[p2].active]
-                                if opts_act:
+                                if len(opts_act) == 1:
+                                    # ウェイト1人 → 自動でアクティブ（確認不要）
+                                    target = opts_act[0]
+                                    gs.stage[target].active = True
+                                    gs.log.append(f"[AUTO] {pos}: {ci.cardnumber} ライブ開始時 → {target} set ACTIVE (auto)")
+                                elif len(opts_act) >= 2:
+                                    # ウェイト複数 → 画像選択ポップアップ一発（do/skip段階なし）
+                                    # カード画像で選択、またはskipも可
+                                    wait_cns = [gs.stage[p2].cardnumber for p2 in opts_act if gs.stage.get(p2)]
                                     pr = {
-                                        'kind': 'live_start_free_effect',
-                                        'pos': pos,
-                                        'cn': ci.cardnumber,
-                                        'op': op_free,
-                                        'op_params': gd_free,
-                                        'text': f"{pos}: {ci.cardnumber} ライブ開始時 → {eff}",
-                                        'options': ['do', 'skip'],
+                                        'kind': 'choose_stage_member_to_activate',
+                                        'text': f"{pos}: {ci.cardnumber} ライブ開始時 → ステージのメンバーを1人アクティブにする（スキップ可）",
+                                        'options': opts_act,
+                                        'card_options': wait_cns,
+                                        'allow_skip': True,
+                                        'source_pos': pos,
+                                        'source_cn': ci.cardnumber,
                                     }
                                     _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
+                                # ウェイト0人 → 何もしない
                     continue
                 need_e = _parse_energy_cost(cost)
                 if need_e <= 0:
@@ -4979,6 +4988,11 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         return
 
     if kind == 'choose_stage_member_to_activate':
+        # skipが許可されている場合（ライブ開始時の「1人まで」）
+        allow_skip = bool(p.get('allow_skip', False))
+        if allow_skip and choice_str.lower() in ('skip', '__skip__', 'no', 'n', '0', 'false'):
+            gs.log.append(f"[SKIP] choose_stage_member_to_activate: skipped")
+            return
         pos2 = str(choice_str or '').upper()
         if pos2 not in ('L','C','R'):
             gs.log.append(f"[ERR] activate_member: invalid pos {choice_str}")
