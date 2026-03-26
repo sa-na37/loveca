@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: stage_select_wait_landscape_20260323
+# BUILD_TAG: stage_picker_allow_less_20260326b
 from __future__ import annotations
 
 """llocg_ui.server
@@ -2846,7 +2846,7 @@ HTML = r'''<!doctype html>
     elModalTitle.textContent = '選択';
     elModalText.textContent = String((p && (p.text || p.prompt || p.message)) ? (p.text || p.prompt || p.message) : '');
     const pendText = String((p && (p.text || p.prompt || p.message)) ? (p.text || p.prompt || p.message) : '');
-    const allowSkip = /Skip可/i.test(pendText) || /\bskip\b/i.test(pendText) || (kind && /pick/i.test(kind));
+    const allowSkip = !!((p && (p.allow_less || p.allow_skip)) || /Skip可/i.test(pendText) || /\bskip\b/i.test(pendText) || (kind && /pick/i.test(kind));
     elModalActions.innerHTML = '';
     elModalCards.innerHTML = '';
 
@@ -2917,20 +2917,24 @@ HTML = r'''<!doctype html>
 
     const allCardNo = opts.length && opts.every(o=>looksLikeCardNo(o));
 
-    // Stage position options (L/C/R のみ) → ステージカード画像で表示
-    const allStagePos = opts.length && opts.every(o=>['L','C','R'].includes(String(o).toUpperCase()));
+    // Stage position options (plain L/C/R or labels like 'L: ...') → ステージカード画像で表示
+    const stageEntries = opts.map(o=>{
+      const raw = String(o || '').trim();
+      const pos = raw ? raw[0].toUpperCase() : '';
+      return { raw, pos };
+    });
+    const allStagePos = stageEntries.length && stageEntries.every(e=>['L','C','R'].includes(e.pos));
     if(allStagePos){
       const row = document.createElement('div');
       row.className = 'choiceRow';
       const dimsP = standardSize('portrait');
       const dimsL = standardSize('landscape');
-      opts.forEach(pos=>{
-        const posU = String(pos).toUpperCase();
+      stageEntries.forEach(({raw, pos})=>{
+        const posU = pos;
         const stage = (st && st.stage) ? st.stage : {};
         const slotData = stage[posU];
         const cn = slotData ? String(slotData.cardnumber || '') : '';
-        const isWait = slotData && (slotData.active === false);
-        // WAITカードは枠ごとlandscape（横向き）にする
+        const isWait = !!(slotData && slotData.active === false);
         const btnDims = isWait ? dimsL : dimsP;
         const b = document.createElement('button');
         b.className = 'choiceBtn';
@@ -2942,8 +2946,6 @@ HTML = r'''<!doctype html>
           const img = document.createElement('img');
           img.src = imgUrl(cn); img.alt = cn;
           if(isWait){
-            // WAIT: portrait画像をlandscape枠の中央に -90度回転して表示
-            // 回転後に枠にフィットするよう幅=枠h, 高さ=枠w にしてからtranslate+rotate
             img.style.width           = btnDims.h + 'px';
             img.style.height          = btnDims.w + 'px';
             img.style.position        = 'absolute';
@@ -2954,7 +2956,6 @@ HTML = r'''<!doctype html>
           }
           b.appendChild(img);
         }
-        // WAITバッジ（右上オーバーレイ）
         if(isWait){
           const badge = document.createElement('div');
           badge.style.cssText = 'position:absolute;top:6px;right:6px;background:rgba(220,120,0,.92);color:#fff;font-size:11px;font-weight:bold;padding:3px 7px;border-radius:5px;pointer-events:none;z-index:10;letter-spacing:0.05em;box-shadow:0 1px 4px rgba(0,0,0,.4);';
@@ -2963,17 +2964,66 @@ HTML = r'''<!doctype html>
         }
         const cap = document.createElement('div');
         cap.className = 'choiceCap';
-        cap.textContent = posU + (cn ? `: ${cn}` : '（空）') + (isWait ? ' [WAIT]' : '');
+        cap.textContent = raw || (posU + (cn ? `: ${cn}` : '（空）') + (isWait ? ' [WAIT]' : ''));
         b.appendChild(cap);
         b.addEventListener('click', async ev=>{
           ev.stopPropagation();
-          st = await apiCmd('resolve_pending', {idx:0, choice: posU});
+          st = await apiCmd('resolve_pending', {idx:0, choice: raw || posU});
           selHand=[]; updateTop(); render();
         });
         row.appendChild(b);
       });
       elModalCards.appendChild(row);
       if(allowSkip){
+        const bSkip = document.createElement('button');
+        bSkip.className = 'miniBtn'; bSkip.textContent = 'Skip';
+        bSkip.addEventListener('click', async ev=>{
+          ev.stopPropagation();
+          st = await apiCmd('resolve_pending', {idx:0, choice:'skip'});
+          selHand=[]; updateTop(); render();
+        });
+        elModalActions.appendChild(bSkip);
+      }
+      elMask.style.display = 'block';
+      return;
+    }
+
+    // topdeck_from_green: card images + optional Skip button
+    if(kind === 'topdeck_from_green'){
+      const cardOpts = opts.filter(o => looksLikeCardNo(String(o)));
+      const hasSkip  = opts.some(o => String(o).toLowerCase() === 'skip');
+      const row = document.createElement('div');
+      row.className = 'choiceRow';
+      const dimsP = standardSize('portrait');
+      const dimsL = standardSize('landscape');
+      const dupCount = {};
+      cardOpts.forEach(o=>{ const k=String(o).trim(); dupCount[k]=(dupCount[k]||0)+1; });
+      const dupSeen = {};
+      cardOpts.forEach(cn=>{
+        cn = String(cn).trim();
+        const intr = intrinsicOrient(cn);
+        const d = (intr==='landscape') ? dimsL : dimsP;
+        const b = document.createElement('button');
+        b.className = 'choiceBtn';
+        b.style.width = d.w + 'px';
+        b.style.height = d.h + 'px';
+        const img = document.createElement('img');
+        img.src = imgUrl(cn); img.alt = cn;
+        dupSeen[cn] = (dupSeen[cn]||0)+1;
+        const nth = dupSeen[cn]; const tot = dupCount[cn]||0;
+        const cap = document.createElement('div');
+        cap.className = 'choiceCap';
+        cap.textContent = (tot>1) ? `${cn} (${nth}/${tot})` : cn;
+        b.appendChild(img); b.appendChild(cap);
+        b.addEventListener('click', async ev=>{
+          ev.stopPropagation();
+          st = await apiCmd('resolve_pending', {idx:0, choice: cn});
+          selHand=[]; updateTop(); render();
+        });
+        row.appendChild(b);
+      });
+      elModalCards.appendChild(row);
+      if(hasSkip){
         const bSkip = document.createElement('button');
         bSkip.className = 'miniBtn'; bSkip.textContent = 'Skip';
         bSkip.addEventListener('click', async ev=>{
