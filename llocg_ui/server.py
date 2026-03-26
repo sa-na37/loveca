@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: stage_picker_allow_less_20260326b
+# BUILD_TAG: stage_picker_allow_less_20260326c
 from __future__ import annotations
 
 """llocg_ui.server
@@ -2846,7 +2846,7 @@ HTML = r'''<!doctype html>
     elModalTitle.textContent = '選択';
     elModalText.textContent = String((p && (p.text || p.prompt || p.message)) ? (p.text || p.prompt || p.message) : '');
     const pendText = String((p && (p.text || p.prompt || p.message)) ? (p.text || p.prompt || p.message) : '');
-    const allowSkip = !!((p && (p.allow_less || p.allow_skip)) || /Skip可/i.test(pendText) || /\bskip\b/i.test(pendText) || (kind && /pick/i.test(kind));
+    const allowSkip = !!((p && (p.allow_less || p.allow_skip)) || /Skip可/i.test(pendText) || /\bskip\b/i.test(pendText) || (kind && /pick/i.test(kind)));
     elModalActions.innerHTML = '';
     elModalCards.innerHTML = '';
 
