@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: direct_stage_picker_skip_20260326b
+# BUILD_TAG: direct_stage_picker_skip_20260326c
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -47,6 +47,7 @@ from .engine_base import (
     _parse_energy_cost, _cost_requires_self_wait, _cost_requires_self_to_green,
     _iter_triggered_abilities, _iter_activated_abilities,
     _has_matchable_activated, _ability_has_supported_clause,
+    _has_sacrifice_ability,
     can_activate_in_state, can_activate, activation_moves_self_to_green,
     snapshot_state, restore_state, push_undo, do_undo, begin_turn,
     new_game, refresh, load_simdeck,
