@@ -604,7 +604,7 @@ def _enqueue_look_top_3way_split(
         return
     gs.pending.append({
         'kind': 'look_top_3way_step',
-        'text': f'デッキ上{len(pool)}枚から1枚を手札へ、1枚をデッキ上へ、1枚を控え室へ（順に選択）',
+        'text': f'デッキ上{len(pool)}枚公開 ① 手札に加えるカードを選択',
         'options': list(pool),
         'pool': list(pool),
         'display_cards': list(pool),
@@ -4630,7 +4630,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                 remaining = list(pool)
                 gs.pending.append({
                     'kind': 'look_top_3way_step',
-                    'text': f'残り{len(remaining)}枚からデッキ上に置く1枚を選ぶ（残りは控え室）',
+                    'text': f'残り{len(remaining)}枚 ② デッキ上に置くカードを選択（残りは控え室へ）',
                     'options': remaining,
                     'pool': remaining,
                     'display_cards': remaining,
