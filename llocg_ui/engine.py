@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: opponent_wait1_20260327
+# BUILD_TAG: opponent_wait1_b_20260327
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -2705,6 +2705,24 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                                     _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
                                 # ウェイト0人 → 何もしない
                     continue
+                # self-wait コスト（「このメンバーをウェイトにしてもよい」）付き効果
+                if _cost_requires_self_wait(cost) and not _cost_requires_self_to_green(cost):
+                    if not slot.active:
+                        # すでにウェイト → コスト払えないのでスキップ
+                        continue
+                    if _match_effect_template(eff):
+                        pr = {
+                            'kind': 'live_start_pay_effect',
+                            'pos': pos,
+                            'cn': ci.cardnumber,
+                            'need_e': 0,
+                            'cost_kind': 'self_wait',
+                            'effect': eff,
+                            'text': f'{pos}: {ci.cardnumber} ライブ開始時 [このメンバーをウェイトにしてもよい] → {eff}',
+                            'options': ['pay', 'skip'],
+                        }
+                        _append_prompt(pr, f'{pos}: {ci.cardnumber} ライブ開始時')
+                    continue
                 need_e = _parse_energy_cost(cost)
                 if need_e <= 0:
                     need_e = 1
@@ -5189,7 +5207,11 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                     'after_source_cn': src_cn,
                 })
                 return
-            # コストなし（エネルギーのみ or コストなし）→ 即時効果適用
+            # self-wait コスト → このメンバーをウェイトにして効果適用
+            if cost_kind == 'self_wait':
+                slot.active = False
+                gs.log.append(f"[COST] {pos}: {slot.cardnumber} -> WAIT (self-wait cost)")
+            # コストなし（エネルギーのみ or コストなし or self-wait処理済み）→ 即時効果適用
             rng = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
             ok = try_apply_effect_template(gs, rng, cards_db, eff, after_ctx)
             if ok:
