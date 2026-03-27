@@ -122,17 +122,32 @@ def write_deck_meta_json(
 # Card no / rarity split
 # -----------------------------
 
+def _norm_plus(s: str) -> str:
+    return (s or "").replace("＋", "+").strip()
+
+
 def split_card_no_and_rarity(s: str) -> Tuple[str, str]:
     if not s:
         return "", ""
     s = s.strip()
     s = s.replace("－", "-").replace("―", "-").replace("—", "-")
-    tokens = ["SEC2", "SEC+", "SEC", "R2", "R+", "PR", "P2", "P1", "SD", "L", "N", "R"]
+    s = _norm_plus(s)
+
+    # DeckLog sometimes exports card IDs like:
+    #   PL!N-pb1-005-P+
+    #   PL!N-pb1-005-P＋
+    #   PL!HS-PR-018-PR
+    # Strip the rarity suffix, then trim any separator hyphen left before it.
+    tokens = ["SEC2", "SEC+", "SEC", "R2", "R+", "PR", "P2", "P1", "P+", "SD", "L", "N", "R"]
+    su = s.upper()
     for t in tokens:
-        if s.upper().endswith(t):
-            card_no = s[:-len(t)]
-            return card_no, t.replace("SEC+", "SEC2").replace("R+", "R2")
-    return s, ""
+        if su.endswith(t):
+            card_no = s[:-len(t)].rstrip("-").strip()
+            rarity = t.replace("P1", "P").replace("SEC+", "SEC2").replace("R+", "R2")
+            return card_no, rarity
+
+    # Tolerate a trailing hyphen even when no rarity suffix was present.
+    return s.rstrip("-").strip(), ""
 
 # -----------------------------
 # Parsing: HTML (rendered)
