@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: stage_picker_allow_less_20260326c
+# BUILD_TAG: stage_img_activate_20260327
 from __future__ import annotations
 
 """llocg_ui.server
@@ -2918,11 +2918,15 @@ HTML = r'''<!doctype html>
     const allCardNo = opts.length && opts.every(o=>looksLikeCardNo(o));
 
     // Stage position options (plain L/C/R or labels like 'L: ...') → ステージカード画像で表示
-    const stageEntries = opts.map(o=>{
-      const raw = String(o || '').trim();
-      const pos = raw ? raw[0].toUpperCase() : '';
-      return { raw, pos };
-    });
+    // skip を除外してからL/C/R判定する（choose_stage_member_to_activate など skip混入ケース対応）
+    const stagePosHasSkip = opts.some(o => String(o).toLowerCase() === 'skip');
+    const stageEntries = opts
+      .filter(o => String(o).toLowerCase() !== 'skip')
+      .map(o=>{
+        const raw = String(o || '').trim();
+        const pos = raw ? raw[0].toUpperCase() : '';
+        return { raw, pos };
+      });
     const allStagePos = stageEntries.length && stageEntries.every(e=>['L','C','R'].includes(e.pos));
     if(allStagePos){
       const row = document.createElement('div');
@@ -2974,7 +2978,7 @@ HTML = r'''<!doctype html>
         row.appendChild(b);
       });
       elModalCards.appendChild(row);
-      if(allowSkip){
+      if(allowSkip || stagePosHasSkip){
         const bSkip = document.createElement('button');
         bSkip.className = 'miniBtn'; bSkip.textContent = 'Skip';
         bSkip.addEventListener('click', async ev=>{
