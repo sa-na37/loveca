@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: heart_replace_yell_live_fix_20260327
+# BUILD_TAG: opponent_wait1_20260327
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -78,6 +78,8 @@ _EFFECT_RULES = [
     {"id": "set_self_wait_member", "pattern": r"^このメンバーをウェイトにする。$", "op": "set_self_wait"},
     # Opponent wait: "相手のステージにいるコストN以下のメンバーをM人までウェイトにする。"
     {"id": "set_opponent_wait_upto_n", "pattern": r"^相手のステージにいるコスト(?P<cost>\d+)以下のメンバーを(?P<max_n>\d+)人までウェイト(?:状態に)?にする。$", "op": "set_opponent_wait"},
+    # Opponent wait exactly 1: "相手のステージにいるコストN以下のメンバー1人をウェイトにする。"
+    {"id": "set_opponent_wait_exactly1", "pattern": r"^相手のステージにいるコスト(?P<cost>\d+)以下のメンバー1人をウェイトにする。$", "op": "set_opponent_wait_exactly1"},
     # Opponent wait all: "相手のステージにいるすべてのコストN以下のメンバーをウェイトにする。"
     {"id": "set_opponent_wait_all_cost", "pattern": r"^相手のステージにいるすべてのコスト(?P<cost>\d+)以下のメンバーをウェイトにする。$", "op": "set_opponent_wait"},
     # Opponent self-choice wait
@@ -862,6 +864,11 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         cost_lim = int(gd.get('cost', 99) or 99)
         max_n = int(gd.get('max_n', gd.get('n', 1)) or 1)
         gs.log.append(f'[MANUAL] 相手のステージにいるコスト{cost_lim}以下のメンバーを{max_n}人までウェイトにする（手動で処理してください）')
+        return
+
+    if op == 'set_opponent_wait_exactly1':
+        cost_lim = int(gd.get('cost', 99) or 99)
+        gs.log.append(f'[MANUAL] 相手のステージにいるコスト{cost_lim}以下のメンバー1人をウェイトにする（手動で処理してください）')
         return
 
     if op == 'set_opponent_wait_self_choice':
@@ -2581,12 +2588,11 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
             clauses = ab.get("clauses", [])
             if not isinstance(clauses, list):
                 continue
-            try:
-                blob_all = ''.join([str((cl0.get('raw') or cl0.get('effect_template') or '') ) for cl0 in clauses if isinstance(cl0, dict)])
-            except Exception:
-                blob_all = ''
-
             if (not str(getattr(gs, 'success_zone_heart_color', '') or '').strip()):
+                try:
+                    blob_all = ''.join([str((cl0.get('raw') or cl0.get('effect_template') or '') ) for cl0 in clauses if isinstance(cl0, dict)])
+                except Exception:
+                    blob_all = ''
                 if (
                     ('成功ライブカード置き場' in blob_all) and
                     ('選んだハート' in blob_all) and
@@ -2603,26 +2609,6 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                         }
                         _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
                         continue
-
-            # ハート変換（元々持つハートは選んだハートになる）- clauses分割対応のblob_allチェック
-            if '元々持つハートは選んだハートになる' in blob_all and ('1つを選ぶ' in blob_all or '1つ選ぶ' in blob_all):
-                opts_hr_jp = [c for c in re.findall(r'<\(([^)]+)\)>', blob_all) if c in ('桃', '赤', '黄', '緑', '青', '紫')]
-                color_opts_all = []
-                for jp in opts_hr_jp:
-                    col = _HEART_JP_MAP.get(jp, '')
-                    if col and col not in color_opts_all:
-                        color_opts_all.append(col)
-                if color_opts_all:
-                    pr = {
-                        'kind': 'live_start_heart_replace',
-                        'pos': pos,
-                        'cn': ci.cardnumber,
-                        'text': f"{pos}: {ci.cardnumber} ライブ開始時 → 元々持つハートを選んだハートに変換 (ライブ終了時まで)",
-                        'options': opts_hr_jp,
-                        'color_map': {jp: _HEART_JP_MAP.get(jp, jp) for jp in opts_hr_jp},
-                    }
-                    _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
-                    continue
 
             for cl in clauses:
                 if not isinstance(cl, dict):
@@ -3536,24 +3522,6 @@ def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict
                     continue
                 if _parse_energy_cost(cost) > 0 or _cost_requires_self_to_green(cost):
                     continue
-                # Optional hand-discard cost for retrieve_from_yell effects (LIVE card side)
-                m_opt = re.search(r'手札を(\d+)枚控え室に置いてもよい', cost)
-                if m_opt and _match_effect_template(eff) and 'retrieve_from_yell' == (_match_effect_template(eff) or [{}])[0].get('op', ''):
-                    cost_n = int(m_opt.group(1))
-                    gs.pending.append({
-                        'kind': 'live_success_pay_effect',
-                        'pos': '',
-                        'cn': cn_live,
-                        'cost_kind': 'discard_from_hand',
-                        'cost_n': cost_n,
-                        'effect': eff,
-                        'text': f"{cn_live}[ライブ成功時] 手札を{cost_n}枚控え室に置いてもよい → {eff}",
-                        'options': ['pay', 'skip'],
-                        'source_cn': cn_live,
-                        'ctx': {'source_cn': cn_live},
-                    })
-                    gs.log.append(f"[PENDING] {cn_live}[ライブ成功時] pay_or_skip -> {eff}")
-                    return
                 ctx2 = {'source_cn': cn_live}
                 if try_apply_effect_template(gs, rng, cards_db, eff, ctx2):
                     gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時] applied {eff}")
