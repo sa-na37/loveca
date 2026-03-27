@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: activate_member_onestep_b_20260326
+# BUILD_TAG: 3way_display_cards_20260327
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -4633,6 +4633,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                     'text': f'残り{len(remaining)}枚からデッキ上に置く1枚を選ぶ（残りは控え室）',
                     'options': remaining,
                     'pool': remaining,
+                    'display_cards': remaining,
                     'step': 'topdeck',
                     'picked_hand': picked,
                     'picked_top': '',
