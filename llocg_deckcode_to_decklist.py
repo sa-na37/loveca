@@ -126,6 +126,22 @@ def _norm_plus(s: str) -> str:
     return (s or "").replace("＋", "+").strip()
 
 
+_CARDNO_SUFFIX_RE = re.compile(r"^(?P<base>.*-\d{3})(?:-(?P<suf>[A-Za-z0-9+＋]+))?$")
+_ACCEPTED_RARITIES = {
+    "N", "R", "R2", "L", "L2", "SD", "PR", "P", "P+", "P2", "SEC", "SEC2", "SECL", "AR", "RM"
+}
+
+
+def _normalize_rarity_token(s: str) -> str:
+    t = _norm_plus(s).upper()
+    alias = {
+        "P1": "P",
+        "SEC+": "SEC2",
+        "R+": "R2",
+    }
+    return alias.get(t, t)
+
+
 def split_card_no_and_rarity(s: str) -> Tuple[str, str]:
     if not s:
         return "", ""
@@ -133,18 +149,23 @@ def split_card_no_and_rarity(s: str) -> Tuple[str, str]:
     s = s.replace("－", "-").replace("―", "-").replace("—", "-")
     s = _norm_plus(s)
 
-    # DeckLog sometimes exports card IDs like:
-    #   PL!N-pb1-005-P+
-    #   PL!N-pb1-005-P＋
-    #   PL!HS-PR-018-PR
-    # Strip the rarity suffix, then trim any separator hyphen left before it.
-    tokens = ["SEC2", "SEC+", "SEC", "R2", "R+", "PR", "P2", "P1", "P+", "SD", "L", "N", "R"]
-    su = s.upper()
-    for t in tokens:
-        if su.endswith(t):
-            card_no = s[:-len(t)].rstrip("-").strip()
-            rarity = t.replace("P1", "P").replace("SEC+", "SEC2").replace("R+", "R2")
-            return card_no, rarity
+    # Prefer an explicit suffix only when the card number itself matches the
+    # usual '*-NNN(-RARITY)?' pattern. This avoids stripping ordinary trailing
+    # letters from unrelated strings while covering all supported rarity tokens.
+    m = _CARDNO_SUFFIX_RE.match(s)
+    if m:
+        base = (m.group("base") or "").rstrip("-").strip()
+        suf = _normalize_rarity_token(m.group("suf") or "")
+        if suf in _ACCEPTED_RARITIES:
+            return base, suf
+        return base, ""
+
+    # Fallback: try suffix stripping against the accepted rarity set.
+    parts = s.rsplit("-", 1)
+    if len(parts) == 2:
+        base, suf = parts[0].strip(), _normalize_rarity_token(parts[1])
+        if suf in _ACCEPTED_RARITIES:
+            return base.rstrip("-").strip(), suf
 
     # Tolerate a trailing hyphen even when no rarity suffix was present.
     return s.rstrip("-").strip(), ""
