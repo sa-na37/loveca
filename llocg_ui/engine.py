@@ -335,6 +335,13 @@ def can_activate_in_state(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: s
             ok_any = True
         if ok_any:
             return True
+    # BODY起動効果（手札をすべて公開する）: effect_text_norm ベース検出
+    if _has_body_activated_in_text(ci):
+        body_key = f"{pos}:{_canon_cardno(getattr(ci, 'cardnumber', '') or '')}:body_activated"
+        used = int((getattr(gs, 'used_this_turn', {}) or {}).get(body_key, 0) or 0)
+        if used < 1:
+            return True
+
     # legacy fallback (only when this card has no matchable activated ability templates)
     if not _has_matchable_activated(ci):
         if _has_green_live_take_ability(ci) or _has_green_member_take_ability(ci) or _has_sacrifice_ability(ci):
@@ -3123,22 +3130,7 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
                 if gs.pending:
                     return
 
-    # --- BODY trigger: 「手札をすべて公開する」コスト付き登場時効果 ---
-    # trigger='BODY' はDBでは '登場' と別キーワードの可能性があるため独立処理
-    for ab in _iter_triggered_abilities(ci, 'BODY'):
-        clauses = ab.get('clauses', [])
-        if not isinstance(clauses, list):
-            continue
-        for cl in clauses:
-            if not isinstance(cl, dict):
-                continue
-            cost = str(cl.get('cost_template', '') or '')
-            eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
-            if not eff:
-                continue
-            if '手札をすべて公開する' in cost:
-                _handle_body_reveal_all_hand(gs, cards_db, pos, canon, eff, rng)
-                return
+    # BODY効果（手札をすべて公開する）は起動効果のため cmd_activate_member で処理
 
 
 def _handle_body_reveal_all_hand(
@@ -3315,22 +3307,14 @@ def _has_supported_enter_auto(ci: Optional[CardInfo]) -> bool:
     return False
 
 
-def _has_supported_body_auto(ci: Optional[CardInfo]) -> bool:
-    """Return True if the card has a BODY trigger with 手札をすべて公開する cost."""
-    if not ci or not getattr(ci, 'abilities', None):
+def _has_body_activated_in_text(ci: Optional[CardInfo]) -> bool:
+    """Return True if the card has a BODY-style activated ability (手札をすべて公開する) in effect_text_norm.
+    Handles cards where abilities are not parsed into a structured list.
+    """
+    if not ci:
         return False
-    for ab in _iter_triggered_abilities(ci, 'BODY'):
-        clauses = ab.get('clauses', [])
-        if not isinstance(clauses, list):
-            continue
-        for cl in clauses:
-            if not isinstance(cl, dict):
-                continue
-            cost = str(cl.get('cost_template', '') or '')
-            eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
-            if '手札をすべて公開する' in cost and eff:
-                return True
-    return False
+    txt = str(getattr(ci, 'effect_text_norm', '') or getattr(ci, 'effect_text_raw', '') or '')
+    return '<起動>' in txt and '手札をすべて公開する' in txt
 
 
 def _list_active_ai_cost10_positions(gs: GameState, cards_db: Dict[str, CardInfo], entered_cn: str) -> List[str]:
@@ -3382,15 +3366,6 @@ def _collect_auto_triggers_on_member_enter(gs: GameState, cards_db: Dict[str, Ca
             'cn': entered_cn,
         })
 
-    # BODY trigger (手札をすべて公開する)
-    if ci_enter and _has_supported_body_auto(ci_enter):
-        out.append({
-            'kind': 'body_auto',
-            'source_cn': canon_enter,
-            'pos': str(entered_pos or 'C').upper(),
-            'cn': entered_cn,
-        })
-
     # 宮下愛(PL!N-pb1-005): one trigger per unused copy on stage
     for ai_pos in _list_active_ai_cost10_positions(gs, cards_db, entered_cn):
         out.append({
@@ -3423,11 +3398,6 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         pos = str(trig.get('pos', 'C') or 'C').upper()
         cn = str(trig.get('cn', '') or '')
         handle_enter_auto(gs, cards_db, pos, cn)
-        return
-    if kind == 'body_auto':
-        pos = str(trig.get('pos', 'C') or 'C').upper()
-        cn = str(trig.get('cn', '') or '')
-        handle_enter_auto(gs, cards_db, pos, cn)  # BODYブランチはhandle_enter_auto内で処理
         return
     if kind == 'ai_cost10_enter':
         handle_stage_cost10_member_enter(gs, cards_db, entered_pos=str(trig.get('entered_pos','C') or 'C'), entered_cn=str(trig.get('entered_cn','') or ''), ai_pos=str(trig.get('ai_pos','') or ''), rng=rng)
@@ -4194,6 +4164,33 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
         gs.log.append(f"[PENDING] Emma bp3-008: choose 1 Nijigasaki member to set WAIT ({len(cands)} candidates)")
         return
 
+    # 0) BODY起動効果（手札をすべて公開する）: effect_text_norm ベース検出
+    #    abilities フィールドが存在しないカード（PL!N-PR-003等）に対応
+    if _has_body_activated_in_text(ci):
+        body_key = f"{pos}:{_canon_cardno(getattr(ci, 'cardnumber', '') or '')}:body_activated"
+        used = int((getattr(gs, 'used_this_turn', {}) or {}).get(body_key, 0) or 0)
+        if used >= 1:
+            gs.log.append(f"[INFO] activate: BODY起動効果は今ターン使用済み ({body_key})")
+            return
+        # effect text から効果部分を抽出（コロン以降）
+        txt = str(getattr(ci, 'effect_text_norm', '') or getattr(ci, 'effect_text_raw', '') or '')
+        eff_body = ''
+        if '手札をすべて公開する：' in txt:
+            eff_body = txt.split('手札をすべて公開する：', 1)[1].strip()
+        if not eff_body:
+            gs.log.append(f"[ERR] activate: BODY効果テキストの解析失敗 ({ci.cardnumber})")
+            return
+        try:
+            gs.used_this_turn[body_key] = 1
+        except Exception:
+            try:
+                gs.used_this_turn = {body_key: 1}
+            except Exception:
+                pass
+        gs.log.append(f"[ACT] {pos}: {ci.cardnumber} BODY起動効果発動")
+        _handle_body_reveal_all_hand(gs, cards_db, pos, ci.cardnumber, eff_body, rng)
+        return
+
     # 1) Generic activated abilities
     for ab in _iter_activated_abilities(ci):
         flags = _ability_usage_flags(ab if isinstance(ab, dict) else {})
@@ -4306,6 +4303,20 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                     })
                     gs.log.append(f"[PENDING] named_cards_cost_multi: total={total} cands={cands}")
                     return
+
+            # Cost: 手札をすべて公開する（BODY起動効果）
+            if '手札をすべて公開する' in cost:
+                # Mark once-per-turn before suspending
+                if flags.get('once_per_turn'):
+                    try:
+                        gs.used_this_turn[akey] = 1
+                    except Exception:
+                        try:
+                            gs.used_this_turn = {akey: 1}
+                        except Exception:
+                            pass
+                _handle_body_reveal_all_hand(gs, cards_db, pos, ci.cardnumber, eff, rng)
+                return
 
             # Mark once-per-turn usage after costs are paid (even if effect creates pending)
             if flags.get('once_per_turn'):
