@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: self_wait_block_fix_20260330
+# BUILD_TAG: opponent_wait_notify_20260330
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -865,16 +865,37 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
     if op == 'set_opponent_wait':
         cost_lim = int(gd.get('cost', 99) or 99)
         max_n = int(gd.get('max_n', gd.get('n', 1)) or 1)
+        src_cn = str((ctx or {}).get('source_cn', '') or '')
         gs.log.append(f'[MANUAL] 相手のステージにいるコスト{cost_lim}以下のメンバーを{max_n}人までウェイトにする（手動で処理してください）')
+        gs.pending.append({
+            'kind': 'opponent_wait_notify',
+            'text': f'【相手への効果】コスト{cost_lim}以下のメンバーを{max_n}人までウェイトにする\n（相手の盤面で手動で処理してください）',
+            'source_cn': src_cn,
+            'options': ['ok'],
+        })
         return
 
     if op == 'set_opponent_wait_exactly1':
         cost_lim = int(gd.get('cost', 99) or 99)
+        src_cn = str((ctx or {}).get('source_cn', '') or '')
         gs.log.append(f'[MANUAL] 相手のステージにいるコスト{cost_lim}以下のメンバー1人をウェイトにする（手動で処理してください）')
+        gs.pending.append({
+            'kind': 'opponent_wait_notify',
+            'text': f'【相手への効果】コスト{cost_lim}以下のメンバー1人をウェイトにする\n（相手の盤面で手動で処理してください）',
+            'source_cn': src_cn,
+            'options': ['ok'],
+        })
         return
 
     if op == 'set_opponent_wait_self_choice':
+        src_cn = str((ctx or {}).get('source_cn', '') or '')
         gs.log.append('[MANUAL] 相手は自身のステージのアクティブメンバー1人をウェイトにする（手動で処理してください）')
+        gs.pending.append({
+            'kind': 'opponent_wait_notify',
+            'text': '【相手への効果】相手は自身のステージのアクティブメンバー1人をウェイトにする\n（相手の盤面で手動で処理してください）',
+            'source_cn': src_cn,
+            'options': ['ok'],
+        })
         return
 
     if op == 'retrieve_from_yell':
@@ -4918,6 +4939,11 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         drew = draw(gs, 3, None)
         gs.log.append(f'[AUTO] NEO SKY, NEO MAP!: drew {drew}')
         _enqueue_topdeck_from_hand(gs, 3, 'NEO SKY, NEO MAP!')
+        return
+
+    if kind == 'opponent_wait_notify':
+        # 相手への効果通知：OKで閉じるだけ（相手盤面は手動処理）
+        gs.log.append('[ACK] opponent_wait_notify: confirmed by user')
         return
 
     if kind == 'topdeck_from_hand':
