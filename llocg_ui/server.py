@@ -58,7 +58,7 @@ from .engine import (
     StageSlot,
 )
 
-APP_VERSION = "clean-ui-v2_8_skip_yell_empty_live"
+APP_VERSION = "body_img_pick_20260330"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -2702,6 +2702,116 @@ HTML = r'''<!doctype html>
         });
         elModalActions.appendChild(bSkip);
       }
+
+      elMask.style.display = 'block';
+      return;
+    }
+
+    // BODY起動: デッキ上5枚からライブカードを1枚選択（choose_from_topkと同じ左右分割UI）
+    if(kind === 'body_reveal_pick_live'){
+      const displayCards = Array.isArray(p.display_cards) ? p.display_cards
+                         : (Array.isArray(p.pool) ? p.pool : []);
+      const candidates = Array.isArray(p.candidates) ? p.candidates
+                       : (Array.isArray(p.live_cands) ? p.live_cands : []);
+      const helperText = String((p && (p.text || p.prompt || p.message))
+                         ? (p.text || p.prompt || p.message)
+                         : 'ライブカードをクリックして選択（スキップ可）');
+
+      popup = {type:'pending', closable:false};
+      elModalTitle.textContent = 'デッキ公開';
+      elModalText.textContent = helperText;
+      elModalCards.innerHTML = '';
+      elModalActions.innerHTML = '';
+
+      const candidateSet = new Set(candidates.map(c => String(c).trim()));
+      const leftCards  = displayCards.filter(c => candidateSet.has(String(c).trim()));
+      const rightCards = displayCards.filter(c => !candidateSet.has(String(c).trim()));
+
+      const dimsP = standardSize('portrait');
+      const dimsL = standardSize('landscape');
+      const maxW  = Math.max(dimsP.w, dimsL.w);
+      const maxH  = Math.max(dimsP.h, dimsL.h);
+
+      function makeBodySurf(cards, clickable){
+        const surf = document.createElement('div');
+        surf.className = 'surf';
+        surf.style.height = (maxH + 12) + 'px';
+        const step = maxW * 0.45;
+        const minW = (cards.length <= 1) ? (maxW + 24) : (maxW + step*(cards.length-1) + 24);
+        surf.style.minWidth = minW + 'px';
+        cards.forEach((cn, i) => {
+          const s = String(cn).trim();
+          const orient = intrinsicOrient(s);
+          const d = (orient === 'landscape') ? dimsL : dimsP;
+          const x = 12 + step*i + (maxW - d.w)/2;
+          const y = 6  + (maxH - d.h)/2;
+          let clickFn = null;
+          if(clickable){
+            clickFn = async () => {
+              st = await apiCmd('resolve_pending', {idx:0, choice: s});
+              selHand = [];
+              updateTop();
+              render();
+            };
+          }
+          const c = makeCard(s, orient, x, y, d.w, d.h, '', clickFn, false, 100+i);
+          if(!clickable){
+            c.style.opacity = '0.35';
+            c.style.filter  = 'grayscale(80%)';
+            c.style.cursor  = 'default';
+          }
+          surf.appendChild(c);
+        });
+        return surf;
+      }
+
+      const splitWrap = document.createElement('div');
+      splitWrap.style.cssText = 'display:flex;gap:0;align-items:flex-start;';
+
+      if(leftCards.length > 0){
+        const col = document.createElement('div');
+        col.style.cssText = 'flex:0 0 auto;';
+        const lbl = document.createElement('div');
+        lbl.style.cssText = 'color:#ffe066;font-size:11px;margin-bottom:3px;text-align:center;padding:0 12px;';
+        lbl.textContent = '▼ ライブカード（クリックで選択）';
+        col.appendChild(lbl);
+        col.appendChild(makeBodySurf(leftCards, true));
+        splitWrap.appendChild(col);
+      }
+
+      if(leftCards.length > 0 && rightCards.length > 0){
+        const sep = document.createElement('div');
+        sep.style.cssText = 'width:2px;background:#444;align-self:stretch;flex-shrink:0;margin:0 8px;';
+        splitWrap.appendChild(sep);
+      }
+
+      if(rightCards.length > 0){
+        const col = document.createElement('div');
+        col.style.cssText = 'flex:0 0 auto;';
+        const lbl = document.createElement('div');
+        lbl.style.cssText = 'color:#777;font-size:11px;margin-bottom:3px;text-align:center;padding:0 12px;';
+        lbl.textContent = 'その他（選択不可）';
+        col.appendChild(lbl);
+        col.appendChild(makeBodySurf(rightCards, false));
+        splitWrap.appendChild(col);
+      }
+
+      elModalCards.appendChild(splitWrap);
+
+      const bSkip = document.createElement('button');
+      bSkip.className = 'miniBtn';
+      bSkip.textContent = 'Skip';
+      let _brSubmitting = false;
+      bSkip.addEventListener('click', async ev => {
+        ev.stopPropagation();
+        if(_brSubmitting) return;
+        _brSubmitting = true;
+        st = await apiCmd('resolve_pending', {idx:0, choice:'skip'});
+        selHand = [];
+        updateTop();
+        render();
+      });
+      elModalActions.appendChild(bSkip);
 
       elMask.style.display = 'block';
       return;

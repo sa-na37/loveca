@@ -3188,6 +3188,9 @@ def _handle_body_reveal_all_hand(
         'k': k,
         'text': f'{canon}[BODY]: デッキ上{k}枚からライブカードを1枚手札に加えてもよい（スキップ可）',
         'options': list(live_cands) + ['skip'],
+        'display_cards': list(pool),
+        'candidates': list(live_cands),
+        'optional': True,
     })
 
 
