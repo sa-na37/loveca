@@ -117,6 +117,283 @@ KNOWN_SIMPLE = {
 }
 
 
+# -------------------------
+# official image manifest
+# -------------------------
+OFFICIAL_BASE_URL = "https://llofficial-cardgame.com"
+OFFICIAL_CARDLIST_SEARCH_URL = OFFICIAL_BASE_URL + "/cardlist/searchresults/"
+OFFICIAL_CARDLIST_MORE_URL = OFFICIAL_BASE_URL + "/cardlist/cardsearch_ex"
+
+PB_PREFIX_TO_OFFICIAL_EXPANSION = {
+    "PL!SP": "PBSP",
+    "PL!LS": "PBLS",
+    "PL!N": "PBnj",
+    "PL!": "PBLL",
+    "LL": "PBLL",
+}
+SD_PREFIX_TO_OFFICIAL_EXPANSION = {
+    "PL!SP": "SPSD01",
+    "PL!N": "NSD01",
+    "PL!HS": "HSSD01",
+    "PL!LS": "LSSD01",
+    "PL!S": "SSD01",
+    "PL!": "PLSD01",
+}
+OFFICIAL_RARITY_ALIAS = {
+    "R＋": "R2", "R+": "R2",
+    "L＋": "L2", "L+": "L2",
+    "P＋": "P2", "P+": "P2",
+    "PE＋": "PE2", "PE+": "PE2",
+    "SEC＋": "SEC2", "SEC+": "SEC2",
+    "PR＋": "PR2", "PR+": "PR2",
+}
+OFFICIAL_CARD_RARITY_TAIL_RE = re.compile(r"^(?P<base>.+)-(?P<rarity>[A-Za-z0-9＋\+]{1,8})$")
+
+
+def _card_prefix_from_cardno(cardno: str) -> str:
+    parts = (cardno or "").split("-")
+    if not parts:
+        return cardno
+    head = parts[0]
+    if head.startswith("PL!"):
+        return head
+    return head
+
+
+def official_expansion_from_cardno(cardno: str) -> Optional[str]:
+    c = (cardno or "").strip()
+    if not c:
+        return None
+    m = re.search(r"(?:^|-)bp([1-9][0-9]*)(?:-|$)", c, re.IGNORECASE)
+    if m:
+        n = int(m.group(1))
+        return f"BP{n:02d}"
+    m = re.search(r"(?:^|-)pb([1-9][0-9]*)(?:-|$)", c, re.IGNORECASE)
+    if m:
+        return PB_PREFIX_TO_OFFICIAL_EXPANSION.get(_card_prefix_from_cardno(c))
+    m = re.search(r"(?:^|-)sd([1-9][0-9]*)(?:-|$)", c, re.IGNORECASE)
+    if m:
+        n = int(m.group(1))
+        base = SD_PREFIX_TO_OFFICIAL_EXPANSION.get(_card_prefix_from_cardno(c))
+        if not base:
+            return None
+        return re.sub(r"SD\d{2}$", f"SD{n:02d}", base)
+    return None
+
+
+def official_normalize_rarity_token(token: str) -> str:
+    t = (token or "").strip().upper().replace("＋", "+")
+    return OFFICIAL_RARITY_ALIAS.get(t, t)
+
+
+def split_display_card_and_rarity(display_card: str) -> Tuple[str, str]:
+    s = (display_card or "").strip()
+    m = OFFICIAL_CARD_RARITY_TAIL_RE.match(s)
+    if not m:
+        return s, ""
+    base = m.group("base").strip()
+    rarity = m.group("rarity").strip()
+    return base, rarity
+
+
+def infer_rarity_from_filename(filename: str) -> str:
+    stem = Path(filename).stem
+    if "-" not in stem:
+        return ""
+    tail = stem.rsplit("-", 1)[-1]
+    return official_normalize_rarity_token(tail)
+
+
+def parse_official_cardlist_items(html: str, expansion: str, wanted_cardnos: Optional[Set[str]] = None) -> List[Dict[str, Any]]:
+    soup = BeautifulSoup(html, "lxml")
+    items: List[Dict[str, Any]] = []
+    seen: Set[Tuple[str, str, str]] = set()
+
+    for node in soup.select(".cardlist-Result_Item.image-Item[card]"):
+        display_card = (node.get("card") or "").strip()
+        if not display_card:
+            continue
+        base_cardno, rarity_display = split_display_card_and_rarity(display_card)
+        if wanted_cardnos is not None and base_cardno not in wanted_cardnos:
+            continue
+        img = node.find("img")
+        if not img:
+            continue
+        src = (img.get("src") or "").strip()
+        if not src:
+            continue
+        parsed = urllib.parse.urlparse(src)
+        remote_filename = Path(urllib.parse.unquote(parsed.path)).name
+        if not remote_filename:
+            continue
+        rarity_norm = infer_rarity_from_filename(remote_filename) or official_normalize_rarity_token(rarity_display)
+        folder = expansion
+        # If the live src already contains the /cardlist/<folder>/ segment, trust it.
+        mm = re.search(r"/cardlist/([^/]+)/[^/]+$", parsed.path)
+        if mm:
+            folder = mm.group(1)
+        exact_url = f"{OFFICIAL_BASE_URL}/wordpress/wp-content/images/cardlist/{folder}/{remote_filename}"
+        key = (base_cardno, rarity_norm, remote_filename)
+        if key in seen:
+            continue
+        seen.add(key)
+        items.append({
+            "cardnumber": base_cardno,
+            "card_attr": display_card,
+            "rarity_display": rarity_display,
+            "rarity_norm": rarity_norm,
+            "folder": folder,
+            "remote_filename": remote_filename,
+            "exact_url": exact_url,
+        })
+    return items
+
+
+def extract_official_max_page(html: str) -> int:
+    m = re.search(r"max_page\s*=\s*([0-9]+)", html)
+    if not m:
+        return 1
+    try:
+        return max(1, int(m.group(1)))
+    except Exception:
+        return 1
+
+
+def load_cardnumbers_from_db(db_json: Optional[Path], db_csv: Optional[Path]) -> List[str]:
+    out: List[str] = []
+    if db_json and db_json.exists():
+        try:
+            data = json.loads(db_json.read_text(encoding="utf-8"))
+            rows = data if isinstance(data, list) else data.get("cards", data)
+            if isinstance(rows, list):
+                for r in rows:
+                    if isinstance(r, dict):
+                        cn = r.get("cardnumber")
+                        if isinstance(cn, str) and cn.strip():
+                            out.append(cn.strip())
+        except Exception:
+            pass
+    if (not out) and db_csv and db_csv.exists():
+        try:
+            df = pd.read_csv(db_csv)
+            if "cardnumber" in df.columns:
+                out.extend([str(x).strip() for x in df["cardnumber"].dropna().tolist() if str(x).strip()])
+        except Exception:
+            pass
+    # de-dup keep order
+    seen = set()
+    uniq: List[str] = []
+    for cn in out:
+        if cn not in seen:
+            uniq.append(cn)
+            seen.add(cn)
+    return uniq
+
+
+def cmd_official_image_manifest(
+    db_json: Optional[Path],
+    db_csv: Optional[Path],
+    outdir: Path,
+    cache_dir: Path,
+    delay: float,
+    user_agent: str,
+    timeout: float = 25.0,
+    per_card_fallback: bool = True,
+) -> Path:
+    wanted_cardnos = load_cardnumbers_from_db(db_json, db_csv)
+    if not wanted_cardnos:
+        raise SystemExit("[ERROR] no cardnumber rows found for official image manifest generation")
+
+    wanted_set = set(wanted_cardnos)
+    expansion_to_cards: Dict[str, Set[str]] = {}
+    unmatched: List[str] = []
+    for cn in wanted_cardnos:
+        exp = official_expansion_from_cardno(cn)
+        if exp:
+            expansion_to_cards.setdefault(exp, set()).add(cn)
+        else:
+            unmatched.append(cn)
+
+    cards_map: Dict[str, List[Dict[str, Any]]] = {}
+    expansions_summary: Dict[str, Any] = {}
+
+    def push_items(items: List[Dict[str, Any]]) -> None:
+        for item in items:
+            cn = item["cardnumber"]
+            cards_map.setdefault(cn, [])
+            key = (item["rarity_norm"], item["remote_filename"], item["folder"])
+            seen_keys = {(x["rarity_norm"], x["remote_filename"], x["folder"]) for x in cards_map[cn]}
+            if key not in seen_keys:
+                cards_map[cn].append(item)
+
+    for expansion in sorted(expansion_to_cards.keys()):
+        first_url = f"{OFFICIAL_CARDLIST_SEARCH_URL}?expansion={urllib.parse.quote(expansion)}&view=image&sort=new"
+        html = fetch(first_url, cache_dir, delay=delay, user_agent=user_agent, timeout=timeout)
+        page_items = parse_official_cardlist_items(html, expansion, wanted_cardnos=expansion_to_cards[expansion])
+        push_items(page_items)
+        max_page = extract_official_max_page(html)
+        pages_done = 1
+        if max_page >= 2:
+            for page in range(2, max_page + 1):
+                more_url = f"{OFFICIAL_CARDLIST_MORE_URL}?expansion={urllib.parse.quote(expansion)}&view=image&page={page}"
+                more_html = fetch(more_url, cache_dir, delay=delay, user_agent=user_agent, timeout=timeout)
+                push_items(parse_official_cardlist_items(more_html, expansion, wanted_cardnos=expansion_to_cards[expansion]))
+                pages_done += 1
+        expansions_summary[expansion] = {
+            "cards_wanted": len(expansion_to_cards[expansion]),
+            "pages_fetched": pages_done,
+            "max_page": max_page,
+        }
+
+    missing_after_expansion = [cn for cn in wanted_cardnos if cn not in cards_map]
+    # per-card fallback is reserved for unmatched prefixes / stubborn misses (PR etc.)
+    if per_card_fallback and missing_after_expansion:
+        for cn in missing_after_expansion:
+            url = f"{OFFICIAL_CARDLIST_SEARCH_URL}?cardno={urllib.parse.quote(cn)}&view=image&sort=new"
+            try:
+                html = fetch(url, cache_dir, delay=delay, user_agent=user_agent, timeout=timeout)
+            except Exception:
+                continue
+            push_items(parse_official_cardlist_items(html, official_expansion_from_cardno(cn) or "UNKNOWN", wanted_cardnos={cn}))
+
+    manifest = {
+        "version": 1,
+        "source": "official_cardlist",
+        "generated_from": {
+            "db_json": str(db_json) if db_json else "",
+            "db_csv": str(db_csv) if db_csv else "",
+        },
+        "base_url": f"{OFFICIAL_BASE_URL}/wordpress/wp-content/images/cardlist",
+        "cards_total_in_db": len(wanted_cardnos),
+        "cards_with_manifest": len(cards_map),
+        "cards_missing_manifest": len([cn for cn in wanted_cardnos if cn not in cards_map]),
+        "expansions": expansions_summary,
+        "cards": {cn: cards_map.get(cn, []) for cn in wanted_cardnos if cards_map.get(cn)},
+    }
+
+    outdir.mkdir(parents=True, exist_ok=True)
+    out_path = outdir / "official_image_manifest.json"
+    out_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    # also emit a compact TSV for quick inspection / grep
+    flat_rows: List[Dict[str, Any]] = []
+    for cn, entries in manifest["cards"].items():
+        for e in entries:
+            flat_rows.append({
+                "cardnumber": cn,
+                "rarity_norm": e.get("rarity_norm", ""),
+                "rarity_display": e.get("rarity_display", ""),
+                "folder": e.get("folder", ""),
+                "remote_filename": e.get("remote_filename", ""),
+                "exact_url": e.get("exact_url", ""),
+            })
+    flat_path = outdir / "official_image_manifest.tsv"
+    pd.DataFrame(flat_rows).to_csv(flat_path, index=False, encoding="utf-8-sig", sep="\t")
+    print(f"[DONE] official image manifest -> {out_path}")
+    print(f"[DONE] official image manifest TSV -> {flat_path}")
+    return out_path
+
+
 def sha_path(cache_dir: Path, url: str) -> Path:
     h = hashlib.sha256(url.encode("utf-8")).hexdigest()[:32]
     return cache_dir / f"{h}.html"
@@ -1216,6 +1493,16 @@ def build_parser() -> argparse.ArgumentParser:
     pa.add_argument("--csv", required=True)
     pa.add_argument("--top-unknown", type=int, default=30)
 
+    pim = sub.add_parser("image-manifest")
+    pim.add_argument("--json", default="")
+    pim.add_argument("--csv", default="")
+    pim.add_argument("--outdir", default=CONFIG["outdir"])
+    pim.add_argument("--cache", default=CONFIG["cache"])
+    pim.add_argument("--delay", type=float, default=CONFIG["delay"])
+    pim.add_argument("--user-agent", default=CONFIG["user_agent"])
+    pim.add_argument("--timeout", type=float, default=25.0)
+    pim.add_argument("--no-per-card-fallback", action="store_true")
+
     pall = sub.add_parser("all")
     pall.add_argument("--products-url", default=CONFIG["products_url"])
     pall.add_argument("--outdir", default=CONFIG["outdir"])
@@ -1230,6 +1517,9 @@ def build_parser() -> argparse.ArgumentParser:
     pall.add_argument("--suffix", default=CONFIG["normalize_suffix"])
     pall.add_argument("--mine-top", type=int, default=120)
     pall.add_argument("--top-unknown", type=int, default=30)
+    pall.add_argument("--no-official-image-manifest", action="store_true")
+    pall.add_argument("--official-timeout", type=float, default=25.0)
+    pall.add_argument("--no-per-card-fallback", action="store_true")
 
     return p
 
@@ -1269,6 +1559,21 @@ def main() -> None:
         cmd_audit(Path(args.csv), args.top_unknown)
         return
 
+    if args.cmd == "image-manifest":
+        db_json = Path(args.json) if args.json else None
+        db_csv = Path(args.csv) if args.csv else None
+        cmd_official_image_manifest(
+            db_json=db_json,
+            db_csv=db_csv,
+            outdir=Path(args.outdir),
+            cache_dir=Path(args.cache),
+            delay=args.delay,
+            user_agent=args.user_agent,
+            timeout=args.timeout,
+            per_card_fallback=(not args.no_per_card_fallback),
+        )
+        return
+
     if args.cmd == "all":
         out_csv, out_json = cmd_scrape(
             products_url=args.products_url,
@@ -1282,9 +1587,23 @@ def main() -> None:
             limit_cards=args.limit_cards,
             no_normalize=args.no_normalize,
         )
-        norm_csv, _ = cmd_normalize(out_csv, out_json, Path(args.outdir), args.suffix)
+        norm_csv, norm_json = cmd_normalize(out_csv, out_json, Path(args.outdir), args.suffix)
         cmd_mine(norm_csv, Path(args.outdir), args.mine_top)
         cmd_audit(norm_csv, args.top_unknown)
+        if not args.no_official_image_manifest:
+            try:
+                cmd_official_image_manifest(
+                    db_json=norm_json,
+                    db_csv=norm_csv,
+                    outdir=Path(args.outdir),
+                    cache_dir=Path(args.cache),
+                    delay=args.delay,
+                    user_agent=args.user_agent,
+                    timeout=args.official_timeout,
+                    per_card_fallback=(not args.no_per_card_fallback),
+                )
+            except Exception as e:
+                print(f"[WARN] official image manifest generation failed: {e}")
         return
 
 

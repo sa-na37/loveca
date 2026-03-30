@@ -1,95 +1,86 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-llocg_fetch_all_card_images_v8.py
+llocg_fetch_all_card_images.py
 
-Fetch LoveLive! OCG card images from the official site, robust to:
-- expansion folder variations (BP01-05, PB*, PR, *SD01, etc.)
-- rarity suffix variations (N, R, R2, L, L2, SD, PR, SEC, P, P2, ...)
-- card-number formatting variations (zero-padding, embedded "-R-" etc.)
-- TLS certificate issues on some local Python installs (auto-fallback to verify=False)
+Fetch LoveLive! OCG card images from the official site.
 
-Output layout (requested): group by EXPANSION FOLDER only
+Strategy:
+1) Build target card list from cards_min_tokv1.json (preferred) and compiled DB (union).
+2) If <root>/official_image_manifest.json exists, try exact URLs from that manifest first.
+3) Fall back to heuristic folder / rarity inference only for cards still missing.
+
+Output layout:
   <root>/card_images/<FOLDER>/<CARDNO>-<RARITY>.png
-
-By default, already-existing files are skipped.
-
-静音実行
-python3 llocg_fetch_all_card_images.py --root ./llocg_db_out_full --quiet
-
 """
-
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import random
 import re
 import time
+import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 try:
     import requests
-except Exception as e:  # pragma: no cover
+except Exception:
     requests = None  # type: ignore
-
 
 BASE_URL = "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist"
 
-# Reasonable defaults; user can extend via _RARITIES.txt
-DEFAULT_RARITIES = ["N", "R", "R2", "L", "L2", "SD", "PR", "SEC", "SECL", "AR", "RM", "P", "P2"]
+DEFAULT_RARITIES = [
+    "SD", "N", "R", "R2", "L", "L2", "PR", "PR2", "P", "P2",
+    "SEC", "SEC2", "SECL", "AR", "RM", "RE", "PE", "PE2", "SECE", "LLE",
+]
 
-# Folder candidates that are known to exist (user-provided).
 KNOWN_FOLDERS = [
     "BP01", "BP02", "BP03", "BP04", "BP05",
     "PBSP", "PBLS", "PBLL", "PBnj",
     "PR",
-    "SPSD01", "NSD01", "PLSD01", "LSSD01", "HSSD01",
+    "SPSD01", "NSD01", "PLSD01", "LSSD01", "HSSD01", "SSD01",
 ]
 
-# Mapping rules: card prefix -> PB folder (best-effort; still falls back to trying all PB* if needed)
 PB_PREFIX_TO_FOLDER = {
     "PL!SP": "PBSP",
     "PL!LS": "PBLS",
-    "PL!N":  "PBnj",  # based on user example
-    "PL!":   "PBLL",  # "PL!-" no subtag tends to align with PBLL per user note
+    "PL!N":  "PBnj",
+    "PL!":   "PBLL",
     "LL":    "PBLL",
 }
-
 SD_PREFIX_TO_FOLDER = {
     "PL!SP": "SPSD01",
     "PL!N":  "NSD01",
     "PL!HS": "HSSD01",
     "PL!LS": "LSSD01",
+    "PL!S":  "SSD01",
     "PL!":   "PLSD01",
 }
+RARITY_ALIAS = {
+    "R+": "R2", "R＋": "R2",
+    "L+": "L2", "L＋": "L2",
+    "P+": "P2", "P＋": "P2",
+    "PE+": "PE2", "PE＋": "PE2",
+    "SEC+": "SEC2", "SEC＋": "SEC2",
+    "PR+": "PR2", "PR＋": "PR2",
+}
 
-BP_RE = re.compile(r"(?:^|-)bp([1-9])(?:-|$)", re.IGNORECASE)
+BP_RE = re.compile(r"(?:^|-)bp([1-9][0-9]*)(?:-|$)", re.IGNORECASE)
 SD_RE = re.compile(r"(?:^|-)sd([0-9]+)(?:-|$)", re.IGNORECASE)
 PB_RE = re.compile(r"(?:^|-)pb([0-9]+)(?:-|$)", re.IGNORECASE)
-PR_RE = re.compile(r"(?:^|-)PR-(\d+)$", re.IGNORECASE)
 
 
-def _norm_cardno_for_filename(cardno: str) -> str:
-    """
-    Keep case & punctuation, only fix the *last* numeric token to 3-digit zero padding.
-    Example:
-      PL!-bp3-4   -> PL!-bp3-004
-      LL-PR-4     -> LL-PR-004
-      PL!-bp3-R-1 -> PL!-bp3-R-001
-    """
-    parts = cardno.split("-")
-    if not parts:
-        return cardno
-    last = parts[-1]
-    if last.isdigit():
-        parts[-1] = last.zfill(3)
-        return "-".join(parts)
-    # Sometimes last token can be like "001R" etc. Only pad if purely numeric.
-    return cardno
+def _uniq_keep_order(xs: Sequence[str]) -> List[str]:
+    seen = set()
+    out: List[str] = []
+    for x in xs:
+        if x not in seen:
+            out.append(x)
+            seen.add(x)
+    return out
 
 
 def _read_text_lines(p: Path) -> List[str]:
@@ -99,220 +90,287 @@ def _read_text_lines(p: Path) -> List[str]:
         return []
 
 
+def _normalize_rarity_token(rarity: str) -> str:
+    r = (rarity or "").strip().upper().replace("＋", "+")
+    return RARITY_ALIAS.get(r, r)
+
 
 def _sanitize_rarities(items: List[str]) -> List[str]:
-    """Filter out accidental labels like 'MEMBER: N R ...' and keep only rarity tokens."""
     out: List[str] = []
     for x in (items or []):
         if x is None:
             continue
         s = str(x).strip().upper().replace("＋", "+")
-        # split if someone put "MEMBER: N R R2"
         if ":" in s:
             s = s.split(":", 1)[1].strip()
-        # allow whitespace-separated lists too
-        parts = re.split(r"[\s,]+", s)
-        for p in parts:
-            p = p.strip()
+        for p in re.split(r"[\s,]+", s):
+            p = _normalize_rarity_token(p.strip())
             if not p:
                 continue
-            # rarity token should be short and alnum/+ only
-            if re.fullmatch(r"[A-Z0-9\+]{1,5}", p):
+            if re.fullmatch(r"[A-Z0-9\+]{1,8}", p):
                 out.append(p)
-    # de-dup keep order
-    seen = set()
-    uniq = []
-    for r in out:
-        if r not in seen:
-            uniq.append(r)
-            seen.add(r)
-    return uniq
+    return _uniq_keep_order(out)
+
+
 def load_rarities(root: Path, outdir: Path, extra_cli: Optional[str]) -> List[str]:
-    """
-    Priority:
-      1) CLI --rarities "A,B,C"
-      2) outdir/_RARITIES.txt
-      3) root/_RARITIES.txt
-      4) DEFAULT_RARITIES
-    """
     if extra_cli:
         items = [x.strip() for x in extra_cli.split(",") if x.strip()]
-        return _uniq_keep_order(items)
-
+        rarities = _sanitize_rarities(items)
+        return rarities or list(DEFAULT_RARITIES)
     for cand in [outdir / "_RARITIES.txt", root / "_RARITIES.txt"]:
         lines = [ln for ln in _read_text_lines(cand) if ln and not ln.startswith("#")]
         if lines:
-            # allow comma-separated in lines
             items: List[str] = []
             for ln in lines:
                 items.extend([x.strip() for x in ln.split(",") if x.strip()])
-            return _uniq_keep_order(items)
-
+            rarities = _sanitize_rarities(items)
+            if rarities:
+                return rarities
     return list(DEFAULT_RARITIES)
 
 
-def _uniq_keep_order(xs: Sequence[str]) -> List[str]:
-    seen = set()
-    out = []
-    for x in xs:
-        if x not in seen:
-            out.append(x)
-            seen.add(x)
-    return out
-
-
-def find_latest_compiled(root: Path) -> Path:
-    """
-    Accept both:
-      cards_compiled_v*.json  (project standard)
-      cards_compiled_*.json   (older)
-    Choose the lexicographically largest as a stable approximation of "latest".
-    """
+def find_latest_compiled(root: Path) -> Optional[Path]:
     cand = list(root.glob("cards_compiled_v*.json")) + list(root.glob("cards_compiled_*.json"))
-    if not cand:
-        raise FileNotFoundError("No compiled DB found under root: expected cards_compiled_v*.json")
-    cand = sorted(cand)
-    return cand[-1]
+    return sorted(cand)[-1] if cand else None
 
 
-def load_compiled(path: Path) -> Any:
+def find_tokv1_json(root: Path) -> Optional[Path]:
+    p = root / "cards_min_tokv1.json"
+    return p if p.exists() else None
+
+
+def load_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def iter_cardnos(compiled: Any) -> List[str]:
-    """
-    Robustly extract card numbers from various schemas:
-      - list of dicts with 'card_no'/'cardno'/'id'/'number'
-      - dict with key 'cards' that is list
-      - dict mapping cardno -> dict
-    """
-    out: List[str] = []
+def _norm_cardno_for_filename(cardno: str) -> str:
+    parts = (cardno or "").split("-")
+    if not parts:
+        return cardno
+    last = parts[-1]
+    if last.isdigit():
+        parts[-1] = last.zfill(3)
+    return "-".join(parts)
 
-    def push(x: Any):
-        if isinstance(x, str) and x:
-            out.append(x)
+
+def _card_prefix(cardno: str) -> str:
+    parts = (cardno or "").split("-")
+    if not parts:
+        return cardno
+    head = parts[0]
+    if head.startswith("PL!"):
+        return head
+    return head
+
+
+def _product_family(cardno: str) -> str:
+    c = (cardno or "").lower()
+    if "-pr-" in c:
+        return "pr"
+    if "-sd" in c:
+        return "sd"
+    if "-pb" in c:
+        return "pb"
+    if "-bp" in c:
+        return "bp"
+    return "other"
+
+
+def _record_cardnumber(obj: Dict[str, Any]) -> Optional[str]:
+    for k in ("cardnumber", "cardNumber", "card_no", "cardno", "id", "number", "card_number"):
+        v = obj.get(k)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return None
+
+
+def load_compiled_records(path: Optional[Path]) -> List[Dict[str, Any]]:
+    if not path or not path.exists():
+        return []
+    compiled = load_json(path)
+    out: List[Dict[str, Any]] = []
+
+    def push(cardno: str, meta: Optional[Dict[str, Any]] = None) -> None:
+        rec = dict(meta or {})
+        rec["cardnumber"] = cardno
+        out.append(rec)
 
     if isinstance(compiled, dict):
-        if "cards" in compiled and isinstance(compiled["cards"], list):
+        if isinstance(compiled.get("cards"), list):
             for obj in compiled["cards"]:
                 if isinstance(obj, dict):
-                    for k in ("cardnumber", "cardNumber", "card_no", "cardno", "id", "number", "card_number"):
-                        if k in obj and isinstance(obj[k], str):
-                            push(obj[k])
-                            break
-                elif isinstance(obj, str):
-                    push(obj)
+                    cn = _record_cardnumber(obj)
+                    if cn:
+                        push(cn, obj)
+                elif isinstance(obj, str) and obj.strip():
+                    push(obj.strip())
         else:
-            # maybe dict mapping id->entry
-            # use keys that look like cardnos
             for k, v in compiled.items():
-                if isinstance(k, str) and ("-" in k) and len(k) >= 6:
-                    # heuristic: cardno often contains 'bp'/'sd'/'PR' etc.
-                    if re.search(r"(bp|sd|PR|pb)", k, re.IGNORECASE):
-                        push(k)
-                # also check values if dict
                 if isinstance(v, dict):
-                    for kk in ("cardnumber", "cardNumber", "card_no", "cardno", "id", "number", "card_number"):
-                        if kk in v and isinstance(v[kk], str):
-                            push(v[kk])
-                            break
+                    cn = _record_cardnumber(v)
+                    if cn:
+                        push(cn, v)
+                if isinstance(k, str) and "-" in k and re.search(r"(bp|sd|pr|pb)", k, re.I):
+                    push(k)
     elif isinstance(compiled, list):
         for obj in compiled:
             if isinstance(obj, dict):
-                for k in ("cardnumber", "cardNumber", "card_no", "cardno", "id", "number", "card_number"):
-                    if k in obj and isinstance(obj[k], str):
-                        push(obj[k])
-                        break
-            elif isinstance(obj, str):
-                push(obj)
+                cn = _record_cardnumber(obj)
+                if cn:
+                    push(cn, obj)
+            elif isinstance(obj, str) and obj.strip():
+                push(obj.strip())
 
-    # Clean + de-dup
-    out = [o.strip() for o in out if isinstance(o, str) and o.strip()]
-    out = _uniq_keep_order(out)
+    dedup: Dict[str, Dict[str, Any]] = {}
+    for rec in out:
+        cn = rec["cardnumber"].strip()
+        if cn:
+            dedup[cn] = rec
+    return list(dedup.values())
 
-    # Safety: only keep strings that look like cardnos
-    out2 = []
-    for o in out:
-        if "-" in o and len(o) >= 6:
-            out2.append(o)
-    return out2
+
+def load_tokv1_records(path: Optional[Path]) -> List[Dict[str, Any]]:
+    if not path or not path.exists():
+        return []
+    obj = load_json(path)
+    cards = obj if isinstance(obj, list) else obj.get("cards", obj)
+    out: List[Dict[str, Any]] = []
+    if isinstance(cards, list):
+        for rec in cards:
+            if isinstance(rec, dict):
+                cn = rec.get("cardnumber")
+                if isinstance(cn, str) and cn.strip():
+                    out.append(rec)
+    return out
+
+
+def load_target_records(root: Path, compiled_path: Optional[Path]) -> Tuple[List[Dict[str, Any]], Optional[Path], Optional[Path]]:
+    tokv1_path = find_tokv1_json(root)
+    tokv1_records = load_tokv1_records(tokv1_path)
+    compiled_records = load_compiled_records(compiled_path)
+
+    merged: Dict[str, Dict[str, Any]] = {}
+    for rec in compiled_records:
+        cn = _norm_cardno_for_filename(rec["cardnumber"].strip())
+        rec = dict(rec)
+        rec["cardnumber"] = cn
+        merged[cn] = rec
+    for rec in tokv1_records:
+        cn = _norm_cardno_for_filename(rec["cardnumber"].strip())
+        merged.setdefault(cn, {}).update(rec)
+        merged[cn]["cardnumber"] = cn
+    records = [merged[k] for k in sorted(merged.keys())]
+    return records, tokv1_path, compiled_path
+
+
+def build_url(folder: str, remote_filename: str) -> str:
+    return f"{BASE_URL}/{folder}/{remote_filename}"
 
 
 def folder_candidates_for_cardno(cardno: str) -> List[str]:
-    """
-    Determine likely folder(s) to try, ordered by probability.
-    We still allow fallback to KNOWN_FOLDERS to be robust.
-    """
     c = cardno
 
-    # 1) SD decks
     m = SD_RE.search(c)
     if m:
         pref = _card_prefix(c)
         folder = SD_PREFIX_TO_FOLDER.get(pref)
-        # sd number also matters (sd1 -> *SD01)
         sdnum = m.group(1)
         sdtag = f"SD{sdnum.zfill(2)}"
-        # Our known folders are ...SD01 ; build accordingly if pref mapping exists.
         cand: List[str] = []
         if folder:
-            # ensure it matches the sd number; replace trailing digits
             if folder.endswith("SD01"):
-                folder2 = folder[:-2] + sdnum.zfill(2)
+                cand.append(folder[:-2] + sdnum.zfill(2))
             else:
-                folder2 = folder
-            cand.append(folder2)
-        # fallback: try any folder that ends with sdtag (case-sensitive)
-        for f in KNOWN_FOLDERS:
-            if f.endswith(sdtag):
-                cand.append(f)
+                cand.append(folder)
+        cand.extend([f for f in KNOWN_FOLDERS if f.endswith(sdtag)])
         return _uniq_keep_order(cand)
 
-    # 2) PR folder
     if "-PR-" in c:
         return ["PR"]
 
-    # 3) BP expansions from bpX
     bm = BP_RE.search(c)
     if bm:
-        x = int(bm.group(1))
-        if 1 <= x <= 9:
-            return [f"BP0{x}"]
+        return [f"BP{int(bm.group(1)):02d}"]
 
-    # 4) PB: based on prefix mapping + still try other PB folders
     pm = PB_RE.search(c)
     if pm:
-        pref = _card_prefix(c)
-        best = PB_PREFIX_TO_FOLDER.get(pref)
-        cand = []
-        if best:
-            cand.append(best)
-        # plus all PB* known
+        best = PB_PREFIX_TO_FOLDER.get(_card_prefix(c))
+        cand = [best] if best else []
         cand.extend([f for f in KNOWN_FOLDERS if f.startswith("PB")])
-        return _uniq_keep_order(cand)
+        return _uniq_keep_order([x for x in cand if x])
 
-    # 5) LL-bpX without bp marker? (unlikely)
-    # Fallback: try all known folders
     return list(KNOWN_FOLDERS)
 
 
-def _card_prefix(cardno: str) -> str:
-    """
-    Prefix is the first token or first two tokens if starts with PL!<TAG>.
-    Examples:
-      PL!N-sd1-025 -> PL!N
-      PL!SP-sd1-020 -> PL!SP
-      PL!-sd1-004 -> PL!
-      LL-bp2-001 -> LL
-    """
-    parts = cardno.split("-")
-    if not parts:
-        return cardno
-    head = parts[0]
-    # PL!* may be embedded as first token (e.g., "PL!N", "PL!SP", "PL!")
-    if head.startswith("PL!"):
-        return head
-    return head
+def family_rarities(cardno: str, global_rarities: Sequence[str], manifest_entries: Optional[List[Dict[str, Any]]] = None) -> List[str]:
+    manifest_rs: List[str] = []
+    if manifest_entries:
+        manifest_rs = [e.get("rarity_norm", "") for e in manifest_entries if isinstance(e, dict)]
+        manifest_rs = _sanitize_rarities(manifest_rs)
+    fam = _product_family(cardno)
+    if fam == "sd":
+        fam_order = ["SD"]
+    elif fam == "pr":
+        fam_order = ["PR", "PR2", "P", "P2", "SEC", "SEC2", "SECL", "RE", "PE", "PE2"]
+    elif fam in {"bp", "pb"}:
+        fam_order = ["N", "R", "R2", "L", "L2", "RM", "AR", "SEC", "SEC2", "SECL", "RE", "PE", "PE2", "SECE", "LLE", "P", "P2", "PR", "PR2"]
+    else:
+        fam_order = []
+    combined = manifest_rs + fam_order + list(global_rarities)
+    return _uniq_keep_order(_sanitize_rarities(combined))
+
+
+def _rarity_mid_token(rarity: str) -> str:
+    r = _normalize_rarity_token(rarity)
+    if r.endswith("2") and len(r) >= 2:
+        return r[:-1]
+    return r
+
+
+def remote_filename_variants(folder: str, cardno: str, rarity: str) -> List[str]:
+    folder_u = (folder or "").strip().upper()
+    r = _normalize_rarity_token(rarity)
+    out: List[str] = [f"{cardno}-{r}.png"]
+
+    if folder_u == "PR":
+        cn2 = cardno
+        cn2_low = cn2.lower()
+        if "-pr-" in cn2_low:
+            parts = re.split("(?i)-pr-", cn2)
+            if len(parts) >= 2:
+                cn_drop = "-".join([parts[0]] + parts[1:])
+                out.append(f"{cn_drop}-{r}.png")
+
+    cn_low = cardno.lower()
+    if folder_u == "BP03" and "-bp3-" in cn_low:
+        idx = cn_low.find("-bp3-")
+        prefix = cardno[:idx]
+        set_tok = cardno[idx + 1: idx + 4]
+        rest = cardno[idx + 5:]
+        parts = rest.split("-")
+        num = parts[-1]
+        mids = [r, _rarity_mid_token(r)]
+        for mid in _uniq_keep_order([m for m in mids if m]):
+            out.append(f"{prefix}-{set_tok}-{mid}-{num}-{r}.png")
+
+    return _uniq_keep_order(out)
+
+
+def load_official_manifest(root: Path) -> Dict[str, List[Dict[str, Any]]]:
+    path = root / "official_image_manifest.json"
+    if not path.exists():
+        return {}
+    try:
+        obj = load_json(path)
+    except Exception:
+        return {}
+    cards = obj.get("cards", {}) if isinstance(obj, dict) else {}
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    if isinstance(cards, dict):
+        for cn, entries in cards.items():
+            if isinstance(cn, str) and isinstance(entries, list):
+                out[_norm_cardno_for_filename(cn)] = [e for e in entries if isinstance(e, dict)]
+    return out
 
 
 @dataclass
@@ -324,86 +382,12 @@ class TryResult:
     folder: str
     cardno: str
     rarity: str
+    mode: str
     bytes: int = 0
 
 
 def _ensure_dir(p: Path) -> None:
     p.mkdir(parents=True, exist_ok=True)
-
-
-def build_url(folder: str, remote_filename: str) -> str:
-    return f"{BASE_URL}/{folder}/{remote_filename}"
-
-
-def _rarity_mid_token(rarity: str) -> str:
-    """Return a simplified rarity token sometimes used mid-filename.
-
-    For BP03, we have observed the official image filenames embedding a
-    rarity token immediately after the set code, and also at the suffix:
-      - PL!-bp3-R-001-R.png
-      - PL!N-bp3-N-022-N.png
-
-    For suffix variants like R2/L2/P2, the mid token may appear either as
-    the full token (R2) or the base token (R). This helper returns the
-    base token.
-    """
-    r = (rarity or "").strip().upper().replace("＋", "+")
-    # Treat P+ as P for image filenames (the official site typically uses P / P2)
-    if r.endswith("+"):
-        r = r[:-1]
-    if r.endswith("2") and len(r) >= 2:
-        return r[:-1]
-    return r
-
-
-def remote_filename_variants(folder: str, cardno: str, rarity: str) -> List[str]:
-    """Generate remote filename candidates (not local save names).
-
-    Default pattern:
-      {cardno}-{rarity}.png
-
-    BP03 has a known variant:
-      {prefix}-bp3-{mid}-{num}-{rarity}.png
-    where {mid} is usually equal to rarity (or the base token for *2)
-    and {prefix} is the card prefix before '-bp3-'.
-    """
-    folder_u = (folder or "").strip().upper()
-    r = (rarity or "").strip().upper().replace("＋", "+")
-    # Treat P+ as P for image filenames (the official site typically uses P / P2)
-    if r.endswith("+"):
-        r = r[:-1]
-    out: List[str] = []
-
-    # Normal pattern (works for most folders)
-    out.append(f"{cardno}-{r}.png")
-
-    # PR cards: official filenames often drop the mid token "-PR-" (e.g., PL!HS-PR-018 -> PL!HS-018-PR.png)
-    if folder_u == "PR":
-        cn2 = cardno
-        cn2_low = (cn2 or "").lower()
-        if "-pr-" in cn2_low:
-            parts = re.split("(?i)-pr-", cn2)
-            if len(parts) >= 2:
-                cn_drop = "-".join([parts[0]] + parts[1:])
-                out.append(f"{cn_drop}-{r}.png")
-
-
-    # BP03 variant (insert rarity token after bp3)
-    cn_low = (cardno or "").lower()
-    if folder_u == "BP03" and "-bp3-" in cn_low:
-        idx = cn_low.find("-bp3-")
-        prefix = cardno[:idx]  # up to the hyphen before bp3
-        set_tok = cardno[idx + 1: idx + 4]  # 'bp3' in original case
-        rest = cardno[idx + 5:]  # after '-bp3-'
-        parts = rest.split("-")
-        num = parts[-1]
-        mids = [r, _rarity_mid_token(r)]
-        for mid in list(dict.fromkeys([m for m in mids if m])):
-            out.append(f"{prefix}-{set_tok}-{mid}-{num}-{r}.png")
-
-    # De-dup while preserving order
-    return list(dict.fromkeys(out))
-
 
 
 def _urllib_get(url: str, headers: Dict[str, str], timeout: float, insecure: bool) -> Tuple[int, bytes]:
@@ -416,80 +400,118 @@ def _urllib_get(url: str, headers: Dict[str, str], timeout: float, insecure: boo
     with urlopen(req, timeout=timeout, context=ctx) as r:
         data = r.read()
         return int(getattr(r, "status", 200) or 200), data
-def download_one(
-    sess: "requests.Session",
-    folder: str,
+
+
+def _http_get(sess: Optional["requests.Session"], url: str, headers: Dict[str, str], timeout: float, verify: bool) -> Tuple[int, bytes]:
+    if sess is None:
+        return _urllib_get(url, headers=headers, timeout=timeout, insecure=not verify)
+    resp = sess.get(url, timeout=timeout, headers=headers, verify=verify)
+    return resp.status_code, resp.content
+
+
+def _download_url(
+    sess: Optional["requests.Session"],
+    url: str,
+    out_path: Path,
+    timeout: float,
+    allow_insecure_fallback: bool,
+    state: Dict[str, Any],
+) -> Tuple[bool, str, int]:
+    verify = not bool(state.get("insecure", False))
+    try:
+        status_code, content = _http_get(sess, url, state["headers"], timeout=timeout, verify=verify)
+    except Exception as e:
+        msg = f"{type(e).__name__}: {e}"
+        if allow_insecure_fallback and ("CERTIFICATE_VERIFY_FAILED" in msg or "SSLError" in msg or "ssl" in msg.lower()) and not state.get("insecure_used", False):
+            state["insecure_used"] = True
+            state["insecure"] = True
+            try:
+                status_code, content = _http_get(sess, url, state["headers"], timeout=timeout, verify=False)
+            except Exception as e2:
+                return False, f"EXC {type(e2).__name__}", 0
+        else:
+            return False, f"EXC {type(e).__name__}", 0
+
+    if status_code != 200 or not content:
+        return False, f"HTTP {status_code}", 0
+
+    _ensure_dir(out_path.parent)
+    out_path.write_bytes(content)
+    return True, "OK", len(content)
+
+
+def try_manifest_entry(
+    sess: Optional["requests.Session"],
     cardno: str,
+    entry: Dict[str, Any],
+    outdir: Path,
+    skip_existing: bool,
+    timeout: float,
+    allow_insecure_fallback: bool,
+    state: Dict[str, Any],
+) -> TryResult:
+    folder = str(entry.get("folder", "") or "")
+    rarity = _normalize_rarity_token(str(entry.get("rarity_norm", "") or ""))
+    remote_filename = str(entry.get("remote_filename", "") or "")
+    exact_url = str(entry.get("exact_url", "") or "")
+    if not folder or not rarity:
+        return TryResult(False, "BAD_ENTRY", "", "", folder, cardno, rarity, "manifest", 0)
+
+    out_path = outdir / folder / f"{cardno}-{rarity}.png"
+    if skip_existing and out_path.exists() and out_path.stat().st_size > 0:
+        return TryResult(True, "SKIP_EXISTS", exact_url, str(out_path), folder, cardno, rarity, "manifest", 0)
+
+    urls = []
+    if exact_url:
+        urls.append(exact_url)
+    if remote_filename:
+        built = build_url(folder, remote_filename)
+        if built not in urls:
+            urls.append(built)
+
+    last_status = "NO_TRY"
+    last_url = ""
+    for url in urls:
+        last_url = url
+        ok, status, nbytes = _download_url(sess, url, out_path, timeout, allow_insecure_fallback, state)
+        if ok:
+            return TryResult(True, status, url, str(out_path), folder, cardno, rarity, "manifest", nbytes)
+        last_status = status
+
+    return TryResult(False, last_status, last_url, str(out_path), folder, cardno, rarity, "manifest", 0)
+
+
+def try_heuristic(
+    sess: Optional["requests.Session"],
+    cardno: str,
+    folder: str,
     rarity: str,
     outdir: Path,
     skip_existing: bool,
     timeout: float,
-    sleep: float,
-    jitter: float,
     allow_insecure_fallback: bool,
     state: Dict[str, Any],
 ) -> TryResult:
-    """
-    Download a single (folder,cardno,rarity) image.
-    - Skips if already exists and skip_existing.
-    - Auto-fallback to verify=False once if SSL fails.
-    """
-    # store by folder only (requested)
-    folder_dir = outdir / folder
-    filename = f"{cardno}-{rarity}.png"
-    path = folder_dir / filename
+    rarity = _normalize_rarity_token(rarity)
+    out_path = outdir / folder / f"{cardno}-{rarity}.png"
+    if skip_existing and out_path.exists() and out_path.stat().st_size > 0:
+        return TryResult(True, "SKIP_EXISTS", "", str(out_path), folder, cardno, rarity, "heuristic", 0)
 
-    if skip_existing and path.exists() and path.stat().st_size > 0:
-        return TryResult(ok=True, status="SKIP_EXISTS", url="", path=str(path), folder=folder, cardno=cardno, rarity=rarity, bytes=0)
-
-    last_url = ""
     last_status = "NO_TRY"
+    last_url = ""
     for remote_filename in remote_filename_variants(folder, cardno, rarity):
         url = build_url(folder, remote_filename)
         last_url = url
-        # ensure folder only when actually writing
-        verify = not bool(state.get("insecure", False))
-        try:
-            if sess is None:
-                status_code, content = _urllib_get(url, headers=state["headers"], timeout=timeout, insecure=not verify)
-                class _R: pass
-                resp = _R(); resp.status_code=status_code; resp.content=content
-            else:
-                resp = sess.get(url, timeout=timeout, headers=state["headers"], verify=verify)
-        except Exception as e:
-            # SSL failure fallback
-            msg = f"{type(e).__name__}: {e}"
-            if allow_insecure_fallback and ("CERTIFICATE_VERIFY_FAILED" in msg or "SSLError" in msg or "ssl" in msg.lower()) and not state.get("insecure_used", False):
-                state["insecure_used"] = True
-                state["insecure"] = True
-                try:
-                    if sess is None:
-                        status_code, content = _urllib_get(url, headers=state["headers"], timeout=timeout, insecure=True)
-                        class _R: pass
-                        resp = _R(); resp.status_code=status_code; resp.content=content
-                    else:
-                        resp = sess.get(url, timeout=timeout, headers=state["headers"], verify=False)
-                except Exception as e2:
-                    last_status = f"EXC {type(e2).__name__}"
-                    continue
-            else:
-                last_status = f"EXC {type(e).__name__}"
-                continue
-
-        if resp.status_code != 200 or not resp.content:
-            last_status = f"HTTP {resp.status_code}"
-            continue
-
-        _ensure_dir(folder_dir)
-        path.write_bytes(resp.content)
-        return TryResult(True, "OK", url, str(path), folder, cardno, rarity, len(resp.content))
-
-    return TryResult(False, last_status, last_url, str(path), folder, cardno, rarity, 0)
+        ok, status, nbytes = _download_url(sess, url, out_path, timeout, allow_insecure_fallback, state)
+        if ok:
+            return TryResult(True, status, url, str(out_path), folder, cardno, rarity, "heuristic", nbytes)
+        last_status = status
+    return TryResult(False, last_status, last_url, str(out_path), folder, cardno, rarity, "heuristic", 0)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--root", type=Path, required=True, help="Project root (contains cards_compiled_*.json)")
+    ap.add_argument("--root", type=Path, required=True, help="Project root (contains cards_min_tokv1.json / cards_compiled_*.json)")
     ap.add_argument("--compiled", type=Path, default=None, help="Optional compiled JSON path")
     ap.add_argument("--outdir", type=Path, default=None, help="Output dir (default: <root>/card_images)")
     ap.add_argument("--rarities", type=str, default=None, help="Comma-separated rarities to try (overrides _RARITIES.txt)")
@@ -500,169 +522,195 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--no-skip-existing", dest="skip_existing", action="store_false")
     ap.set_defaults(skip_existing=True)
     ap.add_argument("--timeout", type=float, default=10.0)
-    ap.add_argument("--sleep", type=float, default=0.05)
-    ap.add_argument("--jitter", type=float, default=0.05)
-    ap.add_argument("--max-warn-total", type=int, default=40, help="Rate-limit console warnings")
-    ap.add_argument("--max-warn-per-card", type=int, default=2, help="Rate-limit warnings per card")
+    ap.add_argument("--sleep", type=float, default=0.02)
+    ap.add_argument("--jitter", type=float, default=0.03)
+    ap.add_argument("--max-warn-total", type=int, default=40)
+    ap.add_argument("--max-warn-per-card", type=int, default=2)
     ap.add_argument("--user-agent", type=str, default="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36")
-    ap.add_argument("--quiet", action="store_true", help="Suppress most logs (still prints final summary)")
-    ap.add_argument("--insecure", action="store_true", help="Disable TLS verification (not recommended). Auto-fallback is enabled by default.")
-    ap.add_argument("--no-insecure-fallback", action="store_true", help="Disable auto TLS fallback.")
+    ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--insecure", action="store_true")
+    ap.add_argument("--no-insecure-fallback", action="store_true")
     args = ap.parse_args(argv)
 
     def _log(*a, **k):
-        if not getattr(args, "quiet", False):
+        if not args.quiet:
             print(*a, **k)
 
     root = args.root.resolve()
     compiled_path = args.compiled.resolve() if args.compiled else find_latest_compiled(root)
     outdir = args.outdir.resolve() if args.outdir else (root / "card_images")
-
     outdir.mkdir(parents=True, exist_ok=True)
 
-    rarities = load_rarities(root, outdir, args.rarities)
-    rarities = _uniq_keep_order(rarities)
-    rarities = _sanitize_rarities(rarities)
-    if not rarities:
-        rarities = list(DEFAULT_RARITIES)
+    global_rarities = load_rarities(root, outdir, args.rarities)
+    global_rarities = _uniq_keep_order(_sanitize_rarities(global_rarities)) or list(DEFAULT_RARITIES)
 
-    compiled = load_compiled(compiled_path)
-    cardnos = iter_cardnos(compiled)
-    if not cardnos:
-        print("[ERR] No card numbers found in compiled DB.")
+    target_records, tokv1_path, compiled_path = load_target_records(root, compiled_path)
+    if not target_records:
+        print("[ERR] No card numbers found in tokv1/compiled DB.")
+        print("      tokv1   :", tokv1_path)
         print("      compiled:", compiled_path)
-        print("      Hint: check schema; expected dict['cards'] list or mapping keys.")
         return 2
 
-    # normalize cardnos for filename usage (padding)
-    cardnos_norm = [_norm_cardno_for_filename(cn) for cn in cardnos]
-    # keep original order but normalized
-    cardnos_norm = _uniq_keep_order(cardnos_norm)
+    manifest = load_official_manifest(root)
 
-    sess = None
-    if requests is not None:
-        sess = requests.Session()
-
+    sess = requests.Session() if requests is not None else None
     state: Dict[str, Any] = {
         "headers": {"User-Agent": args.user_agent},
         "insecure": bool(args.insecure),
         "insecure_used": False,
     }
-    allow_fallback = (not args.no_insecure_fallback)
+    allow_fallback = not args.no_insecure_fallback
 
     results: List[TryResult] = []
     ok_files = 0
     skip_files = 0
     fail_attempts = 0
+    manifest_success = 0
+    heuristic_success = 0
+    manifest_cards = 0
 
     warn_total = 0
     warn_by_card: Dict[str, int] = {}
 
-    # Key idea: For each card, try folder candidates in order and download all rarities that exist for the *first folder* that yields at least 1 image.
-    # This prevents massive warning spam across irrelevant folders.
-    for i, cardno in enumerate(cardnos_norm, 1):
-        folders = folder_candidates_for_cardno(cardno)
+    for i, rec in enumerate(target_records, 1):
+        cardno = _norm_cardno_for_filename(rec["cardnumber"].strip())
+        manifest_entries = manifest.get(cardno, [])
+        if manifest_entries:
+            manifest_cards += 1
 
-        saved_any_for_card = False
-        chosen_folder = None
+        per_card_results: List[TryResult] = []
+        card_had_success = False
 
-        for folder in folders:
-            any_ok_in_folder = False
-            folder_results: List[TryResult] = []
-
-            for rarity in rarities:
-                tr = download_one(
-                    sess,
-                    folder=folder,
+        # 1) exact manifest URLs
+        if manifest_entries:
+            for entry in manifest_entries:
+                tr = try_manifest_entry(
+                    sess=sess,
                     cardno=cardno,
-                    rarity=rarity,
+                    entry=entry,
                     outdir=outdir,
                     skip_existing=args.skip_existing,
                     timeout=args.timeout,
-                    sleep=args.sleep,
-                    jitter=args.jitter,
                     allow_insecure_fallback=allow_fallback,
                     state=state,
                 )
-                folder_results.append(tr)
-
+                per_card_results.append(tr)
                 if tr.ok:
+                    card_had_success = True
                     if tr.status == "SKIP_EXISTS":
                         skip_files += 1
                     else:
                         ok_files += 1
-                    any_ok_in_folder = True
-                    saved_any_for_card = True
-
+                    manifest_success += 1
                     if (not args.all_rarities) and tr.status != "SKIP_EXISTS":
-                        # stop after first real download
                         break
                 else:
                     fail_attempts += 1
 
                 time.sleep(args.sleep + random.random() * args.jitter)
 
-            # If this folder produced at least 1 image (downloaded or already existed), we accept this folder as the correct one.
-            # Then we keep all folder_results (including failures) and stop trying other folders to reduce noise.
-            if any_ok_in_folder:
-                chosen_folder = folder
-                results.extend(folder_results)
-                break
-            else:
-                # Keep only *very limited* warnings, do not store all failures from wrong folders to avoid report bloat.
-                # But if we're at the last folder candidate, store them for diagnostics.
-                if folder == folders[-1]:
-                    results.extend(folder_results)
+        # 2) heuristic fallback only if manifest absent or no manifest success
+        if not card_had_success:
+            folders = []
+            if manifest_entries:
+                folders.extend([str(e.get("folder", "") or "") for e in manifest_entries if str(e.get("folder", "") or "")])
+            folders.extend(folder_candidates_for_cardno(cardno))
+            folders = _uniq_keep_order([f for f in folders if f])
 
-                # Rate-limited warning on folder mismatch
-                warn_by_card.setdefault(cardno, 0)
-                if warn_total < args.max_warn_total and warn_by_card[cardno] < args.max_warn_per_card:
-                    # show a single example URL from this folder
-                    if folder_results:
-                        ex = folder_results[0].url
+            rarities = family_rarities(cardno, global_rarities, manifest_entries=manifest_entries)
+            chosen_folder = None
+
+            for folder in folders:
+                any_ok_in_folder = False
+                folder_results: List[TryResult] = []
+
+                for rarity in rarities:
+                    tr = try_heuristic(
+                        sess=sess,
+                        cardno=cardno,
+                        folder=folder,
+                        rarity=rarity,
+                        outdir=outdir,
+                        skip_existing=args.skip_existing,
+                        timeout=args.timeout,
+                        allow_insecure_fallback=allow_fallback,
+                        state=state,
+                    )
+                    folder_results.append(tr)
+
+                    if tr.ok:
+                        card_had_success = True
+                        any_ok_in_folder = True
+                        if tr.status == "SKIP_EXISTS":
+                            skip_files += 1
+                        else:
+                            ok_files += 1
+                        heuristic_success += 1
+                        if (not args.all_rarities) and tr.status != "SKIP_EXISTS":
+                            break
                     else:
-                        ex_remote = remote_filename_variants(folder, cardno, rarities[0])[0]
-                        ex = build_url(folder, ex_remote)
-                    print(f"[WARN] {cardno}: no images under folder={folder} (example {ex})")
-                    warn_total += 1
-                    warn_by_card[cardno] += 1
+                        fail_attempts += 1
+
+                    time.sleep(args.sleep + random.random() * args.jitter)
+
+                if any_ok_in_folder:
+                    chosen_folder = folder
+                    per_card_results.extend(folder_results)
+                    break
+                else:
+                    if folder == folders[-1]:
+                        per_card_results.extend(folder_results)
+
+                    warn_by_card.setdefault(cardno, 0)
+                    if warn_total < args.max_warn_total and warn_by_card[cardno] < args.max_warn_per_card:
+                        ex = folder_results[0].url if folder_results else ""
+                        _log(f"[WARN] {cardno}: no images under folder={folder} (example {ex})")
+                        warn_total += 1
+                        warn_by_card[cardno] += 1
+
+        results.extend(per_card_results)
 
         if i % 100 == 0 or i == 1:
-            print(f"[{i}/{len(cardnos_norm)}] ok_files={ok_files} skipped={skip_files} fail_attempts={fail_attempts} ...")
+            _log(f"[{i}/{len(target_records)}] ok_files={ok_files} skipped={skip_files} fail_attempts={fail_attempts} manifest_cards={manifest_cards} ...")
 
-    # Write report
     report = {
         "root": str(root),
-        "compiled": str(compiled_path),
+        "tokv1": str(tokv1_path) if tokv1_path else "",
+        "compiled": str(compiled_path) if compiled_path else "",
         "outdir": str(outdir),
-        "rarities": rarities,
+        "manifest_present": bool(manifest),
+        "rarities": global_rarities,
         "counts": {
-            "cards_total": len(cardnos_norm),
+            "cards_total": len(target_records),
+            "cards_with_manifest": manifest_cards,
             "ok_files": ok_files,
             "skipped": skip_files,
             "fail_attempts": fail_attempts,
+            "manifest_successes": manifest_success,
+            "heuristic_successes": heuristic_success,
         },
         "notes": {
             "insecure_mode_used": bool(state.get("insecure_used", False) or state.get("insecure", False)),
-            "strategy": "For each card: try likely folders; stop at first folder with any success; then try all rarities in that folder.",
+            "strategy": "manifest exact URL first; heuristic folder/rarity fallback only when needed",
         },
         "results": [tr.__dict__ for tr in results],
     }
     rep_path = outdir / "_download_report.json"
     rep_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    # Fail log: only actual failures (not SKIP_EXISTS)
     fail_lines: List[str] = []
     for tr in results:
         if (not tr.ok) and tr.status != "SKIP_EXISTS":
-            fail_lines.append(f"{tr.cardno}\t{tr.folder}\t{tr.rarity}\t{tr.status}\t{tr.url}")
+            fail_lines.append(f"{tr.cardno}\t{tr.folder}\t{tr.rarity}\t{tr.mode}\t{tr.status}\t{tr.url}")
     fail_log = outdir / "_failures.log"
     fail_log.write_text("\n".join(fail_lines) + ("\n" if fail_lines else ""), encoding="utf-8")
 
     print("[DONE]")
+    print("tokv1    :", tokv1_path)
     print("compiled :", compiled_path)
     print("outdir   :", outdir)
-    print("rarities :", ", ".join(rarities))
+    print("manifest :", bool(manifest))
+    print("rarities :", ", ".join(global_rarities))
     print("ok_files :", ok_files)
     print("skipped  :", skip_files)
     print("failed   :", len(fail_lines))
@@ -670,8 +718,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     print("fail_log :", fail_log)
 
     if ok_files == 0 and skip_files == 0:
-        print("[ERR] No files were downloaded or skipped. This usually means card list extraction failed or all URLs are unreachable.")
-        print("      Check the report and failures log; also verify network/TLS on your environment.")
+        print("[ERR] No files were downloaded or skipped. This usually means target extraction failed or all URLs are unreachable.")
         return 3
 
     return 0
