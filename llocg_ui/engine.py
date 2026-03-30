@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: opponent_wait_notify_20260330
+# BUILD_TAG: body_reveal_live_20260330
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -3123,6 +3123,94 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
                 if gs.pending:
                     return
 
+    # --- BODY trigger: 「手札をすべて公開する」コスト付き登場時効果 ---
+    # trigger='BODY' はDBでは '登場' と別キーワードの可能性があるため独立処理
+    for ab in _iter_triggered_abilities(ci, 'BODY'):
+        clauses = ab.get('clauses', [])
+        if not isinstance(clauses, list):
+            continue
+        for cl in clauses:
+            if not isinstance(cl, dict):
+                continue
+            cost = str(cl.get('cost_template', '') or '')
+            eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+            if not eff:
+                continue
+            if '手札をすべて公開する' in cost:
+                _handle_body_reveal_all_hand(gs, cards_db, pos, canon, eff, rng)
+                return
+
+
+def _handle_body_reveal_all_hand(
+    gs: GameState,
+    cards_db: Dict[str, CardInfo],
+    pos: str,
+    canon: str,
+    eff: str,
+    rng: Optional[random.Random],
+) -> None:
+    """BODY効果: 手札をすべて公開し、ライブカードがない場合にデッキ上5枚からライブカードを1枚手札へ。
+
+    対象カード例:
+      PL!N-PR-003 上原歩夢 / PL!N-PR-008 近江彼方 / PL!N-PR-010 エマ・ヴェルデ
+    効果テキスト:
+      自分のステージにほかのメンバーがおり、かつこれにより公開した手札の中にライブカードがない場合、
+      自分のデッキの上からカードを5枚見る。その中からライブカードを1枚公開して手札に加えてもよい。残りを控え室に置く。
+    """
+    # 条件1: 自分のステージにほかのメンバーがいるか
+    other_members = [p for p in ('L', 'C', 'R') if p != pos and gs.stage.get(p)]
+    if not other_members:
+        gs.log.append(f'[AUTO] {canon}[BODY]: 他メンバーなし → 効果なし')
+        return
+
+    # 手札を公開（内容をログに記録）
+    hand_cns = list(gs.hand)
+    live_in_hand = [cn for cn in hand_cns if _is_live_card(cards_db, cn)]
+    gs.log.append(f'[AUTO] {canon}[BODY]: 手札公開 hand={hand_cns} live_in_hand={live_in_hand}')
+
+    # 条件2: 公開した手札にライブカードがない
+    if live_in_hand:
+        gs.log.append(f'[AUTO] {canon}[BODY]: 手札にライブカードあり → 効果なし')
+        return
+
+    # 条件達成: デッキ上5枚を見てライブカード1枚を手札に加えてもよい
+    k = 5
+    _rule_refresh_for_top_access(gs, rng, k, reason=f'{canon}_body')
+    pool = list(gs.deck[:k])
+    if not pool:
+        gs.log.append(f'[AUTO] {canon}[BODY]: デッキ空 → 効果なし')
+        return
+
+    # ライブカード候補を絞る
+    live_cands = [cn for cn in pool if _is_live_card(cards_db, cn)]
+    if not live_cands:
+        # ライブカードなし → 全て控え室へ
+        for cn in pool:
+            gs.deck.remove(cn)
+            gs.green_room.append(cn)
+        gs.log.append(f'[AUTO] {canon}[BODY]: デッキ上{k}枚にライブカードなし → 全て控え室 {pool}')
+        return
+
+    gs.log.append(f'[PENDING] {canon}[BODY]: デッキ上{k}枚={pool} ライブ候補={live_cands}')
+    gs.pending.append({
+        'kind': 'body_reveal_pick_live',
+        'cn': canon,
+        'pos': pos,
+        'pool': list(pool),
+        'live_cands': list(live_cands),
+        'k': k,
+        'text': f'{canon}[BODY]: デッキ上{k}枚からライブカードを1枚手札に加えてもよい（スキップ可）',
+        'options': list(live_cands) + ['skip'],
+    })
+
+
+def _is_live_card(cards_db: Dict[str, CardInfo], cn: str) -> bool:
+    """Return True if cn is a LIVE-type card."""
+    ci = _get_card(cards_db, _canon_cardno(str(cn or '')))
+    if not ci:
+        return False
+    return is_live_type(getattr(ci, 'type', '') or '')
+
 
 def handle_stage_cost10_member_enter(gs: GameState, cards_db: Dict[str, CardInfo], entered_pos: str, entered_cn: str, ai_pos: str = '', rng: Optional[random.Random] = None) -> None:
     """Handle auto abilities that trigger when a cost-10 MEMBER enters your stage.
@@ -3227,6 +3315,24 @@ def _has_supported_enter_auto(ci: Optional[CardInfo]) -> bool:
     return False
 
 
+def _has_supported_body_auto(ci: Optional[CardInfo]) -> bool:
+    """Return True if the card has a BODY trigger with 手札をすべて公開する cost."""
+    if not ci or not getattr(ci, 'abilities', None):
+        return False
+    for ab in _iter_triggered_abilities(ci, 'BODY'):
+        clauses = ab.get('clauses', [])
+        if not isinstance(clauses, list):
+            continue
+        for cl in clauses:
+            if not isinstance(cl, dict):
+                continue
+            cost = str(cl.get('cost_template', '') or '')
+            eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+            if '手札をすべて公開する' in cost and eff:
+                return True
+    return False
+
+
 def _list_active_ai_cost10_positions(gs: GameState, cards_db: Dict[str, CardInfo], entered_cn: str) -> List[str]:
     """Return stage positions of unused 宮下愛(PL!N-pb1-005) that would trigger on cost-10 member enter."""
     canon_enter = _canon_cardno(entered_cn)
@@ -3276,6 +3382,15 @@ def _collect_auto_triggers_on_member_enter(gs: GameState, cards_db: Dict[str, Ca
             'cn': entered_cn,
         })
 
+    # BODY trigger (手札をすべて公開する)
+    if ci_enter and _has_supported_body_auto(ci_enter):
+        out.append({
+            'kind': 'body_auto',
+            'source_cn': canon_enter,
+            'pos': str(entered_pos or 'C').upper(),
+            'cn': entered_cn,
+        })
+
     # 宮下愛(PL!N-pb1-005): one trigger per unused copy on stage
     for ai_pos in _list_active_ai_cost10_positions(gs, cards_db, entered_cn):
         out.append({
@@ -3308,6 +3423,11 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         pos = str(trig.get('pos', 'C') or 'C').upper()
         cn = str(trig.get('cn', '') or '')
         handle_enter_auto(gs, cards_db, pos, cn)
+        return
+    if kind == 'body_auto':
+        pos = str(trig.get('pos', 'C') or 'C').upper()
+        cn = str(trig.get('cn', '') or '')
+        handle_enter_auto(gs, cards_db, pos, cn)  # BODYブランチはhandle_enter_auto内で処理
         return
     if kind == 'ai_cost10_enter':
         handle_stage_cost10_member_enter(gs, cards_db, entered_pos=str(trig.get('entered_pos','C') or 'C'), entered_cn=str(trig.get('entered_cn','') or ''), ai_pos=str(trig.get('ai_pos','') or ''), rng=rng)
@@ -4944,6 +5064,45 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
     if kind == 'opponent_wait_notify':
         # 相手への効果通知：OKで閉じるだけ（相手盤面は手動処理）
         gs.log.append('[ACK] opponent_wait_notify: confirmed by user')
+        return
+
+    if kind == 'body_reveal_pick_live':
+        pool = list(p.get('pool', []) or [])
+        live_cands = list(p.get('live_cands', []) or [])
+        cn_src = str(p.get('cn', '') or '')
+        chosen = _canon_cardno(str(choice_str or ''))
+        # pool をデッキから除去
+        deck_copy = list(gs.deck)
+        for c2 in pool:
+            try:
+                deck_copy.remove(c2)
+            except ValueError:
+                pass
+        gs.deck = deck_copy
+        if choice_str.lower() in ('skip', '__skip__', 'no', '0', 'false'):
+            # スキップ: 全て控え室
+            for c2 in pool:
+                gs.green_room.append(c2)
+            gs.log.append(f'[SKIP] {cn_src}[BODY]: 全て控え室 {pool}')
+            return
+        # 選択されたカードが候補にあるか確認
+        matched = None
+        for c2 in live_cands:
+            if _canon_cardno(c2) == chosen:
+                matched = c2
+                break
+        if not matched:
+            gs.log.append(f'[ERR] {cn_src}[BODY]: {chosen} not in live_cands {live_cands}')
+            # エラー時は全て控え室
+            for c2 in pool:
+                gs.green_room.append(c2)
+            return
+        # 選択カードを手札へ、残りを控え室へ
+        gs.hand.append(matched)
+        rest = [c2 for c2 in pool if _canon_cardno(c2) != _canon_cardno(matched)]
+        for c2 in rest:
+            gs.green_room.append(c2)
+        gs.log.append(f'[ACT] {cn_src}[BODY]: {matched} -> hand, rest -> green {rest}')
         return
 
     if kind == 'topdeck_from_hand':
