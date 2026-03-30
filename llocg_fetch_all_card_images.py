@@ -9,6 +9,7 @@ Strategy:
 1) Build target card list from cards_min_tokv1.json (preferred) and compiled DB (union).
 2) If <root>/official_image_manifest.json exists, try exact URLs from that manifest first.
 3) Fall back to heuristic folder / rarity inference only for cards still missing.
+4) For PR-family cards, heuristic rarity tries are restricted to PR / PR2 only.
 
 Output layout:
   <root>/card_images/<FOLDER>/<CARDNO>-<RARITY>.png
@@ -311,12 +312,18 @@ def family_rarities(cardno: str, global_rarities: Sequence[str], manifest_entrie
     if fam == "sd":
         fam_order = ["SD"]
     elif fam == "pr":
-        fam_order = ["PR", "PR2", "P", "P2", "SEC", "SEC2", "SECL", "RE", "PE", "PE2"]
+        # PR family is intentionally narrow.
+        # In current local validation, PR cards are covered by PR / PR2 only;
+        # trying broader rarity families just generates large numbers of 404s.
+        fam_order = ["PR", "PR2"]
     elif fam in {"bp", "pb"}:
         fam_order = ["N", "R", "R2", "L", "L2", "RM", "AR", "SEC", "SEC2", "SECL", "RE", "PE", "PE2", "SECE", "LLE", "P", "P2", "PR", "PR2"]
     else:
         fam_order = []
-    combined = manifest_rs + fam_order + list(global_rarities)
+    if fam == "pr":
+        combined = manifest_rs + fam_order
+    else:
+        combined = manifest_rs + fam_order + list(global_rarities)
     return _uniq_keep_order(_sanitize_rarities(combined))
 
 
