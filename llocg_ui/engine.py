@@ -309,7 +309,9 @@ def can_activate_in_state(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: s
             eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
             if not eff:
                 continue
-            if not _match_effect_template(eff):
+            # BODY起動効果（手札をすべて公開する）はeffect_templateが_EFFECT_RULESにないためスキップ
+            is_body_cost = '手札をすべて公開する' in cost and str(ab.get('trigger', '') or '') == 'BODY'
+            if not is_body_cost and not _match_effect_template(eff):
                 continue
             # energy cost check
             need_e = _parse_energy_cost(cost)
@@ -335,13 +337,6 @@ def can_activate_in_state(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: s
             ok_any = True
         if ok_any:
             return True
-    # BODY起動効果（手札をすべて公開する）: effect_text_norm ベース検出
-    if _has_body_activated_in_text(ci):
-        body_key = f"{pos}:{_canon_cardno(getattr(ci, 'cardnumber', '') or '')}:body_activated"
-        used = int((getattr(gs, 'used_this_turn', {}) or {}).get(body_key, 0) or 0)
-        if used < 1:
-            return True
-
     # legacy fallback (only when this card has no matchable activated ability templates)
     if not _has_matchable_activated(ci):
         if _has_green_live_take_ability(ci) or _has_green_member_take_ability(ci) or _has_sacrifice_ability(ci):
@@ -3308,13 +3303,21 @@ def _has_supported_enter_auto(ci: Optional[CardInfo]) -> bool:
 
 
 def _has_body_activated_in_text(ci: Optional[CardInfo]) -> bool:
-    """Return True if the card has a BODY-style activated ability (手札をすべて公開する) in effect_text_norm.
-    Handles cards where abilities are not parsed into a structured list.
+    """Return True if the card has a BODY-style activated ability (手札をすべて公開する).
+    Uses the structured abilities field (trigger='BODY', ability_type='起動').
     """
     if not ci:
         return False
-    txt = str(getattr(ci, 'effect_text_norm', '') or getattr(ci, 'effect_text_raw', '') or '')
-    return '<起動>' in txt and '手札をすべて公開する' in txt
+    for ab in _iter_activated_abilities(ci):
+        if str(ab.get('trigger', '') or '') != 'BODY':
+            continue
+        for cl in (ab.get('clauses', []) or []):
+            if not isinstance(cl, dict):
+                continue
+            cost = str(cl.get('cost_template', '') or '')
+            if '手札をすべて公開する' in cost:
+                return True
+    return False
 
 
 def _list_active_ai_cost10_positions(gs: GameState, cards_db: Dict[str, CardInfo], entered_cn: str) -> List[str]:
@@ -4164,34 +4167,7 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
         gs.log.append(f"[PENDING] Emma bp3-008: choose 1 Nijigasaki member to set WAIT ({len(cands)} candidates)")
         return
 
-    # 0) BODY起動効果（手札をすべて公開する）: effect_text_norm ベース検出
-    #    abilities フィールドが存在しないカード（PL!N-PR-003等）に対応
-    if _has_body_activated_in_text(ci):
-        body_key = f"{pos}:{_canon_cardno(getattr(ci, 'cardnumber', '') or '')}:body_activated"
-        used = int((getattr(gs, 'used_this_turn', {}) or {}).get(body_key, 0) or 0)
-        if used >= 1:
-            gs.log.append(f"[INFO] activate: BODY起動効果は今ターン使用済み ({body_key})")
-            return
-        # effect text から効果部分を抽出（コロン以降）
-        txt = str(getattr(ci, 'effect_text_norm', '') or getattr(ci, 'effect_text_raw', '') or '')
-        eff_body = ''
-        if '手札をすべて公開する：' in txt:
-            eff_body = txt.split('手札をすべて公開する：', 1)[1].strip()
-        if not eff_body:
-            gs.log.append(f"[ERR] activate: BODY効果テキストの解析失敗 ({ci.cardnumber})")
-            return
-        try:
-            gs.used_this_turn[body_key] = 1
-        except Exception:
-            try:
-                gs.used_this_turn = {body_key: 1}
-            except Exception:
-                pass
-        gs.log.append(f"[ACT] {pos}: {ci.cardnumber} BODY起動効果発動")
-        _handle_body_reveal_all_hand(gs, cards_db, pos, ci.cardnumber, eff_body, rng)
-        return
-
-    # 1) Generic activated abilities
+    # 1) Generic activated abilities（BODY起動効果もこのループ内で処理）
     for ab in _iter_activated_abilities(ci):
         flags = _ability_usage_flags(ab if isinstance(ab, dict) else {})
         akey = _ability_key(ci, ab if isinstance(ab, dict) else {}, pos)
