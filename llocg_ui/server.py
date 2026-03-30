@@ -58,7 +58,7 @@ from .engine import (
     StageSlot,
 )
 
-APP_VERSION = "body_img_pick_20260330"
+APP_VERSION = "body_img_pick_20260330b"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
