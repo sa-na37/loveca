@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: opponent_wait1_b_20260327
+# BUILD_TAG: self_wait_optional_fix_20260327
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -178,9 +178,11 @@ def _cost_requires_self_to_green(cost_text: str) -> bool:
 
 
 def _cost_requires_self_wait(cost_text: str) -> bool:
-    """Return True if cost requires this member to become WAIT (but NOT sent to green)."""
+    """Return True if cost requires this member to become WAIT (but NOT sent to green).
+    Matches both 'ウェイトにする' and 'ウェイトにしてもよい' (optional cost).
+    """
     t = str(cost_text or '').strip()
-    if 'ウェイトにする' in t and 'このメンバー' in t:
+    if 'ウェイトにし' in t and 'このメンバー' in t:
         # Exclude self-to-green costs ("このメンバーをステージから控え室に置く")
         if '控え室' not in t and 'ステージから' not in t:
             return True
