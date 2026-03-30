@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: self_wait_optional_fix_20260327
+# BUILD_TAG: self_wait_block_fix_20260330
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -2587,6 +2587,7 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
             trig = str(ab.get("trigger", "") or "")
             if "ライブ開始時" not in trig:
                 continue
+            gs.log.append(f'[DEBUG] live_start ab found: pos={pos} cn={ci.cardnumber} trig={repr(trig)}')
             clauses = ab.get("clauses", [])
             if not isinstance(clauses, list):
                 continue
@@ -2684,6 +2685,26 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                         }
                         _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
                         continue
+                    # self-wait コスト（「このメンバーをウェイトにしてもよい」「ウェイトにする」）付き効果
+                    # ※Eコストなしブロック内でチェックしないと2709のcontinueに捕捉される
+                    if _cost_requires_self_wait(cost) and not _cost_requires_self_to_green(cost):
+                        if not slot.active:
+                            # すでにウェイト → コスト払えないのでスキップ
+                            continue
+                        gs.log.append(f'[DEBUG] self_wait: pos={pos} cn={ci.cardnumber} cost={repr(cost)} eff={repr(eff)} match={bool(_match_effect_template(eff))}')
+                        if _match_effect_template(eff):
+                            pr = {
+                                'kind': 'live_start_pay_effect',
+                                'pos': pos,
+                                'cn': ci.cardnumber,
+                                'need_e': 0,
+                                'cost_kind': 'self_wait',
+                                'effect': eff,
+                                'text': f'{pos}: {ci.cardnumber} ライブ開始時 [このメンバーをウェイトにしてもよい] → {eff}',
+                                'options': ['pay', 'skip'],
+                            }
+                            _append_prompt(pr, f'{pos}: {ci.cardnumber} ライブ開始時')
+                        continue
                     # コストなし・フリー効果（activate_stage_member等）
                     if not cost.strip() or cost.strip() == eff.strip():
                         m_free = _match_effect_template(eff)
@@ -2707,7 +2728,7 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                                     _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
                                 # ウェイト0人 → 何もしない
                     continue
-                # self-wait コスト（「このメンバーをウェイトにしてもよい」）付き効果
+                # self-wait コスト（Eコストあり扱いで来た場合のフォールバック・通常は上のブロックで処理済み）
                 if _cost_requires_self_wait(cost) and not _cost_requires_self_to_green(cost):
                     if not slot.active:
                         # すでにウェイト → コスト払えないのでスキップ
