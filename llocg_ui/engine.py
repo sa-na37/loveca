@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: always_2member_shizuku_fix_20260331b
+# BUILD_TAG: engine_stage2_blue_blade_20260331
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -135,6 +135,20 @@ def _match_effect_template(effect_text: str):
     s = (effect_text or "").strip()
     if not s:
         return None
+
+    # Extension hook: keep runtime entrypoint stable in engine.py, while allowing
+    # Claude-sized effect work to live in the much smaller engine_effect.py.
+    # The extension module should stay import-light and must not import this
+    # engine module at import time (avoid circular imports). It receives the
+    # current engine globals only when matching is requested.
+    try:
+        from . import engine_effect as _engine_effect
+        m_ext = _engine_effect.try_match_effect_template_ext(globals(), s)
+        if m_ext:
+            return m_ext
+    except Exception:
+        pass
+
     for r in _EFFECT_RULES_COMPILED:
         m = r["re"].match(s)
         if m:
@@ -649,6 +663,17 @@ def _enqueue_reorder_from_topk_keep_any(gs: 'GameState', k: int, rng: Optional[r
 
 
 def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[str, CardInfo], rule: Dict[str, Any], gd: Dict[str, str], ctx: Dict[str, Any]) -> None:
+    # Extension hook: try lightweight effect layer first. This lets day-to-day
+    # effect implementation happen in engine_effect.py without forcing Claude to
+    # ingest the full runtime file every time.
+    try:
+        from . import engine_effect as _engine_effect
+        handled = _engine_effect.try_apply_effect_by_rule_ext(globals(), gs, rng, cards_db, rule, gd, ctx)
+        if handled:
+            return
+    except Exception:
+        pass
+
     op = rule.get('op')
 
     if op == 'draw':
@@ -1878,6 +1903,50 @@ def stage_blade(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
         s += 2 * int(n_lz)
     return s
 
+
+
+def always_2member_blade_bonus_for(gs: "GameState", cards_db: Dict[str, CardInfo], pos: str) -> int:
+    """Return always-effect blade bonus for the slot at pos.
+
+    PL!N-PR-020 / PL!S-PR-037:
+      ステージにメンバーがちょうど2人のとき、このメンバーは +1 ブレードを得る。
+    Called by server.py to compute per-slot display bonus (same pattern as lanzhu).
+    Returns 1 if the condition is met for this slot, else 0.
+    """
+    try:
+        pos = str(pos or '').upper()
+        slot = (gs.stage or {}).get(pos)
+        if not slot or not getattr(slot, 'active', False):
+            return 0
+        c = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+        if not c or not _has_body_always_2member_blade_heart(c):
+            return 0
+        stage_member_n = _stage_member_count(gs, cards_db)
+        return 1 if stage_member_n == 2 else 0
+    except Exception:
+        return 0
+
+
+def always_2member_heart_bonus_for(gs: "GameState", cards_db: Dict[str, CardInfo], pos: str) -> Dict[str, int]:
+    """Return always-effect heart bonus dict for the slot at pos.
+
+    PL!N-PR-020 / PL!S-PR-037:
+      ステージにメンバーがちょうど2人のとき、このメンバーは青ハート+1を得る。
+    Called by server.py to compute per-slot display bonus (same pattern as lanzhu).
+    Returns {"blue": 1} if the condition is met, else {}.
+    """
+    try:
+        pos = str(pos or '').upper()
+        slot = (gs.stage or {}).get(pos)
+        if not slot or not getattr(slot, 'active', False):
+            return {}
+        c = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+        if not c or not _has_body_always_2member_blade_heart(c):
+            return {}
+        stage_member_n = _stage_member_count(gs, cards_db)
+        return {"blue": 1} if stage_member_n == 2 else {}
+    except Exception:
+        return {}
 
 
 def _lanzhu_bp1_012_live_bonus_count(gs: "GameState", cards_db: Dict[str, CardInfo]) -> int:
