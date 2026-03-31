@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: texticon_lanzhu_bonus_20260331
+# BUILD_TAG: texticon_icon_hover_fix_20260331
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1394,9 +1394,17 @@ class Handler(BaseHTTPRequestHandler):
             fname = unquote(fname).lstrip("/")
             if fname and "/" not in fname:
                 p2 = self.app.root / "llocg_db_out_full" / "card_images" / "texticons" / fname
+                print(f"[TEXTICON] root={self.app.root!r} fname={fname!r} path={p2} exists={p2.exists()}")
                 if p2.exists():
                     ctype = "image/png" if fname.lower().endswith(".png") else "image/jpeg"
                     self._send(200, p2.read_bytes(), ctype)
+                    return
+                # expanduser fallback
+                p3 = Path(str(self.app.root).replace("~", str(Path.home()))) / "llocg_db_out_full" / "card_images" / "texticons" / fname
+                print(f"[TEXTICON] fallback path={p3} exists={p3.exists()}")
+                if p3.exists():
+                    ctype = "image/png" if fname.lower().endswith(".png") else "image/jpeg"
+                    self._send(200, p3.read_bytes(), ctype)
                     return
             self._send(404, b"", "text/plain")
             return
@@ -2315,11 +2323,12 @@ HTML = r'''<!doctype html>
           };
 
           // オーバーレイ本体（縦並び、カード右上）
+          // card(.cardWrap) の子にすることでホバー時の z-index 上昇に追従する
           const ov = document.createElement('div');
           ov.style.cssText = [
             'position:absolute',
-            `right:${Math.round(zoneW - (x + sz.w))}px`,
-            `top:${Math.round(y + 2)}px`,
+            'right:0',
+            'top:2px',
             'display:flex',
             'flex-direction:column',
             'align-items:flex-end',
@@ -2328,7 +2337,7 @@ HTML = r'''<!doctype html>
             'background:rgba(0,0,0,0.62)',
             'border-radius:6px 0 0 6px',
             'pointer-events:none',
-            'z-index:450',
+            'z-index:50',
           ].join(';');
 
           // ブレードスタック
@@ -2362,7 +2371,7 @@ HTML = r'''<!doctype html>
             ov.appendChild(makeIconStack(icons, `${fb}ハート +${n}（一時）`));
           }
 
-          inner.appendChild(ov);
+          card.appendChild(ov);
         }
       }
     }catch(e){}
