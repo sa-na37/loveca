@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: texticon_overlay_20260331
+# BUILD_TAG: texticon_stack_overlay_20260331
 from __future__ import annotations
 
 """llocg_ui.server
@@ -58,7 +58,7 @@ from .engine import (
     StageSlot,
 )
 
-APP_VERSION = "texticon_overlay_20260331"
+APP_VERSION = "texticon_stack_overlay_20260331"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -2214,8 +2214,6 @@ HTML = r'''<!doctype html>
 
         const hasBonus = totalBlade > 0 || Object.keys(tmpHearts).some(k=>Number(tmpHearts[k])>0);
         if(hasBonus){
-          // アイコンパス（マニフェスト準拠）
-          // local_path: card_images/texticons/xxx.png → サーバー上は /texticon/xxx
           const ICON_BASE = '/llocg_db_out_full/card_images/texticons/';
           const heartIconFile = {
             pink:'heart_01.png', red:'heart_02.png', yellow:'heart_03.png',
@@ -2230,9 +2228,62 @@ HTML = r'''<!doctype html>
             green:'#44dd88', blue:'#55aaff', purple:'#cc77ff', all:'#fff',
           };
 
+          // アイコンサイズと重なり量
+          const ICO  = 16;   // アイコン1枚の幅・高さ (px)
+          const STEP = 10;   // 右が前面になる重なりオフセット (px)
+
+          // アイコンスタックを作る関数
+          // icons: [{src, alt, fallbackText, fallbackColor, title}...]
+          // 右が前面 = index大ほど z-index高
+          const makeIconStack = (icons, titleAll)=>{
+            const n = icons.length;
+            const totalW = ICO + STEP * (n - 1);
+            const wrap = document.createElement('div');
+            wrap.title = titleAll;
+            wrap.style.cssText = [
+              'position:relative',
+              `width:${totalW}px`,
+              `height:${ICO}px`,
+              'flex-shrink:0',
+            ].join(';');
+            icons.forEach((ico, i)=>{
+              const img = document.createElement('img');
+              img.src = ico.src;
+              img.alt = ico.alt;
+              img.style.cssText = [
+                'position:absolute',
+                `left:${STEP * i}px`,
+                'top:0',
+                `width:${ICO}px`,
+                `height:${ICO}px`,
+                'object-fit:contain',
+                `z-index:${10 + i}`,
+              ].join(';');
+              img.onerror = ()=>{
+                const sp = document.createElement('span');
+                sp.textContent = ico.fallbackText;
+                sp.style.cssText = [
+                  'position:absolute',
+                  `left:${STEP * i}px`,
+                  'top:0',
+                  `width:${ICO}px`,
+                  `height:${ICO}px`,
+                  'display:flex',
+                  'align-items:center',
+                  'justify-content:center',
+                  `font-size:${ICO - 2}px`,
+                  `color:${ico.fallbackColor}`,
+                  `z-index:${10 + i}`,
+                ].join(';');
+                img.replaceWith(sp);
+              };
+              wrap.appendChild(img);
+            });
+            return wrap;
+          };
+
+          // オーバーレイ本体（縦並び、カード右上）
           const ov = document.createElement('div');
-          // 右上: x=card右端 - ovW, y=card上端 + 少し下げ
-          // position:absolute はinner基準
           ov.style.cssText = [
             'position:absolute',
             `right:${Math.round(zoneW - (x + sz.w))}px`,
@@ -2240,7 +2291,7 @@ HTML = r'''<!doctype html>
             'display:flex',
             'flex-direction:column',
             'align-items:flex-end',
-            'gap:2px',
+            'gap:3px',
             'padding:3px 4px',
             'background:rgba(0,0,0,0.62)',
             'border-radius:6px 0 0 6px',
@@ -2248,52 +2299,34 @@ HTML = r'''<!doctype html>
             'z-index:450',
           ].join(';');
 
-          // ── ブレードピップ ──────────────────────────────
+          // ブレードスタック
           if(totalBlade > 0){
-            const pip = document.createElement('div');
-            pip.title = `ブレード +${totalBlade}` +
-                        (alwBlade > 0 ? `（常時 +${alwBlade}）` : '') +
-                        (tmpBlade > 0 ? `（一時 +${tmpBlade}）` : '');
-            pip.style.cssText = 'display:flex;align-items:center;gap:2px;';
-
-            const img = document.createElement('img');
-            img.src   = ICON_BASE + 'icon_blade.png';
-            img.alt   = '▲';
-            img.style.cssText = 'width:14px;height:14px;object-fit:contain;';
-            img.onerror = ()=>{ img.replaceWith(Object.assign(document.createElement('span'),{textContent:'▲',style:'font-size:11px;color:#ffe566;'})); };
-
-            const lbl = document.createElement('span');
-            lbl.textContent = `+${totalBlade}`;
-            lbl.style.cssText = 'font-size:11px;font-weight:700;color:#ffe566;line-height:1;';
-
-            pip.appendChild(img);
-            pip.appendChild(lbl);
-            ov.appendChild(pip);
+            const icons = Array.from({length: totalBlade}, ()=>({
+              src: ICON_BASE + 'icon_blade.png',
+              alt: '▲',
+              fallbackText: '▲',
+              fallbackColor: '#ffe566',
+            }));
+            const titleStr = `ブレード +${totalBlade}` +
+              (alwBlade > 0 ? `（常時+${alwBlade}）` : '') +
+              (tmpBlade > 0 ? `（一時+${tmpBlade}）` : '');
+            ov.appendChild(makeIconStack(icons, titleStr));
           }
 
-          // ── ハートピップ（色別）─────────────────────────
+          // ハートスタック（色別）
           for(const [col, cnt] of Object.entries(tmpHearts)){
             const n = Number(cnt);
             if(!n || n <= 0) continue;
-            const pip = document.createElement('div');
-            pip.title = `${heartFallback[col]||col}ハート +${n}（一時）`;
-            pip.style.cssText = 'display:flex;align-items:center;gap:2px;';
-
-            const img = document.createElement('img');
-            img.src   = ICON_BASE + (heartIconFile[col] || `heart_${col}.png`);
-            img.alt   = heartFallback[col] || col;
-            img.style.cssText = 'width:14px;height:14px;object-fit:contain;';
-            const fallCol = heartColor[col] || '#fff';
-            const fallTxt = heartFallback[col] || col;
-            img.onerror = ()=>{ img.replaceWith(Object.assign(document.createElement('span'),{textContent:'♥',style:`font-size:11px;color:${fallCol};`})); };
-
-            const lbl = document.createElement('span');
-            lbl.textContent = `+${n}`;
-            lbl.style.cssText = `font-size:11px;font-weight:700;color:${fallCol};line-height:1;`;
-
-            pip.appendChild(img);
-            pip.appendChild(lbl);
-            ov.appendChild(pip);
+            const file = heartIconFile[col] || `heart_${col}.png`;
+            const fb   = heartFallback[col] || col;
+            const fc   = heartColor[col] || '#fff';
+            const icons = Array.from({length: n}, ()=>({
+              src: ICON_BASE + file,
+              alt: fb,
+              fallbackText: '♥',
+              fallbackColor: fc,
+            }));
+            ov.appendChild(makeIconStack(icons, `${fb}ハート +${n}（一時）`));
           }
 
           inner.appendChild(ov);
