@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: always_blade_cost13_20260330c
+# BUILD_TAG: stage_to_green_activate_20260331b
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -3072,6 +3072,10 @@ def cmd_play(gs: GameState, cards_db: Dict[str, CardInfo], hand_idx: int, pos: s
         pay_cost = max(0, cost - int(baton_old_cost or 0))
         gs.green_room.append(baton_old_cn)
         gs.log.append(f"[BATON] {pos}: {baton_old_cn} -> green room; reduce {cost} by {baton_old_cost} => pay {pay_cost}")
+        # 自動効果: ステージから控え室に置かれたとき、メンバー1人をアクティブにしてもよい (PL!-PR-001等)
+        _baton_old_ci = _get_card(cards_db, baton_old_cn)
+        if _baton_old_ci and _has_stage_to_green_body_auto(_baton_old_ci):
+            _enqueue_stage_to_green_activate_prompt(gs, baton_old_cn)
 
     if not pay_energy(gs, pay_cost):
         gs.log.append(f"[ERR] play: insufficient energy (need {pay_cost}, have {gs.energy_active})")
@@ -3372,6 +3376,51 @@ def _has_body_activated_in_text(ci: Optional[CardInfo]) -> bool:
             if '手札をすべて公開する' in cost:
                 return True
     return False
+
+
+def _has_stage_to_green_body_auto(ci: Optional['CardInfo']) -> bool:
+    """Return True if card has 自動(BODY): ステージから控え室に置かれたとき、メンバー1人をアクティブにしてもよい。
+
+    Matches PL!-PR-001 / PL!-PR-002 effect:
+      <自動> このメンバーがステージから控え室に置かれたとき、メンバー1人をアクティブにしてもよい。
+    """
+    if not ci or not getattr(ci, 'abilities', None):
+        return False
+    for ab in ci.abilities:
+        if not isinstance(ab, dict):
+            continue
+        at = str(ab.get('ability_type', '') or '')
+        if '自動' not in at:
+            continue
+        trig = str(ab.get('trigger', '') or '')
+        if 'BODY' not in trig:
+            continue
+        for cl in (ab.get('clauses', []) or []):
+            if not isinstance(cl, dict):
+                continue
+            eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+            if 'ステージから控え室に置かれたとき' in eff and 'アクティブ' in eff:
+                return True
+    return False
+
+
+def _enqueue_stage_to_green_activate_prompt(gs: 'GameState', cn_left: str) -> None:
+    """ステージから控え室に置かれたメンバーの自動効果: メンバー1人をアクティブにしてもよい。
+
+    既存の choose_stage_member_to_activate (allow_skip=True) を流用。
+    """
+    opts = [p for p in ('L', 'C', 'R') if gs.stage.get(p)]
+    if not opts:
+        gs.log.append(f'[AUTO] {cn_left}[BODY自動]: ステージにメンバーなし → 効果なし')
+        return
+    gs.pending.append({
+        'kind': 'choose_stage_member_to_activate',
+        'text': f'{cn_left}[BODY自動]: メンバー1人をアクティブにしてもよい（スキップ可）',
+        'options': opts + ['skip'],
+        'allow_skip': True,
+        'source_cn': cn_left,
+    })
+    gs.log.append(f'[PENDING] {cn_left}[BODY自動]: choose member to activate (skip可) opts={opts}')
 
 
 def _list_active_ai_cost10_positions(gs: GameState, cards_db: Dict[str, CardInfo], entered_cn: str) -> List[str]:
@@ -4287,9 +4336,14 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                 gs.log.append(f"[COST] moved 1 energy under {pos} from {src} (under={int(getattr(slot,'energy_under',0) or 0)}; E active={gs.energy_active} wait={gs.energy_wait})")
 
             if _cost_requires_self_to_green(cost):
+                _leaving_cn = slot.cardnumber
                 gs.green_room.append(slot.cardnumber)
                 gs.stage[pos] = None
                 gs.log.append(f"[COST] {pos}: {slot.cardnumber} -> waiting room")
+                # 自動効果: ステージから控え室に置かれたとき、メンバー1人をアクティブにしてもよい (PL!-PR-001等)
+                _leaving_ci = _get_card(cards_db, _leaving_cn)
+                if _leaving_ci and _has_stage_to_green_body_auto(_leaving_ci):
+                    _enqueue_stage_to_green_activate_prompt(gs, _leaving_cn)
 
             # Cost: self-wait (member stays on stage but becomes WAIT)
             if _cost_requires_self_wait(cost) and not _cost_requires_self_to_green(cost):
