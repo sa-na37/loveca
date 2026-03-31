@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: body_img_pick_20260330b
+# BUILD_TAG: always_blade_cost13_20260330c
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -1766,8 +1766,57 @@ def _has_under_energy_blade_bonus(ci: Optional[CardInfo]) -> bool:
                 return True
     return False
 
+def _has_body_always_cost13_blade_bonus(ci: Optional[CardInfo]) -> bool:
+    """Return True if the card has a 常時(BODY) ability that grants +2 blade
+    when self or opponent stage has a cost-13+ member.
+
+    Matches PL!S-PR-029/030/031 effect:
+      <常時> 自分か相手のステージにコスト13以上のメンバーがいる場合、<(ブレード)><(ブレード)>を得る。
+    """
+    if not ci or not getattr(ci, 'abilities', None):
+        return False
+    for ab in ci.abilities:
+        if not isinstance(ab, dict):
+            continue
+        at = str(ab.get('ability_type', '') or '')
+        if '常時' not in at:
+            continue
+        # trigger field may be 'BODY' for this card type
+        trig = str(ab.get('trigger', '') or '')
+        clauses = ab.get('clauses', [])
+        if not isinstance(clauses, list):
+            continue
+        for cl in clauses:
+            if not isinstance(cl, dict):
+                continue
+            eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '')
+            if 'コスト13以上' in eff and 'ブレード' in eff:
+                return True
+    return False
+
+
+def _stage_has_cost13_plus_member(gs: 'GameState', cards_db: Dict[str, CardInfo]) -> bool:
+    """Return True if any slot on stage (self) has a member with cost >= 13."""
+    for slot in (gs.stage or {}).values():
+        if not slot:
+            continue
+        ci = _get_card(cards_db, slot.cardnumber)
+        if not ci:
+            continue
+        if _is_live_ci(ci):
+            continue
+        try:
+            if int(getattr(ci, 'cost', 0) or 0) >= 13:
+                return True
+        except Exception:
+            pass
+    return False
+
+
 def stage_blade(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
     s = 0
+    # Check cost-13 condition once (shared by all 常時 BODY blade cards on stage)
+    has_cost13 = _stage_has_cost13_plus_member(gs, cards_db)
     for slot in gs.stage.values():
         if not slot or not slot.active:
             continue
@@ -1775,7 +1824,9 @@ def stage_blade(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
         base_b = (int(c.blade) if c else 0)
         temp_b = int(getattr(slot, "temp_blade", 0) or 0)
         under_b = int(getattr(slot, "energy_under", 0) or 0) if _has_under_energy_blade_bonus(c) else 0
-        s += base_b + temp_b + under_b
+        # 常時 BODY: 自分か相手のステージにコスト13以上のメンバーがいる場合+2
+        always_b = 2 if (has_cost13 and _has_body_always_cost13_blade_bonus(c)) else 0
+        s += base_b + temp_b + under_b + always_b
     # Lanzhu (PL!N-bp1-012) live-only bonus: +2 blade per copy when condition met
     try:
         n_lz = _lanzhu_bp1_012_live_bonus_count(gs, cards_db)

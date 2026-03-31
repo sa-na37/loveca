@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: stage_img_activate_20260327
+# BUILD_TAG: always_blade_cost13_20260330c
 from __future__ import annotations
 
 """llocg_ui.server
@@ -58,7 +58,7 @@ from .engine import (
     StageSlot,
 )
 
-APP_VERSION = "body_img_pick_20260330b"
+APP_VERSION = "always_blade_cost13_20260330c"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -1005,6 +1005,11 @@ class App:
                         "has_sac": _has_sacrifice_ability(_get_card(self.cards_db, v.cardnumber)),
                         "energy_under": int(getattr(v, "energy_under", 0) or 0),
                         "can_activate": can_activate_in_state(self.gs, self.cards_db, k),
+                        # 一時的なブレード/ハート増加（UIアイコン表示用）
+                        "temp_blade": int(getattr(v, "temp_blade", 0) or 0),
+                        "temp_hearts": dict(getattr(v, "temp_hearts", {}) or {}),
+                        # 常時BODYブレード加算（コスト13以上条件）
+                        "always_blade_bonus": self._always_blade_bonus_for(k, v),
                     }
                     if v
                     else None
@@ -1015,6 +1020,23 @@ class App:
             "banner": banner,
             "ui_version": APP_VERSION,
         }
+    def _always_blade_bonus_for(self, pos: str, slot) -> int:
+        """常時BODYブレードボーナスを返す（UI表示専用）。"""
+        from .engine import _has_body_always_cost13_blade_bonus, _stage_has_cost13_plus_member
+        try:
+            if not slot or not getattr(slot, 'active', False):
+                return 0
+            ci = _get_card(self.cards_db, slot.cardnumber)
+            if not ci:
+                return 0
+            if not _has_body_always_cost13_blade_bonus(ci):
+                return 0
+            if _stage_has_cost13_plus_member(self.gs, self.cards_db):
+                return 2
+        except Exception:
+            pass
+        return 0
+
 # PATCH_V2_10_LIVE_GUARD_MAIN_ONLY_APPCMD
     def _live_set_split(self):
         # returns (live_cns, other_cns)
@@ -2166,6 +2188,79 @@ HTML = r'''<!doctype html>
     }catch(e){}
 
     inner.appendChild(card);
+
+    // ── 一時ブレード/ハート増加アイコンオーバーレイ ──────────────────────
+    try{
+      const sd  = (st && st.stage_detail) ? st.stage_detail : null;
+      const det = sd ? sd[slotKey] : null;
+      if(det){
+        const tmpBlade  = Number(det.temp_blade      || 0);
+        const alwBlade  = Number(det.always_blade_bonus || 0);
+        const tmpHearts = det.temp_hearts || {};
+        const totalBlade = tmpBlade + alwBlade;
+
+        const hasBonus = totalBlade > 0 || Object.keys(tmpHearts).some(k=>tmpHearts[k]>0);
+        if(hasBonus){
+          const ov = document.createElement('div');
+          ov.style.cssText = [
+            'position:absolute',
+            `left:${x}px`,
+            `top:${y + sz.h - 28}px`,
+            `width:${sz.w}px`,
+            'display:flex',
+            'flex-wrap:wrap',
+            'gap:2px',
+            'padding:2px 3px',
+            'background:rgba(0,0,0,0.55)',
+            'border-radius:0 0 4px 4px',
+            'pointer-events:none',
+            'z-index:450',
+            'box-sizing:border-box',
+          ].join(';');
+
+          // ブレードアイコン（△ 記号 + 数）
+          if(totalBlade > 0){
+            const pip = document.createElement('span');
+            pip.title = `ブレード +${totalBlade}${alwBlade>0?' (常時:+'+alwBlade+')':''}`;
+            pip.style.cssText = 'font-size:11px;color:#ffe566;font-weight:700;white-space:nowrap;line-height:1.4;';
+            // アイコン画像があれば使い、なければテキスト
+            const bladeImg = document.createElement('img');
+            bladeImg.src   = '/icon/blade.png';
+            bladeImg.alt   = '▲';
+            bladeImg.style.cssText = 'width:12px;height:12px;vertical-align:middle;margin-right:1px;';
+            bladeImg.onerror = ()=>{ bladeImg.replaceWith(document.createTextNode('▲')); };
+            pip.appendChild(bladeImg);
+            pip.appendChild(document.createTextNode(`+${totalBlade}`));
+            ov.appendChild(pip);
+          }
+
+          // ハートアイコン（色別）
+          const heartColorMap = {
+            pink:'#ff88cc', red:'#ff4444', yellow:'#ffe566',
+            green:'#44dd88', blue:'#44aaff', purple:'#bb66ff',
+          };
+          const heartJpMap = {
+            pink:'桃', red:'赤', yellow:'黄', green:'緑', blue:'青', purple:'紫',
+          };
+          for(const [col, cnt] of Object.entries(tmpHearts)){
+            if(!cnt || Number(cnt)<=0) continue;
+            const pip = document.createElement('span');
+            pip.title = `${heartJpMap[col]||col}ハート +${cnt} (一時)`;
+            pip.style.cssText = `font-size:11px;color:${heartColorMap[col]||'#fff'};font-weight:700;white-space:nowrap;line-height:1.4;`;
+            const hImg = document.createElement('img');
+            hImg.src   = `/icon/heart_${col}.png`;
+            hImg.alt   = '♥';
+            hImg.style.cssText = 'width:12px;height:12px;vertical-align:middle;margin-right:1px;';
+            hImg.onerror = ()=>{ hImg.replaceWith(document.createTextNode('♥')); };
+            pip.appendChild(hImg);
+            pip.appendChild(document.createTextNode(`+${cnt}`));
+            ov.appendChild(pip);
+          }
+
+          inner.appendChild(ov);
+        }
+      }
+    }catch(e){}
   }
 
   function renderEnergy(zoneEl){
