@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: always_2member_blade_heart_20260331b
+# BUILD_TAG: always_2member_shizuku_fix_20260331b
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -1854,7 +1854,7 @@ def stage_blade(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
     s = 0
     # Check cost-13 condition once (shared by all 常時 BODY blade cards on stage)
     has_cost13 = _stage_has_cost13_plus_member(gs, cards_db)
-    # Check exactly-2-member condition once (shared by PL!N-PR-020 / PL!S-PR-037)
+    # Check exactly-2-member condition once (PL!N-PR-020 / PL!S-PR-037)
     stage_member_n = _stage_member_count(gs, cards_db)
     has_exactly2 = (stage_member_n == 2)
     for slot in gs.stage.values():
@@ -2683,6 +2683,8 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                         'options': ['pay', 'skip'],
                     }
                     _append_prompt(pr, pr['text'])
+                # special-case 処理済み → 汎用ループをスキップ
+                continue
         except Exception:
             pass
 
@@ -2700,6 +2702,8 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                         'pos_options': list(cands0),
                     }
                     _append_prompt(pr, f"{pos}: {getattr(ci, 'cardnumber', '') or ''} ライブ開始時")
+                # special-case 処理済み → 汎用ループをスキップ
+                continue
         except Exception:
             pass
 
