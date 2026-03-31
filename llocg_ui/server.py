@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: texticon_icon_hover_fix_20260331c
+# BUILD_TAG: back_deckzone_fix_20260331
 from __future__ import annotations
 
 """llocg_ui.server
@@ -58,7 +58,7 @@ from .engine import (
     StageSlot,
 )
 
-APP_VERSION = "texticon_stack_overlay_20260331"
+APP_VERSION = "back_deckzone_fix_20260331"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -1013,7 +1013,6 @@ class App:
                         # PL!N-bp1-012 ランジュのライブ中ボーナス（UIアイコン表示用）
                         "lanzhu_blade_bonus": self._lanzhu_blade_bonus_for(k, v),
                         "lanzhu_heart_bonus": self._lanzhu_heart_bonus_for(k, v),
-                        # 常時 stage2: +blade / +blue heart (PL!N-PR-020 / PL!S-PR-037)
                         "always2member_blade_bonus": self._always2member_blade_bonus_for(k, v),
                         "always2member_heart_bonus": self._always2member_heart_bonus_for(k, v),
                     }
@@ -1070,20 +1069,20 @@ class App:
             return 0
 
     def _always2member_blade_bonus_for(self, pos: str, slot) -> int:
-        """ちょうど2人条件の常時ブレード加算をUI表示用に返す。"""
+        """常時2人条件ブレードボーナスをUI表示用に返す。"""
         from .engine import always_2member_blade_bonus_for
         try:
-            if not slot or not getattr(slot, 'active', False):
+            if not slot:
                 return 0
             return int(always_2member_blade_bonus_for(self.gs, self.cards_db, pos) or 0)
         except Exception:
             return 0
 
-    def _always2member_heart_bonus_for(self, pos: str, slot) -> Dict[str, int]:
-        """ちょうど2人条件の常時ハート加算をUI表示用に返す。"""
+    def _always2member_heart_bonus_for(self, pos: str, slot):
+        """常時2人条件ハートボーナスをUI表示用に返す。"""
         from .engine import always_2member_heart_bonus_for
         try:
-            if not slot or not getattr(slot, 'active', False):
+            if not slot:
                 return {}
             return dict(always_2member_heart_bonus_for(self.gs, self.cards_db, pos) or {})
         except Exception:
@@ -1378,36 +1377,38 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/img":
             qs = parse_qs(u.query)
             cn = unquote((qs.get("cn", [""])[0] or "").strip())
-            # special: deck back image
+            # special: energy card back image
             if cn == "__BACK__":
                 cand = []
                 try:
                     _loveca_root = Path(__file__).resolve().parents[1]
-                    cand.append(_loveca_root / "back.png")
-                    cand.append(_loveca_root / "back.jpg")
-                    cand.append(_loveca_root / "back.jpeg")
-                    cand.append(_loveca_root / "llocg_db_out_full" / "back.png")
-                    cand.append(_loveca_root / "llocg_db_out_full" / "back.jpg")
-                    cand.append(_loveca_root / "llocg_db_out_full" / "back.jpeg")
-                    cand.append(self.app.root / "back.png")
-                    cand.append(self.app.root / "back.jpg")
-                    cand.append(self.app.root / "back.jpeg")
-                    cand.append(self.app.root / "llocg_db_out_full" / "back.png")
-                    cand.append(self.app.root / "llocg_db_out_full" / "back.jpg")
-                    cand.append(self.app.root / "llocg_db_out_full" / "back.jpeg")
+                    cand.extend([
+                        self.app.root / "back.png",
+                        self.app.root / "back.jpg",
+                        self.app.root / "back.jpeg",
+                        self.app.root / "llocg_db_out_full" / "back.png",
+                        self.app.root / "llocg_db_out_full" / "back.jpg",
+                        self.app.root / "llocg_db_out_full" / "back.jpeg",
+                        _loveca_root / "back.png",
+                        _loveca_root / "back.jpg",
+                        _loveca_root / "back.jpeg",
+                        _loveca_root / "llocg_db_out_full" / "back.png",
+                        _loveca_root / "llocg_db_out_full" / "back.jpg",
+                        _loveca_root / "llocg_db_out_full" / "back.jpeg",
+                    ])
                 except Exception:
                     pass
                 for p2 in cand:
                     try:
                         if p2 and p2.exists():
-                            ctype = "image/jpeg" if str(p2).lower().endswith((".jpg", ".jpeg")) else "image/png"
+                            ctype = "image/jpeg" if str(p2).lower().endswith((".jpg",".jpeg")) else "image/png"
                             self._send(200, p2.read_bytes(), ctype)
                             return
                     except Exception:
                         pass
                 self._send(404, b"", "text/plain")
                 return
-            # special: energy card back image
+
             if cn == "__ENERGY__":
                 cand = []
                 try:
@@ -1816,7 +1817,6 @@ HTML = r'''<!doctype html>
     try{ return String((st && st.cn2type && st.cn2type[cn]) || ''); }catch(e){ return ''; }
   }
   function intrinsicOrient(cn){
-    if(cn === '__BACK__') return 'landscape';
     const t = cnType(cn).toUpperCase();
     if(t.includes('LIVE')) return 'landscape';
     return 'portrait';
