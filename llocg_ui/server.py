@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: texticon_stack_overlay_20260331
+# BUILD_TAG: texticon_lanzhu_bonus_20260331
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1010,6 +1010,9 @@ class App:
                         "temp_hearts": dict(getattr(v, "temp_hearts", {}) or {}),
                         # 常時BODYブレード加算（コスト13以上条件）
                         "always_blade_bonus": self._always_blade_bonus_for(k, v),
+                        # PL!N-bp1-012 ランジュのライブ中ボーナス（UIアイコン表示用）
+                        "lanzhu_blade_bonus": self._lanzhu_blade_bonus_for(k, v),
+                        "lanzhu_heart_bonus": self._lanzhu_heart_bonus_for(k, v),
                     }
                     if v
                     else None
@@ -1036,6 +1039,32 @@ class App:
         except Exception:
             pass
         return 0
+
+    def _lanzhu_blade_bonus_for(self, pos: str, slot) -> int:
+        """PL!N-bp1-012 ランジュのライブ中ブレードボーナスをUI表示用に返す。"""
+        from .engine import _lanzhu_bp1_012_live_bonus_count, _canon_cardno
+        try:
+            if not slot or not getattr(slot, 'active', False):
+                return 0
+            if _canon_cardno(getattr(slot, 'cardnumber', '') or '') != 'PL!N-bp1-012':
+                return 0
+            n = _lanzhu_bp1_012_live_bonus_count(self.gs, self.cards_db)
+            return 2 if n > 0 else 0
+        except Exception:
+            return 0
+
+    def _lanzhu_heart_bonus_for(self, pos: str, slot) -> int:
+        """PL!N-bp1-012 ランジュのライブ中ALLハートボーナスをUI表示用に返す。"""
+        from .engine import _lanzhu_bp1_012_live_bonus_count, _canon_cardno
+        try:
+            if not slot or not getattr(slot, 'active', False):
+                return 0
+            if _canon_cardno(getattr(slot, 'cardnumber', '') or '') != 'PL!N-bp1-012':
+                return 0
+            n = _lanzhu_bp1_012_live_bonus_count(self.gs, self.cards_db)
+            return 2 if n > 0 else 0
+        except Exception:
+            return 0
 
 # PATCH_V2_10_LIVE_GUARD_MAIN_ONLY_APPCMD
     def _live_set_split(self):
@@ -2209,8 +2238,11 @@ HTML = r'''<!doctype html>
       if(det){
         const tmpBlade  = Number(det.temp_blade      || 0);
         const alwBlade  = Number(det.always_blade_bonus || 0);
-        const tmpHearts = det.temp_hearts || {};
-        const totalBlade = tmpBlade + alwBlade;
+        const lzBlade   = Number(det.lanzhu_blade_bonus || 0);
+        const lzHeart   = Number(det.lanzhu_heart_bonus || 0);
+        const tmpHearts = Object.assign({}, det.temp_hearts || {});
+        if(lzHeart > 0) tmpHearts['all'] = (Number(tmpHearts['all'] || 0)) + lzHeart;
+        const totalBlade = tmpBlade + alwBlade + lzBlade;
 
         const hasBonus = totalBlade > 0 || Object.keys(tmpHearts).some(k=>Number(tmpHearts[k])>0);
         if(hasBonus){
@@ -2309,7 +2341,8 @@ HTML = r'''<!doctype html>
             }));
             const titleStr = `ブレード +${totalBlade}` +
               (alwBlade > 0 ? `（常時+${alwBlade}）` : '') +
-              (tmpBlade > 0 ? `（一時+${tmpBlade}）` : '');
+              (tmpBlade > 0 ? `（一時+${tmpBlade}）` : '') +
+              (lzBlade  > 0 ? `（ランジュ+${lzBlade}）` : '');
             ov.appendChild(makeIconStack(icons, titleStr));
           }
 
