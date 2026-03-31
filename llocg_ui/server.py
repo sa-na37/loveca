@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: texticon_icon_hover_fix_20260331
+# BUILD_TAG: texticon_icon_hover_fix_20260331b
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1393,19 +1393,19 @@ class Handler(BaseHTTPRequestHandler):
             fname = u.path[len("/llocg_db_out_full/card_images/texticons/"):]
             fname = unquote(fname).lstrip("/")
             if fname and "/" not in fname:
-                p2 = self.app.root / "llocg_db_out_full" / "card_images" / "texticons" / fname
-                print(f"[TEXTICON] root={self.app.root!r} fname={fname!r} path={p2} exists={p2.exists()}")
-                if p2.exists():
-                    ctype = "image/png" if fname.lower().endswith(".png") else "image/jpeg"
-                    self._send(200, p2.read_bytes(), ctype)
-                    return
-                # expanduser fallback
-                p3 = Path(str(self.app.root).replace("~", str(Path.home()))) / "llocg_db_out_full" / "card_images" / "texticons" / fname
-                print(f"[TEXTICON] fallback path={p3} exists={p3.exists()}")
-                if p3.exists():
-                    ctype = "image/png" if fname.lower().endswith(".png") else "image/jpeg"
-                    self._send(200, p3.read_bytes(), ctype)
-                    return
+                # self.app.root が llocg_db_out_full を指している場合があるため
+                # __file__ (llocg_ui/server.py) の親の親 (loveca/) を正規のルートとして使う
+                _loveca_root = Path(__file__).resolve().parents[1]
+                _cands = [
+                    _loveca_root / "llocg_db_out_full" / "card_images" / "texticons" / fname,
+                    self.app.root / "llocg_db_out_full" / "card_images" / "texticons" / fname,
+                    self.app.root / "card_images" / "texticons" / fname,
+                ]
+                for _p in _cands:
+                    if _p.exists():
+                        ctype = "image/png" if fname.lower().endswith(".png") else "image/jpeg"
+                        self._send(200, _p.read_bytes(), ctype)
+                        return
             self._send(404, b"", "text/plain")
             return
 
