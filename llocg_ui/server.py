@@ -1013,9 +1013,6 @@ class App:
                         # PL!N-bp1-012 ランジュのライブ中ボーナス（UIアイコン表示用）
                         "lanzhu_blade_bonus": self._lanzhu_blade_bonus_for(k, v),
                         "lanzhu_heart_bonus": self._lanzhu_heart_bonus_for(k, v),
-                        # 常時 stage2: +blade / +blue heart (PL!N-PR-020 / PL!S-PR-037)
-                        "always2member_blade_bonus": self._always2member_blade_bonus_for(k, v),
-                        "always2member_heart_bonus": self._always2member_heart_bonus_for(k, v),
                     }
                     if v
                     else None
@@ -1068,26 +1065,6 @@ class App:
             return 2 if n > 0 else 0
         except Exception:
             return 0
-
-    def _always2member_blade_bonus_for(self, pos: str, slot) -> int:
-        """常時2人条件のブレードボーナスをUI表示用に返す。"""
-        from .engine import always_2member_blade_bonus_for
-        try:
-            if not slot or not getattr(slot, 'active', False):
-                return 0
-            return int(always_2member_blade_bonus_for(self.gs, self.cards_db, pos) or 0)
-        except Exception:
-            return 0
-
-    def _always2member_heart_bonus_for(self, pos: str, slot) -> Dict[str, int]:
-        """常時2人条件のハートボーナスをUI表示用に返す。"""
-        from .engine import always_2member_heart_bonus_for
-        try:
-            if not slot or not getattr(slot, 'active', False):
-                return {}
-            return dict(always_2member_heart_bonus_for(self.gs, self.cards_db, pos) or {})
-        except Exception:
-            return {}
 
 # PATCH_V2_10_LIVE_GUARD_MAIN_ONLY_APPCMD
     def _live_set_split(self):
@@ -1378,6 +1355,41 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/img":
             qs = parse_qs(u.query)
             cn = unquote((qs.get("cn", [""])[0] or "").strip())
+            # special: deck/back image
+            if cn == "__BACK__":
+                cand = []
+                try:
+                    # prioritize refreshed DB root assets first
+                    cand.append(self.app.root / "back.png")
+                    cand.append(self.app.root / "back.jpg")
+                    cand.append(self.app.root / "back.jpeg")
+                    cand.append(self.app.root / "back.webp")
+                    cand.append(self.app.root / "llocg_db_out_full" / "back.png")
+                    cand.append(self.app.root / "llocg_db_out_full" / "back.jpg")
+                    cand.append(self.app.root / "llocg_db_out_full" / "back.jpeg")
+                    cand.append(self.app.root / "llocg_db_out_full" / "back.webp")
+                    _loveca_root = Path(__file__).resolve().parents[1]
+                    cand.append(_loveca_root / "back.png")
+                    cand.append(_loveca_root / "back.jpg")
+                    cand.append(_loveca_root / "back.jpeg")
+                    cand.append(_loveca_root / "back.webp")
+                except Exception:
+                    pass
+                for p2 in cand:
+                    try:
+                        if p2 and p2.exists():
+                            suf = str(p2).lower()
+                            if suf.endswith(".png"):
+                                ctype = "image/png"
+                            elif suf.endswith(".webp"):
+                                ctype = "image/webp"
+                            else:
+                                ctype = "image/jpeg"
+                            self._send(200, p2.read_bytes(), ctype)
+                            return
+                    except Exception:
+                        pass
+
             # special: energy card back image
             if cn == "__ENERGY__":
                 cand = []
@@ -2267,19 +2279,13 @@ HTML = r'''<!doctype html>
       const sd  = (st && st.stage_detail) ? st.stage_detail : null;
       const det = sd ? sd[slotKey] : null;
       if(det){
-        const tmpBlade   = Number(det.temp_blade || 0);
-        const alwBlade   = Number(det.always_blade_bonus || 0);
-        const lzBlade    = Number(det.lanzhu_blade_bonus || 0);
-        const lzHeart    = Number(det.lanzhu_heart_bonus || 0);
-        const a2mBlade   = Number(det.always2member_blade_bonus || 0);
-        const a2mHearts  = Object.assign({}, det.always2member_heart_bonus || {});
-        const tmpHearts  = Object.assign({}, det.temp_hearts || {});
+        const tmpBlade  = Number(det.temp_blade      || 0);
+        const alwBlade  = Number(det.always_blade_bonus || 0);
+        const lzBlade   = Number(det.lanzhu_blade_bonus || 0);
+        const lzHeart   = Number(det.lanzhu_heart_bonus || 0);
+        const tmpHearts = Object.assign({}, det.temp_hearts || {});
         if(lzHeart > 0) tmpHearts['all'] = (Number(tmpHearts['all'] || 0)) + lzHeart;
-        for(const [col, cnt] of Object.entries(a2mHearts)){
-          const n = Number(cnt || 0);
-          if(n > 0) tmpHearts[col] = (Number(tmpHearts[col] || 0)) + n;
-        }
-        const totalBlade = tmpBlade + alwBlade + lzBlade + a2mBlade;
+        const totalBlade = tmpBlade + alwBlade + lzBlade;
 
         const hasBonus = totalBlade > 0 || Object.keys(tmpHearts).some(k=>Number(tmpHearts[k])>0);
         if(hasBonus){
