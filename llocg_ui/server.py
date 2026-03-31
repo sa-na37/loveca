@@ -1359,6 +1359,19 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(404, b"", "text/plain")
             return
 
+        # texticon static files: /llocg_db_out_full/card_images/texticons/<filename>
+        if u.path.startswith("/llocg_db_out_full/card_images/texticons/"):
+            fname = u.path[len("/llocg_db_out_full/card_images/texticons/"):]
+            fname = unquote(fname).lstrip("/")
+            if fname and "/" not in fname:
+                p2 = self.app.root / "llocg_db_out_full" / "card_images" / "texticons" / fname
+                if p2.exists():
+                    ctype = "image/png" if fname.lower().endswith(".png") else "image/jpeg"
+                    self._send(200, p2.read_bytes(), ctype)
+                    return
+            self._send(404, b"", "text/plain")
+            return
+
         self._send(404, b"not found", "text/plain; charset=utf-8")
 
     def do_POST(self) -> None:
@@ -2189,7 +2202,7 @@ HTML = r'''<!doctype html>
 
     inner.appendChild(card);
 
-    // ── 一時ブレード/ハート増加アイコンオーバーレイ ──────────────────────
+    // ── 一時ブレード/ハート増加アイコンオーバーレイ（カード右上） ──────────
     try{
       const sd  = (st && st.stage_detail) ? st.stage_detail : null;
       const det = sd ? sd[slotKey] : null;
@@ -2199,61 +2212,87 @@ HTML = r'''<!doctype html>
         const tmpHearts = det.temp_hearts || {};
         const totalBlade = tmpBlade + alwBlade;
 
-        const hasBonus = totalBlade > 0 || Object.keys(tmpHearts).some(k=>tmpHearts[k]>0);
+        const hasBonus = totalBlade > 0 || Object.keys(tmpHearts).some(k=>Number(tmpHearts[k])>0);
         if(hasBonus){
+          // アイコンパス（マニフェスト準拠）
+          // local_path: card_images/texticons/xxx.png → サーバー上は /texticon/xxx
+          const ICON_BASE = '/llocg_db_out_full/card_images/texticons/';
+          const heartIconFile = {
+            pink:'heart_01.png', red:'heart_02.png', yellow:'heart_03.png',
+            green:'heart_04.png', blue:'heart_05.png', purple:'heart_06.png',
+            all:'icon_all.png',
+          };
+          const heartFallback = {
+            pink:'桃', red:'赤', yellow:'黄', green:'緑', blue:'青', purple:'紫', all:'ALL',
+          };
+          const heartColor = {
+            pink:'#ff88cc', red:'#ff5555', yellow:'#ffe566',
+            green:'#44dd88', blue:'#55aaff', purple:'#cc77ff', all:'#fff',
+          };
+
           const ov = document.createElement('div');
+          // 右上: x=card右端 - ovW, y=card上端 + 少し下げ
+          // position:absolute はinner基準
           ov.style.cssText = [
             'position:absolute',
-            `left:${x}px`,
-            `top:${y + sz.h - 28}px`,
-            `width:${sz.w}px`,
+            `right:${Math.round(zoneW - (x + sz.w))}px`,
+            `top:${Math.round(y + 2)}px`,
             'display:flex',
-            'flex-wrap:wrap',
+            'flex-direction:column',
+            'align-items:flex-end',
             'gap:2px',
-            'padding:2px 3px',
-            'background:rgba(0,0,0,0.55)',
-            'border-radius:0 0 4px 4px',
+            'padding:3px 4px',
+            'background:rgba(0,0,0,0.62)',
+            'border-radius:6px 0 0 6px',
             'pointer-events:none',
             'z-index:450',
-            'box-sizing:border-box',
           ].join(';');
 
-          // ブレードアイコン（△ 記号 + 数）
+          // ── ブレードピップ ──────────────────────────────
           if(totalBlade > 0){
-            const pip = document.createElement('span');
-            pip.title = `ブレード +${totalBlade}${alwBlade>0?' (常時:+'+alwBlade+')':''}`;
-            pip.style.cssText = 'font-size:11px;color:#ffe566;font-weight:700;white-space:nowrap;line-height:1.4;';
-            // アイコン画像があれば使い、なければテキスト
-            const bladeImg = document.createElement('img');
-            bladeImg.src   = '/icon/blade.png';
-            bladeImg.alt   = '▲';
-            bladeImg.style.cssText = 'width:12px;height:12px;vertical-align:middle;margin-right:1px;';
-            bladeImg.onerror = ()=>{ bladeImg.replaceWith(document.createTextNode('▲')); };
-            pip.appendChild(bladeImg);
-            pip.appendChild(document.createTextNode(`+${totalBlade}`));
+            const pip = document.createElement('div');
+            pip.title = `ブレード +${totalBlade}` +
+                        (alwBlade > 0 ? `（常時 +${alwBlade}）` : '') +
+                        (tmpBlade > 0 ? `（一時 +${tmpBlade}）` : '');
+            pip.style.cssText = 'display:flex;align-items:center;gap:2px;';
+
+            const img = document.createElement('img');
+            img.src   = ICON_BASE + 'icon_blade.png';
+            img.alt   = '▲';
+            img.style.cssText = 'width:14px;height:14px;object-fit:contain;';
+            img.onerror = ()=>{ img.replaceWith(Object.assign(document.createElement('span'),{textContent:'▲',style:'font-size:11px;color:#ffe566;'})); };
+
+            const lbl = document.createElement('span');
+            lbl.textContent = `+${totalBlade}`;
+            lbl.style.cssText = 'font-size:11px;font-weight:700;color:#ffe566;line-height:1;';
+
+            pip.appendChild(img);
+            pip.appendChild(lbl);
             ov.appendChild(pip);
           }
 
-          // ハートアイコン（色別）
-          const heartColorMap = {
-            pink:'#ff88cc', red:'#ff4444', yellow:'#ffe566',
-            green:'#44dd88', blue:'#44aaff', purple:'#bb66ff',
-          };
-          const heartJpMap = {
-            pink:'桃', red:'赤', yellow:'黄', green:'緑', blue:'青', purple:'紫',
-          };
+          // ── ハートピップ（色別）─────────────────────────
           for(const [col, cnt] of Object.entries(tmpHearts)){
-            if(!cnt || Number(cnt)<=0) continue;
-            const pip = document.createElement('span');
-            pip.title = `${heartJpMap[col]||col}ハート +${cnt} (一時)`;
-            pip.style.cssText = `font-size:11px;color:${heartColorMap[col]||'#fff'};font-weight:700;white-space:nowrap;line-height:1.4;`;
-            const hImg = document.createElement('img');
-            hImg.src   = `/icon/heart_${col}.png`;
-            hImg.alt   = '♥';
-            hImg.style.cssText = 'width:12px;height:12px;vertical-align:middle;margin-right:1px;';
-            hImg.onerror = ()=>{ hImg.replaceWith(document.createTextNode('♥')); };
-            pip.appendChild(hImg);
-            pip.appendChild(document.createTextNode(`+${cnt}`));
+            const n = Number(cnt);
+            if(!n || n <= 0) continue;
+            const pip = document.createElement('div');
+            pip.title = `${heartFallback[col]||col}ハート +${n}（一時）`;
+            pip.style.cssText = 'display:flex;align-items:center;gap:2px;';
+
+            const img = document.createElement('img');
+            img.src   = ICON_BASE + (heartIconFile[col] || `heart_${col}.png`);
+            img.alt   = heartFallback[col] || col;
+            img.style.cssText = 'width:14px;height:14px;object-fit:contain;';
+            const fallCol = heartColor[col] || '#fff';
+            const fallTxt = heartFallback[col] || col;
+            img.onerror = ()=>{ img.replaceWith(Object.assign(document.createElement('span'),{textContent:'♥',style:`font-size:11px;color:${fallCol};`})); };
+
+            const lbl = document.createElement('span');
+            lbl.textContent = `+${n}`;
+            lbl.style.cssText = `font-size:11px;font-weight:700;color:${fallCol};line-height:1;`;
+
+            pip.appendChild(img);
+            pip.appendChild(lbl);
             ov.appendChild(pip);
           }
 
