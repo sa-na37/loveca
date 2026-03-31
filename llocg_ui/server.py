@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: always_blade_cost13_20260330c
+# BUILD_TAG: texticon_overlay_20260331
 from __future__ import annotations
 
 """llocg_ui.server
@@ -58,7 +58,7 @@ from .engine import (
     StageSlot,
 )
 
-APP_VERSION = "always_blade_cost13_20260330c"
+APP_VERSION = "texticon_overlay_20260331"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
