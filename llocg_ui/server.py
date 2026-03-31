@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: texticon_icon_hover_fix_20260331b
+# BUILD_TAG: texticon_icon_hover_fix_20260331c
 from __future__ import annotations
 
 """llocg_ui.server
@@ -2340,6 +2340,25 @@ HTML = r'''<!doctype html>
             'z-index:50',
           ].join(';');
 
+          // アイコン行（＋ラベル + スタック）を作る関数
+          const makeIconRow = (stack, titleAll)=>{
+            const row = document.createElement('div');
+            row.title = titleAll;
+            row.style.cssText = 'display:flex;align-items:center;gap:2px;';
+            const plus = document.createElement('span');
+            plus.textContent = '＋';
+            plus.style.cssText = [
+              'color:#fff',
+              'font-size:11px',
+              'font-weight:700',
+              'line-height:1',
+              'flex-shrink:0',
+            ].join(';');
+            row.appendChild(plus);
+            row.appendChild(stack);
+            return row;
+          };
+
           // ブレードスタック
           if(totalBlade > 0){
             const icons = Array.from({length: totalBlade}, ()=>({
@@ -2352,7 +2371,7 @@ HTML = r'''<!doctype html>
               (alwBlade > 0 ? `（常時+${alwBlade}）` : '') +
               (tmpBlade > 0 ? `（一時+${tmpBlade}）` : '') +
               (lzBlade  > 0 ? `（ランジュ+${lzBlade}）` : '');
-            ov.appendChild(makeIconStack(icons, titleStr));
+            ov.appendChild(makeIconRow(makeIconStack(icons, ''), titleStr));
           }
 
           // ハートスタック（色別）
@@ -2368,7 +2387,7 @@ HTML = r'''<!doctype html>
               fallbackText: '♥',
               fallbackColor: fc,
             }));
-            ov.appendChild(makeIconStack(icons, `${fb}ハート +${n}（一時）`));
+            ov.appendChild(makeIconRow(makeIconStack(icons, ''), `${fb}ハート +${n}（一時）`));
           }
 
           card.appendChild(ov);
