@@ -1,0 +1,55 @@
+1. 現状
+
+engine.py BUILD_TAG: named_cards_cost_deck_bottom_20260319
+server.py BUILD_TAG: stage_wait_overflow_visible_20260319
+git: 最後のpushは stage wait card overflow visible まで完了
+
+2. 今回セッションで完了した修正
+
+↻ボタンによる手動ウェイト/アクティブ切り替え（server.py）
+ウェイト状態のカード画像を CCW 回転・同スケール・overflow visible で表示（server.py）
+activate_all_stage_members ⑤: 動作確認OK
+energy_activate_upto ⑥: 動作確認OK
+named_cards_to_deck_bottom コスト実装（engine.py）← 未デバッグ・未push
+
+3. 次のチャットで最初にやること
+
+engine.py の syntax check: python3 -m py_compile llocg_ui/engine.py && echo OK
+git add + commit + push
+デバッグ（控え室に名前カードを用意してLL-bp3-001起動）:
+
+bashcd ~/Desktop/gsim/loveca || exit 1
+LLOCG_START_DEBUG=1 \
+LLOCG_START_PHASE='MAIN' \
+LLOCG_START_TURN=1 \
+LLOCG_START_HAND='PL!N-bp1-001' \
+LLOCG_START_HAND_SIZE=1 \
+LLOCG_START_STAGE='C=LL-bp3-001' \
+LLOCG_START_GREEN='PL!-bp3-004 PL!-bp3-006 PL!-bp3-008 PL!-bp3-013 PL!-bp3-004 PL!-bp3-006' \
+LLOCG_START_ENERGY_ACTIVE=2 \
+LLOCG_START_ENERGY_WAIT=4 \
+python3 run_llocg_ui_web.py --deck-code 1RCBL
+
+確認: 起動ボタン → 控え室から名前カード選択ポップアップ → 6枚選択 → デッキ下へ → エネルギーアクティブ化
+
+
+未実装エフェクト実装継続
+
+4. 開発方針（確定済みルール）
+（前回引き継ぎ文書と同じ内容を引き続き適用）
+
+ファイル: engine.py / server.py のみ
+BUILD_TAG でバージョン管理
+修正のたびに：修正済みファイル・上書きコマンド・gitコマンド・デバッグコマンドをセットで出す
+デバッグコマンドは有効フェイズ（MAIN/LIVE_SET/LIVE_CONFIRM/MULLIGAN）のみ使用
+ライブ開始時効果のデバッグは手札にライブカードを必ず入れる
+spec.txt を優先参照
+server.py にフェイズ遷移割り込みを入れない
+
+5. 実装済み effect op（2026-03-19時点）
+op効果drawカードをN枚引くdraw_then_discardN枚引いてM枚捨てるdiscard_from_hand手札をN枚控え室へ（pending選択UI）retrieve_from_waiting_room控え室からLIVE/MEMBERをN枚手札へtopdeck_from_green控え室→デッキ上look_top_chooseデッキ上K枚見て1枚手札へlook_top_reorder_keep_anyデッキ上K枚見て任意枚数を任意順でデッキ上へenergy_put_waitエネルギーをウェイト状態で置くenergy_activateエネルギーをN枚アクティブenergy_activate_uptoエネルギーをN枚までアクティブ ✅gain_blade_until_end_liveライブ終了時までブレード+Ngain_icons_until_end_liveライブ終了時まで固定色ハート/ブレードchoose_heart_gain_self好きなハート色を自分に+1choose_heart_gain_other_member好きなハート色を他メンバーに+1activate_stage_memberステージメンバーを1人までアクティブactivate_all_stage_membersステージ全員アクティブ ✅named_cards_to_deck_bottom控え室の名前指定カードをデッキ下へ（コスト）✅未デバッグ
+6. 解決済みバグ（今回追加分）
+
+const isWait 二重宣言 → JS SyntaxError → ページ全体クラッシュ
+ステージウェイト時のzoneInner overflow:hidden → カードがクリップされる → overflow: visible で解決
+MEMBER_CHANGE フェイズ（存在しない）をデバッグコマンドに使用 → 以後 MAIN/LIVE_SET 等のみ使用
