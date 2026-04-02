@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_group1_lowest_risk_20260402c
+# BUILD_TAG: engine_effect_group1_lowest_risk_20260402d
 from __future__ import annotations
 
 """llocg_ui.engine_effect
@@ -574,37 +574,22 @@ def try_apply_effect_by_rule_ext(
     # ------------------------------------------------------------------
     # Prompt 24: PL!-bp4-001 高坂穂乃果
     # 1人用シミュレータでは相手ステージが存在しないため条件判定を省略。
-    # 常にトリガー → pay_or_skip で任意解決 (draw 1)。
+    # 常にトリガー → 直接 draw 1 実行。
+    # 多重トリガー防止: gs._p24_drawn_this_live フラグで管理。
     # 実際の対戦実装時は _opp_stage_member_cost_sum で条件判定を復活させること。
     # ------------------------------------------------------------------
     if ext_key == "live_start_my_cost_lower_draw1":
-        # 多重トリガー防止: 同一 source_cn の pay_or_skip が既に pending にあればスキップ
-        source_cn = str((ctx or {}).get("source_cn") or "")
+        # 多重トリガー防止
         try:
-            pending_list = getattr(gs, "pending", []) or []
-            for p in pending_list:
-                if (
-                    isinstance(p, dict)
-                    and p.get("kind") == "pay_or_skip"
-                    and p.get("source_cn") == source_cn
-                    and p.get("ext_key") == "live_start_my_cost_lower_draw1"
-                ):
-                    gs.log.append("[SKIP] pay_or_skip draw1 already pending (高坂穂乃果)")
-                    return True
+            if getattr(gs, "_p24_drawn_this_live", False):
+                gs.log.append("[SKIP] already drew this live (高坂穂乃果)")
+                return True
+            gs._p24_drawn_this_live = True
         except Exception:
             pass
-        payload = {
-            "kind": "pay_or_skip",
-            "description": "自分ステージのコスト合計が相手より低い場合、カードを1枚引く",
-            "effect": "draw1",
-            "source_cn": source_cn,
-            "ext_key": "live_start_my_cost_lower_draw1",
-            # draw1 を engine の pay_or_skip resolver が認識できる選択肢名に合わせる
-            "options": ["draw1", "skip"],
-        }
+        drawn = _draw_cards(eng, gs, 1)
         try:
-            getattr(gs, "pending").append(payload)
-            gs.log.append("[PENDING] pay_or_skip draw1 (高坂穂乃果)")
+            gs.log.append(f"[AUTO_EXT] cost_lower(skip_check:1player) -> draw {drawn} (高坂穂乃果)")
         except Exception:
             pass
         return True
@@ -781,7 +766,6 @@ def try_apply_effect_by_rule_ext(
     if ext_key == "live_success_score_gt_opp_and_hasunosora_energy_wait":
         my_score = _live_score_total(gs)
         opp_score = _opp_live_score_total(gs)
-        # ctx に live_score / opp_live_score があれば優先
         try:
             if (ctx or {}).get("live_score") is not None:
                 my_score = int(ctx["live_score"])
@@ -792,29 +776,14 @@ def try_apply_effect_by_rule_ext(
 
         has_hasunosora = _stage_has_group(gs, cards_db, "蓮ノ空")
 
-        # 相手が存在しない（1人用シミュ）場合は pay_or_skip で任意解決
+        # 相手が存在しない（1人用シミュ）場合はスコア条件をスキップし蓮ノ空条件のみ判定
         opp_exists = (
             getattr(gs, "opponent", None) is not None
             or getattr(gs, "opp", None) is not None
         )
-        if not opp_exists:
-            source_cn = str((ctx or {}).get("source_cn") or "")
-            payload = {
-                "kind": "pay_or_skip",
-                "description": "ライブ合計スコアが相手より高く、かつ蓮ノ空メンバーがいる場合、エネルギーをウェイトで1枚置く（相手不在のため手動確認）",
-                "effect": "energy_wait1",
-                "source_cn": source_cn,
-                "ext_key": "live_success_score_gt_opp_and_hasunosora_energy_wait",
-                "options": ["energy_wait1", "skip"],
-            }
-            try:
-                getattr(gs, "pending").append(payload)
-                gs.log.append("[PENDING] pay_or_skip energy_wait1 (ド！ド！ド！: 相手不在のため手動確認)")
-            except Exception:
-                pass
-            return True
+        score_ok = (not opp_exists) or (my_score > opp_score)
 
-        if my_score > opp_score and has_hasunosora:
+        if score_ok and has_hasunosora:
             added = 0
             try:
                 energy_deck = (
@@ -829,8 +798,9 @@ def try_apply_effect_by_rule_ext(
             except Exception:
                 pass
             try:
+                opp_note = "相手不在のためスコア条件省略" if not opp_exists else f"score {my_score}>{opp_score}"
                 gs.log.append(
-                    f"[AUTO_EXT] live_score {my_score}>{opp_score} & 蓮ノ空 on stage "
+                    f"[AUTO_EXT] {opp_note} & 蓮ノ空 on stage "
                     f"-> energy_wait +{added} (ド！ド！ド！)"
                 )
             except Exception:
