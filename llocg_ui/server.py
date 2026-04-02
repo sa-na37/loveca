@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: position_change_ui_20260402
+# BUILD_TAG: generic_pending_source_popup_20260402a
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1580,6 +1580,13 @@ HTML = r'''<!doctype html>
     <div id="mask">
       <div id="modal">
         <div id="modalTitle">Popup</div>
+        <div id="modalLead">
+          <div id="modalSourceCard"></div>
+          <div id="modalLeadText">
+            <div id="modalSourceName"></div>
+            <div id="modalSourceMeta"></div>
+          </div>
+        </div>
         <div id="modalText"></div>
         <div id="modalCards"></div>
         <div id="modalActions"></div>
@@ -1633,6 +1640,10 @@ HTML = r'''<!doctype html>
   const elMask = document.getElementById('mask');
   const elModal = document.getElementById('modal');
   const elModalTitle = document.getElementById('modalTitle');
+  const elModalLead = document.getElementById('modalLead');
+  const elModalSourceCard = document.getElementById('modalSourceCard');
+  const elModalSourceName = document.getElementById('modalSourceName');
+  const elModalSourceMeta = document.getElementById('modalSourceMeta');
   const elModalText = document.getElementById('modalText');
   const elModalCards = document.getElementById('modalCards');
   const elModalActions = document.getElementById('modalActions');
@@ -1774,6 +1785,50 @@ HTML = r'''<!doctype html>
   function labelFor(cn){
     const m = (st && st.cn2label) ? st.cn2label : null;
     return (m && m[cn]) ? String(m[cn]) : String(cn);
+  }
+  function clearModalLead(){
+    elModalLead.classList.remove('visible');
+    elModalSourceCard.innerHTML = '';
+    elModalSourceName.textContent = '';
+    elModalSourceMeta.textContent = '';
+  }
+  function pendingSourceCn(p){
+    const tries = [
+      p && p.source_cn,
+      p && p.ctx && p.ctx.source_cn,
+      p && p.prompt && p.prompt.source_cn,
+      p && Array.isArray(p.queue) && p.queue[0] && p.queue[0].source_cn,
+    ];
+    for(const v of tries){
+      const s = String(v || '').trim();
+      if(s && looksLikeCardNo(s)) return s;
+    }
+    return '';
+  }
+  function pendingTriggerLabel(p){
+    const direct = String((p && (p.trigger || p.timing || p.when)) || '').trim();
+    if(direct) return direct;
+    const kind = String((p && p.kind) || '').trim();
+    if(kind.startsWith('live_start') || kind === 'enqueue_pending_prompt') return 'ライブ開始時';
+    if(kind.includes('success')) return 'ライブ成功時';
+    if(kind.includes('enter') || kind.includes('on_enter')) return '登場時';
+    if(kind.includes('activate') || kind.includes('body')) return '起動/能力';
+    return '';
+  }
+  function setModalLeadFromPending(p){
+    const cn = pendingSourceCn(p);
+    if(!cn){ clearModalLead(); return; }
+    const nameMap = (st && st.cn2name) ? st.cn2name : null;
+    const displayName = (nameMap && nameMap[cn]) ? String(nameMap[cn]) : String(cn);
+    const trigger = pendingTriggerLabel(p);
+    elModalSourceCard.innerHTML = '';
+    const img = document.createElement('img');
+    img.src = imgUrl(cn);
+    img.alt = cn;
+    elModalSourceCard.appendChild(img);
+    elModalSourceName.textContent = `${displayName}（${cn}）`;
+    elModalSourceMeta.textContent = trigger ? `発生源カード\n${trigger}` : '発生源カード';
+    elModalLead.classList.add('visible');
   }
 
   function selLimit(){
@@ -2561,6 +2616,7 @@ HTML = r'''<!doctype html>
   function closePopup(){
     popup = {type:null};
     elMask.style.display = 'none';
+    clearModalLead();
     elModalCards.innerHTML = '';
     elModalText.textContent = '';
     elModalActions.innerHTML = '';
@@ -2787,6 +2843,7 @@ HTML = r'''<!doctype html>
 
   function showPending(p){
     const kind = (p && p.kind) ? String(p.kind) : '';
+    setModalLeadFromPending(p);
 
     // Drag-and-drop reorder UI
     if(kind === 'reorder_topk_keep_any'){
@@ -3181,9 +3238,10 @@ HTML = r'''<!doctype html>
     }
 
     popup = {type:'pending', closable:false};
-    elModalTitle.textContent = '選択';
-    elModalText.textContent = String((p && (p.text || p.prompt || p.message)) ? (p.text || p.prompt || p.message) : '');
-    const pendText = String((p && (p.text || p.prompt || p.message)) ? (p.text || p.prompt || p.message) : '');
+    elModalTitle.textContent = '効果の選択';
+    const defaultPendText = pendingSourceCn(p) ? '効果を解決するため、対象または選択肢を選んでください。' : '';
+    elModalText.textContent = String((p && (p.text || p.prompt || p.message)) ? (p.text || p.prompt || p.message) : defaultPendText);
+    const pendText = String((p && (p.text || p.prompt || p.message)) ? (p.text || p.prompt || p.message) : defaultPendText);
     const allowSkip = !!((p && (p.allow_less || p.allow_skip)) || /Skip可/i.test(pendText) || /\bskip\b/i.test(pendText) || (kind && /pick/i.test(kind)));
     elModalActions.innerHTML = '';
     elModalCards.innerHTML = '';
