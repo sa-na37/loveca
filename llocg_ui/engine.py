@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: position_change_20260331c
+# BUILD_TAG: source_cn_propagation_20260402a
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -789,6 +789,7 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
             'kind': 'choose_stage_member_to_activate',
             'text': 'ステージのメンバーを1人までアクティブにする（対象を選択）',
             'options': opts,
+            'source_cn': str(ctx.get('source_cn', '') or ''),
         })
         gs.log.append('[PENDING] choose stage member to activate')
         return
@@ -824,6 +825,7 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
             'n': 1,
             'text': f'{src}: 好きなハートの色を1つ指定する → ライブ終了時まで+1',
             'options': ['桃', '赤', '黄', '緑', '青', '紫'],
+            'source_cn': str(ctx.get('source_cn', '') or ''),
         })
         gs.log.append(f'[PENDING] {pos}: choose heart color (self)')
         return
@@ -856,6 +858,7 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
             'chosen_color': '',
             'text': f'{src}: 好きなハートの色を1つ指定する → ステージの{group}メンバー1人に+1',
             'options': ['桃', '赤', '黄', '緑', '青', '紫'],
+            'source_cn': str(ctx.get('source_cn', '') or ''),
         })
         gs.log.append(f'[PENDING] {pos}: choose heart color for other {group} member')
         return
@@ -3195,6 +3198,7 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
         gs.pending.append({
             "kind": "choose_shioriko_enter",
             "cn": canon,
+            "source_cn": canon,
             "pos": pos.upper(),
             "text": "栞子[登場]: 効果を1つ選ぶ（エネルギー+1 / 控え室の虹ヶ咲LIVEを最大2枚デッキ上）",
             "options": ["energy", "topdeck"],
@@ -3314,6 +3318,7 @@ def _handle_body_reveal_all_hand(
     gs.pending.append({
         'kind': 'body_reveal_pick_live',
         'cn': canon,
+        'source_cn': canon,
         'pos': pos,
         'pool': list(pool),
         'live_cands': list(live_cands),
@@ -4411,6 +4416,7 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                         'resume_effect': eff,
                         'resume_pos': pos,
                         'resume_source_cn': ci.cardnumber,
+                        'source_cn': ci.cardnumber,
                     })
                     gs.log.append(f"[PENDING] named_cards_cost_multi: total={total} cands={cands}")
                     return
@@ -4478,6 +4484,7 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                 "kind": "pick_live_from_green",
                 "text": "控え室のライブカードを1枚手札に加える",
                 "options": cands,
+                "source_cn": ci.cardnumber,
             })
             gs.log.append(f"[PENDING] pick 1 LIVE from waiting room ({len(cands)} candidates)")
 
@@ -4503,6 +4510,7 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                 "kind": "pick_member_from_green",
                 "text": "控え室のメンバーカードを1枚手札に加える",
                 "options": cands,
+                "source_cn": ci.cardnumber,
             })
             gs.log.append(f"[PENDING] pick 1 MEMBER from waiting room ({len(cands)} candidates)")
 
@@ -5495,6 +5503,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                         'kind': 'choose_stage_member_to_activate',
                         'text': f'{pos}: ステージのメンバーを1人アクティブにする（対象を選択）',
                         'options': wait_opts,
+                        'source_cn': str(getattr(ci, 'cardnumber', '') or ''),
                     })
                     gs.log.append(f"[PENDING] {pos}: live_start activate member choice")
         else:
@@ -5820,6 +5829,8 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                 "kind": "shioriko_topdeck_pick1",
                 "text": "栞子[登場]: 控え室の『虹ヶ咲』LIVEを最大2枚デッキ上。まず1枚目（=一番上）を選ぶ / Skip可",
                 "options": cands,
+                "source_cn": "PL!N-pb1-010",
+                "cn": "PL!N-pb1-010",
             })
             gs.log.append(f"[PENDING] 栞子[登場]: pick topdeck #1 from {len(cands)} candidates")
             return
@@ -5872,6 +5883,8 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             "kind": "shioriko_topdeck_pick2",
             "text": "栞子[登場]: 2枚目（=上から2枚目）を選ぶ / Skip可",
             "options": cands2,
+            "source_cn": "PL!N-pb1-010",
+            "cn": "PL!N-pb1-010",
         })
         gs.log.append(f"[PENDING] 栞子[登場]: pick topdeck #2 from {len(cands2)} candidates")
         return

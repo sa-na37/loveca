@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: generic_pending_source_popup_20260402a
+# BUILD_TAG: generic_pending_source_popup_20260402b
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1795,9 +1795,17 @@ HTML = r'''<!doctype html>
   function pendingSourceCn(p){
     const tries = [
       p && p.source_cn,
+      p && p.cn,
+      p && p.after_source_cn,
+      p && p.resume_source_cn,
       p && p.ctx && p.ctx.source_cn,
+      p && p.ctx && p.ctx.cn,
       p && p.prompt && p.prompt.source_cn,
+      p && p.prompt && p.prompt.cn,
       p && Array.isArray(p.queue) && p.queue[0] && p.queue[0].source_cn,
+      p && Array.isArray(p.queue) && p.queue[0] && p.queue[0].cn,
+      p && Array.isArray(p.remaining) && p.remaining[0] && p.remaining[0].source_cn,
+      p && Array.isArray(p.remaining) && p.remaining[0] && p.remaining[0].cn,
     ];
     for(const v of tries){
       const s = String(v || '').trim();
