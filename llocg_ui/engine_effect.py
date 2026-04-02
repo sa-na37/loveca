@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_group1_lowest_risk_20260402b
+# BUILD_TAG: engine_effect_group1_lowest_risk_20260402c
 from __future__ import annotations
 
 """llocg_ui.engine_effect
@@ -578,12 +578,29 @@ def try_apply_effect_by_rule_ext(
     # 実際の対戦実装時は _opp_stage_member_cost_sum で条件判定を復活させること。
     # ------------------------------------------------------------------
     if ext_key == "live_start_my_cost_lower_draw1":
+        # 多重トリガー防止: 同一 source_cn の pay_or_skip が既に pending にあればスキップ
+        source_cn = str((ctx or {}).get("source_cn") or "")
+        try:
+            pending_list = getattr(gs, "pending", []) or []
+            for p in pending_list:
+                if (
+                    isinstance(p, dict)
+                    and p.get("kind") == "pay_or_skip"
+                    and p.get("source_cn") == source_cn
+                    and p.get("ext_key") == "live_start_my_cost_lower_draw1"
+                ):
+                    gs.log.append("[SKIP] pay_or_skip draw1 already pending (高坂穂乃果)")
+                    return True
+        except Exception:
+            pass
         payload = {
             "kind": "pay_or_skip",
             "description": "自分ステージのコスト合計が相手より低い場合、カードを1枚引く",
             "effect": "draw1",
-            "source_cn": str((ctx or {}).get("source_cn") or ""),
-            "options": ["draw", "skip"],
+            "source_cn": source_cn,
+            "ext_key": "live_start_my_cost_lower_draw1",
+            # draw1 を engine の pay_or_skip resolver が認識できる選択肢名に合わせる
+            "options": ["draw1", "skip"],
         }
         try:
             getattr(gs, "pending").append(payload)
@@ -648,6 +665,22 @@ def try_apply_effect_by_rule_ext(
     # ------------------------------------------------------------------
     if ext_key == "enter_printemps_count_activate_energy":
         count = _stage_unit_count(gs, cards_db, "Printemps")
+        # 診断: 各スロットのcardnumber・unitをログに出す
+        try:
+            st = getattr(gs, "stage", None)
+            _diag = {}
+            if isinstance(st, dict):
+                for _p in ("L", "C", "R"):
+                    _sl = st.get(_p)
+                    if _sl is not None:
+                        _cn = getattr(_sl, "cardnumber", None)
+                        _unit = _card_unit(_sl, cards_db) if _cn else None
+                        _diag[_p] = f"{_cn}(unit={_unit})"
+                    else:
+                        _diag[_p] = None
+            gs.log.append(f"[DIAG] stage={_diag}, Printemps_count={count} (南ことり)")
+        except Exception:
+            pass
         if count > 0:
             moved = _activate_energy(gs, count)
             try:
@@ -693,20 +726,29 @@ def try_apply_effect_by_rule_ext(
         milled = 0
         try:
             deck = getattr(gs, "deck", None)
-            waiting = (
-                getattr(gs, "waiting_room", None)
-                or getattr(gs, "graveyard", None)
-                or getattr(gs, "discard", None)
-            )
+            # 控え室フィールド名を複数候補で探す
+            waiting = None
+            for _attr in ("waiting_room", "graveyard", "discard", "green_room"):
+                _v = getattr(gs, _attr, None)
+                if _v is not None:
+                    waiting = _v
+                    break
             if deck is not None and waiting is not None:
-                for _ in range(10):
-                    if not deck:
-                        break
-                    waiting.append(deck.pop(0))
-                    milled += 1
+                # deck が list でない場合は cards 属性を試みる
+                deck_list = deck if isinstance(deck, list) else getattr(deck, "cards", None)
+                wait_list = waiting if isinstance(waiting, list) else getattr(waiting, "cards", None)
+                if deck_list is not None and wait_list is not None:
+                    for _ in range(10):
+                        if not deck_list:
+                            break
+                        wait_list.append(deck_list.pop(0))
+                        milled += 1
             gs.log.append(f"[AUTO_EXT] mill {milled} cards to waiting_room (小泉花陽)")
-        except Exception:
-            pass
+        except Exception as _e:
+            try:
+                gs.log.append(f"[ERR] mill failed: {_e} (小泉花陽)")
+            except Exception:
+                pass
         return True
 
     # ------------------------------------------------------------------
@@ -749,6 +791,29 @@ def try_apply_effect_by_rule_ext(
             pass
 
         has_hasunosora = _stage_has_group(gs, cards_db, "蓮ノ空")
+
+        # 相手が存在しない（1人用シミュ）場合は pay_or_skip で任意解決
+        opp_exists = (
+            getattr(gs, "opponent", None) is not None
+            or getattr(gs, "opp", None) is not None
+        )
+        if not opp_exists:
+            source_cn = str((ctx or {}).get("source_cn") or "")
+            payload = {
+                "kind": "pay_or_skip",
+                "description": "ライブ合計スコアが相手より高く、かつ蓮ノ空メンバーがいる場合、エネルギーをウェイトで1枚置く（相手不在のため手動確認）",
+                "effect": "energy_wait1",
+                "source_cn": source_cn,
+                "ext_key": "live_success_score_gt_opp_and_hasunosora_energy_wait",
+                "options": ["energy_wait1", "skip"],
+            }
+            try:
+                getattr(gs, "pending").append(payload)
+                gs.log.append("[PENDING] pay_or_skip energy_wait1 (ド！ド！ド！: 相手不在のため手動確認)")
+            except Exception:
+                pass
+            return True
+
         if my_score > opp_score and has_hasunosora:
             added = 0
             try:
@@ -786,7 +851,15 @@ def try_apply_effect_by_rule_ext(
     # ------------------------------------------------------------------
     if ext_key == "live_start_all_stage_filled_x2_blade":
         slot = _src_slot(gs, ctx)
-        if _all_stage_slots_filled(gs):
+        filled = _all_stage_slots_filled(gs)
+        # 診断: 各スロットの cardnumber をログに出す
+        try:
+            st = getattr(gs, "stage", None)
+            _diag = {p: (getattr(st.get(p), "cardnumber", None) if isinstance(st, dict) and st.get(p) else None) for p in ("L", "C", "R")}
+            gs.log.append(f"[DIAG] stage slots={_diag}, filled={filled}, src_slot={'found' if slot else 'None'} (大沢瑠璃乃)")
+        except Exception:
+            pass
+        if filled:
             if slot is not None:
                 _add_temp_blade(eng, slot, 2)
             try:
