@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: position_change_ui_20260331
+# BUILD_TAG: position_change_ui_20260402
 from __future__ import annotations
 
 """llocg_ui.server
@@ -3267,15 +3267,24 @@ HTML = r'''<!doctype html>
         });
       const allStagePosPC = stageEntriesPC.length && stageEntriesPC.every(e=>['L','C','R'].includes(e.pos));
       if(allStagePosPC){
+        const stage = (st && st.stage) ? st.stage : {};
+        const srcPos = String((p && (p.src_pos || p.pos || '')) || '').trim().toUpperCase();
+        const srcSlot = srcPos && stage[srcPos] ? stage[srcPos] : null;
+        const srcCn = srcSlot ? String(srcSlot.cardnumber || '') : '';
+        const srcName = srcSlot ? String(srcSlot.cardname || srcSlot.name || srcCn || '') : '';
+        elModalTitle.textContent = 'ポジションチェンジ';
+        elModalText.textContent = srcName
+          ? `${srcName}${srcPos ? `（現在 ${srcPos}）` : ''} の移動先を選んでください。移動先にメンバーがいる場合は入れ替わります。`
+          : `移動先を選んでください。移動先にメンバーがいる場合は入れ替わります。`;
         const row = document.createElement('div');
         row.className = 'choiceRow';
         const dimsP = standardSize('portrait');
         const dimsL = standardSize('landscape');
         stageEntriesPC.forEach(({raw, pos})=>{
           const posU = pos;
-          const stage = (st && st.stage) ? st.stage : {};
           const slotData = stage[posU];
           const cn = slotData ? String(slotData.cardnumber || '') : '';
+          const cardname = slotData ? String(slotData.cardname || slotData.name || '') : '';
           const isWait = !!(slotData && slotData.active === false);
           const btnDims = isWait ? dimsL : dimsP;
           const b = document.createElement('button');
@@ -3306,7 +3315,9 @@ HTML = r'''<!doctype html>
           }
           const cap = document.createElement('div');
           cap.className = 'choiceCap';
-          cap.textContent = raw || (posU + (cn ? `: ${cn}` : '（空）') + (isWait ? ' [WAIT]' : ''));
+          cap.textContent = cn
+            ? `${posU}${cardname ? `: ${cardname}` : `: ${cn}`}${isWait ? ' [WAIT]' : ''}`
+            : `${posU}（空）`;
           b.appendChild(cap);
           b.addEventListener('click', async ev=>{
             ev.stopPropagation();
