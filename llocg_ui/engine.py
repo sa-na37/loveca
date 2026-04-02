@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: source_cn_propagation_20260402a
+# BUILD_TAG: pay_or_skip_nocost_20260402a
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -789,7 +789,6 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
             'kind': 'choose_stage_member_to_activate',
             'text': 'ステージのメンバーを1人までアクティブにする（対象を選択）',
             'options': opts,
-            'source_cn': str(ctx.get('source_cn', '') or ''),
         })
         gs.log.append('[PENDING] choose stage member to activate')
         return
@@ -825,7 +824,6 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
             'n': 1,
             'text': f'{src}: 好きなハートの色を1つ指定する → ライブ終了時まで+1',
             'options': ['桃', '赤', '黄', '緑', '青', '紫'],
-            'source_cn': str(ctx.get('source_cn', '') or ''),
         })
         gs.log.append(f'[PENDING] {pos}: choose heart color (self)')
         return
@@ -858,7 +856,6 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
             'chosen_color': '',
             'text': f'{src}: 好きなハートの色を1つ指定する → ステージの{group}メンバー1人に+1',
             'options': ['桃', '赤', '黄', '緑', '青', '紫'],
-            'source_cn': str(ctx.get('source_cn', '') or ''),
         })
         gs.log.append(f'[PENDING] {pos}: choose heart color for other {group} member')
         return
@@ -3198,7 +3195,6 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
         gs.pending.append({
             "kind": "choose_shioriko_enter",
             "cn": canon,
-            "source_cn": canon,
             "pos": pos.upper(),
             "text": "栞子[登場]: 効果を1つ選ぶ（エネルギー+1 / 控え室の虹ヶ咲LIVEを最大2枚デッキ上）",
             "options": ["energy", "topdeck"],
@@ -3318,7 +3314,6 @@ def _handle_body_reveal_all_hand(
     gs.pending.append({
         'kind': 'body_reveal_pick_live',
         'cn': canon,
-        'source_cn': canon,
         'pos': pos,
         'pool': list(pool),
         'live_cands': list(live_cands),
@@ -4416,7 +4411,6 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                         'resume_effect': eff,
                         'resume_pos': pos,
                         'resume_source_cn': ci.cardnumber,
-                        'source_cn': ci.cardnumber,
                     })
                     gs.log.append(f"[PENDING] named_cards_cost_multi: total={total} cands={cands}")
                     return
@@ -4484,7 +4478,6 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                 "kind": "pick_live_from_green",
                 "text": "控え室のライブカードを1枚手札に加える",
                 "options": cands,
-                "source_cn": ci.cardnumber,
             })
             gs.log.append(f"[PENDING] pick 1 LIVE from waiting room ({len(cands)} candidates)")
 
@@ -4510,7 +4503,6 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                 "kind": "pick_member_from_green",
                 "text": "控え室のメンバーカードを1枚手札に加える",
                 "options": cands,
-                "source_cn": ci.cardnumber,
             })
             gs.log.append(f"[PENDING] pick 1 MEMBER from waiting room ({len(cands)} candidates)")
 
@@ -4643,13 +4635,18 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
     # --- Generic effect-engine prompts ---
 
     if kind == 'pay_or_skip':
-        # Generic optional-cost prompt (e.g., "...してもよい：<effect>")
-        cost_kind = str(p.get('cost_kind', '') or '')
+        # Generic optional prompt. Supports both
+        #   - optional discard cost -> after_effect_template
+        #   - no-cost yes/no -> immediate after_effect_template
+        cost_kind = str(p.get('cost_kind', '') or '').strip()
         cost_n = _safe_int(p.get('cost_n', 0), 0)
         after_eff = str(p.get('after_effect_template', '') or '').strip()
         ctx0 = dict(p.get('ctx', {}) or {})
         src = str(p.get('source_cn', '') or '')
         low = choice_str.lower()
+
+        if src and not ctx0.get('source_cn'):
+            ctx0['source_cn'] = src
 
         if low in ('skip', '__skip__', 'no', 'n', '0', 'false'):
             gs.log.append(f"[SKIP] {src}: skipped optional cost")
@@ -4679,6 +4676,21 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                 'after_ctx': ctx0,
                 'after_source_cn': src,
             })
+            return
+
+        if cost_kind in ('', 'none', 'no_cost', 'immediate'):
+            if after_eff:
+                rng2 = random.Random(getattr(gs, 'seed', 1) or 1)
+                ok = try_apply_effect_template(gs, rng2, cards_db, after_eff, ctx0)
+                if ok:
+                    gs.log.append(f"[ACT] {src}: applied {after_eff}")
+                else:
+                    gs.log.append(f"[WARN] {src}: pay_or_skip immediate effect not matchable {after_eff}")
+            else:
+                gs.log.append(f"[INFO] {src}: pay_or_skip had no after_effect_template")
+            _r = p.get('_resume') if isinstance(p, dict) else None
+            if _r:
+                gs.pending.append(_r)
             return
 
         gs.log.append(f"[ERR] pay_or_skip: unsupported cost_kind={cost_kind}")
@@ -5503,7 +5515,6 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                         'kind': 'choose_stage_member_to_activate',
                         'text': f'{pos}: ステージのメンバーを1人アクティブにする（対象を選択）',
                         'options': wait_opts,
-                        'source_cn': str(getattr(ci, 'cardnumber', '') or ''),
                     })
                     gs.log.append(f"[PENDING] {pos}: live_start activate member choice")
         else:
@@ -5829,8 +5840,6 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                 "kind": "shioriko_topdeck_pick1",
                 "text": "栞子[登場]: 控え室の『虹ヶ咲』LIVEを最大2枚デッキ上。まず1枚目（=一番上）を選ぶ / Skip可",
                 "options": cands,
-                "source_cn": "PL!N-pb1-010",
-                "cn": "PL!N-pb1-010",
             })
             gs.log.append(f"[PENDING] 栞子[登場]: pick topdeck #1 from {len(cands)} candidates")
             return
@@ -5883,8 +5892,6 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             "kind": "shioriko_topdeck_pick2",
             "text": "栞子[登場]: 2枚目（=上から2枚目）を選ぶ / Skip可",
             "options": cands2,
-            "source_cn": "PL!N-pb1-010",
-            "cn": "PL!N-pb1-010",
         })
         gs.log.append(f"[PENDING] 栞子[登場]: pick topdeck #2 from {len(cands2)} candidates")
         return
