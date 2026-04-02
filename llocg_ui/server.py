@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: generic_pending_source_popup_20260402b
+# BUILD_TAG: generic_pending_source_popup_20260402c
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1526,11 +1526,19 @@ HTML = r'''<!doctype html>
   #mask{position:absolute;left:0;top:0;bottom:0;right:var(--sideW);background:rgba(0,0,0,.55);display:none;z-index:9000;}
   #modal{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(92%, calc(var(--pmW) - var(--sideW) - 140px));max-height:min(64%, calc(var(--pmH) - 160px));overflow:hidden;background:#1b1b1b;border:1px solid rgba(255,255,255,.15);border-radius:16px;padding:12px;box-shadow:0 14px 60px rgba(0,0,0,.7);display:flex;flex-direction:column;}
   #modalTitle{font-weight:700;}
-  #modalText{white-space:pre-wrap;line-height:1.35;color:#ddd;font-size:13px;margin-top:8px;}
-  #modalCards{margin-top:10px;overflow-x:auto;overflow-y:hidden;padding-bottom:6px;} 
   #modalCards .surf{position:relative;height:1px;}
-  #modalActions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap;}
   #modalActions .miniBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:6px 10px;border-radius:10px;cursor:pointer;}
+  #modalLead{display:none;align-items:flex-start;gap:12px;margin-top:10px;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.04);overflow:hidden;flex:0 0 auto;}
+  #modalLead.visible{display:flex;}
+  #modalSourceCard{flex:0 0 auto;width:110px;height:154px;border-radius:10px;overflow:hidden;background:#000;box-shadow:0 6px 18px rgba(0,0,0,.35);}
+  #modalSourceCard img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;}
+  #modalLeadText{min-width:0;display:flex;flex-direction:column;gap:6px;justify-content:flex-start;align-self:stretch;}
+  #modalSourceName{font-size:14px;font-weight:700;line-height:1.35;color:#fff;word-break:break-word;}
+  #modalSourceMeta{font-size:12px;line-height:1.45;color:#bbb;white-space:pre-wrap;word-break:break-word;}
+  #modalText{white-space:pre-wrap;line-height:1.35;color:#ddd;font-size:13px;margin-top:8px;flex:0 0 auto;}
+  #modalCards{margin-top:10px;overflow-x:auto;overflow-y:auto;min-height:0;padding-bottom:6px;}
+  #modalCards .surf{position:relative;height:1px;}
+  #modalActions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap;flex:0 0 auto;}
 /* UI_FIX_PENDING_CARD_CHOICES */
   /* pending card choice list (image buttons) */
   .choiceRow{display:inline-flex;gap:8px;align-items:flex-start;overflow-x:auto;overflow-y:hidden;max-width:min(72vw, 1060px);padding:6px 2px 10px 2px;}
