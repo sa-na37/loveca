@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_group1_lowest_risk_20260402
+# BUILD_TAG: engine_effect_group1_lowest_risk_20260402b
 from __future__ import annotations
 
 """llocg_ui.engine_effect
@@ -573,26 +573,23 @@ def try_apply_effect_by_rule_ext(
 
     # ------------------------------------------------------------------
     # Prompt 24: PL!-bp4-001 高坂穂乃果
-    # 自分ステージのコスト合計 < 相手 → draw 1
+    # 1人用シミュレータでは相手ステージが存在しないため条件判定を省略。
+    # 常にトリガー → pay_or_skip で任意解決 (draw 1)。
+    # 実際の対戦実装時は _opp_stage_member_cost_sum で条件判定を復活させること。
     # ------------------------------------------------------------------
     if ext_key == "live_start_my_cost_lower_draw1":
-        my_cost = _stage_member_cost_sum(gs, cards_db)
-        opp_cost = _opp_stage_member_cost_sum(gs, cards_db)
-        if my_cost < opp_cost:
-            drawn = _draw_cards(eng, gs, 1)
-            try:
-                gs.log.append(
-                    f"[AUTO_EXT] my_cost={my_cost} < opp_cost={opp_cost} -> draw {drawn} (高坂穂乃果)"
-                )
-            except Exception:
-                pass
-        else:
-            try:
-                gs.log.append(
-                    f"[AUTO_EXT] my_cost={my_cost} >= opp_cost={opp_cost}, no draw (高坂穂乃果)"
-                )
-            except Exception:
-                pass
+        payload = {
+            "kind": "pay_or_skip",
+            "description": "自分ステージのコスト合計が相手より低い場合、カードを1枚引く",
+            "effect": "draw1",
+            "source_cn": str((ctx or {}).get("source_cn") or ""),
+            "options": ["draw", "skip"],
+        }
+        try:
+            getattr(gs, "pending").append(payload)
+            gs.log.append("[PENDING] pay_or_skip draw1 (高坂穂乃果)")
+        except Exception:
+            pass
         return True
 
     # ------------------------------------------------------------------
