@@ -559,10 +559,6 @@ def try_apply_effect_by_rule_ext(
         if slot is not None and n > 0:
             _add_temp_blade(eng, slot, n)
             try:
-                slot.temp_until = 'end_of_live'
-            except Exception:
-                pass
-            try:
                 gs.log.append(
                     f"[AUTO_EXT] success_zone={len(success_cards)} -> +{n}blade (西木野真姫)"
                 )
@@ -727,10 +723,6 @@ def try_apply_effect_by_rule_ext(
         if slot is not None and n > 0:
             _add_temp_blade(eng, slot, n)
             try:
-                slot.temp_until = 'end_of_live'
-            except Exception:
-                pass
-            try:
                 gs.log.append(
                     f"[AUTO_EXT] live_cards={n} -> +{n}blade (夕霧綴理)"
                 )
@@ -800,10 +792,6 @@ def try_apply_effect_by_rule_ext(
         if _all_stage_slots_filled(gs):
             if slot is not None:
                 _add_temp_blade(eng, slot, 2)
-                try:
-                    slot.temp_until = 'end_of_live'
-                except Exception:
-                    pass
             try:
                 gs.log.append("[AUTO_EXT] all stage filled -> +2blade (大沢瑠璃乃)")
             except Exception:
