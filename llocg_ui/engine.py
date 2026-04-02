@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: position_change_20260331b
+# BUILD_TAG: position_change_20260331c
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -2673,6 +2673,7 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
     if gs.live_start_prompted:
         return 0
 
+    rng = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
     triggers: List[Dict[str, Any]] = []
 
     def _append_prompt(prompt: Dict[str, Any], label: str = '') -> None:
