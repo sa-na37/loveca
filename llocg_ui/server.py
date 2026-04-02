@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: back_deckzone_fix_20260331
+# BUILD_TAG: position_change_ui_20260331
 from __future__ import annotations
 
 """llocg_ui.server
@@ -58,7 +58,7 @@ from .engine import (
     StageSlot,
 )
 
-APP_VERSION = "back_deckzone_fix_20260331"
+APP_VERSION = "texticon_stack_overlay_20260331"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -1013,8 +1013,6 @@ class App:
                         # PL!N-bp1-012 ランジュのライブ中ボーナス（UIアイコン表示用）
                         "lanzhu_blade_bonus": self._lanzhu_blade_bonus_for(k, v),
                         "lanzhu_heart_bonus": self._lanzhu_heart_bonus_for(k, v),
-                        "always2member_blade_bonus": self._always2member_blade_bonus_for(k, v),
-                        "always2member_heart_bonus": self._always2member_heart_bonus_for(k, v),
                     }
                     if v
                     else None
@@ -1067,26 +1065,6 @@ class App:
             return 2 if n > 0 else 0
         except Exception:
             return 0
-
-    def _always2member_blade_bonus_for(self, pos: str, slot) -> int:
-        """常時2人条件ブレードボーナスをUI表示用に返す。"""
-        from .engine import always_2member_blade_bonus_for
-        try:
-            if not slot:
-                return 0
-            return int(always_2member_blade_bonus_for(self.gs, self.cards_db, pos) or 0)
-        except Exception:
-            return 0
-
-    def _always2member_heart_bonus_for(self, pos: str, slot):
-        """常時2人条件ハートボーナスをUI表示用に返す。"""
-        from .engine import always_2member_heart_bonus_for
-        try:
-            if not slot:
-                return {}
-            return dict(always_2member_heart_bonus_for(self.gs, self.cards_db, pos) or {})
-        except Exception:
-            return {}
 
 # PATCH_V2_10_LIVE_GUARD_MAIN_ONLY_APPCMD
     def _live_set_split(self):
@@ -1378,37 +1356,6 @@ class Handler(BaseHTTPRequestHandler):
             qs = parse_qs(u.query)
             cn = unquote((qs.get("cn", [""])[0] or "").strip())
             # special: energy card back image
-            if cn == "__BACK__":
-                cand = []
-                try:
-                    _loveca_root = Path(__file__).resolve().parents[1]
-                    cand.extend([
-                        self.app.root / "back.png",
-                        self.app.root / "back.jpg",
-                        self.app.root / "back.jpeg",
-                        self.app.root / "llocg_db_out_full" / "back.png",
-                        self.app.root / "llocg_db_out_full" / "back.jpg",
-                        self.app.root / "llocg_db_out_full" / "back.jpeg",
-                        _loveca_root / "back.png",
-                        _loveca_root / "back.jpg",
-                        _loveca_root / "back.jpeg",
-                        _loveca_root / "llocg_db_out_full" / "back.png",
-                        _loveca_root / "llocg_db_out_full" / "back.jpg",
-                        _loveca_root / "llocg_db_out_full" / "back.jpeg",
-                    ])
-                except Exception:
-                    pass
-                for p2 in cand:
-                    try:
-                        if p2 and p2.exists():
-                            ctype = "image/jpeg" if str(p2).lower().endswith((".jpg",".jpeg")) else "image/png"
-                            self._send(200, p2.read_bytes(), ctype)
-                            return
-                    except Exception:
-                        pass
-                self._send(404, b"", "text/plain")
-                return
-
             if cn == "__ENERGY__":
                 cand = []
                 try:
@@ -1660,7 +1607,7 @@ HTML = r'''<!doctype html>
   // Right side contains: DECK (top), Waiting room (middle), Energy+UNDO+NEXT (bottom)
   const layout = {
     zones: {
-      deck:    {x: 1335, y:  28, w: 165, h: 255, kind:"deck",    orient:"portrait", label:"DECK"},
+      deck:    {x: 1235, y:  60, w: 270, h: 180, kind:"deck",    orient:"portrait", label:"DECK"},
       green:   {x: 1235, y: 255, w: 270, h: 260, kind:"green",   orient:"portrait", label:"Waiting room"},
       energy:  {x: 1235, y: 545, w: 270, h: 280, kind:"energy",  orient:"portrait", label:"ENERGY"},
       // 成功ライブカード置き場（playmat枠に合わせて左側へ）
@@ -2297,19 +2244,13 @@ HTML = r'''<!doctype html>
       const sd  = (st && st.stage_detail) ? st.stage_detail : null;
       const det = sd ? sd[slotKey] : null;
       if(det){
-        const tmpBlade   = Number(det.temp_blade || 0);
-        const alwBlade   = Number(det.always_blade_bonus || 0);
-        const lzBlade    = Number(det.lanzhu_blade_bonus || 0);
-        const lzHeart    = Number(det.lanzhu_heart_bonus || 0);
-        const a2mBlade   = Number(det.always2member_blade_bonus || 0);
-        const a2mHearts  = Object.assign({}, det.always2member_heart_bonus || {});
-        const tmpHearts  = Object.assign({}, det.temp_hearts || {});
+        const tmpBlade  = Number(det.temp_blade      || 0);
+        const alwBlade  = Number(det.always_blade_bonus || 0);
+        const lzBlade   = Number(det.lanzhu_blade_bonus || 0);
+        const lzHeart   = Number(det.lanzhu_heart_bonus || 0);
+        const tmpHearts = Object.assign({}, det.temp_hearts || {});
         if(lzHeart > 0) tmpHearts['all'] = (Number(tmpHearts['all'] || 0)) + lzHeart;
-        for(const [col, cnt] of Object.entries(a2mHearts)){
-          const n = Number(cnt || 0);
-          if(n > 0) tmpHearts[col] = (Number(tmpHearts[col] || 0)) + n;
-        }
-        const totalBlade = tmpBlade + alwBlade + lzBlade + a2mBlade;
+        const totalBlade = tmpBlade + alwBlade + lzBlade;
 
         const hasBonus = totalBlade > 0 || Object.keys(tmpHearts).some(k=>Number(tmpHearts[k])>0);
         if(hasBonus){
@@ -3314,6 +3255,83 @@ HTML = r'''<!doctype html>
 
     const allCardNo = opts.length && opts.every(o=>looksLikeCardNo(o));
 
+    // position_change: show stage position choices as image buttons (same style as stage-choice UI)
+    if(kind === 'position_change'){
+      const stagePosHasSkipPC = opts.some(o => String(o).toLowerCase() === 'skip');
+      const stageEntriesPC = opts
+        .filter(o => String(o).toLowerCase() !== 'skip')
+        .map(o=>{
+          const raw = String(o || '').trim();
+          const pos = raw ? raw[0].toUpperCase() : '';
+          return { raw, pos };
+        });
+      const allStagePosPC = stageEntriesPC.length && stageEntriesPC.every(e=>['L','C','R'].includes(e.pos));
+      if(allStagePosPC){
+        const row = document.createElement('div');
+        row.className = 'choiceRow';
+        const dimsP = standardSize('portrait');
+        const dimsL = standardSize('landscape');
+        stageEntriesPC.forEach(({raw, pos})=>{
+          const posU = pos;
+          const stage = (st && st.stage) ? st.stage : {};
+          const slotData = stage[posU];
+          const cn = slotData ? String(slotData.cardnumber || '') : '';
+          const isWait = !!(slotData && slotData.active === false);
+          const btnDims = isWait ? dimsL : dimsP;
+          const b = document.createElement('button');
+          b.className = 'choiceBtn';
+          b.style.width    = btnDims.w + 'px';
+          b.style.height   = btnDims.h + 'px';
+          b.style.position = 'relative';
+          b.style.overflow = 'hidden';
+          if(cn && looksLikeCardNo(cn)){
+            const img = document.createElement('img');
+            img.src = imgUrl(cn); img.alt = cn;
+            if(isWait){
+              img.style.width           = btnDims.h + 'px';
+              img.style.height          = btnDims.w + 'px';
+              img.style.position        = 'absolute';
+              img.style.top             = '50%';
+              img.style.left            = '50%';
+              img.style.transform       = 'translate(-50%, -50%) rotate(-90deg)';
+              img.style.transformOrigin = 'center center';
+            }
+            b.appendChild(img);
+          }
+          if(isWait){
+            const badge = document.createElement('div');
+            badge.style.cssText = 'position:absolute;top:6px;right:6px;background:rgba(220,120,0,.92);color:#fff;font-size:11px;font-weight:bold;padding:3px 7px;border-radius:5px;pointer-events:none;z-index:10;letter-spacing:0.05em;box-shadow:0 1px 4px rgba(0,0,0,.4);';
+            badge.textContent = 'WAIT';
+            b.appendChild(badge);
+          }
+          const cap = document.createElement('div');
+          cap.className = 'choiceCap';
+          cap.textContent = raw || (posU + (cn ? `: ${cn}` : '（空）') + (isWait ? ' [WAIT]' : ''));
+          b.appendChild(cap);
+          b.addEventListener('click', async ev=>{
+            ev.stopPropagation();
+            st = await apiCmd('resolve_pending', {idx:0, choice: raw || posU});
+            selHand=[]; updateTop(); render();
+          });
+          row.appendChild(b);
+        });
+        elModalCards.appendChild(row);
+        if(stagePosHasSkipPC){
+          const bSkip = document.createElement('button');
+          bSkip.className = 'miniBtn'; bSkip.textContent = 'Skip';
+          bSkip.addEventListener('click', async ev=>{
+            ev.stopPropagation();
+            st = await apiCmd('resolve_pending', {idx:0, choice:'skip'});
+            selHand=[]; updateTop(); render();
+          });
+          elModalActions.appendChild(bSkip);
+        }
+        elMask.style.display = 'block';
+        return;
+      }
+    }
+
+    // Stage position options (plain L/C/R or labels like 'L: ...') → ステージカード画像で表示
     // Stage position options (plain L/C/R or labels like 'L: ...') → ステージカード画像で表示
     // skip を除外してからL/C/R判定する（choose_stage_member_to_activate など skip混入ケース対応）
     const stagePosHasSkip = opts.some(o => String(o).toLowerCase() === 'skip');

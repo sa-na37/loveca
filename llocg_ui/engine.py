@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_stage2_blue_blade_20260331
+# BUILD_TAG: position_change_20260331
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -1903,50 +1903,6 @@ def stage_blade(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
         s += 2 * int(n_lz)
     return s
 
-
-
-def always_2member_blade_bonus_for(gs: "GameState", cards_db: Dict[str, CardInfo], pos: str) -> int:
-    """Return always-effect blade bonus for the slot at pos.
-
-    PL!N-PR-020 / PL!S-PR-037:
-      ステージにメンバーがちょうど2人のとき、このメンバーは +1 ブレードを得る。
-    Called by server.py to compute per-slot display bonus (same pattern as lanzhu).
-    Returns 1 if the condition is met for this slot, else 0.
-    """
-    try:
-        pos = str(pos or '').upper()
-        slot = (gs.stage or {}).get(pos)
-        if not slot or not getattr(slot, 'active', False):
-            return 0
-        c = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
-        if not c or not _has_body_always_2member_blade_heart(c):
-            return 0
-        stage_member_n = _stage_member_count(gs, cards_db)
-        return 1 if stage_member_n == 2 else 0
-    except Exception:
-        return 0
-
-
-def always_2member_heart_bonus_for(gs: "GameState", cards_db: Dict[str, CardInfo], pos: str) -> Dict[str, int]:
-    """Return always-effect heart bonus dict for the slot at pos.
-
-    PL!N-PR-020 / PL!S-PR-037:
-      ステージにメンバーがちょうど2人のとき、このメンバーは青ハート+1を得る。
-    Called by server.py to compute per-slot display bonus (same pattern as lanzhu).
-    Returns {"blue": 1} if the condition is met, else {}.
-    """
-    try:
-        pos = str(pos or '').upper()
-        slot = (gs.stage or {}).get(pos)
-        if not slot or not getattr(slot, 'active', False):
-            return {}
-        c = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
-        if not c or not _has_body_always_2member_blade_heart(c):
-            return {}
-        stage_member_n = _stage_member_count(gs, cards_db)
-        return {"blue": 1} if stage_member_n == 2 else {}
-    except Exception:
-        return {}
 
 
 def _lanzhu_bp1_012_live_bonus_count(gs: "GameState", cards_db: Dict[str, CardInfo]) -> int:
@@ -4591,6 +4547,47 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             'queue': list(q),
         })
         setattr(gs, '_deferred_auto_queue', [])
+
+    if kind == 'position_change':
+        src_pos = str(p.get('src_pos', '') or '').upper()
+        source_cn = str(p.get('source_cn', '') or '')
+        valid_src = {'L', 'C', 'R'}
+        valid_dst = {'L', 'C', 'R'}
+
+        if src_pos not in valid_src:
+            gs.log.append(f"[ERR] position_change: invalid src_pos '{src_pos}'")
+            return
+
+        if (choice_str == '') or (choice_str.lower() == 'skip'):
+            gs.log.append(f"[POSITION_CHANGE] {source_cn or '?'} {src_pos} -> skip")
+            return
+
+        dst_pos = choice_str.upper()
+        if dst_pos not in valid_dst:
+            gs.log.append(f"[ERR] position_change: invalid choice '{choice_str}'")
+            gs.pending.insert(idx, p)
+            return
+
+        stage = getattr(gs, 'stage', None)
+        if not isinstance(stage, dict):
+            gs.log.append('[ERR] position_change: stage missing')
+            return
+
+        src_slot = stage.get(src_pos)
+        dst_slot = stage.get(dst_pos)
+        if src_slot is None:
+            gs.log.append(f"[WARN] position_change: source {src_pos} is empty")
+            return
+
+        if not source_cn:
+            try:
+                source_cn = str(getattr(src_slot, 'cardnumber', '') or '')
+            except Exception:
+                source_cn = ''
+
+        stage[src_pos], stage[dst_pos] = dst_slot, src_slot
+        gs.log.append(f"[POSITION_CHANGE] {source_cn or '?'} {src_pos} -> {dst_pos}")
+        return
 
     if kind == 'auto_order':
         queue = list(p.get('queue', []) or [])
