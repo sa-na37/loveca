@@ -1525,20 +1525,20 @@ HTML = r'''<!doctype html>
   /* popups */
   #mask{position:absolute;left:0;top:0;bottom:0;right:var(--sideW);background:rgba(0,0,0,.55);display:none;z-index:9000;}
   #modal{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(92%, calc(var(--pmW) - var(--sideW) - 140px));max-height:min(64%, calc(var(--pmH) - 160px));overflow:hidden;background:#1b1b1b;border:1px solid rgba(255,255,255,.15);border-radius:16px;padding:12px;box-shadow:0 14px 60px rgba(0,0,0,.7);display:flex;flex-direction:column;}
-  #modalTitle{font-weight:700;flex:0 0 auto;}
-  #modalMain{display:flex;gap:16px;flex:1 1 auto;min-height:0;overflow:hidden;margin-top:10px;}
-  #modalLead{display:none;flex:0 0 160px;max-width:160px;min-width:160px;flex-direction:column;gap:8px;align-items:flex-start;}
+  #modalTitle{font-weight:800;flex:0 0 auto;font-size:20px;line-height:1.2;letter-spacing:.01em;}
+  #modalMain{display:flex;gap:22px;flex:1 1 auto;min-height:0;overflow:hidden;margin-top:14px;}
+  #modalLead{display:none;flex:0 0 186px;max-width:186px;min-width:186px;flex-direction:column;gap:10px;align-items:flex-start;}
   #modalLead.visible{display:flex;}
-  #modalSourceCard{width:150px;min-width:150px;}
-  #modalSourceCard img{display:block;width:150px;height:auto;max-height:220px;object-fit:cover;border-radius:12px;border:1px solid rgba(255,255,255,.14);box-shadow:0 8px 24px rgba(0,0,0,.35);}
-  #modalSourceName{width:150px;font-weight:700;color:#fff;font-size:13px;line-height:1.35;white-space:normal;word-break:break-word;}
-  #modalSourceMeta{width:150px;font-size:11px;color:#aaa;line-height:1.35;white-space:pre-wrap;}
+  #modalSourceCard{width:176px;min-width:176px;}
+  #modalSourceCard img{display:block;width:176px;height:auto;max-height:252px;object-fit:cover;border-radius:12px;border:1px solid rgba(255,255,255,.14);box-shadow:0 8px 24px rgba(0,0,0,.35);}
+  #modalSourceName{width:176px;font-weight:800;color:#fff;font-size:17px;line-height:1.32;white-space:normal;word-break:break-word;}
+  #modalSourceMeta{width:176px;font-size:13px;color:#bfc3cb;line-height:1.45;white-space:pre-wrap;}
   #modalContent{display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0;overflow:hidden;}
-  #modalText{white-space:pre-wrap;line-height:1.45;color:#ddd;font-size:13px;margin-top:0;flex:0 0 auto;}
-  #modalCards{margin-top:10px;overflow-x:auto;overflow-y:auto;padding-bottom:6px;flex:1 1 auto;min-height:0;} 
+  #modalText{white-space:pre-wrap;line-height:1.62;color:#e6e6e6;font-size:17px;margin-top:0;flex:0 0 auto;}
+  #modalCards{margin-top:14px;overflow-x:auto;overflow-y:auto;padding-bottom:8px;flex:1 1 auto;min-height:0;} 
   #modalCards .surf{position:relative;height:1px;}
-  #modalActions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap;flex:0 0 auto;}
-  #modalActions .miniBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:6px 10px;border-radius:10px;cursor:pointer;}
+  #modalActions{display:flex;gap:10px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap;flex:0 0 auto;}
+  #modalActions .miniBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:9px 16px;border-radius:12px;cursor:pointer;font-size:16px;font-weight:700;}
 /* UI_FIX_PENDING_CARD_CHOICES */
   /* pending card choice list (image buttons) */
   .choiceRow{display:inline-flex;gap:8px;align-items:flex-start;overflow-x:auto;overflow-y:hidden;max-width:min(72vw, 1060px);padding:6px 2px 10px 2px;}
@@ -1844,8 +1844,8 @@ HTML = r'''<!doctype html>
     img.src = imgUrl(cn);
     img.alt = cn;
     elModalSourceCard.appendChild(img);
-    elModalSourceName.textContent = `${displayName}（${cn}）`;
-    elModalSourceMeta.textContent = trigger ? `発生源カード\n${trigger}` : '発生源カード';
+    elModalSourceName.textContent = displayName;
+    elModalSourceMeta.textContent = trigger ? `${cn}\n発生源 / ${trigger}` : `${cn}\n発生源カード`;
     elModalLead.classList.add('visible');
   }
 
