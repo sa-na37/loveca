@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_position_change_20260331
+# BUILD_TAG: engine_effect_position_change_20260331b
 from __future__ import annotations
 
 """llocg_ui.engine_effect
@@ -198,16 +198,13 @@ def try_apply_effect_by_rule_ext(
     #     return True
     if ext_key == "position_change_optional":
         src_pos = str((ctx or {}).get("src_pos") or (ctx or {}).get("pos") or "").upper()
-        if src_pos == "C":
-            options = ["L", "R", "skip"]
-        elif src_pos in ("L", "R"):
-            options = ["C", "skip"]
-        else:
+        if src_pos not in ("L", "C", "R"):
             try:
                 gs.log.append(f"[WARN] position_change_optional: invalid src_pos='{src_pos}'")
             except Exception:
                 pass
             return True
+        options = [p for p in ("L", "C", "R") if p != src_pos] + ["skip"]
 
         payload = {
             "kind": "position_change",

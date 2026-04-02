@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: position_change_20260331
+# BUILD_TAG: position_change_20260331b
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -2877,8 +2877,11 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                                         'source_cn': ci.cardnumber,
                                     }
                                     _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
-                                # ウェイト0人 → 何もしない
-                    continue
+                            else:
+                                ctx_free = {'pos': pos.upper(), 'src_pos': pos.upper(), 'source_cn': ci.cardnumber}
+                                if try_apply_effect_template(gs, rng, cards_db, eff, ctx_free):
+                                    gs.log.append(f"[AUTO] {ci.cardnumber}[ライブ開始時]: applied {eff}")
+                        continue
                 # self-wait コスト（Eコストあり扱いで来た場合のフォールバック・通常は上のブロックで処理済み）
                 if _cost_requires_self_wait(cost) and not _cost_requires_self_to_green(cost):
                     if not slot.active:
