@@ -1024,21 +1024,41 @@ class App:
             "ui_version": APP_VERSION,
         }
     def _always_blade_bonus_for(self, pos: str, slot) -> int:
-        """常時BODYブレードボーナスを返す（UI表示専用）。"""
-        from .engine import _has_body_always_cost13_blade_bonus, _stage_has_cost13_plus_member
+        """常時ブレードボーナスを返す（UI表示専用）。
+
+        含むもの:
+        - 常時BODY: コスト13以上条件の +2
+        - Love wing bell (PL!-bp4-020): success_zone にある間、センターの μ's に +1/copy
+        """
+        from .engine import (
+            _has_body_always_cost13_blade_bonus,
+            _stage_has_cost13_plus_member,
+            _love_wing_bell_success_bonus_count,
+        )
+        bonus = 0
         try:
             if not slot or not getattr(slot, 'active', False):
                 return 0
             ci = _get_card(self.cards_db, slot.cardnumber)
             if not ci:
                 return 0
-            if not _has_body_always_cost13_blade_bonus(ci):
-                return 0
-            if _stage_has_cost13_plus_member(self.gs, self.cards_db):
-                return 2
+
+            # 常時BODY: コスト13以上条件
+            try:
+                if _has_body_always_cost13_blade_bonus(ci) and _stage_has_cost13_plus_member(self.gs, self.cards_db):
+                    bonus += 2
+            except Exception:
+                pass
+
+            # Love wing bell: success_zone にある間、センターの μ's メンバーに +1/copy
+            try:
+                if pos == 'C' and ("μ's" in str(getattr(ci, 'group', '') or '')):
+                    bonus += int(_love_wing_bell_success_bonus_count(self.gs) or 0)
+            except Exception:
+                pass
         except Exception:
-            pass
-        return 0
+            return 0
+        return int(bonus)
 
     def _lanzhu_blade_bonus_for(self, pos: str, slot) -> int:
         """PL!N-bp1-012 ランジュのライブ中ブレードボーナスをUI表示用に返す。"""
@@ -2375,11 +2395,26 @@ HTML = r'''<!doctype html>
       const det = sd ? sd[slotKey] : null;
       if(det){
         const tmpBlade  = Number(det.temp_blade      || 0);
-        const alwBlade  = Number(det.always_blade_bonus || 0);
+        const alwBlade0 = Number(det.always_blade_bonus || 0);
         const lzBlade   = Number(det.lanzhu_blade_bonus || 0);
         const lzHeart   = Number(det.lanzhu_heart_bonus || 0);
         const tmpHearts = Object.assign({}, det.temp_hearts || {});
         if(lzHeart > 0) tmpHearts['all'] = (Number(tmpHearts['all'] || 0)) + lzHeart;
+
+        // Love wing bell の常時ブレードは、state_detail に乗らない環境でも
+        // success_zone から再計算して可視バッジへ反映する
+        let alwBlade = alwBlade0;
+        try{
+          if(alwBlade <= 0 && slotKey === 'C'){
+            const sz = Array.isArray(st && st.success_zone) ? st.success_zone : [];
+            const cnSelf = String(cn || '');
+            // μ's カードは cardnumber が PL!- で始まる前提
+            if(cnSelf.startsWith('PL!-')){
+              const lwCount = sz.filter(x => String(x||'') === 'PL!-bp4-020').length;
+              if(lwCount > 0) alwBlade += lwCount;
+            }
+          }
+        }catch(e){}
         const totalBlade = tmpBlade + alwBlade + lzBlade;
 
         const hasBonus = totalBlade > 0 || Object.keys(tmpHearts).some(k=>Number(tmpHearts[k])>0);
@@ -2469,6 +2504,29 @@ HTML = r'''<!doctype html>
             'pointer-events:none',
             'z-index:50',
           ].join(';');
+
+          // 常時ブレードがある場合は数値バッジも併置して見えやすくする
+          if(alwBlade > 0){
+            const badge = document.createElement('div');
+            badge.title = `常時ブレード +${alwBlade}`;
+            badge.textContent = `常時 +${alwBlade}▲`;
+            badge.style.cssText = [
+              'position:absolute',
+              'right:4px',
+              'top:4px',
+              'padding:2px 6px',
+              'background:rgba(255,190,60,.92)',
+              'color:#111',
+              'font-size:11px',
+              'font-weight:700',
+              'line-height:1.2',
+              'border-radius:999px',
+              'box-shadow:0 1px 4px rgba(0,0,0,.45)',
+              'pointer-events:none',
+              'z-index:72',
+            ].join(';');
+            card.appendChild(badge);
+          }
 
           // アイコン行（＋ラベル + スタック）を作る関数
           const makeIconRow = (stack, titleAll)=>{
