@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: confirm_effect_enter_selfwait_choose_stage_ext_20260403a
+# BUILD_TAG: live_card_start_hook_love_wing_bell_20260403b
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -1893,6 +1893,12 @@ def stage_blade(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
         always_b = 2 if (has_cost13 and _has_body_always_cost13_blade_bonus(c)) else 0
         # 常時 BODY: ステージのメンバーがちょうど2人のとき+1 (PL!N-PR-020 / PL!S-PR-037)
         always_b += 1 if (has_exactly2 and _has_body_always_2member_blade_heart(c)) else 0
+        # Love wing bell (PL!-bp4-020): while in success_zone, your center μ's member gets +1 blade per copy
+        try:
+            if (gs.stage or {}).get('C') is slot and ('μ's' in str(getattr(c, 'group', '') or '')):
+                always_b += int(_love_wing_bell_success_bonus_count(gs) or 0)
+        except Exception:
+            pass
         s += base_b + temp_b + under_b + always_b
     # Lanzhu (PL!N-bp1-012) live-only bonus: +2 blade per copy when condition met
     try:
@@ -1939,6 +1945,19 @@ def _lanzhu_bp1_012_live_bonus_count(gs: "GameState", cards_db: Dict[str, CardIn
         if _canon_cardno(getattr(slot, "cardnumber", "") or "") == "PL!N-bp1-012":
             n += 1
     return int(n)
+
+def _love_wing_bell_success_bonus_count(gs: "GameState") -> int:
+    """Return how many copies of Love wing bell (PL!-bp4-020) are in success_zone."""
+    n = 0
+    for cn in list(getattr(gs, 'success_zone', []) or []):
+        try:
+            canon = _canon_cardno(cn)
+        except Exception:
+            canon = str(cn or '')
+        if canon == 'PL!-bp4-020':
+            n += 1
+    return int(n)
+
 
 def owned_base_hearts(gs: GameState, cards_db: Dict[str, CardInfo]) -> Dict[str, int]:
     pool: Dict[str, int] = {}
@@ -2937,6 +2956,66 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                         "options": ["pay", "skip"],
                     }
                     _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
+
+    # Generic LIVE-card live-start hook for set_zone cards.
+    #
+    # Historically this function mostly scanned stage members and a few hard-coded
+    # LIVE cards, so generic LIVE cards with <ライブ開始時> abilities in set_zone
+    # never triggered.  We first try generic no-cost clauses here, then keep the
+    # existing hard-coded LIVE handlers below.
+    try:
+        _generic_live_skip = {
+            _RISE_UP_HIGH_CN_CANON,
+            _BUTTERFLY_CN_CANON,
+            _NEO_SKY_CN_CANON,
+            _TSUNAGARU_CONNECT_CN_CANON,
+            _VIVID_WORLD_CN_CANON,
+        }
+    except Exception:
+        _generic_live_skip = set()
+    try:
+        for cn_live in list(getattr(gs, 'set_zone', []) or []):
+            try:
+                canon_live = _canon_cardno(str(cn_live or ''))
+            except Exception:
+                canon_live = str(cn_live or '')
+            if canon_live in _generic_live_skip:
+                continue
+            ci_live = _get_card(cards_db, cn_live)
+            if not ci_live or not getattr(ci_live, 'abilities', None):
+                continue
+            for ab in (getattr(ci_live, 'abilities', None) or []):
+                if not isinstance(ab, dict):
+                    continue
+                trig = str(ab.get('trigger', '') or '')
+                if 'ライブ開始時' not in trig:
+                    continue
+                gs.log.append(f'[DEBUG] live_start LIVE ab found: cn={getattr(ci_live, "cardnumber", cn_live)} trig={repr(trig)}')
+                clauses = ab.get('clauses', [])
+                if not isinstance(clauses, list):
+                    continue
+                for cl in clauses:
+                    if not isinstance(cl, dict):
+                        continue
+                    raw = str(cl.get('raw', '') or '')
+                    cost = str(cl.get('cost_template', '') or raw)
+                    eff = str(cl.get('effect_template', '') or raw)
+                    # Only generic no-cost LIVE-card hooks here.  Paid/special cards
+                    # stay on the hard-coded paths below.
+                    if ('<(E)>' in cost or '[E]' in cost or 'Ｅ' in cost or 'E' in cost):
+                        continue
+                    if _cost_requires_self_wait(cost) or _cost_requires_self_to_green(cost):
+                        continue
+                    m_live = re.search(r'手札のライブカードを(\d+)枚控え室に置いてもよい', cost)
+                    m_hand = re.search(r'手札を(\d+)枚控え室に置いてもよい', cost)
+                    if m_live or m_hand:
+                        continue
+                    if not cost.strip() or cost.strip() == eff.strip():
+                        ctx_live = {'source_cn': getattr(ci_live, 'cardnumber', '') or str(cn_live or '')}
+                        if try_apply_effect_template(gs, rng, cards_db, eff, ctx_live):
+                            gs.log.append(f"[AUTO] LIVE: {getattr(ci_live, 'cardnumber', '') or cn_live}[ライブ開始時] applied {eff}")
+    except Exception:
+        pass
 
     # LIVE-card live-start: Rise Up High! (PL!N-bp4-029)
     try:
