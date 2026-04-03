@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_group1_lowest_risk_20260402e
+# BUILD_TAG: engine_effect_group1_lowest_risk_20260402c
 from __future__ import annotations
 
 """llocg_ui.engine_effect
@@ -179,6 +179,7 @@ def _add_temp_blade(eng: Dict[str, Any], slot: Any, n: int) -> None:
         return
     try:
         slot.temp_blade = int(getattr(slot, "temp_blade", 0) or 0) + int(n)
+        slot.temp_until = "end_of_live"
     except Exception:
         pass
 
@@ -200,6 +201,7 @@ def _add_temp_hearts(eng: Dict[str, Any], slot: Any, hearts: Dict[str, int]) -> 
         cur[str(k)] = int(cur.get(str(k), 0) or 0) + iv
     try:
         slot.temp_hearts = cur
+        slot.temp_until = "end_of_live"
     except Exception:
         pass
 
@@ -371,6 +373,17 @@ def _opp_stage_member_cost_sum(gs: Any, cards_db: Dict[str, Any]) -> int:
     return total
 
 
+def _has_opponent_state(gs: Any) -> bool:
+    """Best-effort check whether opponent state exists in this runtime."""
+    try:
+        opp = getattr(gs, "opponent", None) or getattr(gs, "opp", None)
+        if opp is None:
+            return False
+        return True
+    except Exception:
+        return False
+
+
 def _activate_energy(gs: Any, n: int) -> int:
     """Move up to n cards from energy_wait to energy_active. Returns count moved."""
     moved = 0
@@ -522,6 +535,32 @@ def try_apply_effect_by_rule_ext(
 
     ext_key = str(rule.get("ext_key") or "").strip()
 
+    # confirm_effect helper path from engine.py (no-cost, single-player fallback)
+    confirm_op = str((ctx or {}).get("_ext_confirm_op") or "").strip()
+    if confirm_op == "draw1":
+        drawn = _draw_cards(eng, gs, 1)
+        try:
+            gs.log.append(f"[AUTO_EXT] confirm -> draw {drawn}")
+        except Exception:
+            pass
+        return True
+    if confirm_op == "energy_wait_plus1":
+        added = 0
+        try:
+            energy_deck = (getattr(gs, "energy_deck", None) or getattr(gs, "energy_pile", None))
+            energy_wait = getattr(gs, "energy_wait", None)
+            if energy_deck and energy_wait is not None:
+                card = energy_deck.pop(0)
+                energy_wait.append(card)
+                added = 1
+        except Exception:
+            pass
+        try:
+            gs.log.append(f"[AUTO_EXT] confirm -> energy_wait +{added}")
+        except Exception:
+            pass
+        return True
+
     # ------------------------------------------------------------------
     # 既存: position_change_optional
     # ------------------------------------------------------------------
@@ -573,40 +612,39 @@ def try_apply_effect_by_rule_ext(
 
     # ------------------------------------------------------------------
     # Prompt 24: PL!-bp4-001 高坂穂乃果
-    # 1人用シミュレータでは相手ステージが存在しないため条件判定を省略。
-    # 常にトリガー → 直接 draw 1 実行。
-    # 多重トリガー防止: gs._p24_drawn_this_live フラグで管理。
-    # 実際の対戦実装時は _opp_stage_member_cost_sum で条件判定を復活させること。
+    # 自ステージのコスト合計が相手より低い場合、カードを1枚引く。
+    # 1人用シミュレータで相手状態が無い場合は、Poppin' Up! と同様に
+    # ユーザー確認 pending を積み、条件を満たすと判断したときだけ適用できるようにする。
     # ------------------------------------------------------------------
     if ext_key == "live_start_my_cost_lower_draw1":
-        # 多重トリガー防止: 同一source_cnのpendingが既にあればスキップ
-        source_cn = str((ctx or {}).get("source_cn") or "")
-        try:
-            for _p in (getattr(gs, "pending", []) or []):
-                if (
-                    isinstance(_p, dict)
-                    and _p.get("kind") == "pay_or_skip"
-                    and _p.get("source_cn") == source_cn
-                    and _p.get("ext_key") == "live_start_my_cost_lower_draw1"
-                ):
-                    gs.log.append("[SKIP] pay_or_skip already pending (高坂穂乃果)")
-                    return True
-        except Exception:
-            pass
-        # 1人用シミュ: 条件省略。cost_kind='none' で pay 時に after_effect_template を即実行。
+        my_cost = _stage_member_cost_sum(gs, cards_db)
+        opp_exists = _has_opponent_state(gs)
+        opp_cost = _opp_stage_member_cost_sum(gs, cards_db) if opp_exists else 0
+        src = str((ctx or {}).get("source_cn") or "")
+        if opp_exists:
+            if my_cost < opp_cost:
+                drawn = _draw_cards(eng, gs, 1)
+                try:
+                    gs.log.append(f"[AUTO_EXT] stage_cost {my_cost}<{opp_cost} -> draw {drawn} (高坂穂乃果)")
+                except Exception:
+                    pass
+            else:
+                try:
+                    gs.log.append(f"[AUTO_EXT] stage_cost {my_cost}>={opp_cost}, no draw (高坂穂乃果)")
+                except Exception:
+                    pass
+            return True
         payload = {
-            "kind": "pay_or_skip",
-            "cost_kind": "none",
-            "text": "自分ステージのコスト合計が相手より低い場合、カードを1枚引く（相手不在のため条件省略）",
-            "options": ["pay", "skip"],
+            "kind": "confirm_effect",
+            "text": "【高坂穂乃果】ライブ開始時：自分ステージのコスト合計が相手より低いなら、カードを1枚引く",
+            "options": ["使う", "スキップ"],
             "after_effect_template": "自分ステージにいるメンバーのコストの合計が相手より低い場合、カードを1枚引く。",
-            "ctx": dict(ctx or {}),
-            "source_cn": source_cn,
-            "ext_key": "live_start_my_cost_lower_draw1",
+            "ctx": {"source_cn": src, "_ext_confirm_op": "draw1"},
+            "source_cn": src,
         }
         try:
             getattr(gs, "pending").append(payload)
-            gs.log.append("[PENDING] pay_or_skip no-cost draw1 (高坂穂乃果)")
+            gs.log.append(f"[PENDING] 高坂穂乃果: confirm draw1 (my_cost={my_cost}, opp unavailable)")
         except Exception:
             pass
         return True
@@ -667,22 +705,6 @@ def try_apply_effect_by_rule_ext(
     # ------------------------------------------------------------------
     if ext_key == "enter_printemps_count_activate_energy":
         count = _stage_unit_count(gs, cards_db, "Printemps")
-        # 診断: 各スロットのcardnumber・unitをログに出す
-        try:
-            st = getattr(gs, "stage", None)
-            _diag = {}
-            if isinstance(st, dict):
-                for _p in ("L", "C", "R"):
-                    _sl = st.get(_p)
-                    if _sl is not None:
-                        _cn = getattr(_sl, "cardnumber", None)
-                        _unit = _card_unit(_sl, cards_db) if _cn else None
-                        _diag[_p] = f"{_cn}(unit={_unit})"
-                    else:
-                        _diag[_p] = None
-            gs.log.append(f"[DIAG] stage={_diag}, Printemps_count={count} (南ことり)")
-        except Exception:
-            pass
         if count > 0:
             moved = _activate_energy(gs, count)
             try:
@@ -728,29 +750,22 @@ def try_apply_effect_by_rule_ext(
         milled = 0
         try:
             deck = getattr(gs, "deck", None)
-            # 控え室フィールド名を複数候補で探す
-            waiting = None
-            for _attr in ("waiting_room", "graveyard", "discard", "green_room"):
-                _v = getattr(gs, _attr, None)
-                if _v is not None:
-                    waiting = _v
-                    break
+            waiting = getattr(gs, "green_room", None)
+            if waiting is None:
+                waiting = (
+                    getattr(gs, "waiting_room", None)
+                    or getattr(gs, "graveyard", None)
+                    or getattr(gs, "discard", None)
+                )
             if deck is not None and waiting is not None:
-                # deck が list でない場合は cards 属性を試みる
-                deck_list = deck if isinstance(deck, list) else getattr(deck, "cards", None)
-                wait_list = waiting if isinstance(waiting, list) else getattr(waiting, "cards", None)
-                if deck_list is not None and wait_list is not None:
-                    for _ in range(10):
-                        if not deck_list:
-                            break
-                        wait_list.append(deck_list.pop(0))
-                        milled += 1
+                for _ in range(10):
+                    if not deck:
+                        break
+                    waiting.append(deck.pop(0))
+                    milled += 1
             gs.log.append(f"[AUTO_EXT] mill {milled} cards to waiting_room (小泉花陽)")
-        except Exception as _e:
-            try:
-                gs.log.append(f"[ERR] mill failed: {_e} (小泉花陽)")
-            except Exception:
-                pass
+        except Exception:
+            pass
         return True
 
     # ------------------------------------------------------------------
@@ -779,33 +794,64 @@ def try_apply_effect_by_rule_ext(
     # ------------------------------------------------------------------
     # Prompt 72: PL!HS-bp1-023 ド！ド！ド！
     # ライブ合計スコア > 相手 かつ ステージに蓮ノ空メンバー → energy deck から 1枚 wait
+    # 1人用シミュレータで相手スコアが無い場合は、Poppin' Up! と同様に
+    # ユーザー確認 pending を積み、条件を満たすと判断したときだけ適用できるようにする。
     # ------------------------------------------------------------------
     if ext_key == "live_success_score_gt_opp_and_hasunosora_energy_wait":
-        has_hasunosora = _stage_has_group(gs, cards_db, "蓮ノ空")
+        my_score = _live_score_total(gs)
+        opp_score = _opp_live_score_total(gs)
+        try:
+            if (ctx or {}).get("live_score") is not None:
+                my_score = int(ctx["live_score"])
+            if (ctx or {}).get("opp_live_score") is not None:
+                opp_score = int(ctx["opp_live_score"])
+        except Exception:
+            pass
 
-        # 蓮ノ空メンバーがいない場合は即スキップ（条件を満たせない）
+        has_hasunosora = _stage_has_group(gs, cards_db, "蓮ノ空")
         if not has_hasunosora:
             try:
-                gs.log.append("[AUTO_EXT] no 蓮ノ空 on stage, skip (ド！ド！ド！)")
+                gs.log.append("[AUTO_EXT] no 蓮ノ空 on stage, no energy (ド！ド！ド！)")
             except Exception:
                 pass
             return True
 
-        # 蓮ノ空あり: 1人用シミュではスコア条件省略。pay_or_skip で選択させる。
-        source_cn = str((ctx or {}).get("source_cn") or "")
+        opp_exists = _has_opponent_state(gs)
+        if opp_exists:
+            if my_score > opp_score:
+                added = 0
+                try:
+                    energy_deck = (getattr(gs, "energy_deck", None) or getattr(gs, "energy_pile", None))
+                    energy_wait = getattr(gs, "energy_wait", None)
+                    if energy_deck and energy_wait is not None:
+                        card = energy_deck.pop(0)
+                        energy_wait.append(card)
+                        added = 1
+                except Exception:
+                    pass
+                try:
+                    gs.log.append(f"[AUTO_EXT] live_score {my_score}>{opp_score} & 蓮ノ空 on stage -> energy_wait +{added} (ド！ド！ド！)")
+                except Exception:
+                    pass
+            else:
+                try:
+                    gs.log.append(f"[AUTO_EXT] live_score {my_score}<={opp_score}, no energy (ド！ド！ド！)")
+                except Exception:
+                    pass
+            return True
+
+        src = str((ctx or {}).get("source_cn") or "")
         payload = {
-            "kind": "pay_or_skip",
-            "cost_kind": "none",
-            "text": "ライブ合計スコアが相手より高く蓮ノ空メンバーがいる場合、エネルギーをウェイトで1枚置く（相手不在のためスコア条件省略）",
-            "options": ["pay", "skip"],
+            "kind": "confirm_effect",
+            "text": "【ド！ド！ド！】ライブ成功時：自分の合計スコアが相手より高いなら、エネルギーを1枚ウェイトで置く",
+            "options": ["使う", "スキップ"],
             "after_effect_template": "ライブの合計スコアが相手より高く、かつ自分のステージに『蓮ノ空』のメンバーがいる場合、自分のエネルギーデッキから、エネルギーカードを1枚ウェイト状態で置く。",
-            "ctx": dict(ctx or {}),
-            "source_cn": source_cn,
-            "ext_key": "live_success_score_gt_opp_and_hasunosora_energy_wait",
+            "ctx": {"source_cn": src, "_ext_confirm_op": "energy_wait_plus1"},
+            "source_cn": src,
         }
         try:
             getattr(gs, "pending").append(payload)
-            gs.log.append("[PENDING] pay_or_skip no-cost energy_wait1 (ド！ド！ド！)")
+            gs.log.append(f"[PENDING] ド！ド！ド！: confirm energy_wait+1 (my_score={my_score}, opp unavailable)")
         except Exception:
             pass
         return True
@@ -816,15 +862,7 @@ def try_apply_effect_by_rule_ext(
     # ------------------------------------------------------------------
     if ext_key == "live_start_all_stage_filled_x2_blade":
         slot = _src_slot(gs, ctx)
-        filled = _all_stage_slots_filled(gs)
-        # 診断: 各スロットの cardnumber をログに出す
-        try:
-            st = getattr(gs, "stage", None)
-            _diag = {p: (getattr(st.get(p), "cardnumber", None) if isinstance(st, dict) and st.get(p) else None) for p in ("L", "C", "R")}
-            gs.log.append(f"[DIAG] stage slots={_diag}, filled={filled}, src_slot={'found' if slot else 'None'} (大沢瑠璃乃)")
-        except Exception:
-            pass
-        if filled:
+        if _all_stage_slots_filled(gs):
             if slot is not None:
                 _add_temp_blade(eng, slot, 2)
             try:
