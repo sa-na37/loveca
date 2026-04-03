@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: pay_or_skip_nocost_20260402a
+# BUILD_TAG: enter_selfwait_payorskip_20260402b
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -3220,8 +3220,9 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
             eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
             if not eff:
                 continue
-            # Cost template handling (limited: optional discard from hand, e.g. "手札を1枚控え室に置いてもよい：...")
+            # Cost template handling
             if cost:
+                # optional discard from hand: "手札をN枚控え室に置いてもよい"
                 m = re.search(r"手札を(\d+)枚控え室に置いてもよい", cost)
                 n = 0
                 if m:
@@ -3244,6 +3245,24 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
                         'source_cn': canon,
                     })
                     gs.log.append(f"[PENDING] {canon}[登場]: pay/skip -> discard {n} then {eff}")
+                    return
+                # optional self-wait: "このメンバーをウェイト状態にしてもよい"
+                if _cost_requires_self_wait(cost) and not _cost_requires_self_to_green(cost):
+                    slot0 = gs.stage.get(pos.upper()) if isinstance(getattr(gs, 'stage', None), dict) else None
+                    if not slot0 or not getattr(slot0, 'active', False):
+                        gs.log.append(f"[INFO] {canon}[登場]: self-wait cost unavailable")
+                        return
+                    ctx = {'pos': pos.upper(), 'source_cn': canon}
+                    gs.pending.append({
+                        'kind': 'pay_or_skip',
+                        'text': f'{canon}[登場]: {cost}：{eff}',
+                        'options': ['pay', 'skip'],
+                        'cost_kind': 'self_wait',
+                        'after_effect_template': eff,
+                        'ctx': ctx,
+                        'source_cn': canon,
+                    })
+                    gs.log.append(f"[PENDING] {canon}[登場]: pay/skip -> self-wait then {eff}")
                     return
                 # unsupported cost template for now
                 continue
@@ -4635,18 +4654,15 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
     # --- Generic effect-engine prompts ---
 
     if kind == 'pay_or_skip':
-        # Generic optional prompt. Supports both
-        #   - optional discard cost -> after_effect_template
-        #   - no-cost yes/no -> immediate after_effect_template
-        cost_kind = str(p.get('cost_kind', '') or '').strip()
+        # Generic optional-cost prompt (e.g., "...してもよい：<effect>")
+        cost_kind = str(p.get('cost_kind', '') or '')
         cost_n = _safe_int(p.get('cost_n', 0), 0)
         after_eff = str(p.get('after_effect_template', '') or '').strip()
         ctx0 = dict(p.get('ctx', {}) or {})
         src = str(p.get('source_cn', '') or '')
-        low = choice_str.lower()
-
-        if src and not ctx0.get('source_cn'):
+        if src and (not ctx0.get('source_cn')):
             ctx0['source_cn'] = src
+        low = choice_str.lower()
 
         if low in ('skip', '__skip__', 'no', 'n', '0', 'false'):
             gs.log.append(f"[SKIP] {src}: skipped optional cost")
@@ -4678,16 +4694,32 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             })
             return
 
-        if cost_kind in ('', 'none', 'no_cost', 'immediate'):
-            if after_eff:
-                rng2 = random.Random(getattr(gs, 'seed', 1) or 1)
-                ok = try_apply_effect_template(gs, rng2, cards_db, after_eff, ctx0)
-                if ok:
-                    gs.log.append(f"[ACT] {src}: applied {after_eff}")
-                else:
-                    gs.log.append(f"[WARN] {src}: pay_or_skip immediate effect not matchable {after_eff}")
+        if cost_kind == 'self_wait':
+            pos = str(ctx0.get('pos', '') or '').upper()
+            slot = gs.stage.get(pos) if isinstance(getattr(gs, 'stage', None), dict) else None
+            if not slot or not getattr(slot, 'active', False):
+                gs.log.append(f"[ERR] pay_or_skip: self_wait unavailable at pos={pos}")
+                return
+            slot.active = False
+            gs.log.append(f"[COST] {pos}: {getattr(slot,'cardnumber','?')} -> WAIT (self-wait cost)")
+            rng = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
+            ok = try_apply_effect_template(gs, rng, cards_db, after_eff, ctx0)
+            if ok:
+                gs.log.append(f"[AUTO] {pos}: paid self-wait -> applied {after_eff}")
             else:
-                gs.log.append(f"[INFO] {src}: pay_or_skip had no after_effect_template")
+                gs.log.append(f"[WARN] {pos}: paid self-wait but effect not matchable: {after_eff}")
+            _r = p.get('_resume') if isinstance(p, dict) else None
+            if _r:
+                gs.pending.append(_r)
+            return
+
+        if cost_kind in ('', 'none', 'no_cost', 'immediate'):
+            rng = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
+            ok = try_apply_effect_template(gs, rng, cards_db, after_eff, ctx0)
+            if ok:
+                gs.log.append(f"[AUTO] {src}: optional effect applied {after_eff}")
+            else:
+                gs.log.append(f"[WARN] {src}: optional effect not matchable: {after_eff}")
             _r = p.get('_resume') if isinstance(p, dict) else None
             if _r:
                 gs.pending.append(_r)
