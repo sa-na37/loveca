@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: generic_pending_source_popup_20260402b
+# BUILD_TAG: generic_pending_text_cleanup_20260402g_revert_fontsize
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1525,20 +1525,20 @@ HTML = r'''<!doctype html>
   /* popups */
   #mask{position:absolute;left:0;top:0;bottom:0;right:var(--sideW);background:rgba(0,0,0,.55);display:none;z-index:9000;}
   #modal{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(92%, calc(var(--pmW) - var(--sideW) - 140px));max-height:min(64%, calc(var(--pmH) - 160px));overflow:hidden;background:#1b1b1b;border:1px solid rgba(255,255,255,.15);border-radius:16px;padding:12px;box-shadow:0 14px 60px rgba(0,0,0,.7);display:flex;flex-direction:column;}
-  #modalTitle{font-weight:800;flex:0 0 auto;font-size:20px;line-height:1.2;letter-spacing:.01em;}
-  #modalMain{display:flex;gap:22px;flex:1 1 auto;min-height:0;overflow:hidden;margin-top:14px;}
-  #modalLead{display:none;flex:0 0 186px;max-width:186px;min-width:186px;flex-direction:column;gap:10px;align-items:flex-start;}
+  #modalTitle{font-weight:700;flex:0 0 auto;}
+  #modalMain{display:flex;gap:16px;flex:1 1 auto;min-height:0;overflow:hidden;margin-top:10px;}
+  #modalLead{display:none;flex:0 0 160px;max-width:160px;min-width:160px;flex-direction:column;gap:8px;align-items:flex-start;}
   #modalLead.visible{display:flex;}
-  #modalSourceCard{width:176px;min-width:176px;}
-  #modalSourceCard img{display:block;width:176px;height:auto;max-height:252px;object-fit:cover;border-radius:12px;border:1px solid rgba(255,255,255,.14);box-shadow:0 8px 24px rgba(0,0,0,.35);}
-  #modalSourceName{width:176px;font-weight:800;color:#fff;font-size:17px;line-height:1.32;white-space:normal;word-break:break-word;}
-  #modalSourceMeta{width:176px;font-size:13px;color:#bfc3cb;line-height:1.45;white-space:pre-wrap;}
+  #modalSourceCard{width:150px;min-width:150px;}
+  #modalSourceCard img{display:block;width:150px;height:auto;max-height:220px;object-fit:cover;border-radius:12px;border:1px solid rgba(255,255,255,.14);box-shadow:0 8px 24px rgba(0,0,0,.35);}
+  #modalSourceName{width:150px;font-weight:700;color:#fff;font-size:13px;line-height:1.35;white-space:normal;word-break:break-word;}
+  #modalSourceMeta{width:150px;font-size:11px;color:#aaa;line-height:1.35;white-space:pre-wrap;}
   #modalContent{display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0;overflow:hidden;}
-  #modalText{white-space:pre-wrap;line-height:1.62;color:#e6e6e6;font-size:17px;margin-top:0;flex:0 0 auto;}
-  #modalCards{margin-top:14px;overflow-x:auto;overflow-y:auto;padding-bottom:8px;flex:1 1 auto;min-height:0;} 
+  #modalText{white-space:pre-wrap;line-height:1.45;color:#ddd;font-size:13px;margin-top:0;flex:0 0 auto;}
+  #modalCards{margin-top:10px;overflow-x:auto;overflow-y:auto;padding-bottom:6px;flex:1 1 auto;min-height:0;} 
   #modalCards .surf{position:relative;height:1px;}
-  #modalActions{display:flex;gap:10px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap;flex:0 0 auto;}
-  #modalActions .miniBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:9px 16px;border-radius:12px;cursor:pointer;font-size:16px;font-weight:700;}
+  #modalActions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap;flex:0 0 auto;}
+  #modalActions .miniBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:6px 10px;border-radius:10px;cursor:pointer;}
 /* UI_FIX_PENDING_CARD_CHOICES */
   /* pending card choice list (image buttons) */
   .choiceRow{display:inline-flex;gap:8px;align-items:flex-start;overflow-x:auto;overflow-y:hidden;max-width:min(72vw, 1060px);padding:6px 2px 10px 2px;}
@@ -1796,6 +1796,63 @@ HTML = r'''<!doctype html>
     const m = (st && st.cn2label) ? st.cn2label : null;
     return (m && m[cn]) ? String(m[cn]) : String(cn);
   }
+  function cardNameFor(cn){
+    const m = (st && st.cn2name) ? st.cn2name : null;
+    const name = (m && m[cn]) ? String(m[cn]).trim() : '';
+    return name || String(cn || '');
+  }
+  function choiceTextLabel(raw){
+    const s = String(raw || '').trim();
+    const low = s.toLowerCase();
+    if(!s) return '';
+    if(looksLikeCardNo(s)) return cardNameFor(s);
+    if(low === 'skip' || low === '__skip__') return 'スキップ';
+    if(low === 'pay' || low === 'yes' || low === 'y' || low === '1' || low === 'true' || low === 'apply' || low === 'use') return '使う';
+    if(low === 'no' || low === 'n' || low === '0' || low === 'false') return '使わない';
+    if(low === 'ok') return '確認';
+    return s;
+  }
+  function cardChoiceCaption(cn, nth, tot){
+    const name = cardNameFor(cn);
+    if(tot && tot > 1) return `${name} (${nth}/${tot})`;
+    return name;
+  }
+  function pendingTitleFor(p){
+    const kind = String((p && p.kind) || '').trim();
+    if(kind === 'pay_or_skip' || kind === 'confirm_effect') return '効果を使いますか？';
+    if(kind === 'choose_effects') return '効果を選択';
+    if(kind === 'choose_stage_member_to_activate') return '対象メンバーを選択';
+    if(kind === 'choose_heart_color' || kind === 'choose_heart_color_for_other') return 'ハートの色を選択';
+    if(kind === 'discard_from_hand' || kind === 'discard_named_cards_from_hand') return '手札から選択';
+    if(kind === 'position_change') return '移動先を選択';
+    if(kind === 'choose_from_topk' || kind === 'choose_top_keep_one' || kind === 'topdeck_from_green') return 'カードを選択';
+    if(kind === 'auto_order') return '解決順を選択';
+    return '効果の選択';
+  }
+  function summarizeEffectText(raw){
+    const s = String(raw || '').trim();
+    if(!s) return '';
+    if(s === 'この効果を解決するか選んでください。') return s;
+    if(s.includes('カードを1枚引く')) return 'カードを1枚引きます。';
+    if(s.includes('エネルギーカードを1枚ウェイト状態で置く')) return 'エネルギーを1枚ウェイトで置きます。';
+    if(s.includes('付与するハートの色')) return '付与するハートの色を選んでください。';
+    if(s.includes('手札から') && s.includes('選')) return '手札から選ぶカードを選択してください。';
+    return s;
+  }
+  function pendingTextFor(p){
+    const explicitRaw = (p && (p.text || p.prompt || p.message || p.description || p.after_effect_template)) ? (p.text || p.prompt || p.message || p.description || p.after_effect_template) : '';
+    const explicit = summarizeEffectText(explicitRaw);
+    if(explicit) return explicit;
+    const kind = String((p && p.kind) || '').trim();
+    if(kind === 'pay_or_skip' || kind === 'confirm_effect') return 'この効果を使うか、スキップするかを選んでください。';
+    if(kind === 'choose_stage_member_to_activate') return '対象にするメンバーを選んでください。';
+    if(kind === 'choose_heart_color' || kind === 'choose_heart_color_for_other') return '付与するハートの色を選んでください。';
+    if(kind === 'discard_from_hand' || kind === 'discard_named_cards_from_hand') return '手札から選ぶカードを選択してください。';
+    if(kind === 'choose_effects') return '解決する効果を選んでください。';
+    if(kind === 'auto_order') return '解決順を選んでください。';
+    if(kind === 'position_change') return '移動先のエリアを選んでください。';
+    return pendingSourceCn(p) ? '効果を解決するため、対象または選択肢を選んでください。' : '';
+  }
   function clearModalLead(){
     elModalLead.classList.remove('visible');
     elModalSourceCard.innerHTML = '';
@@ -1845,7 +1902,7 @@ HTML = r'''<!doctype html>
     img.alt = cn;
     elModalSourceCard.appendChild(img);
     elModalSourceName.textContent = displayName;
-    elModalSourceMeta.textContent = trigger ? `${cn}\n発生源 / ${trigger}` : `${cn}\n発生源カード`;
+    elModalSourceMeta.textContent = trigger ? `${cn}\n発生源 / ${trigger}` : `${cn}\n発生源`;
     elModalLead.classList.add('visible');
   }
 
@@ -2992,7 +3049,7 @@ HTML = r'''<!doctype html>
       if(optional){
         const bSkip = document.createElement('button');
         bSkip.className = 'miniBtn';
-        bSkip.textContent = 'Skip';
+        bSkip.textContent = 'スキップ';
         let _cfSubmitting = false;
         bSkip.addEventListener('click', async ev => {
           ev.stopPropagation();
@@ -3215,7 +3272,7 @@ HTML = r'''<!doctype html>
         const cap = document.createElement('div');
         cap.className = 'choiceCap';
         dupSeen[cn] = (dupSeen[cn]||0) + 1;
-        cap.textContent = (dupCount[cn] > 1) ? `${cn} (${dupSeen[cn]}/${dupCount[cn]})` : cn;
+        cap.textContent = cardChoiceCaption(cn, dupSeen[cn], dupCount[cn]);
         b.appendChild(cap);
 
         btnMap[i] = b;
@@ -3256,10 +3313,9 @@ HTML = r'''<!doctype html>
     }
 
     popup = {type:'pending', closable:false};
-    elModalTitle.textContent = '効果の選択';
-    const defaultPendText = pendingSourceCn(p) ? '効果を解決するため、対象または選択肢を選んでください。' : '';
-    elModalText.textContent = String((p && (p.text || p.prompt || p.message)) ? (p.text || p.prompt || p.message) : defaultPendText);
-    const pendText = String((p && (p.text || p.prompt || p.message)) ? (p.text || p.prompt || p.message) : defaultPendText);
+    elModalTitle.textContent = pendingTitleFor(p);
+    const pendText = pendingTextFor(p);
+    elModalText.textContent = pendText;
     const allowSkip = !!((p && (p.allow_less || p.allow_skip)) || /Skip可/i.test(pendText) || /\bskip\b/i.test(pendText) || (kind && /pick/i.test(kind)));
     elModalActions.innerHTML = '';
     elModalCards.innerHTML = '';
@@ -3405,7 +3461,7 @@ HTML = r'''<!doctype html>
         elModalCards.appendChild(row);
         if(stagePosHasSkipPC){
           const bSkip = document.createElement('button');
-          bSkip.className = 'miniBtn'; bSkip.textContent = 'Skip';
+          bSkip.className = 'miniBtn'; bSkip.textContent = 'スキップ';
           bSkip.addEventListener('click', async ev=>{
             ev.stopPropagation();
             st = await apiCmd('resolve_pending', {idx:0, choice:'skip'});
@@ -3482,7 +3538,7 @@ HTML = r'''<!doctype html>
       elModalCards.appendChild(row);
       if(allowSkip || stagePosHasSkip){
         const bSkip = document.createElement('button');
-        bSkip.className = 'miniBtn'; bSkip.textContent = 'Skip';
+        bSkip.className = 'miniBtn'; bSkip.textContent = 'スキップ';
         bSkip.addEventListener('click', async ev=>{
           ev.stopPropagation();
           st = await apiCmd('resolve_pending', {idx:0, choice:'skip'});
@@ -3519,7 +3575,7 @@ HTML = r'''<!doctype html>
         const nth = dupSeen[cn]; const tot = dupCount[cn]||0;
         const cap = document.createElement('div');
         cap.className = 'choiceCap';
-        cap.textContent = (tot>1) ? `${cn} (${nth}/${tot})` : cn;
+        cap.textContent = cardChoiceCaption(cn, nth, tot);
         b.appendChild(img); b.appendChild(cap);
         b.addEventListener('click', async ev=>{
           ev.stopPropagation();
@@ -3531,7 +3587,7 @@ HTML = r'''<!doctype html>
       elModalCards.appendChild(row);
       if(hasSkip){
         const bSkip = document.createElement('button');
-        bSkip.className = 'miniBtn'; bSkip.textContent = 'Skip';
+        bSkip.className = 'miniBtn'; bSkip.textContent = 'スキップ';
         bSkip.addEventListener('click', async ev=>{
           ev.stopPropagation();
           st = await apiCmd('resolve_pending', {idx:0, choice:'skip'});
@@ -3578,7 +3634,7 @@ HTML = r'''<!doctype html>
         dupSeen[cn] = (dupSeen[cn]||0)+1;
         const nth = dupSeen[cn];
         const tot = dupCount[cn]||0;
-        cap.textContent = (tot>1) ? `${cn} (${nth}/${tot})` : cn;
+        cap.textContent = cardChoiceCaption(cn, nth, tot);
 
         b.appendChild(img);
         b.appendChild(cap);
@@ -3599,7 +3655,7 @@ HTML = r'''<!doctype html>
       if(allowSkip){
         const bSkip = document.createElement('button');
         bSkip.className = 'miniBtn';
-        bSkip.textContent = 'Skip';
+        bSkip.textContent = 'スキップ';
         bSkip.addEventListener('click', async (ev)=>{
           ev.stopPropagation();
           st = await apiCmd('resolve_pending', {idx:0, choice:'skip'});
@@ -3615,7 +3671,7 @@ HTML = r'''<!doctype html>
       opts.forEach(opt=>{
         const b = document.createElement('button');
         b.className = 'miniBtn';
-        b.textContent = String(opt);
+        b.textContent = choiceTextLabel(opt);
         b.addEventListener('click', async (ev)=>{
           ev.stopPropagation();
           st = await apiCmd('resolve_pending', {idx:0, choice:String(opt)});
