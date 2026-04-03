@@ -5560,7 +5560,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                     rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
                 except Exception:
                     rng2 = random.Random()
-                try_apply_effect_by_rule(gs, rng2, cards_db, {'op':'__ext__','ext_key':after_ext_key}, {}, ctx2)
+                _apply_effect_by_rule(gs, rng2, cards_db, {'op':'__ext__','ext_key':after_ext_key}, {}, ctx2)
             return
         pos2 = str(choice_str or '').upper()
         if pos2 not in ('L','C','R'):
@@ -5586,7 +5586,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                 rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
             except Exception:
                 rng2 = random.Random()
-            applied = bool(try_apply_effect_by_rule(gs, rng2, cards_db, {'op':'__ext__','ext_key':after_ext_key}, {}, ctx2))
+            applied = bool(_apply_effect_by_rule(gs, rng2, cards_db, {'op':'__ext__','ext_key':after_ext_key}, {}, ctx2))
             gs.log.append(f"[AUTO] choose_stage_member_to_activate -> {'applied' if applied else 'no_match'} {after_ext_key} ({pos2})")
             return
         slot2.active = True
