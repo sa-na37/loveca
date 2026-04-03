@@ -2505,29 +2505,6 @@ HTML = r'''<!doctype html>
             'z-index:50',
           ].join(';');
 
-          // 常時ブレードがある場合は数値バッジも併置して見えやすくする
-          if(alwBlade > 0){
-            const badge = document.createElement('div');
-            badge.title = `常時ブレード +${alwBlade}`;
-            badge.textContent = `常時 +${alwBlade}▲`;
-            badge.style.cssText = [
-              'position:absolute',
-              'right:4px',
-              'top:4px',
-              'padding:2px 6px',
-              'background:rgba(255,190,60,.92)',
-              'color:#111',
-              'font-size:11px',
-              'font-weight:700',
-              'line-height:1.2',
-              'border-radius:999px',
-              'box-shadow:0 1px 4px rgba(0,0,0,.45)',
-              'pointer-events:none',
-              'z-index:72',
-            ].join(';');
-            card.appendChild(badge);
-          }
-
           // アイコン行（＋ラベル + スタック）を作る関数
           const makeIconRow = (stack, titleAll)=>{
             const row = document.createElement('div');
@@ -2555,10 +2532,7 @@ HTML = r'''<!doctype html>
               fallbackText: '▲',
               fallbackColor: '#ffe566',
             }));
-            const titleStr = `ブレード +${totalBlade}` +
-              (alwBlade > 0 ? `（常時+${alwBlade}）` : '') +
-              (tmpBlade > 0 ? `（一時+${tmpBlade}）` : '') +
-              (lzBlade  > 0 ? `（ランジュ+${lzBlade}）` : '');
+            const titleStr = `ブレード +${totalBlade}`;
             ov.appendChild(makeIconRow(makeIconStack(icons, ''), titleStr));
           }
 
