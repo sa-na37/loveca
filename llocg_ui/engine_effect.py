@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_group2_single_target_20260403a
+# BUILD_TAG: engine_effect_group2_single_target_20260403b
 from __future__ import annotations
 
 """llocg_ui.engine_effect
@@ -212,11 +212,36 @@ EXTRA_EFFECT_RULES = [
 ]
 
 
+def _norm_ws(text: str) -> str:
+    """Collapse whitespace for effect_template comparison.
+
+    Steps:
+      1. Collapse every run of whitespace (including newlines) to a single space.
+      2. Remove spaces that appear immediately before or after icon tokens of the
+         form ``<(...)>`` — these spaces are an artefact of the card DB inserting
+         newlines around icon tokens and must not prevent matching against the
+         one-liner form used in EXTRA_EFFECT_RULES.
+    """
+    import re as _re
+    s = _re.sub(r'\s+', ' ', (text or "").strip())
+    # Remove space before icon token: "は、 <(ブレード)>" -> "は、<(ブレード)>"
+    s = _re.sub(r' (<\([^)]*\)>)', r'\1', s)
+    # Remove space after icon token: "<(ブレード)> を" -> "<(ブレード)>を"
+    s = _re.sub(r'(<\([^)]*\)>) ', r'\1', s)
+    return s
+
+
 def try_match_effect_template_ext(
     eng: Dict[str, Any],
     effect_text: str,
 ) -> Optional[Tuple[Dict[str, Any], Dict[str, str]]]:
     """Match extension-owned effect templates.
+
+    Matching strategy (in priority order):
+      1. Exact match after strip()  -- safest, preserves existing behaviour.
+      2. Whitespace-normalized match -- collapses newlines / multi-spaces to a
+         single space before comparing.  Needed because some card DB entries
+         embed newlines around icon tokens such as <(ブレード)>.
 
     Returns:
         (rule, gd) if matched, else None.
@@ -225,9 +250,17 @@ def try_match_effect_template_ext(
     if not s:
         return None
 
+    s_norm = _norm_ws(s)
+
     for r in EXTRA_EFFECT_RULES:
         tpl = str(r.get("effect_template", "") or "").strip()
-        if tpl and s == tpl:
+        if not tpl:
+            continue
+        # 1. exact match (highest priority, no change to existing behaviour)
+        if s == tpl:
+            return ({"id": r.get("id"), "op": "__ext__", "ext_key": r.get("ext_key")}, {})
+        # 2. whitespace-normalised fallback
+        if s_norm == _norm_ws(tpl):
             return ({"id": r.get("id"), "op": "__ext__", "ext_key": r.get("ext_key")}, {})
     return None
 
