@@ -2694,6 +2694,7 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
 
     rng = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
     triggers: List[Dict[str, Any]] = []
+    did_auto = False
 
     def _append_prompt(prompt: Dict[str, Any], label: str = '') -> None:
         pr = dict(prompt or {})
@@ -2900,6 +2901,7 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                             else:
                                 ctx_free = {'pos': pos.upper(), 'src_pos': pos.upper(), 'source_cn': ci.cardnumber}
                                 if try_apply_effect_template(gs, rng, cards_db, eff, ctx_free):
+                                    did_auto = True
                                     gs.log.append(f"[AUTO] {ci.cardnumber}[ライブ開始時]: applied {eff}")
                         continue
                 # self-wait コスト（Eコストあり扱いで来た場合のフォールバック・通常は上のブロックで処理済み）
@@ -3013,6 +3015,7 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                     if not cost.strip() or cost.strip() == eff.strip():
                         ctx_live = {'source_cn': getattr(ci_live, 'cardnumber', '') or str(cn_live or '')}
                         if try_apply_effect_template(gs, rng, cards_db, eff, ctx_live):
+                            did_auto = True
                             gs.log.append(f"[AUTO] LIVE: {getattr(ci_live, 'cardnumber', '') or cn_live}[ライブ開始時] applied {eff}")
     except Exception:
         pass
@@ -3144,6 +3147,8 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
 
     n = len(triggers)
     if n <= 0:
+        if did_auto:
+            gs.live_start_prompted = True
         return 0
 
     gs.live_start_prompted = True
@@ -5586,8 +5591,17 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                 rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
             except Exception:
                 rng2 = random.Random()
-            applied = bool(_apply_effect_by_rule(gs, rng2, cards_db, {'op':'__ext__','ext_key':after_ext_key}, {}, ctx2))
-            gs.log.append(f"[AUTO] choose_stage_member_to_activate -> {'applied' if applied else 'no_match'} {after_ext_key} ({pos2})")
+            try:
+                _apply_effect_by_rule(gs, rng2, cards_db, {'op':'__ext__','ext_key':after_ext_key}, {}, ctx2)
+                applied = True
+            except Exception:
+                applied = False
+                raise
+            finally:
+                try:
+                    gs.log.append(f"[AUTO] choose_stage_member_to_activate -> {'applied' if applied else 'error'} {after_ext_key} ({pos2})")
+                except Exception:
+                    pass
             return
         slot2.active = True
         gs.log.append(f"[ACT] stage {pos2} set ACTIVE")
