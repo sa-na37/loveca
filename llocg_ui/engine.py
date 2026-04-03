@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_card_start_hook_love_wing_bell_20260403b
+# BUILD_TAG: live_card_start_hook_love_wing_bell_20260403c
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -1895,7 +1895,7 @@ def stage_blade(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
         always_b += 1 if (has_exactly2 and _has_body_always_2member_blade_heart(c)) else 0
         # Love wing bell (PL!-bp4-020): while in success_zone, your center μ's member gets +1 blade per copy
         try:
-            if (gs.stage or {}).get('C') is slot and ('μ's' in str(getattr(c, 'group', '') or '')):
+            if (gs.stage or {}).get('C') is slot and ("μ's" in str(getattr(c, 'group', '') or '')):
                 always_b += int(_love_wing_bell_success_bonus_count(gs) or 0)
         except Exception:
             pass
