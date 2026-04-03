@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: confirm_effect_and_enter_selfwait_20260402c
+# BUILD_TAG: confirm_effect_enter_selfwait_choose_stage_ext_20260403a
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -5462,18 +5462,53 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         return
 
     if kind == 'choose_stage_member_to_activate':
-        # skipが許可されている場合（ライブ開始時の「1人まで」）
-        allow_skip = bool(p.get('allow_skip', False))
-        if allow_skip and choice_str.lower() in ('skip', '__skip__', 'no', 'n', '0', 'false'):
+        # 汎用のステージメンバー選択 pending。
+        # 既存用途: 選んだメンバーを ACTIVE 化。
+        # 拡張用途: after_ext_key がある場合、選択結果を ctx に積んで ext resolver へ渡す。
+        allow_skip = bool(p.get('allow_skip', False) or p.get('optional', False))
+        low = choice_str.lower()
+        if allow_skip and low in ('skip', '__skip__', 'no', 'n', '0', 'false', '使わない', 'いいえ', 'スキップ'):
             gs.log.append(f"[SKIP] choose_stage_member_to_activate: skipped")
+            after_ext_key = str(p.get('after_ext_key', '') or '').strip()
+            if after_ext_key:
+                src = str(p.get('source_cn', '') or '')
+                ctx2 = dict(p.get('ctx', {}) or {})
+                if src and not ctx2.get('source_cn'):
+                    ctx2['source_cn'] = src
+                ctx2['choice'] = 'SKIP'
+                ctx2['chosen_pos'] = 'SKIP'
+                try:
+                    rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
+                except Exception:
+                    rng2 = random.Random()
+                try_apply_effect_by_rule(gs, rng2, cards_db, {'op':'__ext__','ext_key':after_ext_key}, {}, ctx2)
             return
         pos2 = str(choice_str or '').upper()
         if pos2 not in ('L','C','R'):
             gs.log.append(f"[ERR] activate_member: invalid pos {choice_str}")
             return
+        cand = [str(x).upper() for x in list(p.get('candidates', []) or []) if str(x).upper() in ('L','C','R')]
+        if cand and pos2 not in cand:
+            gs.log.append(f"[ERR] activate_member: pos {pos2} not in candidates {cand}")
+            return
         slot2 = gs.stage.get(pos2)
         if not slot2:
             gs.log.append(f"[ERR] activate_member: empty {pos2}")
+            return
+        after_ext_key = str(p.get('after_ext_key', '') or '').strip()
+        if after_ext_key:
+            src = str(p.get('source_cn', '') or '')
+            ctx2 = dict(p.get('ctx', {}) or {})
+            if src and not ctx2.get('source_cn'):
+                ctx2['source_cn'] = src
+            ctx2['choice'] = pos2
+            ctx2['chosen_pos'] = pos2
+            try:
+                rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
+            except Exception:
+                rng2 = random.Random()
+            applied = bool(try_apply_effect_by_rule(gs, rng2, cards_db, {'op':'__ext__','ext_key':after_ext_key}, {}, ctx2))
+            gs.log.append(f"[AUTO] choose_stage_member_to_activate -> {'applied' if applied else 'no_match'} {after_ext_key} ({pos2})")
             return
         slot2.active = True
         gs.log.append(f"[ACT] stage {pos2} set ACTIVE")
