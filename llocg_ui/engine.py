@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_card_start_hook_love_wing_bell_20260403c
+# BUILD_TAG: confirm_effect_enter_selfwait_choose_stage_ext_20260403f
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -1875,48 +1875,30 @@ def _stage_member_count(gs: 'GameState', cards_db: Dict[str, CardInfo]) -> int:
     return int(n)
 
 
-def _slot_always_blade_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, slot) -> int:
-    """Return generic always/success-zone derived blade bonus currently attached to a stage slot.
-
-    This centralizes UI-visible per-slot blade bonuses so server.py does not need
-    card-specific patches. Temporary bonuses remain in slot.temp_blade.
-    """
-    try:
-        if not slot or not getattr(slot, 'active', False):
-            return 0
-        c = _get_card(cards_db, slot.cardnumber)
-        if not c:
-            return 0
-        bonus = 0
-        # 常時 BODY: 自分か相手のステージにコスト13以上のメンバーがいる場合+2
-        has_cost13 = _stage_has_cost13_plus_member(gs, cards_db)
-        if has_cost13 and _has_body_always_cost13_blade_bonus(c):
-            bonus += 2
-        # 常時 BODY: ステージのメンバーがちょうど2人のとき+1
-        has_exactly2 = (_stage_member_count(gs, cards_db) == 2)
-        if has_exactly2 and _has_body_always_2member_blade_heart(c):
-            bonus += 1
-        # Love wing bell: success_zone にある間、センターの μ's メンバーに +1/copy
-        try:
-            if pos == 'C' and ("μ's" in str(getattr(c, 'group', '') or '')):
-                bonus += int(_love_wing_bell_success_bonus_count(gs) or 0)
-        except Exception:
-            pass
-        return int(bonus)
-    except Exception:
-        return 0
-
-
 def stage_blade(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
     s = 0
-    for pos, slot in gs.stage.items():
+    # Check cost-13 condition once (shared by all 常時 BODY blade cards on stage)
+    has_cost13 = _stage_has_cost13_plus_member(gs, cards_db)
+    # Check exactly-2-member condition once (PL!N-PR-020 / PL!S-PR-037)
+    stage_member_n = _stage_member_count(gs, cards_db)
+    has_exactly2 = (stage_member_n == 2)
+    for slot in gs.stage.values():
         if not slot or not slot.active:
             continue
         c = _get_card(cards_db, slot.cardnumber)
         base_b = (int(c.blade) if c else 0)
         temp_b = int(getattr(slot, "temp_blade", 0) or 0)
         under_b = int(getattr(slot, "energy_under", 0) or 0) if _has_under_energy_blade_bonus(c) else 0
-        always_b = _slot_always_blade_bonus(gs, cards_db, pos, slot)
+        # 常時 BODY: 自分か相手のステージにコスト13以上のメンバーがいる場合+2
+        always_b = 2 if (has_cost13 and _has_body_always_cost13_blade_bonus(c)) else 0
+        # 常時 BODY: ステージのメンバーがちょうど2人のとき+1 (PL!N-PR-020 / PL!S-PR-037)
+        always_b += 1 if (has_exactly2 and _has_body_always_2member_blade_heart(c)) else 0
+        # Love wing bell (PL!-bp4-020): while in success_zone, your center μ's member gets +1 blade per copy
+        try:
+            if (gs.stage or {}).get('C') is slot and ("μ's" in str(getattr(c, 'group', '') or '')):
+                always_b += int(_love_wing_bell_success_bonus_count(gs) or 0)
+        except Exception:
+            pass
         s += base_b + temp_b + under_b + always_b
     # Lanzhu (PL!N-bp1-012) live-only bonus: +2 blade per copy when condition met
     try:
@@ -3029,6 +3011,24 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                     m_live = re.search(r'手札のライブカードを(\d+)枚控え室に置いてもよい', cost)
                     m_hand = re.search(r'手札を(\d+)枚控え室に置いてもよい', cost)
                     if m_live or m_hand:
+                        try:
+                            n_cost = int((m_live or m_hand).group(1) or 0)
+                        except Exception:
+                            n_cost = 0
+                        if n_cost > 0:
+                            src_live = getattr(ci_live, 'cardnumber', '') or str(cn_live or '')
+                            pr = {
+                                'kind': 'pay_or_skip',
+                                'cn': src_live,
+                                'source_cn': src_live,
+                                'text': f'{src_live}[ライブ開始時]: {cost}：{eff}',
+                                'options': ['pay', 'skip'],
+                                'cost_kind': 'discard_from_hand',
+                                'cost_n': n_cost,
+                                'after_effect_template': eff,
+                                'ctx': {'source_cn': src_live},
+                            }
+                            _append_prompt(pr, pr['text'])
                         continue
                     if not cost.strip() or cost.strip() == eff.strip():
                         ctx_live = {'source_cn': getattr(ci_live, 'cardnumber', '') or str(cn_live or '')}
@@ -4879,6 +4879,10 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             return
         moved = gs.hand.pop(pick_i)
         gs.green_room.append(moved)
+        try:
+            after_ctx['discarded_cn'] = str(moved or '')
+        except Exception:
+            pass
         rem -= 1
         gs.log.append(f"[ACT] discard 1 -> {moved} (remaining={rem})")
         if rem > 0:

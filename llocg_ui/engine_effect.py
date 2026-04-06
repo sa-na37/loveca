@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_group2_single_target_20260403b
+# BUILD_TAG: engine_effect_group2_single_target_20260403c
 from __future__ import annotations
 
 """llocg_ui.engine_effect
@@ -1296,21 +1296,12 @@ def try_apply_effect_by_rule_ext(
     # ------------------------------------------------------------------
     # Prompt 37: PL!-bp4-024 小夜啼鳥恋詩 (ライブ開始時)
     # ステージの μ's メンバー1人（選択）に +1ブレード
-    # ------------------------------------------------------------------
-    if ext_key == "live_start_pick_mus_stage_member_blade1":
+    # ------------------------------------------------------------------    if ext_key == "live_start_pick_mus_stage_member_blade1":
         mus_members = _stage_positions_with_group(gs, cards_db, "μ's")
         src = str((ctx or {}).get("source_cn") or "")
         if not mus_members:
             try:
                 gs.log.append("[AUTO_EXT] no μ's on stage (小夜啼鳥恋詩)")
-            except Exception:
-                pass
-            return True
-        if len(mus_members) == 1:
-            _, slot = mus_members[0]
-            _add_temp_blade(eng, slot, 1)
-            try:
-                gs.log.append(f"[AUTO_EXT] only 1 μ's -> +1blade to {mus_members[0][0]} (小夜啼鳥恋詩)")
             except Exception:
                 pass
             return True
@@ -1329,6 +1320,7 @@ def try_apply_effect_by_rule_ext(
         except Exception:
             pass
         return True
+
 
     if ext_key == "live_start_pick_mus_stage_member_blade1__resolve":
         chosen_pos = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_pos") or "").upper()
@@ -1368,8 +1360,7 @@ def try_apply_effect_by_rule_ext(
     # Prompt 48: PL!-pb1-012 南ことり (登場)
     # Printemps のウェイト状態メンバーを1人までアクティブにする
     # ウェイト = active==False のスロット
-    # ------------------------------------------------------------------
-    if ext_key == "enter_printemps_activate_up_to_1":
+    # ------------------------------------------------------------------    if ext_key == "enter_printemps_activate_up_to_1":
         src = str((ctx or {}).get("source_cn") or "")
         # Printemps かつ wait (active==False) のスロットを探す
         wait_printemps = []
@@ -1393,15 +1384,6 @@ def try_apply_effect_by_rule_ext(
             except Exception:
                 pass
             return True
-        if len(wait_printemps) == 1:
-            _, slot = wait_printemps[0]
-            try:
-                slot.active = True
-                gs.log.append(f"[AUTO_EXT] activate Printemps at {wait_printemps[0][0]} (南ことり pb1-012)")
-            except Exception:
-                pass
-            return True
-        # 複数いるなら選択
         candidates = [pos for pos, _ in wait_printemps] + ["skip"]
         payload = {
             "kind": "choose_stage_member_to_activate",
@@ -1409,7 +1391,7 @@ def try_apply_effect_by_rule_ext(
             "optional": True,
             "after_ext_key": "enter_printemps_activate_up_to_1__resolve",
             "source_cn": src,
-            "label": "【南ことり】アクティブにするPrintempメンバーを選んでください（スキップ可）",
+            "label": "【南ことり】アクティブにするPrintempsメンバーを選んでください（スキップ可）",
         }
         try:
             getattr(gs, "pending").append(payload)
@@ -1417,6 +1399,7 @@ def try_apply_effect_by_rule_ext(
         except Exception:
             pass
         return True
+
 
     if ext_key == "enter_printemps_activate_up_to_1__resolve":
         chosen_pos = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_pos") or "").upper()
