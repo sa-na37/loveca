@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_group3_A7B2_20260406b
+# BUILD_TAG: engine_effect_group3_A7B2_20260406c2
 from __future__ import annotations
 
 """llocg_ui.engine_effect
@@ -313,6 +313,8 @@ def try_match_effect_template_ext(
       2. Whitespace-normalized match -- collapses newlines / multi-spaces to a
          single space before comparing.  Needed because some card DB entries
          embed newlines around icon tokens such as <(ブレード)>.
+      3. Targeted fuzzy fallback for known tokv1 clause blobs where condition /
+         cost prose may be coalesced into the effect text.
 
     Returns:
         (rule, gd) if matched, else None.
@@ -320,6 +322,28 @@ def try_match_effect_template_ext(
     s = (effect_text or "").strip()
     if not s:
         return None
+
+    s_norm = _norm_ws(s)
+
+    for r in EXTRA_EFFECT_RULES:
+        tpl = str(r.get("effect_template", "") or "").strip()
+        if not tpl:
+            continue
+        if s == tpl:
+            return ({"id": r.get("id"), "op": "__ext__", "ext_key": r.get("ext_key")}, {})
+        if s_norm == _norm_ws(tpl):
+            return ({"id": r.get("id"), "op": "__ext__", "ext_key": r.get("ext_key")}, {})
+
+    fuzzy_rules = [
+        ("enter_pick_mus_member_from_green", ["控え室から『μ's』のメンバーカードを1枚手札に加える。"]),
+        ("live_start_pick_mus_live_from_green", ["控え室から『μ's』のライブカードを1枚手札に加える。"]),
+        ("live_start_choose_pinkYellowPurple_heart", ["<(桃)>", "<(黄)>", "<(紫)>", "選んだハートを1つ得る。"]),
+        ("live_start_no_mus_blade5_force_not_center", ["<(ブレード)>", "5つ以上持つ『μ's』のメンバーがいない場合", "センターエリア以外にポジションチェンジする。"]),
+    ]
+    for ext_key, needles in fuzzy_rules:
+        if all(_norm_ws(nd) in s_norm for nd in needles):
+            return ({"id": ext_key, "op": "__ext__", "ext_key": ext_key}, {})
+    return None
 
     s_norm = _norm_ws(s)
 
@@ -1944,34 +1968,18 @@ def try_apply_effect_by_rule_ext(
             return True
         cns = [str(getattr(c, "cardnumber", None) or c or "") for c in candidates]
         payload = {
-            "kind": "choose_card_from_green",
-            "candidates": cns,
-            "optional": False,
-            "after_ext_key": "enter_pick_mus_member_from_green__resolve",
-            "source_cn": src,
-            "label": "【南ことり】控え室からμ'sのメンバーカードを1枚選んでください",
+            "kind": "choose_member_from_green",
+            "text": "控え室のメンバーカードを1枚手札に加える",
+            "options": cns,
+            "want_kind": "MEMBER",
+            "want_group": "μ's",
+            "remaining_picks": 1,
         }
         try:
             getattr(gs, "pending").append(payload)
             gs.log.append(f"[PENDING] 南ことり bp3-003: choose μ's MEMBER from green {cns}")
         except Exception:
             pass
-        return True
-
-    if ext_key == "enter_pick_mus_member_from_green__resolve":
-        chosen_cn = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_cn") or "").strip()
-        gr = _green_room_list(gs)
-        found = None
-        for c in list(gr):
-            if str(getattr(c, "cardnumber", None) or c or "").strip() == chosen_cn:
-                found = c
-                break
-        if found is not None:
-            ok = _move_card_from_green_to_hand(gs, found)
-            try:
-                gs.log.append(f"[AUTO_EXT] green->hand {chosen_cn} (南ことり bp3-003 resolve) ok={ok}")
-            except Exception:
-                pass
         return True
 
     # ------------------------------------------------------------------
@@ -2005,34 +2013,18 @@ def try_apply_effect_by_rule_ext(
             return True
         cns = [str(getattr(c, "cardnumber", None) or c or "") for c in candidates]
         payload = {
-            "kind": "choose_card_from_green",
-            "candidates": cns,
-            "optional": False,
-            "after_ext_key": "live_start_pick_mus_live_from_green__resolve",
-            "source_cn": src,
-            "label": "【園田海未】控え室からμ'sのライブカードを1枚選んでください",
+            "kind": "choose_live_from_green",
+            "text": "控え室のライブカードを1枚手札に加える",
+            "options": cns,
+            "want_kind": "LIVE",
+            "want_group": "μ's",
+            "remaining_picks": 1,
         }
         try:
             getattr(gs, "pending").append(payload)
             gs.log.append(f"[PENDING] 園田海未 bp3-004: choose μ's LIVE from green {cns}")
         except Exception:
             pass
-        return True
-
-    if ext_key == "live_start_pick_mus_live_from_green__resolve":
-        chosen_cn = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_cn") or "").strip()
-        gr = _green_room_list(gs)
-        found = None
-        for c in list(gr):
-            if str(getattr(c, "cardnumber", None) or c or "").strip() == chosen_cn:
-                found = c
-                break
-        if found is not None:
-            ok = _move_card_from_green_to_hand(gs, found)
-            try:
-                gs.log.append(f"[AUTO_EXT] green->hand {chosen_cn} LIVE (園田海未 bp3-004 resolve) ok={ok}")
-            except Exception:
-                pass
         return True
 
     # ------------------------------------------------------------------
@@ -2050,6 +2042,7 @@ def try_apply_effect_by_rule_ext(
             "text": f"{src}: 桃/黄/紫から1つ選ぶ → ライブ終了時まで+1",
             "options": ["桃", "黄", "紫"],
             "source_cn": src,
+            "src_pos": src_pos,
         }
         try:
             getattr(gs, "pending").append(payload)
@@ -2259,34 +2252,18 @@ def try_apply_effect_by_rule_ext(
             return True
         cns = [str(getattr(c, "cardnumber", None) or c or "") for c in candidates]
         payload = {
-            "kind": "choose_card_from_green",
-            "candidates": cns,
-            "optional": False,
-            "after_ext_key": "live_success_bibi_2diff_pick_bibi_member_from_green__resolve",
-            "source_cn": src,
-            "label": "【Cutie Panther】控え室からBiBiのメンバーカードを1枚選んでください",
+            "kind": "choose_member_from_green",
+            "text": "控え室のメンバーカードを1枚手札に加える",
+            "options": cns,
+            "want_kind": "MEMBER",
+            "want_group": "BiBi",
+            "remaining_picks": 1,
         }
         try:
             getattr(gs, "pending").append(payload)
             gs.log.append(f"[PENDING] Cutie Panther: choose BiBi MEMBER from green {cns}")
         except Exception:
             pass
-        return True
-
-    if ext_key == "live_success_bibi_2diff_pick_bibi_member_from_green__resolve":
-        chosen_cn = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_cn") or "").strip()
-        gr = _green_room_list(gs)
-        found = None
-        for c in list(gr):
-            if str(getattr(c, "cardnumber", None) or c or "").strip() == chosen_cn:
-                found = c
-                break
-        if found is not None:
-            ok = _move_card_from_green_to_hand(gs, found)
-            try:
-                gs.log.append(f"[AUTO_EXT] green->hand {chosen_cn} BiBi (Cutie Panther resolve) ok={ok}")
-            except Exception:
-                pass
         return True
 
     return False
