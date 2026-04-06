@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_group3_A7B2_20260406a
+# BUILD_TAG: engine_effect_group3_A7B2_20260406b
 from __future__ import annotations
 
 """llocg_ui.engine_effect
@@ -861,12 +861,27 @@ def _green_room_list(gs: Any) -> list:
     return []
 
 
+def _label_matches_group_or_unit(card: Any, cards_db: Dict[str, Any], label: str) -> bool:
+    """Best-effort matcher for labels that may live in group or unit.
+    Accept exact match or containment in either field.
+    """
+    try:
+        lab = str(label or "").strip()
+        if not lab:
+            return False
+        g = str(_card_group(card, cards_db) or "").strip()
+        u = str(_card_unit(card, cards_db) or "").strip()
+        return (g == lab) or (u == lab) or (lab in g if g else False) or (lab in u if u else False)
+    except Exception:
+        return False
+
+
 def _green_room_members_by_group(gs: Any, cards_db: Dict[str, Any], group_name: str) -> list:
-    """Return list of MEMBER cards in green_room belonging to group_name."""
+    """Return list of MEMBER cards in green_room belonging to group_name/unit_name."""
     result = []
     for card in _green_room_list(gs):
         try:
-            if _card_type_norm(card, cards_db) == "MEMBER" and _card_group(card, cards_db) == group_name:
+            if _card_type_norm(card, cards_db) == "MEMBER" and _label_matches_group_or_unit(card, cards_db, group_name):
                 result.append(card)
         except Exception:
             pass
@@ -874,11 +889,11 @@ def _green_room_members_by_group(gs: Any, cards_db: Dict[str, Any], group_name: 
 
 
 def _green_room_lives_by_group(gs: Any, cards_db: Dict[str, Any], group_name: str) -> list:
-    """Return list of LIVE cards in green_room belonging to group_name."""
+    """Return list of LIVE cards in green_room belonging to group_name/unit_name."""
     result = []
     for card in _green_room_list(gs):
         try:
-            if _card_type_norm(card, cards_db) == "LIVE" and _card_group(card, cards_db) == group_name:
+            if _card_type_norm(card, cards_db) == "LIVE" and _label_matches_group_or_unit(card, cards_db, group_name):
                 result.append(card)
         except Exception:
             pass
@@ -900,11 +915,11 @@ def _green_room_lives_by_group_score_le(
 
 
 def _green_room_cards_by_group_any_type(gs: Any, cards_db: Dict[str, Any], group_name: str) -> list:
-    """Return cards of any type in green_room belonging to group_name."""
+    """Return cards of any type in green_room belonging to group_name/unit_name."""
     result = []
     for card in _green_room_list(gs):
         try:
-            if _card_group(card, cards_db) == group_name:
+            if _label_matches_group_or_unit(card, cards_db, group_name):
                 result.append(card)
         except Exception:
             pass
@@ -1013,7 +1028,7 @@ def _stage_unit_count_diff_names(gs: Any, cards_db: Dict[str, Any], unit_name: s
             slot = st.get(pos)
             if slot is None or not bool(getattr(slot, "cardnumber", None)):
                 continue
-            if _card_unit(slot, cards_db) != unit_name and _card_group(slot, cards_db) != unit_name:
+            if not _label_matches_group_or_unit(slot, cards_db, unit_name):
                 continue
             name = _card_name(slot, cards_db) or str(getattr(slot, "cardnumber", pos))
             names_seen.add(name)
@@ -1891,40 +1906,19 @@ def try_apply_effect_by_rule_ext(
             return True
         payload = {
             "kind": "choose_heart_color",
-            "colors": ["pink", "red", "yellow", "green", "blue", "purple"],
-            "optional": False,
-            "after_ext_key": "live_start_other_member_exists_choose_heart__resolve",
+            "pos": src_pos,
+            "n": 1,
+            "text": f"{src}: 好きなハートの色を1つ指定する → ライブ終了時まで+1",
+            "options": ["桃", "赤", "黄", "緑", "青", "紫"],
             "source_cn": src,
-            "src_pos": src_pos,
-            "label": "【藤島慈】得るハートの色を選んでください",
         }
         try:
             getattr(gs, "pending").append(payload)
-            gs.log.append("[PENDING] 藤島慈: choose_heart_color")
+            gs.log.append("[PENDING] 藤島慈: choose heart color (self)")
         except Exception:
             pass
         return True
 
-    if ext_key == "live_start_other_member_exists_choose_heart__resolve":
-        src_pos = str((ctx or {}).get("src_pos") or (ctx or {}).get("pos") or "").upper()
-        chosen_color = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_color") or "").lower()
-        st = getattr(gs, "stage", None)
-        slot = (st or {}).get(src_pos) if isinstance(st, dict) and src_pos in ("L", "C", "R") else None
-        if slot is None:
-            src_cn = str((ctx or {}).get("source_cn") or "")
-            if isinstance(st, dict):
-                for pos in ("L", "C", "R"):
-                    s = st.get(pos)
-                    if s and str(getattr(s, "cardnumber", "")) == src_cn:
-                        slot = s
-                        break
-        if slot is not None and chosen_color:
-            _add_temp_hearts(eng, slot, {chosen_color: 1})
-            try:
-                gs.log.append(f"[AUTO_EXT] +{chosen_color} to {src_pos} (藤島慈 resolve)")
-            except Exception:
-                pass
-        return True
 
     # ------------------------------------------------------------------
     # Prompt 14: PL!-bp3-003 南ことり (登場)
@@ -2051,12 +2045,11 @@ def try_apply_effect_by_rule_ext(
         src = str((ctx or {}).get("source_cn") or "")
         payload = {
             "kind": "choose_heart_color",
-            "colors": ["pink", "yellow", "purple"],
-            "optional": False,
-            "after_ext_key": "live_start_choose_pinkYellowPurple_heart__resolve",
+            "pos": src_pos,
+            "n": 1,
+            "text": f"{src}: 桃/黄/紫から1つ選ぶ → ライブ終了時まで+1",
+            "options": ["桃", "黄", "紫"],
             "source_cn": src,
-            "src_pos": src_pos,
-            "label": "【南ことり】得るハートを選んでください（桃/黄/紫）",
         }
         try:
             getattr(gs, "pending").append(payload)
@@ -2065,27 +2058,6 @@ def try_apply_effect_by_rule_ext(
             pass
         return True
 
-    if ext_key == "live_start_choose_pinkYellowPurple_heart__resolve":
-        src_pos = str((ctx or {}).get("src_pos") or (ctx or {}).get("pos") or "").upper()
-        chosen_color = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_color") or "").lower()
-        st = getattr(gs, "stage", None)
-        slot = (st or {}).get(src_pos) if isinstance(st, dict) and src_pos in ("L", "C", "R") else None
-        if slot is None:
-            src_cn = str((ctx or {}).get("source_cn") or "")
-            if isinstance(st, dict):
-                for pos in ("L", "C", "R"):
-                    s = st.get(pos)
-                    if s and str(getattr(s, "cardnumber", "")) == src_cn:
-                        slot = s
-                        break
-        valid_colors = {"pink", "yellow", "purple"}
-        if slot is not None and chosen_color in valid_colors:
-            _add_temp_hearts(eng, slot, {chosen_color: 1})
-            try:
-                gs.log.append(f"[AUTO_EXT] +{chosen_color} to {src_pos} (南ことり sd1-003 resolve)")
-            except Exception:
-                pass
-        return True
 
     # ------------------------------------------------------------------
     # Prompt 73: PL!HS-bp2-001 日野下花帆 (起動)
