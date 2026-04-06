@@ -1507,15 +1507,60 @@ def try_apply_effect_by_rule_ext(
                 canon_cn = canon_fn(discarded_cn) if callable(canon_fn) else str(discarded_cn or "")
                 ci_dis = get_card_fn(cards_db, canon_cn) if callable(get_card_fn) else None
                 if ci_dis is not None:
-                    discarded_name = str(getattr(ci_dis, "cardname", "") or getattr(ci_dis, "name", "") or "")
+                    discarded_name = str(
+                        getattr(ci_dis, "cardname", "") or
+                        getattr(ci_dis, "name", "") or
+                        ((ci_dis if isinstance(ci_dis, dict) else {}).get("cardname")) or
+                        ((ci_dis if isinstance(ci_dis, dict) else {}).get("name")) or
+                        ""
+                    )
             except Exception:
                 pass
-        if not discarded_name:
+
+        def _same_name_or_card(slot_obj: Any, discarded_cn_val: str, discarded_name_val: str) -> bool:
+            slot_cn = str(getattr(slot_obj, "cardnumber", "") or "")
+            # まず cardnumber 一致を強く見る
             try:
-                gs.log.append(f"[AUTO_EXT] could not get name for {discarded_cn} (百生吟子)")
+                canon_fn = eng.get("_canon_cardno")
+                if callable(canon_fn):
+                    if canon_fn(slot_cn) == canon_fn(discarded_cn_val):
+                        return True
+                elif slot_cn == discarded_cn_val:
+                    return True
+            except Exception:
+                if slot_cn == discarded_cn_val:
+                    return True
+
+            # 次に cardname 一致
+            slot_name = _card_name(slot_obj, cards_db)
+            if discarded_name_val and slot_name and slot_name == discarded_name_val:
+                return True
+
+            # 最後に engine の _get_card でもう一度引き直す
+            try:
+                canon_fn = eng.get("_canon_cardno")
+                get_card_fn = eng.get("_get_card")
+                canon_slot = canon_fn(slot_cn) if callable(canon_fn) else slot_cn
+                ci_slot = get_card_fn(cards_db, canon_slot) if callable(get_card_fn) else None
+                slot_name2 = str(
+                    getattr(ci_slot, "cardname", "") or
+                    getattr(ci_slot, "name", "") or
+                    ((ci_slot if isinstance(ci_slot, dict) else {}).get("cardname")) or
+                    ((ci_slot if isinstance(ci_slot, dict) else {}).get("name")) or
+                    ""
+                )
+                if discarded_name_val and slot_name2 and slot_name2 == discarded_name_val:
+                    return True
             except Exception:
                 pass
-            return True
+            return False
+
+        if not discarded_name:
+            # 名前が取れなくても cardnumber 一致だけで通せるようにする
+            try:
+                gs.log.append(f"[AUTO_EXT] name fallback by cardnumber for {discarded_cn} (百生吟子)")
+            except Exception:
+                pass
 
         matched = []
         try:
@@ -1525,19 +1570,7 @@ def try_apply_effect_by_rule_ext(
                     slot = st.get(pos)
                     if slot is None or not bool(getattr(slot, "cardnumber", None)):
                         continue
-                    slot_name = _card_name(slot, cards_db)
-                    slot_cn = str(getattr(slot, "cardnumber", "") or "")
-                    same_name = bool(slot_name and slot_name == discarded_name)
-                    same_cn = False
-                    try:
-                        canon_fn = eng.get("_canon_cardno")
-                        if callable(canon_fn):
-                            same_cn = canon_fn(slot_cn) == canon_fn(discarded_cn)
-                        else:
-                            same_cn = slot_cn == discarded_cn
-                    except Exception:
-                        same_cn = slot_cn == discarded_cn
-                    if same_name or same_cn:
+                    if _same_name_or_card(slot, discarded_cn, discarded_name):
                         matched.append((pos, slot))
         except Exception:
             pass
