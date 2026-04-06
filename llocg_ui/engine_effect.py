@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_group2_single_target_20260403e
+# BUILD_TAG: engine_effect_group2_single_target_20260403f
 from __future__ import annotations
 
 """llocg_ui.engine_effect
@@ -1502,6 +1502,16 @@ def try_apply_effect_by_rule_ext(
         discarded_name = _card_name(discarded_cn, cards_db)
         if not discarded_name:
             try:
+                canon_fn = eng.get("_canon_cardno")
+                get_card_fn = eng.get("_get_card")
+                canon_cn = canon_fn(discarded_cn) if callable(canon_fn) else str(discarded_cn or "")
+                ci_dis = get_card_fn(cards_db, canon_cn) if callable(get_card_fn) else None
+                if ci_dis is not None:
+                    discarded_name = str(getattr(ci_dis, "cardname", "") or getattr(ci_dis, "name", "") or "")
+            except Exception:
+                pass
+        if not discarded_name:
+            try:
                 gs.log.append(f"[AUTO_EXT] could not get name for {discarded_cn} (百生吟子)")
             except Exception:
                 pass
@@ -1516,7 +1526,18 @@ def try_apply_effect_by_rule_ext(
                     if slot is None or not bool(getattr(slot, "cardnumber", None)):
                         continue
                     slot_name = _card_name(slot, cards_db)
-                    if slot_name and slot_name == discarded_name:
+                    slot_cn = str(getattr(slot, "cardnumber", "") or "")
+                    same_name = bool(slot_name and slot_name == discarded_name)
+                    same_cn = False
+                    try:
+                        canon_fn = eng.get("_canon_cardno")
+                        if callable(canon_fn):
+                            same_cn = canon_fn(slot_cn) == canon_fn(discarded_cn)
+                        else:
+                            same_cn = slot_cn == discarded_cn
+                    except Exception:
+                        same_cn = slot_cn == discarded_cn
+                    if same_name or same_cn:
                         matched.append((pos, slot))
         except Exception:
             pass
