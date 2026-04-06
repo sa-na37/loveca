@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: generic_slot_bonus_group2fix_popupicons_20260403m
+# BUILD_TAG: live_start_order_queue_20260406a
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -2917,10 +2917,13 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                                     }
                                     _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
                             else:
-                                ctx_free = {'pos': pos.upper(), 'src_pos': pos.upper(), 'source_cn': ci.cardnumber}
-                                if try_apply_effect_template(gs, rng, cards_db, eff, ctx_free):
-                                    did_auto = True
-                                    gs.log.append(f"[AUTO] {ci.cardnumber}[ライブ開始時]: applied {eff}")
+                                triggers.append({
+                                    'kind': 'live_start_apply_effect',
+                                    'source_cn': ci.cardnumber,
+                                    'label': f'{pos}: {ci.cardnumber} ライブ開始時',
+                                    'pos': pos.upper(),
+                                    'effect': eff,
+                                })
                         continue
                 # self-wait コスト（Eコストあり扱いで来た場合のフォールバック・通常は上のブロックで処理済み）
                 if _cost_requires_self_wait(cost) and not _cost_requires_self_to_green(cost):
@@ -3049,10 +3052,13 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                             _append_prompt(pr, pr['text'])
                         continue
                     if not cost.strip() or cost.strip() == eff.strip():
-                        ctx_live = {'source_cn': getattr(ci_live, 'cardnumber', '') or str(cn_live or '')}
-                        if try_apply_effect_template(gs, rng, cards_db, eff, ctx_live):
-                            did_auto = True
-                            gs.log.append(f"[AUTO] LIVE: {getattr(ci_live, 'cardnumber', '') or cn_live}[ライブ開始時] applied {eff}")
+                        src_live = getattr(ci_live, 'cardnumber', '') or str(cn_live or '')
+                        triggers.append({
+                            'kind': 'live_start_apply_effect',
+                            'source_cn': src_live,
+                            'label': f'{src_live} ライブ開始時',
+                            'effect': eff,
+                        })
     except Exception:
         pass
 
@@ -3679,6 +3685,24 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         prm = dict((trig or {}).get('prompt', {}) or {})
         if prm:
             gs.pending.append(prm)
+        return
+    if kind == 'live_start_apply_effect':
+        eff = str((trig or {}).get('effect', '') or '').strip()
+        src_cn = str((trig or {}).get('source_cn', '') or '').strip()
+        pos = str((trig or {}).get('pos', '') or '').upper()
+        if eff:
+            try:
+                rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
+            except Exception:
+                rng2 = random.Random(0)
+            ctx = {'source_cn': src_cn}
+            if pos:
+                ctx.update({'pos': pos, 'src_pos': pos})
+            try_apply_effect_template(gs, rng2, cards_db, eff, ctx)
+            if pos:
+                gs.log.append(f"[AUTO] {src_cn or '?'}[ライブ開始時]: applied {eff}")
+            else:
+                gs.log.append(f"[AUTO] LIVE: {src_cn or '?'}[ライブ開始時] applied {eff}")
         return
     if kind == 'live_start_vivid_world_auto':
         gs.vivid_world_blue_mode_this_live = True
