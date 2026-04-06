@@ -2395,26 +2395,11 @@ HTML = r'''<!doctype html>
       const det = sd ? sd[slotKey] : null;
       if(det){
         const tmpBlade  = Number(det.temp_blade      || 0);
-        const alwBlade0 = Number(det.always_blade_bonus || 0);
+        const alwBlade  = Number(det.always_blade_bonus || 0);
         const lzBlade   = Number(det.lanzhu_blade_bonus || 0);
         const lzHeart   = Number(det.lanzhu_heart_bonus || 0);
         const tmpHearts = Object.assign({}, det.temp_hearts || {});
         if(lzHeart > 0) tmpHearts['all'] = (Number(tmpHearts['all'] || 0)) + lzHeart;
-
-        // Love wing bell の常時ブレードは、state_detail に乗らない環境でも
-        // success_zone から再計算して可視バッジへ反映する
-        let alwBlade = alwBlade0;
-        try{
-          if(alwBlade <= 0 && slotKey === 'C'){
-            const sz = Array.isArray(st && st.success_zone) ? st.success_zone : [];
-            const cnSelf = String(cn || '');
-            // μ's カードは cardnumber が PL!- で始まる前提
-            if(cnSelf.startsWith('PL!-')){
-              const lwCount = sz.filter(x => String(x||'') === 'PL!-bp4-020').length;
-              if(lwCount > 0) alwBlade += lwCount;
-            }
-          }
-        }catch(e){}
         const totalBlade = tmpBlade + alwBlade + lzBlade;
 
         const hasBonus = totalBlade > 0 || Object.keys(tmpHearts).some(k=>Number(tmpHearts[k])>0);
