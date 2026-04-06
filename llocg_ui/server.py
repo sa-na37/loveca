@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: generic_pending_text_cleanup_20260402g_revert_fontsize
+# BUILD_TAG: popup_icon_tokens_20260403m
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1873,6 +1873,51 @@ HTML = r'''<!doctype html>
     if(kind === 'position_change') return '移動先のエリアを選んでください。';
     return pendingSourceCn(p) ? '効果を解決するため、対象または選択肢を選んでください。' : '';
   }
+  function setRichText(el, raw){
+    const s = String(raw || '');
+    el.innerHTML = '';
+    if(!s) return;
+    const ICON_BASE = '/llocg_db_out_full/card_images/texticons/';
+    const tokenMap = {
+      '<(ブレード)>':'icon_blade.png',
+      '<(桃)>':'heart_01.png',
+      '<(赤)>':'heart_02.png',
+      '<(黄)>':'heart_03.png',
+      '<(緑)>':'heart_04.png',
+      '<(青)>':'heart_05.png',
+      '<(紫)>':'heart_06.png',
+      '<(虹)>':'icon_all.png',
+      '<(すべて)>':'icon_all.png',
+    };
+    const reTok = /<\((ブレード|桃|赤|黄|緑|青|紫|虹|すべて)\)>/g;
+    let last = 0;
+    let m;
+    while((m = reTok.exec(s)) !== null){
+      if(m.index > last){
+        el.appendChild(document.createTextNode(s.slice(last, m.index)));
+      }
+      const tok = m[0];
+      const srcFile = tokenMap[tok];
+      if(srcFile){
+        const img = document.createElement('img');
+        img.src = ICON_BASE + srcFile;
+        img.alt = m[1];
+        img.style.width = '1em';
+        img.style.height = '1em';
+        img.style.objectFit = 'contain';
+        img.style.verticalAlign = '-0.12em';
+        img.style.margin = '0 0.05em';
+        el.appendChild(img);
+      }else{
+        el.appendChild(document.createTextNode(tok));
+      }
+      last = reTok.lastIndex;
+    }
+    if(last < s.length){
+      el.appendChild(document.createTextNode(s.slice(last)));
+    }
+  }
+
   function clearModalLead(){
     elModalLead.classList.remove('visible');
     elModalSourceCard.innerHTML = '';
@@ -2395,11 +2440,26 @@ HTML = r'''<!doctype html>
       const det = sd ? sd[slotKey] : null;
       if(det){
         const tmpBlade  = Number(det.temp_blade      || 0);
-        const alwBlade  = Number(det.always_blade_bonus || 0);
+        const alwBlade0 = Number(det.always_blade_bonus || 0);
         const lzBlade   = Number(det.lanzhu_blade_bonus || 0);
         const lzHeart   = Number(det.lanzhu_heart_bonus || 0);
         const tmpHearts = Object.assign({}, det.temp_hearts || {});
         if(lzHeart > 0) tmpHearts['all'] = (Number(tmpHearts['all'] || 0)) + lzHeart;
+
+        // Love wing bell の常時ブレードは、state_detail に乗らない環境でも
+        // success_zone から再計算して可視バッジへ反映する
+        let alwBlade = alwBlade0;
+        try{
+          if(alwBlade <= 0 && slotKey === 'C'){
+            const sz = Array.isArray(st && st.success_zone) ? st.success_zone : [];
+            const cnSelf = String(cn || '');
+            // μ's カードは cardnumber が PL!- で始まる前提
+            if(cnSelf.startsWith('PL!-')){
+              const lwCount = sz.filter(x => String(x||'') === 'PL!-bp4-020').length;
+              if(lwCount > 0) alwBlade += lwCount;
+            }
+          }
+        }catch(e){}
         const totalBlade = tmpBlade + alwBlade + lzBlade;
 
         const hasBonus = totalBlade > 0 || Object.keys(tmpHearts).some(k=>Number(tmpHearts[k])>0);
@@ -2609,7 +2669,7 @@ HTML = r'''<!doctype html>
     popup = {type:'cardlist', title, cards: cardsList.slice(), closable, helperText};
 
     elModalTitle.textContent = title;
-    elModalText.textContent = helperText || '';
+    setRichText(elModalText, helperText || '');
     elModalActions.innerHTML = '';
     elModalCards.innerHTML = '';
 
@@ -2655,7 +2715,7 @@ HTML = r'''<!doctype html>
     popup = {type:'pending', title, cards: cardsList.slice(), closable:false, helperText};
 
     elModalTitle.textContent = title;
-    elModalText.textContent = helperText || '';
+    setRichText(elModalText, helperText || '');
     elModalActions.innerHTML = '';
     elModalCards.innerHTML = '';
 
@@ -2982,7 +3042,7 @@ HTML = r'''<!doctype html>
 
       popup = {type:'pending', closable:false};
       elModalTitle.textContent = 'デッキ公開';
-      elModalText.textContent = helperText;
+      setRichText(elModalText, helperText);
       elModalCards.innerHTML = '';
       elModalActions.innerHTML = '';
 
@@ -3096,7 +3156,7 @@ HTML = r'''<!doctype html>
 
       popup = {type:'pending', closable:false};
       elModalTitle.textContent = 'デッキ公開';
-      elModalText.textContent = helperText;
+      setRichText(elModalText, helperText);
       elModalCards.innerHTML = '';
       elModalActions.innerHTML = '';
 
@@ -3202,7 +3262,7 @@ HTML = r'''<!doctype html>
 
       popup = {type:'pending', closable:false};
       elModalTitle.textContent = '選択';
-      elModalText.textContent = title;
+      setRichText(elModalText, title);
       elModalCards.innerHTML = '';
       elModalActions.innerHTML = '';
 
@@ -3332,7 +3392,7 @@ HTML = r'''<!doctype html>
     popup = {type:'pending', closable:false};
     elModalTitle.textContent = pendingTitleFor(p);
     const pendText = pendingTextFor(p);
-    elModalText.textContent = pendText;
+    setRichText(elModalText, pendText);
     const allowSkip = !!((p && (p.allow_less || p.allow_skip)) || /Skip可/i.test(pendText) || /\bskip\b/i.test(pendText) || (kind && /pick/i.test(kind)));
     elModalActions.innerHTML = '';
     elModalCards.innerHTML = '';
@@ -3422,9 +3482,9 @@ HTML = r'''<!doctype html>
         const srcCn = srcSlot ? String(srcSlot.cardnumber || '') : '';
         const srcName = srcSlot ? String(srcSlot.cardname || srcSlot.name || srcCn || '') : '';
         elModalTitle.textContent = 'ポジションチェンジ';
-        elModalText.textContent = srcName
+        setRichText(elModalText, srcName
           ? `${srcName}${srcPos ? `（現在 ${srcPos}）` : ''} の移動先を選んでください。移動先にメンバーがいる場合は入れ替わります。`
-          : `移動先を選んでください。移動先にメンバーがいる場合は入れ替わります。`;
+          : `移動先を選んでください。移動先にメンバーがいる場合は入れ替わります。`);
         const row = document.createElement('div');
         row.className = 'choiceRow';
         const dimsP = standardSize('portrait');

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_group2_single_target_20260403c
+# BUILD_TAG: engine_effect_group2_single_target_20260403d
 from __future__ import annotations
 
 """llocg_ui.engine_effect
@@ -378,11 +378,29 @@ def _card_score(card: Any, cards_db: Dict[str, Any]) -> int:
     return 0
 
 
+def _lookup_cardinfo(cards_db: Dict[str, Any], card: Any) -> Any:
+    try:
+        cn = str(getattr(card, "cardnumber", None) or card or "").strip()
+        if not cn:
+            return None
+        info = cards_db.get(cn)
+        if info is not None:
+            return info
+        low = cn.lower()
+        for k, v in (cards_db or {}).items():
+            try:
+                if str(k).strip().lower() == low:
+                    return v
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return None
+
 def _card_group(card: Any, cards_db: Dict[str, Any]) -> str:
     """Return the group string of a card."""
     try:
-        cn = str(getattr(card, "cardnumber", None) or card or "")
-        info = cards_db.get(cn)
+        info = _lookup_cardinfo(cards_db, card)
         if info is not None:
             g = getattr(info, "group", None)
             if g is None:
@@ -400,8 +418,7 @@ def _card_group(card: Any, cards_db: Dict[str, Any]) -> str:
 def _card_unit(card: Any, cards_db: Dict[str, Any]) -> str:
     """Return the unit string of a card."""
     try:
-        cn = str(getattr(card, "cardnumber", None) or card or "")
-        info = cards_db.get(cn)
+        info = _lookup_cardinfo(cards_db, card)
         if info is not None:
             u = getattr(info, "unit", None)
             if u is None:
@@ -438,8 +455,7 @@ def _card_cost(card: Any, cards_db: Dict[str, Any]) -> int:
 def _card_type_norm(card: Any, cards_db: Dict[str, Any]) -> str:
     """Return the normalized card type string (MEMBER / LIVE / etc.)."""
     try:
-        cn = str(getattr(card, "cardnumber", None) or card or "")
-        info = cards_db.get(cn)
+        info = _lookup_cardinfo(cards_db, card)
         if info is not None:
             t = getattr(info, "card_type_norm", None)
             if t is None:
@@ -457,8 +473,7 @@ def _card_type_norm(card: Any, cards_db: Dict[str, Any]) -> str:
 def _card_name(card: Any, cards_db: Dict[str, Any]) -> str:
     """Return the cardname string of a card."""
     try:
-        cn = str(getattr(card, "cardnumber", None) or card or "")
-        info = cards_db.get(cn)
+        info = _lookup_cardinfo(cards_db, card)
         if info is not None:
             n = getattr(info, "cardname", None)
             if n is None:
@@ -1296,7 +1311,8 @@ def try_apply_effect_by_rule_ext(
     # ------------------------------------------------------------------
     # Prompt 37: PL!-bp4-024 小夜啼鳥恋詩 (ライブ開始時)
     # ステージの μ's メンバー1人（選択）に +1ブレード
-    # ------------------------------------------------------------------    if ext_key == "live_start_pick_mus_stage_member_blade1":
+    # ------------------------------------------------------------------
+    if ext_key == "live_start_pick_mus_stage_member_blade1":
         mus_members = _stage_positions_with_group(gs, cards_db, "μ's")
         src = str((ctx or {}).get("source_cn") or "")
         if not mus_members:
@@ -1320,7 +1336,6 @@ def try_apply_effect_by_rule_ext(
         except Exception:
             pass
         return True
-
 
     if ext_key == "live_start_pick_mus_stage_member_blade1__resolve":
         chosen_pos = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_pos") or "").upper()
@@ -1360,9 +1375,9 @@ def try_apply_effect_by_rule_ext(
     # Prompt 48: PL!-pb1-012 南ことり (登場)
     # Printemps のウェイト状態メンバーを1人までアクティブにする
     # ウェイト = active==False のスロット
-    # ------------------------------------------------------------------    if ext_key == "enter_printemps_activate_up_to_1":
+    # ------------------------------------------------------------------
+    if ext_key == "enter_printemps_activate_up_to_1":
         src = str((ctx or {}).get("source_cn") or "")
-        # Printemps かつ wait (active==False) のスロットを探す
         wait_printemps = []
         try:
             st = getattr(gs, "stage", None)
@@ -1399,7 +1414,6 @@ def try_apply_effect_by_rule_ext(
         except Exception:
             pass
         return True
-
 
     if ext_key == "enter_printemps_activate_up_to_1__resolve":
         chosen_pos = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_pos") or "").upper()
