@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_group2_single_target_20260403d
+# BUILD_TAG: engine_effect_group2_single_target_20260403e
 from __future__ import annotations
 
 """llocg_ui.engine_effect
@@ -462,9 +462,42 @@ def _card_type_norm(card: Any, cards_db: Dict[str, Any]) -> str:
                 t = (info if isinstance(info, dict) else {}).get("card_type_norm")
             if t:
                 return str(t)
+
+            raw = getattr(info, "card_type_raw", None)
+            if raw is None:
+                raw = (info if isinstance(info, dict) else {}).get("card_type_raw")
+            if raw is None:
+                raw = getattr(info, "type", None)
+            if raw is None:
+                raw = (info if isinstance(info, dict) else {}).get("type")
+            if raw:
+                s = str(raw).strip().upper()
+                jp = str(raw).strip()
+                if s in ("MEMBER", "LIVE", "ENERGY"):
+                    return s
+                if jp == "メンバー":
+                    return "MEMBER"
+                if jp == "ライブ":
+                    return "LIVE"
+                if jp == "エネルギー":
+                    return "ENERGY"
+
         t = getattr(card, "card_type_norm", None)
         if t:
             return str(t)
+
+        raw = getattr(card, "card_type_raw", None) or getattr(card, "type", None)
+        if raw:
+            s = str(raw).strip().upper()
+            jp = str(raw).strip()
+            if s in ("MEMBER", "LIVE", "ENERGY"):
+                return s
+            if jp == "メンバー":
+                return "MEMBER"
+            if jp == "ライブ":
+                return "LIVE"
+            if jp == "エネルギー":
+                return "ENERGY"
     except Exception:
         pass
     return ""
