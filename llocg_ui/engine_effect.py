@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_group2_single_target_20260403f
+# BUILD_TAG: engine_effect_group3_A7B2_20260406a
 from __future__ import annotations
 
 """llocg_ui.engine_effect
@@ -146,6 +146,77 @@ EXTRA_EFFECT_RULES = [
         "id": "live_start_all_stage_filled_x2_blade",
         "effect_template": "自分のステージのエリアすべてにメンバーが登場している場合、ライブ終了時まで、<(ブレード)><(ブレード)>を得る。",
         "ext_key": "live_start_all_stage_filled_x2_blade",
+    },
+    # -----------------------------------------------------------------------
+    # group3_A7B2_20260406a 新規追加
+    # -----------------------------------------------------------------------
+    # Prompt 6: PL!SP-bp4-008 若菜四季 (ライブ開始時, no-cost)
+    # effect_template が先頭の "position_change_optional" と完全一致するため
+    # 既存エントリを再利用。ここでは追加エントリ不要。
+    # engine 側が ライブ開始時 no-cost として queue に積んでから dispatch される。
+    # -----------------------------------------------------------------------
+    # Prompt 69: PL!HS-bp1-006 藤島慈 (ライブ開始時)
+    # cost=手札を1枚控え室に置いてもよい → engine 側 pay_or_skip
+    # 他メンバーがいる場合、好きなハートの色を1つ指定。ライブ終了時まで得る。
+    {
+        "id": "live_start_discard1_other_member_exists_choose_heart",
+        "effect_template": "自分のステージにほかのメンバーがいる場合、好きなハートの色を1つ指定する。ライブ終了時まで、そのハートを1つ得る。",
+        "ext_key": "live_start_other_member_exists_choose_heart",
+    },
+    # Prompt 14: PL!-bp3-003 南ことり (登場)
+    # cost=このメンバーをウェイトにしてもよい → engine 側 self_wait pay_or_skip
+    # 控え室から μ's のメンバーカードを1枚手札に加える
+    {
+        "id": "enter_self_wait_pick_mus_member_from_green",
+        "effect_template": "自分の控え室から『μ's』のメンバーカードを1枚手札に加える。",
+        "ext_key": "enter_pick_mus_member_from_green",
+    },
+    # Prompt 16: PL!-bp3-004 園田海未 (ライブ開始時)
+    # 成功置き場にカードがある場合のみ発動可
+    # cost=手札を1枚控え室に置いてもよい → engine 側 pay_or_skip
+    # 控え室から μ's のライブカードを1枚手札に加える
+    {
+        "id": "live_start_success_zone_exists_discard1_pick_mus_live_from_green",
+        "effect_template": "自分の控え室から『μ's』のライブカードを1枚手札に加える。",
+        "ext_key": "live_start_pick_mus_live_from_green",
+    },
+    # Prompt 60: PL!-sd1-003 南ことり (ライブ開始時)
+    # cost=手札を1枚控え室に置いてもよい → engine 側 pay_or_skip
+    # <(桃)>/<(黄)>/<(紫)> のうち1つを選ぶ。ライブ終了時まで得る。
+    {
+        "id": "live_start_discard1_choose_pink_yellow_purple_heart",
+        "effect_template": "<(桃)>/<(黄)>/<(紫)>のうち1つを選ぶ。ライブ終了時まで、選んだハートを1つ得る。",
+        "ext_key": "live_start_choose_pinkYellowPurple_heart",
+    },
+    # Prompt 73: PL!HS-bp2-001 日野下花帆 (起動)
+    # コスト: <(E)><(E)> → engine 側起動コスト処理
+    # 控え室からスコア3以下の 蓮ノ空 ライブカードを1枚手札に加える
+    {
+        "id": "body_pick_hasunosora_live_score_le3_from_green",
+        "effect_template": "自分の控え室からスコア3以下の『蓮ノ空』のライブカードを1枚手札に加える。",
+        "ext_key": "body_pick_hasunosora_live_score_le3_from_green",
+    },
+    # Prompt 76: PL!HS-bp2-005 大沢瑠璃乃 (登場)
+    # cost=手札を1枚控え室に置いてもよい → engine 側 pay_or_skip
+    # 他メンバーがいる場合、控え室から みらくらぱーく！ のカードを1枚手札に加える
+    {
+        "id": "enter_discard1_other_member_exists_pick_mirakupark_from_green",
+        "effect_template": "自分のステージにほかのメンバーがいる場合、自分の控え室から『みらくらぱーく！』のカードを1枚手札に加える。",
+        "ext_key": "enter_other_member_exists_pick_mirakupark_from_green",
+    },
+    # Prompt 27: PL!-bp4-005 星空凛 (ライブ開始時)
+    # ブレード5以上の μ's メンバーがいない場合、センター以外へ強制ポジションチェンジ
+    {
+        "id": "live_start_no_mus_blade5_force_position_change_not_center",
+        "effect_template": "自分のステージに<(ブレード)>を5つ以上持つ『μ's』のメンバーがいない場合、このメンバーはセンターエリア以外にポジションチェンジする。",
+        "ext_key": "live_start_no_mus_blade5_force_not_center",
+    },
+    # Prompt 56: PL!-pb1-030 Cutie Panther (ライブ成功時)
+    # ステージに名前の異なる BiBi が2人以上 → 控え室から BiBi メンバー1枚手札へ
+    {
+        "id": "live_success_bibi_2diff_pick_bibi_member_from_green",
+        "effect_template": "自分のステージに名前の異なる『BiBi』のメンバーが2人以上いる場合、自分の控え室から『BiBi』のメンバーカードを1枚手札に加える。",
+        "ext_key": "live_success_bibi_2diff_pick_bibi_member_from_green",
     },
     # -----------------------------------------------------------------------
     # group2_single_target_20260402 新規追加
@@ -772,6 +843,183 @@ def _green_room_top(gs: Any) -> Any:
     except Exception:
         pass
     return None
+
+
+# ---------------------------------------------------------------------------
+# group3 helpers
+# ---------------------------------------------------------------------------
+
+def _green_room_list(gs: Any) -> list:
+    """Return the green_room (控え室) list, trying common field names."""
+    try:
+        for attr in ("green_room", "waiting_room", "graveyard", "discard"):
+            gr = getattr(gs, attr, None)
+            if gr is not None and isinstance(gr, list):
+                return gr
+    except Exception:
+        pass
+    return []
+
+
+def _green_room_members_by_group(gs: Any, cards_db: Dict[str, Any], group_name: str) -> list:
+    """Return list of MEMBER cards in green_room belonging to group_name."""
+    result = []
+    for card in _green_room_list(gs):
+        try:
+            if _card_type_norm(card, cards_db) == "MEMBER" and _card_group(card, cards_db) == group_name:
+                result.append(card)
+        except Exception:
+            pass
+    return result
+
+
+def _green_room_lives_by_group(gs: Any, cards_db: Dict[str, Any], group_name: str) -> list:
+    """Return list of LIVE cards in green_room belonging to group_name."""
+    result = []
+    for card in _green_room_list(gs):
+        try:
+            if _card_type_norm(card, cards_db) == "LIVE" and _card_group(card, cards_db) == group_name:
+                result.append(card)
+        except Exception:
+            pass
+    return result
+
+
+def _green_room_lives_by_group_score_le(
+    gs: Any, cards_db: Dict[str, Any], group_name: str, score_max: int
+) -> list:
+    """Return LIVE cards in green_room with group_name and score <= score_max."""
+    result = []
+    for card in _green_room_lives_by_group(gs, cards_db, group_name):
+        try:
+            if _card_score(card, cards_db) <= score_max:
+                result.append(card)
+        except Exception:
+            pass
+    return result
+
+
+def _green_room_cards_by_group_any_type(gs: Any, cards_db: Dict[str, Any], group_name: str) -> list:
+    """Return cards of any type in green_room belonging to group_name."""
+    result = []
+    for card in _green_room_list(gs):
+        try:
+            if _card_group(card, cards_db) == group_name:
+                result.append(card)
+        except Exception:
+            pass
+    return result
+
+
+def _move_card_from_green_to_hand(gs: Any, card: Any) -> bool:
+    """Remove card from green_room and add to hand. Returns True on success."""
+    try:
+        gr = _green_room_list(gs)
+        if card in gr:
+            gr.remove(card)
+        else:
+            # fallback: try to find by cardnumber
+            cn = str(getattr(card, "cardnumber", None) or card or "")
+            found = None
+            for c in list(gr):
+                if str(getattr(c, "cardnumber", None) or c or "") == cn:
+                    found = c
+                    break
+            if found is None:
+                return False
+            gr.remove(found)
+            card = found
+        hand = getattr(gs, "hand", None)
+        if hand is None:
+            return False
+        hand.append(card)
+        return True
+    except Exception:
+        return False
+
+
+def _opp_stage_has_wait_member(gs: Any) -> bool:
+    """Return True if opponent stage has any member in wait (active==False) state."""
+    try:
+        opp = getattr(gs, "opponent", None) or getattr(gs, "opp", None)
+        if opp is None:
+            return False
+        st = getattr(opp, "stage", None)
+        if not isinstance(st, dict):
+            return False
+        for pos in ("L", "C", "R"):
+            slot = st.get(pos)
+            if slot is None or not bool(getattr(slot, "cardnumber", None)):
+                continue
+            if not bool(getattr(slot, "active", True)):
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def _stage_other_member_exists(gs: Any, src_pos: str) -> bool:
+    """Return True if any stage position OTHER than src_pos has a member."""
+    try:
+        st = getattr(gs, "stage", None)
+        if not isinstance(st, dict):
+            return False
+        for pos in ("L", "C", "R"):
+            if pos == src_pos:
+                continue
+            slot = st.get(pos)
+            if slot is not None and bool(getattr(slot, "cardnumber", None)):
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def _stage_has_any_other_member(gs: Any, exclude_pos: str = "") -> bool:
+    """Return True if any member is on stage (optionally excluding exclude_pos)."""
+    try:
+        st = getattr(gs, "stage", None)
+        if not isinstance(st, dict):
+            return False
+        for pos in ("L", "C", "R"):
+            if pos == exclude_pos:
+                continue
+            slot = st.get(pos)
+            if slot is not None and bool(getattr(slot, "cardnumber", None)):
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def _slot_total_blade(slot: Any) -> int:
+    """Return total blade count of a slot (base + temp)."""
+    try:
+        base = int(getattr(slot, "blade", 0) or 0)
+        temp = int(getattr(slot, "temp_blade", 0) or 0)
+        return base + temp
+    except Exception:
+        return 0
+
+
+def _stage_unit_count_diff_names(gs: Any, cards_db: Dict[str, Any], unit_name: str) -> int:
+    """Count stage members with unit_name having DISTINCT cardnames."""
+    names_seen = set()
+    try:
+        st = getattr(gs, "stage", None)
+        if not isinstance(st, dict):
+            return 0
+        for pos in ("L", "C", "R"):
+            slot = st.get(pos)
+            if slot is None or not bool(getattr(slot, "cardnumber", None)):
+                continue
+            if _card_unit(slot, cards_db) != unit_name and _card_group(slot, cards_db) != unit_name:
+                continue
+            name = _card_name(slot, cards_db) or str(getattr(slot, "cardnumber", pos))
+            names_seen.add(name)
+    except Exception:
+        pass
+    return len(names_seen)
 
 
 # ---------------------------------------------------------------------------
@@ -1619,6 +1867,452 @@ def try_apply_effect_by_rule_ext(
             _add_temp_blade(eng, slot, 1)
             try:
                 gs.log.append(f"[AUTO_EXT] +green+blade -> {chosen_pos} (百生吟子 resolve)")
+            except Exception:
+                pass
+        return True
+
+    # ==================================================================
+    # group3_A7B2_20260406a 新規実装
+    # ==================================================================
+
+    # ------------------------------------------------------------------
+    # Prompt 69: PL!HS-bp1-006 藤島慈 (ライブ開始時)
+    # cost=手札1枚控え室へ → engine 側 pay_or_skip
+    # 他メンバーがいる場合: ハートの色を1つ選んで ライブ終了時まで得る
+    # ------------------------------------------------------------------
+    if ext_key == "live_start_other_member_exists_choose_heart":
+        src_pos = str((ctx or {}).get("src_pos") or (ctx or {}).get("pos") or "").upper()
+        src = str((ctx or {}).get("source_cn") or "")
+        if not _stage_has_any_other_member(gs, exclude_pos=src_pos):
+            try:
+                gs.log.append("[AUTO_EXT] no other member on stage, no effect (藤島慈)")
+            except Exception:
+                pass
+            return True
+        payload = {
+            "kind": "choose_heart_color",
+            "colors": ["pink", "red", "yellow", "green", "blue", "purple"],
+            "optional": False,
+            "after_ext_key": "live_start_other_member_exists_choose_heart__resolve",
+            "source_cn": src,
+            "src_pos": src_pos,
+            "label": "【藤島慈】得るハートの色を選んでください",
+        }
+        try:
+            getattr(gs, "pending").append(payload)
+            gs.log.append("[PENDING] 藤島慈: choose_heart_color")
+        except Exception:
+            pass
+        return True
+
+    if ext_key == "live_start_other_member_exists_choose_heart__resolve":
+        src_pos = str((ctx or {}).get("src_pos") or (ctx or {}).get("pos") or "").upper()
+        chosen_color = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_color") or "").lower()
+        st = getattr(gs, "stage", None)
+        slot = (st or {}).get(src_pos) if isinstance(st, dict) and src_pos in ("L", "C", "R") else None
+        if slot is None:
+            src_cn = str((ctx or {}).get("source_cn") or "")
+            if isinstance(st, dict):
+                for pos in ("L", "C", "R"):
+                    s = st.get(pos)
+                    if s and str(getattr(s, "cardnumber", "")) == src_cn:
+                        slot = s
+                        break
+        if slot is not None and chosen_color:
+            _add_temp_hearts(eng, slot, {chosen_color: 1})
+            try:
+                gs.log.append(f"[AUTO_EXT] +{chosen_color} to {src_pos} (藤島慈 resolve)")
+            except Exception:
+                pass
+        return True
+
+    # ------------------------------------------------------------------
+    # Prompt 14: PL!-bp3-003 南ことり (登場)
+    # cost=このメンバーをウェイトにしてもよい → engine 側 self_wait pay_or_skip
+    # 控え室から μ's のメンバーカードを1枚手札に加える
+    # ------------------------------------------------------------------
+    if ext_key == "enter_pick_mus_member_from_green":
+        src = str((ctx or {}).get("source_cn") or "")
+        candidates = _green_room_members_by_group(gs, cards_db, "μ's")
+        if not candidates:
+            try:
+                gs.log.append("[AUTO_EXT] no μ's MEMBER in green_room (南ことり bp3-003)")
+            except Exception:
+                pass
+            return True
+        if len(candidates) == 1:
+            ok = _move_card_from_green_to_hand(gs, candidates[0])
+            cn_str = str(getattr(candidates[0], "cardnumber", None) or candidates[0] or "")
+            try:
+                gs.log.append(f"[AUTO_EXT] green->hand {cn_str} (南ことり bp3-003) ok={ok}")
+            except Exception:
+                pass
+            return True
+        cns = [str(getattr(c, "cardnumber", None) or c or "") for c in candidates]
+        payload = {
+            "kind": "choose_card_from_green",
+            "candidates": cns,
+            "optional": False,
+            "after_ext_key": "enter_pick_mus_member_from_green__resolve",
+            "source_cn": src,
+            "label": "【南ことり】控え室からμ'sのメンバーカードを1枚選んでください",
+        }
+        try:
+            getattr(gs, "pending").append(payload)
+            gs.log.append(f"[PENDING] 南ことり bp3-003: choose μ's MEMBER from green {cns}")
+        except Exception:
+            pass
+        return True
+
+    if ext_key == "enter_pick_mus_member_from_green__resolve":
+        chosen_cn = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_cn") or "").strip()
+        gr = _green_room_list(gs)
+        found = None
+        for c in list(gr):
+            if str(getattr(c, "cardnumber", None) or c or "").strip() == chosen_cn:
+                found = c
+                break
+        if found is not None:
+            ok = _move_card_from_green_to_hand(gs, found)
+            try:
+                gs.log.append(f"[AUTO_EXT] green->hand {chosen_cn} (南ことり bp3-003 resolve) ok={ok}")
+            except Exception:
+                pass
+        return True
+
+    # ------------------------------------------------------------------
+    # Prompt 16: PL!-bp3-004 園田海未 (ライブ開始時)
+    # 成功置き場にカードがある場合のみ発動可
+    # cost=手札1枚控え室へ → engine 側 pay_or_skip
+    # 控え室から μ's のライブカードを1枚手札に加える
+    # ------------------------------------------------------------------
+    if ext_key == "live_start_pick_mus_live_from_green":
+        src = str((ctx or {}).get("source_cn") or "")
+        if not _success_zone_cards(gs):
+            try:
+                gs.log.append("[AUTO_EXT] success_zone empty, no effect (園田海未 bp3-004)")
+            except Exception:
+                pass
+            return True
+        candidates = _green_room_lives_by_group(gs, cards_db, "μ's")
+        if not candidates:
+            try:
+                gs.log.append("[AUTO_EXT] no μ's LIVE in green_room (園田海未 bp3-004)")
+            except Exception:
+                pass
+            return True
+        if len(candidates) == 1:
+            ok = _move_card_from_green_to_hand(gs, candidates[0])
+            cn_str = str(getattr(candidates[0], "cardnumber", None) or candidates[0] or "")
+            try:
+                gs.log.append(f"[AUTO_EXT] green->hand {cn_str} LIVE (園田海未 bp3-004) ok={ok}")
+            except Exception:
+                pass
+            return True
+        cns = [str(getattr(c, "cardnumber", None) or c or "") for c in candidates]
+        payload = {
+            "kind": "choose_card_from_green",
+            "candidates": cns,
+            "optional": False,
+            "after_ext_key": "live_start_pick_mus_live_from_green__resolve",
+            "source_cn": src,
+            "label": "【園田海未】控え室からμ'sのライブカードを1枚選んでください",
+        }
+        try:
+            getattr(gs, "pending").append(payload)
+            gs.log.append(f"[PENDING] 園田海未 bp3-004: choose μ's LIVE from green {cns}")
+        except Exception:
+            pass
+        return True
+
+    if ext_key == "live_start_pick_mus_live_from_green__resolve":
+        chosen_cn = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_cn") or "").strip()
+        gr = _green_room_list(gs)
+        found = None
+        for c in list(gr):
+            if str(getattr(c, "cardnumber", None) or c or "").strip() == chosen_cn:
+                found = c
+                break
+        if found is not None:
+            ok = _move_card_from_green_to_hand(gs, found)
+            try:
+                gs.log.append(f"[AUTO_EXT] green->hand {chosen_cn} LIVE (園田海未 bp3-004 resolve) ok={ok}")
+            except Exception:
+                pass
+        return True
+
+    # ------------------------------------------------------------------
+    # Prompt 60: PL!-sd1-003 南ことり (ライブ開始時)
+    # cost=手札1枚控え室へ → engine 側 pay_or_skip
+    # 桃/黄/紫 のうち1つ選んでライブ終了時まで得る
+    # ------------------------------------------------------------------
+    if ext_key == "live_start_choose_pinkYellowPurple_heart":
+        src_pos = str((ctx or {}).get("src_pos") or (ctx or {}).get("pos") or "").upper()
+        src = str((ctx or {}).get("source_cn") or "")
+        payload = {
+            "kind": "choose_heart_color",
+            "colors": ["pink", "yellow", "purple"],
+            "optional": False,
+            "after_ext_key": "live_start_choose_pinkYellowPurple_heart__resolve",
+            "source_cn": src,
+            "src_pos": src_pos,
+            "label": "【南ことり】得るハートを選んでください（桃/黄/紫）",
+        }
+        try:
+            getattr(gs, "pending").append(payload)
+            gs.log.append("[PENDING] 南ことり sd1-003: choose pink/yellow/purple heart")
+        except Exception:
+            pass
+        return True
+
+    if ext_key == "live_start_choose_pinkYellowPurple_heart__resolve":
+        src_pos = str((ctx or {}).get("src_pos") or (ctx or {}).get("pos") or "").upper()
+        chosen_color = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_color") or "").lower()
+        st = getattr(gs, "stage", None)
+        slot = (st or {}).get(src_pos) if isinstance(st, dict) and src_pos in ("L", "C", "R") else None
+        if slot is None:
+            src_cn = str((ctx or {}).get("source_cn") or "")
+            if isinstance(st, dict):
+                for pos in ("L", "C", "R"):
+                    s = st.get(pos)
+                    if s and str(getattr(s, "cardnumber", "")) == src_cn:
+                        slot = s
+                        break
+        valid_colors = {"pink", "yellow", "purple"}
+        if slot is not None and chosen_color in valid_colors:
+            _add_temp_hearts(eng, slot, {chosen_color: 1})
+            try:
+                gs.log.append(f"[AUTO_EXT] +{chosen_color} to {src_pos} (南ことり sd1-003 resolve)")
+            except Exception:
+                pass
+        return True
+
+    # ------------------------------------------------------------------
+    # Prompt 73: PL!HS-bp2-001 日野下花帆 (起動)
+    # コスト <(E)><(E)> → engine 側起動コスト処理
+    # 控え室からスコア3以下の 蓮ノ空 ライブカードを1枚手札に加える
+    # ------------------------------------------------------------------
+    if ext_key == "body_pick_hasunosora_live_score_le3_from_green":
+        src = str((ctx or {}).get("source_cn") or "")
+        candidates = _green_room_lives_by_group_score_le(gs, cards_db, "蓮ノ空", 3)
+        if not candidates:
+            try:
+                gs.log.append("[AUTO_EXT] no 蓮ノ空 LIVE score<=3 in green_room (日野下花帆)")
+            except Exception:
+                pass
+            return True
+        if len(candidates) == 1:
+            ok = _move_card_from_green_to_hand(gs, candidates[0])
+            cn_str = str(getattr(candidates[0], "cardnumber", None) or candidates[0] or "")
+            try:
+                gs.log.append(f"[AUTO_EXT] green->hand {cn_str} (日野下花帆) ok={ok}")
+            except Exception:
+                pass
+            return True
+        cns = [str(getattr(c, "cardnumber", None) or c or "") for c in candidates]
+        payload = {
+            "kind": "choose_card_from_green",
+            "candidates": cns,
+            "optional": False,
+            "after_ext_key": "body_pick_hasunosora_live_score_le3_from_green__resolve",
+            "source_cn": src,
+            "label": "【日野下花帆】控え室からスコア3以下の蓮ノ空ライブカードを1枚選んでください",
+        }
+        try:
+            getattr(gs, "pending").append(payload)
+            gs.log.append(f"[PENDING] 日野下花帆: choose 蓮ノ空 LIVE score<=3 from green {cns}")
+        except Exception:
+            pass
+        return True
+
+    if ext_key == "body_pick_hasunosora_live_score_le3_from_green__resolve":
+        chosen_cn = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_cn") or "").strip()
+        gr = _green_room_list(gs)
+        found = None
+        for c in list(gr):
+            if str(getattr(c, "cardnumber", None) or c or "").strip() == chosen_cn:
+                found = c
+                break
+        if found is not None:
+            ok = _move_card_from_green_to_hand(gs, found)
+            try:
+                gs.log.append(f"[AUTO_EXT] green->hand {chosen_cn} (日野下花帆 resolve) ok={ok}")
+            except Exception:
+                pass
+        return True
+
+    # ------------------------------------------------------------------
+    # Prompt 76: PL!HS-bp2-005 大沢瑠璃乃 (登場)
+    # cost=手札1枚控え室へ → engine 側 pay_or_skip
+    # 他メンバーがいる場合、控え室から みらくらぱーく！ のカードを1枚手札へ
+    # 注意: Prompt 77（ライブ開始時+2ブレード）は既存実装。壊さない。
+    # ------------------------------------------------------------------
+    if ext_key == "enter_other_member_exists_pick_mirakupark_from_green":
+        src_pos = str((ctx or {}).get("src_pos") or (ctx or {}).get("pos") or "").upper()
+        src = str((ctx or {}).get("source_cn") or "")
+        if not _stage_has_any_other_member(gs, exclude_pos=src_pos):
+            try:
+                gs.log.append("[AUTO_EXT] no other member on stage (大沢瑠璃乃 bp2-005 enter)")
+            except Exception:
+                pass
+            return True
+        candidates = _green_room_cards_by_group_any_type(gs, cards_db, "みらくらぱーく！")
+        if not candidates:
+            try:
+                gs.log.append("[AUTO_EXT] no みらくらぱーく！ card in green_room (大沢瑠璃乃 bp2-005 enter)")
+            except Exception:
+                pass
+            return True
+        if len(candidates) == 1:
+            ok = _move_card_from_green_to_hand(gs, candidates[0])
+            cn_str = str(getattr(candidates[0], "cardnumber", None) or candidates[0] or "")
+            try:
+                gs.log.append(f"[AUTO_EXT] green->hand {cn_str} (大沢瑠璃乃 bp2-005 enter) ok={ok}")
+            except Exception:
+                pass
+            return True
+        cns = [str(getattr(c, "cardnumber", None) or c or "") for c in candidates]
+        payload = {
+            "kind": "choose_card_from_green",
+            "candidates": cns,
+            "optional": False,
+            "after_ext_key": "enter_other_member_exists_pick_mirakupark_from_green__resolve",
+            "source_cn": src,
+            "label": "【大沢瑠璃乃】控え室からみらくらぱーく！のカードを1枚選んでください",
+        }
+        try:
+            getattr(gs, "pending").append(payload)
+            gs.log.append(f"[PENDING] 大沢瑠璃乃 bp2-005 enter: choose みらくらぱーく！ from green {cns}")
+        except Exception:
+            pass
+        return True
+
+    if ext_key == "enter_other_member_exists_pick_mirakupark_from_green__resolve":
+        chosen_cn = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_cn") or "").strip()
+        gr = _green_room_list(gs)
+        found = None
+        for c in list(gr):
+            if str(getattr(c, "cardnumber", None) or c or "").strip() == chosen_cn:
+                found = c
+                break
+        if found is not None:
+            ok = _move_card_from_green_to_hand(gs, found)
+            try:
+                gs.log.append(f"[AUTO_EXT] green->hand {chosen_cn} (大沢瑠璃乃 bp2-005 enter resolve) ok={ok}")
+            except Exception:
+                pass
+        return True
+
+    # ------------------------------------------------------------------
+    # Prompt 27: PL!-bp4-005 星空凛 (ライブ開始時)
+    # ブレード5以上の μ's メンバーがいない場合、このメンバーはセンター以外へポジションチェンジ
+    # センター以外 = L / R のみ candidates にする
+    # ------------------------------------------------------------------
+    if ext_key == "live_start_no_mus_blade5_force_not_center":
+        src_pos = str((ctx or {}).get("src_pos") or (ctx or {}).get("pos") or "").upper()
+        src = str((ctx or {}).get("source_cn") or "")
+        has_heavy_mus = False
+        try:
+            st = getattr(gs, "stage", None)
+            if isinstance(st, dict):
+                for pos in ("L", "C", "R"):
+                    slot = st.get(pos)
+                    if slot is None or not bool(getattr(slot, "cardnumber", None)):
+                        continue
+                    if _card_group(slot, cards_db) == "μ's" and _slot_total_blade(slot) >= 5:
+                        has_heavy_mus = True
+                        break
+        except Exception:
+            pass
+
+        if has_heavy_mus:
+            try:
+                gs.log.append("[AUTO_EXT] μ's blade>=5 exists, no position_change (星空凛)")
+            except Exception:
+                pass
+            return True
+
+        # センター以外: src_pos が C なら L/R どちらかへ、L/R なら反対側へ
+        if src_pos == "C":
+            options = ["L", "R"]
+        elif src_pos == "L":
+            options = ["R"]
+        elif src_pos == "R":
+            options = ["L"]
+        else:
+            options = ["L", "R"]
+
+        payload = {
+            "kind": "position_change",
+            "src_pos": src_pos,
+            "optional": False,
+            "options": options,
+            "source_cn": src,
+        }
+        try:
+            getattr(gs, "pending").append(payload)
+            gs.log.append(f"[PENDING] 星空凛: force position_change to {options} from {src_pos}")
+        except Exception:
+            pass
+        return True
+
+    # ------------------------------------------------------------------
+    # Prompt 56: PL!-pb1-030 Cutie Panther (ライブ成功時) — 後半のみ EFFECT_ONLY
+    # ステージに名前の異なる BiBi が2人以上 → 控え室から BiBi メンバー1枚手札へ
+    # 前半（必要ハート減算）は NEEDS_ENGINE のため未実装。
+    # ------------------------------------------------------------------
+    if ext_key == "live_success_bibi_2diff_pick_bibi_member_from_green":
+        src = str((ctx or {}).get("source_cn") or "")
+        diff_count = _stage_unit_count_diff_names(gs, cards_db, "BiBi")
+        if diff_count < 2:
+            try:
+                gs.log.append(f"[AUTO_EXT] BiBi diff_names={diff_count}<2, no effect (Cutie Panther)")
+            except Exception:
+                pass
+            return True
+        candidates = _green_room_members_by_group(gs, cards_db, "BiBi")
+        if not candidates:
+            try:
+                gs.log.append("[AUTO_EXT] no BiBi MEMBER in green_room (Cutie Panther)")
+            except Exception:
+                pass
+            return True
+        if len(candidates) == 1:
+            ok = _move_card_from_green_to_hand(gs, candidates[0])
+            cn_str = str(getattr(candidates[0], "cardnumber", None) or candidates[0] or "")
+            try:
+                gs.log.append(f"[AUTO_EXT] green->hand {cn_str} BiBi (Cutie Panther) ok={ok}")
+            except Exception:
+                pass
+            return True
+        cns = [str(getattr(c, "cardnumber", None) or c or "") for c in candidates]
+        payload = {
+            "kind": "choose_card_from_green",
+            "candidates": cns,
+            "optional": False,
+            "after_ext_key": "live_success_bibi_2diff_pick_bibi_member_from_green__resolve",
+            "source_cn": src,
+            "label": "【Cutie Panther】控え室からBiBiのメンバーカードを1枚選んでください",
+        }
+        try:
+            getattr(gs, "pending").append(payload)
+            gs.log.append(f"[PENDING] Cutie Panther: choose BiBi MEMBER from green {cns}")
+        except Exception:
+            pass
+        return True
+
+    if ext_key == "live_success_bibi_2diff_pick_bibi_member_from_green__resolve":
+        chosen_cn = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_cn") or "").strip()
+        gr = _green_room_list(gs)
+        found = None
+        for c in list(gr):
+            if str(getattr(c, "cardnumber", None) or c or "").strip() == chosen_cn:
+                found = c
+                break
+        if found is not None:
+            ok = _move_card_from_green_to_hand(gs, found)
+            try:
+                gs.log.append(f"[AUTO_EXT] green->hand {chosen_cn} BiBi (Cutie Panther resolve) ok={ok}")
             except Exception:
                 pass
         return True
