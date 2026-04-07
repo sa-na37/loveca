@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_group3_A7B2_20260406c2
+# BUILD_TAG: engine_effect_group3_A7B2_20260406c3
 from __future__ import annotations
 
 """llocg_ui.engine_effect
@@ -308,16 +308,11 @@ def try_match_effect_template_ext(
 ) -> Optional[Tuple[Dict[str, Any], Dict[str, str]]]:
     """Match extension-owned effect templates.
 
-    Matching strategy (in priority order):
-      1. Exact match after strip()  -- safest, preserves existing behaviour.
-      2. Whitespace-normalized match -- collapses newlines / multi-spaces to a
-         single space before comparing.  Needed because some card DB entries
-         embed newlines around icon tokens such as <(ブレード)>.
-      3. Targeted fuzzy fallback for known tokv1 clause blobs where condition /
-         cost prose may be coalesced into the effect text.
-
-    Returns:
-        (rule, gd) if matched, else None.
+    Matching strategy:
+      1. Exact match after strip()
+      2. Whitespace-normalized match
+      3. Targeted fuzzy fallback for tokv1 clauses whose effect blob contains
+         condition/cost prose plus the actual effect line.
     """
     s = (effect_text or "").strip()
     if not s:
@@ -335,10 +330,14 @@ def try_match_effect_template_ext(
             return ({"id": r.get("id"), "op": "__ext__", "ext_key": r.get("ext_key")}, {})
 
     fuzzy_rules = [
-        ("enter_pick_mus_member_from_green", ["控え室から『μ's』のメンバーカードを1枚手札に加える。"]),
-        ("live_start_pick_mus_live_from_green", ["控え室から『μ's』のライブカードを1枚手札に加える。"]),
-        ("live_start_choose_pinkYellowPurple_heart", ["<(桃)>", "<(黄)>", "<(紫)>", "選んだハートを1つ得る。"]),
-        ("live_start_no_mus_blade5_force_not_center", ["<(ブレード)>", "5つ以上持つ『μ's』のメンバーがいない場合", "センターエリア以外にポジションチェンジする。"]),
+        ("enter_pick_mus_member_from_green",
+         ["控え室から『μ's』のメンバーカードを1枚手札に加える。"]),
+        ("live_start_pick_mus_live_from_green",
+         ["控え室から『μ's』のライブカードを1枚手札に加える。"]),
+        ("live_start_choose_pinkYellowPurple_heart",
+         ["<(桃)>", "<(黄)>", "<(紫)>", "選んだハートを1つ得る。"]),
+        ("live_start_no_mus_blade5_force_not_center",
+         ["<(ブレード)>", "5つ以上持つ『μ's』のメンバーがいない場合", "センターエリア以外にポジションチェンジする。"]),
     ]
     for ext_key, needles in fuzzy_rules:
         if all(_norm_ws(nd) in s_norm for nd in needles):
