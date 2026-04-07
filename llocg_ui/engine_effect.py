@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_group3_A7B2_20260406c3
+# BUILD_TAG: engine_effect_group3_A7B2_20260407a
 from __future__ import annotations
 
 """llocg_ui.engine_effect
@@ -311,12 +311,47 @@ def try_match_effect_template_ext(
     Matching strategy:
       1. Exact match after strip()
       2. Whitespace-normalized match
-      3. Targeted fuzzy fallback for tokv1 clauses whose effect blob contains
-         condition/cost prose plus the actual effect line.
+      3. Targeted fragment fallback for cards whose DB text is split across
+         multiple clauses, or whose first clause is a cost-only raw fragment.
     """
     s = (effect_text or "").strip()
     if not s:
         return None
+
+    s_norm = _norm_ws(s)
+
+    for r in EXTRA_EFFECT_RULES:
+        tpl = str(r.get("effect_template", "") or "").strip()
+        if not tpl:
+            continue
+        if s == tpl:
+            return ({"id": r.get("id"), "op": "__ext__", "ext_key": r.get("ext_key")}, {})
+        if s_norm == _norm_ws(tpl):
+            return ({"id": r.get("id"), "op": "__ext__", "ext_key": r.get("ext_key")}, {})
+
+    # cards_compiled_v7b splits some abilities into multiple clauses.
+    # Match the actual clause fragment that engine.py sees.
+    fragment_rules = [
+        # Prompt 60: first clause is cost-only raw "手札を1枚控え室に置いてもよい："
+        ("live_start_choose_pinkYellowPurple_heart",
+         lambda t: ("手札を1枚控え室に置いてもよい" in t and ("桃" not in t and "黄" not in t and "紫" not in t))),
+        # Prompt 27: second clause is the unique condition/result fragment
+        ("live_start_no_mus_blade5_force_not_center",
+         lambda t: ("を5つ以上持つ『μ's』のメンバーがいない場合" in t and "センターエリア以外にポジションチェンジする。" in t)),
+        # Prompt 16: DB keeps the whole conditional sentence in one clause
+        ("live_start_pick_mus_live_from_green",
+         lambda t: ("成功カード置き場にカードがある場合" in t and "『μ's』のライブカードを1枚手札に加える。" in t)),
+        # Prompt 14: exact should normally hit, but keep a safe fallback
+        ("enter_pick_mus_member_from_green",
+         lambda t: ("『μ's』のメンバーカードを1枚手札に加える。" in t and "控え室から" in t)),
+    ]
+    for ext_key, pred in fragment_rules:
+        try:
+            if pred(s_norm):
+                return ({"id": ext_key, "op": "__ext__", "ext_key": ext_key}, {})
+        except Exception:
+            pass
+    return None
 
     s_norm = _norm_ws(s)
 
