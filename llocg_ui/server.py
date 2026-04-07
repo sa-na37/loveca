@@ -3482,9 +3482,10 @@ HTML = r'''<!doctype html>
         const srcCn = srcSlot ? String(srcSlot.cardnumber || '') : '';
         const srcName = srcSlot ? String(srcSlot.cardname || srcSlot.name || srcCn || '') : '';
         elModalTitle.textContent = 'ポジションチェンジ';
-        setRichText(elModalText, srcName
+        const explicitPcText = pendingTextFor(p);
+        setRichText(elModalText, explicitPcText || (srcName
           ? `${srcName}${srcPos ? `（現在 ${srcPos}）` : ''} の移動先を選んでください。移動先にメンバーがいる場合は入れ替わります。`
-          : `移動先を選んでください。移動先にメンバーがいる場合は入れ替わります。`);
+          : `移動先を選んでください。移動先にメンバーがいる場合は入れ替わります。`));
         const row = document.createElement('div');
         row.className = 'choiceRow';
         const dimsP = standardSize('portrait');

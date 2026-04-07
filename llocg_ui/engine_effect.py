@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_group3_A7B2_20260407a
+# BUILD_TAG: engine_effect_group3_A7B2_20260407b
 from __future__ import annotations
 
 """llocg_ui.engine_effect
@@ -332,9 +332,11 @@ def try_match_effect_template_ext(
     # cards_compiled_v7b splits some abilities into multiple clauses.
     # Match the actual clause fragment that engine.py sees.
     fragment_rules = [
-        # Prompt 60: first clause is cost-only raw "手札を1枚控え室に置いてもよい："
+        # Prompt 60: cost-only split clause should be matched narrowly.
+        # Do NOT match broader sentences like PL!-bp3-004 that also contain
+        # "手札を1枚控え室に置いてもよい" but are different effects.
         ("live_start_choose_pinkYellowPurple_heart",
-         lambda t: ("手札を1枚控え室に置いてもよい" in t and ("桃" not in t and "黄" not in t and "紫" not in t))),
+         lambda t: (_norm_ws(t) == _norm_ws("手札を1枚控え室に置いてもよい："))),
         # Prompt 27: second clause is the unique condition/result fragment
         ("live_start_no_mus_blade5_force_not_center",
          lambda t: ("を5つ以上持つ『μ's』のメンバーがいない場合" in t and "センターエリア以外にポジションチェンジする。" in t)),
@@ -2247,6 +2249,7 @@ def try_apply_effect_by_rule_ext(
             "optional": False,
             "options": options,
             "source_cn": src,
+            "text": f"{src}: 自分のステージにブレード5以上の『μ's』メンバーがいないため、センターエリア以外にポジションチェンジする",
         }
         try:
             getattr(gs, "pending").append(payload)

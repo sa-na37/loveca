@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_start_order_queue_20260406a
+# BUILD_TAG: live_start_group3_fix_20260407b
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -1212,6 +1212,36 @@ def _iter_triggered_abilities(ci: Optional[CardInfo], trigger_kw: str):
             continue
         out.append(ab)
     return out
+
+
+def _pretty_optional_effect_prompt_text(trigger_label: str, source_cn: str, cost_text: str, effect_text: str) -> str:
+    trig = str(trigger_label or '').strip()
+    src = str(source_cn or '').strip()
+    cost = str(cost_text or '').strip()
+    eff = str(effect_text or '').strip()
+    prefix = f"{src}[{trig}]" if src and trig else (src or trig or '効果')
+
+    try:
+        m = _match_effect_template(eff)
+    except Exception:
+        m = None
+    rule = m[0] if isinstance(m, tuple) and m else {}
+    ext_key = str(rule.get('ext_key', '') or '')
+
+    if ext_key == 'enter_pick_mus_member_from_green':
+        return f"{prefix}: このメンバーをウェイトにしてもよい → 自分の控え室から『μ's』のメンバーカードを1枚手札に加える"
+    if ext_key == 'live_start_pick_mus_live_from_green':
+        return f"{prefix}: 自分の成功カード置き場にカードがある場合、手札を1枚控え室に置いてもよい → 自分の控え室から『μ's』のライブカードを1枚手札に加える"
+    if ext_key == 'live_start_choose_pinkYellowPurple_heart':
+        return f"{prefix}: 手札を1枚控え室に置いてもよい → 桃 / 黄 / 紫 から1つ選び、ライブ終了時までそのハートを1つ得る"
+    if ext_key == 'live_start_no_mus_blade5_force_not_center':
+        return f"{prefix}: 自分のステージにブレード5以上の『μ's』メンバーがいない場合、このメンバーはセンターエリア以外にポジションチェンジする"
+
+    if cost and eff:
+        if eff.startswith(cost) or cost.startswith(eff):
+            return f"{prefix}: {eff if len(eff) >= len(cost) else cost}"
+        return f"{prefix}: {cost} → {eff}"
+    return f"{prefix}: {eff or cost}"
 
 
 def _ability_has_supported_clause(ci: Optional[CardInfo], trigger_kw: str = '', activated: bool = False) -> bool:
@@ -2870,7 +2900,7 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                             'cost_kind': cost_kind,
                             'cost_n': cost_n,
                             'effect': eff,
-                            'text': f"{pos}: {ci.cardnumber} ライブ開始時 [{cost}] → {eff}",
+                            'text': _pretty_optional_effect_prompt_text('ライブ開始時', ci.cardnumber, cost, eff),
                             'options': ['pay', 'skip'],
                         }
                         _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
@@ -2890,7 +2920,7 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                                 'need_e': 0,
                                 'cost_kind': 'self_wait',
                                 'effect': eff,
-                                'text': f'{pos}: {ci.cardnumber} ライブ開始時 [このメンバーをウェイトにしてもよい] → {eff}',
+                                'text': _pretty_optional_effect_prompt_text('ライブ開始時', ci.cardnumber, 'このメンバーをウェイトにしてもよい', eff),
                                 'options': ['pay', 'skip'],
                             }
                             _append_prompt(pr, f'{pos}: {ci.cardnumber} ライブ開始時')
@@ -2938,7 +2968,7 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                             'need_e': 0,
                             'cost_kind': 'self_wait',
                             'effect': eff,
-                            'text': f'{pos}: {ci.cardnumber} ライブ開始時 [このメンバーをウェイトにしてもよい] → {eff}',
+                            'text': _pretty_optional_effect_prompt_text('ライブ開始時', ci.cardnumber, 'このメンバーをウェイトにしてもよい', eff),
                             'options': ['pay', 'skip'],
                         }
                         _append_prompt(pr, f'{pos}: {ci.cardnumber} ライブ開始時')
@@ -3042,7 +3072,7 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                                 'kind': 'pay_or_skip',
                                 'cn': src_live,
                                 'source_cn': src_live,
-                                'text': f'{src_live}[ライブ開始時]: {cost}：{eff}',
+                                'text': _pretty_optional_effect_prompt_text('ライブ開始時', src_live, cost, eff),
                                 'options': ['pay', 'skip'],
                                 'cost_kind': 'discard_from_hand',
                                 'cost_n': n_cost,
@@ -3361,7 +3391,7 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
                     ctx = {'pos': pos.upper(), 'source_cn': canon}
                     gs.pending.append({
                         'kind': 'pay_or_skip',
-                        'text': f'{canon}[登場]: {cost}：{eff}',
+                        'text': _pretty_optional_effect_prompt_text('登場', canon, cost, eff),
                         'options': ['pay', 'skip'],
                         'cost_kind': 'discard_from_hand',
                         'cost_n': n,
@@ -3375,7 +3405,7 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
                     ctx = {'pos': pos.upper(), 'source_cn': canon}
                     gs.pending.append({
                         'kind': 'pay_or_skip',
-                        'text': f'{canon}[登場]: {cost}：{eff}',
+                        'text': _pretty_optional_effect_prompt_text('登場', canon, cost, eff),
                         'options': ['pay', 'skip'],
                         'cost_kind': 'self_wait',
                         'cost_n': 0,
@@ -3564,6 +3594,8 @@ def _has_supported_enter_auto(ci: Optional[CardInfo]) -> bool:
                 if n <= 0 and ("手札を1枚控え室に置いてもよい" in cost):
                     n = 1
                 if n > 0 and _match_effect_template(eff):
+                    return True
+                if _cost_requires_self_wait(cost) and not _cost_requires_self_to_green(cost) and _match_effect_template(eff):
                     return True
                 # other cost templates unsupported for enter-auto support detection
                 continue
