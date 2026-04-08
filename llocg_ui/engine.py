@@ -1333,6 +1333,7 @@ class GameState:
     tsunagaru_connect_bonus_this_live: int = 0
     vivid_world_blue_mode_this_live: bool = False
     vivid_world_bonus_this_live: int = 0
+    live_start_resolved_set_idxs: List[int] = field(default_factory=list)
 
 
 def post_process(gs: GameState) -> None:
@@ -1428,6 +1429,7 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
         "tsunagaru_connect_bonus_this_live": int(getattr(gs, "tsunagaru_connect_bonus_this_live", 0) or 0),
         "vivid_world_blue_mode_this_live": bool(getattr(gs, "vivid_world_blue_mode_this_live", False)),
         "vivid_world_bonus_this_live": int(getattr(gs, "vivid_world_bonus_this_live", 0) or 0),
+        "live_start_resolved_set_idxs": list(getattr(gs, "live_start_resolved_set_idxs", []) or []),
     }
 
 
@@ -1474,6 +1476,10 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
     gs.tsunagaru_connect_bonus_this_live = int(snap.get('tsunagaru_connect_bonus_this_live', getattr(gs, 'tsunagaru_connect_bonus_this_live', 0) or 0) or 0)
     gs.vivid_world_blue_mode_this_live = bool(snap.get('vivid_world_blue_mode_this_live', getattr(gs, 'vivid_world_blue_mode_this_live', False)))
     gs.vivid_world_bonus_this_live = int(snap.get('vivid_world_bonus_this_live', getattr(gs, 'vivid_world_bonus_this_live', 0) or 0) or 0)
+    try:
+        gs.live_start_resolved_set_idxs = [int(x) for x in (snap.get('live_start_resolved_set_idxs', getattr(gs, 'live_start_resolved_set_idxs', []) or []) or [])]
+    except Exception:
+        gs.live_start_resolved_set_idxs = []
 
 
 
@@ -1508,6 +1514,7 @@ def begin_turn(gs: GameState, rng: Optional[random.Random] = None) -> None:
     gs.last_attempt_ok = False
     gs.need_live_success_triggers = False
     gs.need_success_store_choice = False
+    gs.live_start_resolved_set_idxs = []
     # Rules order (coarse): ACTIVE -> ENERGY -> DRAW -> MAIN
     gs.phase = "ACTIVE"
     refresh(gs)
@@ -2465,13 +2472,14 @@ def _enumerate_allocations_for_req(req: Dict[str, int], pool_in: Dict[str, int],
     return uniq
 
 
-def _solve_multi_live_allocations(lives: List[str], cards_db: Dict[str, CardInfo], owned: Dict[str, int]) -> Tuple[bool, Dict[str, Dict[str, Any]]]:
+def _solve_multi_live_allocations(lives: List[str], cards_db: Dict[str, CardInfo], owned: Dict[str, int], live_set_indices: Optional[List[int]] = None) -> Tuple[bool, Dict[str, Dict[str, Any]]]:
     """Find allocations for ALL live cards without reusing hearts.
 
     Returns:
       ok_all, alloc_map[cn] = alloc dict (use_* keys).
     """
     lives = list(lives or [])
+    live_set_indices = list(live_set_indices or [])
     pool0 = {str(k).lower(): int(v or 0) for k, v in (owned or {}).items()}
     pool0.setdefault("all", 0)
 
@@ -2481,9 +2489,10 @@ def _solve_multi_live_allocations(lives: List[str], cards_db: Dict[str, CardInfo
     extra = sorted([k for k in pool0.keys() if k not in ("any", "all") and k not in canon])
     colors = [c for c in canon if (c in pool0)] + extra
     # Also include any colors that appear only in req (rare, but safe)
-    for cn in lives:
+    for _i, cn in enumerate(lives):
         c = _get_card(cards_db, cn)
-        req = _effective_live_required_hearts(cn, c, globals().get('_CURRENT_GS_FOR_ATTEMPT'), cards_db)
+        _set_idx = live_set_indices[_i] if _i < len(live_set_indices) else None
+        req = _effective_live_required_hearts(cn, c, globals().get('_CURRENT_GS_FOR_ATTEMPT'), cards_db, set_idx=_set_idx)
         for k in req.keys():
             kk = str(k).lower()
             if kk in ("any", "all"):
@@ -2498,9 +2507,10 @@ def _solve_multi_live_allocations(lives: List[str], cards_db: Dict[str, CardInfo
 
     # prepare req list
     reqs = []
-    for cn in lives:
+    for _i, cn in enumerate(lives):
         ci = _get_card(cards_db, cn)
-        reqs.append((cn, _effective_live_required_hearts(cn, ci, globals().get('_CURRENT_GS_FOR_ATTEMPT'), cards_db)))
+        _set_idx = live_set_indices[_i] if _i < len(live_set_indices) else None
+        reqs.append((cn, _set_idx, _effective_live_required_hearts(cn, ci, globals().get('_CURRENT_GS_FOR_ATTEMPT'), cards_db, set_idx=_set_idx)))
 
     # try permutations of live card processing order to find any satisfiable plan
     import itertools
@@ -2516,7 +2526,7 @@ def _solve_multi_live_allocations(lives: List[str], cards_db: Dict[str, CardInfo
                 return None
             if i >= len(perm):
                 return list(plan)
-            cn, req = perm[i]
+            cn, _set_idx, req = perm[i]
             options = _enumerate_allocations_for_req(req, pool_now, colors)
             for alloc, pool_after in options:
                 plan.append((cn, alloc))
@@ -3277,6 +3287,39 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
     except Exception:
         pass
 
+
+    # LIVE cards in set_zone: enqueue numeric live-start effects that should resolve in order
+    try:
+        for _set_idx, _cn_live in enumerate(list(getattr(gs, 'set_zone', []) or [])):
+            _ci_live = _get_card(cards_db, _cn_live)
+            if not _ci_live or not _is_live_ci(_ci_live):
+                continue
+            _canon_live = _canon_cardno(_cn_live)
+            if _live_start_set_idx_resolved(gs, _set_idx):
+                continue
+            if _canon_live == _BOKULIVE_BP3_019_CN_CANON:
+                pr = {
+                    'kind': 'live_start_numeric_effect',
+                    'source_cn': _cn_live,
+                    'set_idx': int(_set_idx),
+                    'effect_code': 'bp3_019_score',
+                    "text": f"LIVE{_set_idx+1}: {_cn_live} ライブ開始時 → 自分のライブ中の『μ's』のカードが2枚以上なら、このカードのスコアを+1する。",
+                    'options': ['ok'],
+                }
+                _append_prompt(pr, pr['text'])
+            elif _canon_live == _HEARTBEAT_BP4_021_CN_CANON:
+                pr = {
+                    'kind': 'live_start_numeric_effect',
+                    'source_cn': _cn_live,
+                    'set_idx': int(_set_idx),
+                    'effect_code': 'bp4_021_req_score',
+                    "text": f"LIVE{_set_idx+1}: {_cn_live} ライブ開始時 → 成功ライブ置き場のスコア合計が6以上なら必要ハート(任意)-1、9以上ならさらにこのカードのスコアを+1する。",
+                    'options': ['ok'],
+                }
+                _append_prompt(pr, pr['text'])
+    except Exception:
+        pass
+
     try:
         _vw_n = 0
         for _cn0 in list(getattr(gs, 'set_zone', []) or []):
@@ -3836,6 +3879,10 @@ def cmd_set(gs: GameState, rng: random.Random, indices: List[int]) -> None:
         picked.append(gs.hand.pop(i))
     picked.reverse()
     gs.set_zone = picked[:]
+    try:
+        gs.live_start_resolved_set_idxs = []
+    except Exception:
+        pass
     drawn = draw(gs, len(picked), rng)
     gs.log.append(f"[SET] set {len(picked)} cards, drew {drawn}")
 
@@ -4155,6 +4202,29 @@ def _mu_live_cards_in_set_zone_count(gs: GameState, cards_db: Dict[str, CardInfo
             n += 1
     return int(n)
 
+
+
+def _live_start_set_idx_resolved(gs: Optional[GameState], set_idx: Optional[int]) -> bool:
+    try:
+        if gs is None or set_idx is None:
+            return False
+        return int(set_idx) in [int(x) for x in (getattr(gs, 'live_start_resolved_set_idxs', []) or [])]
+    except Exception:
+        return False
+
+
+def _mark_live_start_set_idx_resolved(gs: GameState, set_idx: Optional[int]) -> None:
+    try:
+        if set_idx is None:
+            return
+        xs = [int(x) for x in (getattr(gs, 'live_start_resolved_set_idxs', []) or [])]
+        k = int(set_idx)
+        if k not in xs:
+            xs.append(k)
+        gs.live_start_resolved_set_idxs = xs
+    except Exception:
+        pass
+
 def _live_score_delta_for_attempt(cn_live, lives_count, gs_turn):
     # Eutopia: if 3+ LIVE cards are set in this attempt, score +2 for Eutopia
     # Rise Up High!: if turn==1 live phase, score +1 for this card
@@ -4168,49 +4238,57 @@ def _live_score_delta_for_attempt(cn_live, lives_count, gs_turn):
         return 1
     return 0
 
-def _heartbeat_required_any_reduction(cn_live, gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
+def _heartbeat_required_any_reduction(cn_live, gs: GameState, cards_db: Dict[str, CardInfo], set_idx: Optional[int] = None) -> int:
     try:
         canon = _canon_cardno(cn_live)
     except Exception:
         canon = str(cn_live or '')
     if canon != _HEARTBEAT_BP4_021_CN_CANON:
+        return 0
+    if not _live_start_set_idx_resolved(gs, set_idx):
         return 0
     total = _success_zone_score_sum(gs, cards_db)
     return 1 if int(total) >= 6 else 0
 
 
-def _heartbeat_score_bonus(cn_live, gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
+def _heartbeat_score_bonus(cn_live, gs: GameState, cards_db: Dict[str, CardInfo], set_idx: Optional[int] = None) -> int:
     try:
         canon = _canon_cardno(cn_live)
     except Exception:
         canon = str(cn_live or '')
     if canon != _HEARTBEAT_BP4_021_CN_CANON:
         return 0
+    if not _live_start_set_idx_resolved(gs, set_idx):
+        return 0
     total = _success_zone_score_sum(gs, cards_db)
     return 1 if int(total) >= 9 else 0
 
 
-def _bokulive_score_bonus(cn_live, gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
+def _bokulive_score_bonus(cn_live, gs: GameState, cards_db: Dict[str, CardInfo], set_idx: Optional[int] = None) -> int:
     try:
         canon = _canon_cardno(cn_live)
     except Exception:
         canon = str(cn_live or '')
     if canon != _BOKULIVE_BP3_019_CN_CANON:
         return 0
+    if not _live_start_set_idx_resolved(gs, set_idx):
+        return 0
     return 1 if _mu_live_cards_in_set_zone_count(gs, cards_db) >= 2 else 0
 
 
-def _compute_attempt_score_breakdown(lives, cards_db, gs_turn, gs=None):
+def _compute_attempt_score_breakdown(lives, cards_db, gs_turn, gs=None, live_set_indices=None):
     lives_count = len(lives or [])
     total = 0
     rows = []
     _butterfly_paid_remaining = int(getattr(gs, 'butterfly_paid_this_live', 0) or 0) if gs is not None else 0
-    for cn in (lives or []):
+    live_set_indices = list(live_set_indices or [])
+    for _i, cn in enumerate((lives or [])):
+        set_idx = live_set_indices[_i] if _i < len(live_set_indices) else None
         ci = _get_card(cards_db, cn)
         base = int(getattr(ci, 'score', 0) or 0) if ci else 0
         delta = int(_live_score_delta_for_attempt(cn, lives_count, gs_turn))
         if gs is not None:
-            delta += int(_extra_live_score_delta_for_attempt(cn, gs, cards_db))
+            delta += int(_extra_live_score_delta_for_attempt(cn, gs, cards_db, set_idx=set_idx))
         try:
             canon = _canon_cardno(cn)
         except Exception:
@@ -4348,7 +4426,7 @@ def _emotion_required_any_bonus(cn_live, gs: GameState) -> int:
     return 3 * int(_emotion_success_count(gs))
 
 
-def _effective_live_required_hearts(cn_live, ci, gs: GameState, cards_db: Optional[Dict[str, CardInfo]] = None) -> Dict[str, int]:
+def _effective_live_required_hearts(cn_live, ci, gs: GameState, cards_db: Optional[Dict[str, CardInfo]] = None, set_idx: Optional[int] = None) -> Dict[str, int]:
     req = dict((getattr(ci, 'required_hearts', {}) if ci else {}) or {})
     try:
         extra_any = int(_emotion_required_any_bonus(cn_live, gs))
@@ -4357,7 +4435,7 @@ def _effective_live_required_hearts(cn_live, ci, gs: GameState, cards_db: Option
     if extra_any > 0:
         req['any'] = int(req.get('any', 0) or 0) + extra_any
     try:
-        reduce_any = int(_heartbeat_required_any_reduction(cn_live, gs, cards_db=(cards_db or {})))
+        reduce_any = int(_heartbeat_required_any_reduction(cn_live, gs, cards_db=(cards_db or {}), set_idx=set_idx))
     except Exception:
         reduce_any = 0
     if reduce_any > 0:
@@ -4365,7 +4443,7 @@ def _effective_live_required_hearts(cn_live, ci, gs: GameState, cards_db: Option
     return req
 
 
-def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
+def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[str, CardInfo], set_idx: Optional[int] = None) -> int:
     try:
         canon = _canon_cardno(cn_live)
     except Exception:
@@ -4383,9 +4461,9 @@ def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[s
     if canon == _EMOTION_CN_CANON:
         return 2 * int(_emotion_success_count(gs))
     if canon == _BOKULIVE_BP3_019_CN_CANON:
-        return int(_bokulive_score_bonus(cn_live, gs, cards_db))
+        return int(_bokulive_score_bonus(cn_live, gs, cards_db, set_idx=set_idx))
     if canon == _HEARTBEAT_BP4_021_CN_CANON:
-        return int(_heartbeat_score_bonus(cn_live, gs, cards_db))
+        return int(_heartbeat_score_bonus(cn_live, gs, cards_db, set_idx=set_idx))
     if canon == _TSUNAGARU_CONNECT_CN_CANON:
         return int(getattr(gs, 'tsunagaru_connect_bonus_this_live', 0) or 0)
     if canon == _VIVID_WORLD_CN_CANON:
@@ -4446,11 +4524,13 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
         return
 
     lives = []
+    live_idxs = []
     nonlives = []
-    for cn in gs.set_zone:
+    for _set_idx, cn in enumerate(gs.set_zone):
         c = _get_card(cards_db, cn)
         if c and is_live_type(c.type):
             lives.append(cn)
+            live_idxs.append(int(_set_idx))
         else:
             nonlives.append(cn)
 
@@ -4465,7 +4545,7 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
 
     gs.log.append(f"[ATTEMPT] LIVE={len(lives)} base={base} cheer={cheer} owned={owned}")
     globals()['_CURRENT_GS_FOR_ATTEMPT'] = gs
-    ok_all, alloc_map = _solve_multi_live_allocations(lives, cards_db, owned)
+    ok_all, alloc_map = _solve_multi_live_allocations(lives, cards_db, owned, live_set_indices=live_idxs)
     globals()['_CURRENT_GS_FOR_ATTEMPT'] = None
 
     if ok_all:
@@ -4476,9 +4556,10 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
             gs.last_attempt_excess_hearts = dict(_excess_pool)
         except Exception:
             gs.last_attempt_excess_hearts = {}
-        for cn in lives:
+        for _j, cn in enumerate(lives):
             c = _get_card(cards_db, cn)
-            req = _effective_live_required_hearts(cn, c, gs, cards_db)
+            _set_idx = live_idxs[_j] if _j < len(live_idxs) else None
+            req = _effective_live_required_hearts(cn, c, gs, cards_db, set_idx=_set_idx)
             alloc = alloc_map.get(cn, {}) or {}
             gs.log.append(f"  live: OK {cn} req={req} alloc={alloc}")
     else:
@@ -4487,9 +4568,10 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
         pool_trace: Dict[str, int] = {str(k).lower(): int(v or 0) for k, v in (owned or {}).items()}
         pool_trace.setdefault("all", 0)
         failed_at = None
-        for cn in lives:
+        for _j, cn in enumerate(lives):
             c = _get_card(cards_db, cn)
-            req = _effective_live_required_hearts(cn, c, gs, cards_db)
+            _set_idx = live_idxs[_j] if _j < len(live_idxs) else None
+            req = _effective_live_required_hearts(cn, c, gs, cards_db, set_idx=_set_idx)
             ok, alloc = can_satisfy_req(req, pool_trace)
             gs.log.append(f"  live: {'OK' if ok else 'NG'} {cn} req={req} alloc={alloc}")
             if ok:
@@ -4500,13 +4582,14 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
         # Mark remaining lives (if any) as not attempted in trace
         if failed_at is not None:
             seen_fail = False
-            for cn in lives:
+            for _j, cn in enumerate(lives):
                 if cn == failed_at:
                     seen_fail = True
                     continue
                 if seen_fail:
                     c = _get_card(cards_db, cn)
-                    req = _effective_live_required_hearts(cn, c, gs, cards_db)
+                    _set_idx = live_idxs[_j] if _j < len(live_idxs) else None
+                    req = _effective_live_required_hearts(cn, c, gs, cards_db, set_idx=_set_idx)
                     gs.log.append(f"  live: NG {cn} req={req} alloc={{'reason': 'not reached'}}")
 
 
@@ -4515,7 +4598,7 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
 
     # Result & UI banner
     if ok_all:
-        total_score, score_rows = _compute_attempt_score_breakdown(lives, cards_db, int(getattr(gs, 'turn', 0) or 0), gs)
+        total_score, score_rows = _compute_attempt_score_breakdown(lives, cards_db, int(getattr(gs, 'turn', 0) or 0), gs, live_set_indices=live_idxs)
         stage_score_bonus = 0
         try:
             for pos, slot in (gs.stage or {}).items():
@@ -5013,6 +5096,30 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             gs.pending.append(_r)
         return
 
+
+    if kind == 'live_start_numeric_effect':
+        low = choice_str.lower()
+        if low not in ('ok', 'apply', 'yes', 'y', '1', 'true', 'use', 'go', 'confirm', 'はい', '使う'):
+            gs.log.append(f"[ERR] live_start_numeric_effect: invalid choice {choice_str}")
+            gs.pending.append(p)
+            return
+        set_idx = p.get('set_idx', None)
+        _mark_live_start_set_idx_resolved(gs, set_idx)
+        src = str(p.get('source_cn', '') or '')
+        eff_code = str(p.get('effect_code', '') or '')
+        if eff_code == 'bp3_019_score':
+            bonus = int(_bokulive_score_bonus(src, gs, cards_db, set_idx=set_idx))
+            gs.log.append(f"[AUTO] {src}[ライブ開始時]: score {bonus:+d}")
+        elif eff_code == 'bp4_021_req_score':
+            red = int(_heartbeat_required_any_reduction(src, gs, cards_db, set_idx=set_idx))
+            bonus = int(_heartbeat_score_bonus(src, gs, cards_db, set_idx=set_idx))
+            gs.log.append(f"[AUTO] {src}[ライブ開始時]: required(any) -{red}, score {bonus:+d}")
+        else:
+            gs.log.append(f"[AUTO] {src}[ライブ開始時]: resolved")
+        _r = p.get('_resume') if isinstance(p, dict) else None
+        if _r:
+            gs.pending.append(_r)
+        return
 
     if kind == 'pay_or_skip':
         # Generic optional-cost prompt (e.g., "...してもよい：<effect>")

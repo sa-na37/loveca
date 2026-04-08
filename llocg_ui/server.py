@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: popup_icon_tokens_20260408e_scoreui
+# BUILD_TAG: popup_icon_tokens_20260408f_livequeue_reqicons
 from __future__ import annotations
 
 """llocg_ui.server
@@ -58,7 +58,7 @@ from .engine import (
     StageSlot,
 )
 
-APP_VERSION = "texticon_stack_overlay_20260408e_scoreui"
+APP_VERSION = "texticon_stack_overlay_20260408f_livequeue_reqicons"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -1031,7 +1031,7 @@ class App:
         Each element is either None or a dict: {cardnumber, base, delta, score}.
         Only LIVE cards in set_zone receive rows; non-LIVE entries stay None.
         """
-        from .engine import _compute_attempt_score_breakdown
+        from .engine import _compute_attempt_score_breakdown, _effective_live_required_hearts
         try:
             items = list(getattr(self.gs, 'set_zone', []) or [])
             rows_out = [None] * len(items)
@@ -1045,15 +1045,31 @@ class App:
                     live_idxs.append(i)
             if not live_cns:
                 return rows_out
-            _total, rows = _compute_attempt_score_breakdown(live_cns, self.cards_db, int(getattr(self.gs, 'turn', 0) or 0), self.gs)
+            _total, rows = _compute_attempt_score_breakdown(live_cns, self.cards_db, int(getattr(self.gs, 'turn', 0) or 0), self.gs, live_set_indices=live_idxs)
             for idx, r in zip(live_idxs, rows):
                 if not isinstance(r, dict):
                     continue
+
+                req_delta = {}
+                try:
+                    ci0 = _get_card(self.cards_db, str(r.get('cn', '') or ''))
+                    base_req = dict((getattr(ci0, 'required_hearts', {}) if ci0 else {}) or {})
+                    eff_req = _effective_live_required_hearts(str(r.get('cn', '') or ''), ci0, self.gs, self.cards_db, set_idx=idx)
+                    keys = set(base_req.keys()) | set(eff_req.keys())
+                    for kk in keys:
+                        b0 = int(base_req.get(kk, 0) or 0)
+                        e0 = int(eff_req.get(kk, 0) or 0)
+                        d0 = e0 - b0
+                        if d0:
+                            req_delta[str(kk)] = int(d0)
+                except Exception:
+                    req_delta = {}
                 rows_out[idx] = {
                     'cardnumber': str(r.get('cn', '') or ''),
                     'base': int(r.get('base', 0) or 0),
                     'delta': int(r.get('delta', 0) or 0),
                     'score': int(r.get('score', 0) or 0),
+                    'req_delta': req_delta,
                 }
             return rows_out
         except Exception:
@@ -1949,10 +1965,11 @@ HTML = r'''<!doctype html>
       '<(緑)>':'heart_04.png',
       '<(青)>':'heart_05.png',
       '<(紫)>':'heart_06.png',
+      '<(任意)>':'icon_any.png',
       '<(虹)>':'icon_all.png',
       '<(すべて)>':'icon_all.png',
     };
-    const reTok = /<\((ブレード|桃|赤|黄|緑|青|紫|虹|すべて)\)>/g;
+    const reTok = /<\((ブレード|桃|赤|黄|緑|青|紫|任意|虹|すべて)\)>/g;
     let last = 0;
     let m;
     while((m = reTok.exec(s)) !== null){
@@ -2426,10 +2443,74 @@ HTML = r'''<!doctype html>
             'letter-spacing:0',
             'white-space:nowrap',
           ].join(';');
-          card.appendChild(sb);
-        }
-      }catch(e){}
-      inner.appendChild(card);
+
+    card.appendChild(sb);
+  }
+  const reqDelta = Object.assign({}, row && row.req_delta || {});
+  if(Object.keys(reqDelta).some(k => Number(reqDelta[k] || 0) !== 0)){
+    const ICON_BASE2 = '/llocg_db_out_full/card_images/texticons/';
+    const heartIconFile2 = {
+      pink:'heart_01.png', red:'heart_02.png', yellow:'heart_03.png',
+      green:'heart_04.png', blue:'heart_05.png', purple:'heart_06.png',
+      any:'icon_any.png', all:'icon_all.png',
+    };
+    const heartFallback2 = {
+      pink:'桃', red:'赤', yellow:'黄', green:'緑', blue:'青', purple:'紫', any:'無', all:'ALL',
+    };
+    const heartColor2 = {
+      pink:'#ff88cc', red:'#ff5555', yellow:'#ffe566', green:'#44dd88',
+      blue:'#55aaff', purple:'#cc77ff', any:'#ddd', all:'#fff',
+    };
+    const ICO2 = 16, STEP2 = 10;
+    const makeIconStack2 = (icons, titleAll)=>{
+      const n = icons.length;
+      const totalW = ICO2 + STEP2 * (n - 1);
+      const wrap = document.createElement('div');
+      wrap.title = titleAll;
+      wrap.style.cssText = ['position:relative', `width:${totalW}px`, `height:${ICO2}px`, 'flex-shrink:0'].join(';');
+      icons.forEach((ico, i)=>{
+        const img = document.createElement('img');
+        img.src = ico.src; img.alt = ico.alt;
+        img.style.cssText = ['position:absolute', `left:${STEP2*i}px`, 'top:0', `width:${ICO2}px`, `height:${ICO2}px`, 'object-fit:contain', `z-index:${10+i}`].join(';');
+        img.onerror = ()=>{
+          const sp = document.createElement('span');
+          sp.textContent = ico.fallbackText;
+          sp.style.cssText = ['position:absolute', `left:${STEP2*i}px`, 'top:0', `width:${ICO2}px`, `height:${ICO2}px`, 'display:flex','align-items:center','justify-content:center',`font-size:${ICO2-2}px`, `color:${ico.fallbackColor}`, `z-index:${10+i}`].join(';');
+          img.replaceWith(sp);
+        };
+        wrap.appendChild(img);
+      });
+      return wrap;
+    };
+    const makeIconRow2 = (signText, stack, titleAll)=>{
+      const row2 = document.createElement('div');
+      row2.title = titleAll;
+      row2.style.cssText = 'display:flex;align-items:center;gap:2px;';
+      const sgn = document.createElement('span');
+      sgn.textContent = signText;
+      sgn.style.cssText = ['color:#fff','font-size:11px','font-weight:700','line-height:1','flex-shrink:0'].join(';');
+      row2.appendChild(sgn);
+      row2.appendChild(stack);
+      return row2;
+    };
+    const ov2 = document.createElement('div');
+    ov2.style.cssText = ['position:absolute','right:0','top:14px','display:flex','flex-direction:column','align-items:flex-end','gap:3px','padding:3px 4px','background:rgba(0,0,0,0.62)','border-radius:6px 0 0 6px','pointer-events:none','z-index:50'].join(';');
+    for(const [col, cnt] of Object.entries(reqDelta)){
+      const n = Number(cnt || 0);
+      if(!n) continue;
+      const absn = Math.abs(n);
+      const file = heartIconFile2[col] || 'icon_any.png';
+      const fb   = heartFallback2[col] || col;
+      const fc   = heartColor2[col] || '#fff';
+      const icons = Array.from({length: absn}, ()=>({src: ICON_BASE2 + file, alt: fb, fallbackText: fb, fallbackColor: fc}));
+      const signText = n > 0 ? '＋' : '－';
+      const desc = `${fb}必要ハート ${n > 0 ? '+' : ''}${n}`;
+      ov2.appendChild(makeIconRow2(signText, makeIconStack2(icons, ''), desc));
+    }
+    card.appendChild(ov2);
+  }
+}catch(e){}
+inner.appendChild(card);
     }
     const badge = document.createElement('div');
     badge.className = 'countBadge';
@@ -2558,20 +2639,20 @@ HTML = r'''<!doctype html>
         }catch(e){}
         const totalBlade = tmpBlade + alwBlade + lzBlade;
 
-        const hasBonus = totalBlade > 0 || alwScore > 0 || Object.keys(tmpHearts).some(k=>Number(tmpHearts[k])>0);
+        const hasBonus = totalBlade !== 0 || alwScore !== 0 || Object.keys(tmpHearts).some(k=>Number(tmpHearts[k])!==0);
         if(hasBonus){
           const ICON_BASE = '/llocg_db_out_full/card_images/texticons/';
           const heartIconFile = {
             pink:'heart_01.png', red:'heart_02.png', yellow:'heart_03.png',
             green:'heart_04.png', blue:'heart_05.png', purple:'heart_06.png',
-            all:'icon_all.png',
+            any:'icon_any.png', all:'icon_all.png',
           };
           const heartFallback = {
-            pink:'桃', red:'赤', yellow:'黄', green:'緑', blue:'青', purple:'紫', all:'ALL',
+            pink:'桃', red:'赤', yellow:'黄', green:'緑', blue:'青', purple:'紫', any:'無', all:'ALL',
           };
           const heartColor = {
             pink:'#ff88cc', red:'#ff5555', yellow:'#ffe566',
-            green:'#44dd88', blue:'#55aaff', purple:'#cc77ff', all:'#fff',
+            green:'#44dd88', blue:'#55aaff', purple:'#cc77ff', any:'#ddd', all:'#fff',
           };
 
           // アイコンサイズと重なり量
@@ -2647,12 +2728,12 @@ HTML = r'''<!doctype html>
           ].join(';');
 
           // アイコン行（＋ラベル + スタック）を作る関数
-          const makeIconRow = (stack, titleAll)=>{
+          const makeIconRow = (signText, stack, titleAll)=>{
             const row = document.createElement('div');
             row.title = titleAll;
             row.style.cssText = 'display:flex;align-items:center;gap:2px;';
             const plus = document.createElement('span');
-            plus.textContent = '＋';
+            plus.textContent = signText;
             plus.style.cssText = [
               'color:#fff',
               'font-size:11px',
@@ -2666,37 +2747,40 @@ HTML = r'''<!doctype html>
           };
 
           // ブレードスタック
-          if(totalBlade > 0){
-            const icons = Array.from({length: totalBlade}, ()=>({
+          if(totalBlade !== 0){
+            const absBlade = Math.abs(totalBlade);
+            const icons = Array.from({length: absBlade}, ()=>({
               src: ICON_BASE + 'icon_blade.png',
               alt: '▲',
               fallbackText: '▲',
               fallbackColor: '#ffe566',
             }));
-            const titleStr = `ブレード +${totalBlade}`;
-            ov.appendChild(makeIconRow(makeIconStack(icons, ''), titleStr));
+            const titleStr = `ブレード ${totalBlade > 0 ? '+' : ''}${totalBlade}`;
+            ov.appendChild(makeIconRow(totalBlade > 0 ? '＋' : '－', makeIconStack(icons, ''), titleStr));
           }
 
           // ハートスタック（色別）
           for(const [col, cnt] of Object.entries(tmpHearts)){
             const n = Number(cnt);
-            if(!n || n <= 0) continue;
+            if(!n) continue;
             const file = heartIconFile[col] || `heart_${col}.png`;
             const fb   = heartFallback[col] || col;
             const fc   = heartColor[col] || '#fff';
-            const icons = Array.from({length: n}, ()=>({
+            const absn = Math.abs(n);
+            const icons = Array.from({length: absn}, ()=>({
               src: ICON_BASE + file,
               alt: fb,
               fallbackText: '♥',
               fallbackColor: fc,
             }));
-            ov.appendChild(makeIconRow(makeIconStack(icons, ''), `${fb}ハート +${n}（一時）`));
+            ov.appendChild(makeIconRow(n > 0 ? '＋' : '－', makeIconStack(icons, ''), `${fb}ハート ${n > 0 ? '+' : ''}${n}（一時）`));
           }
 
-          if(alwScore > 0){
+          if(alwScore !== 0){
             const sb = document.createElement('div');
-            sb.title = `ライブ合計スコア +${alwScore}`;
-            sb.textContent = `SCORE+${alwScore}`;
+            const signScore = alwScore > 0 ? '+' : '';
+            sb.title = `ライブ合計スコア ${signScore}${alwScore}`;
+            sb.textContent = `SCORE${signScore}${alwScore}`;
             sb.style.cssText = [
               'position:absolute',
               'top:-8px',
