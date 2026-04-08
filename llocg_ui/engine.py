@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_start_group3_fix_20260407b
+# BUILD_TAG: engine_required_eval_20260408a
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -1932,6 +1932,16 @@ def _slot_always_blade_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos: 
                 bonus += int(_love_wing_bell_success_bonus_count(gs) or 0)
         except Exception:
             pass
+        # PL!-sd1-001 高坂穂乃果: 成功ライブカード置き場1枚につき +1 blade
+        try:
+            canon_self = _canon_cardno(getattr(slot, 'cardnumber', '') or '')
+        except Exception:
+            canon_self = str(getattr(slot, 'cardnumber', '') or '')
+        if canon_self == 'PL!-sd1-001':
+            bonus += len(list(getattr(gs, 'success_zone', []) or []))
+        # PL!HS-bp2-002 村野さやか: より高コストのメンバーが自分のステージにいる場合 +3 blade
+        if canon_self == 'PL!HS-bp2-002' and _slot_has_higher_cost_member_on_stage(gs, cards_db, pos, slot):
+            bonus += 3
         return int(bonus)
     except Exception:
         return 0
@@ -2007,6 +2017,90 @@ def _love_wing_bell_success_bonus_count(gs: "GameState") -> int:
     return int(n)
 
 
+def _slot_has_higher_cost_member_on_stage(gs: "GameState", cards_db: Dict[str, CardInfo], pos: str, slot) -> bool:
+    try:
+        ci_self = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+        self_cost = int(getattr(ci_self, 'cost', 0) or 0) if ci_self else 0
+    except Exception:
+        return False
+    for pos2 in ('L', 'C', 'R'):
+        if pos2 == str(pos or '').upper():
+            continue
+        slot2 = (gs.stage or {}).get(pos2)
+        if not slot2 or not getattr(slot2, 'active', False):
+            continue
+        ci2 = _get_card(cards_db, getattr(slot2, 'cardnumber', '') or '')
+        if not ci2 or _is_live_ci(ci2):
+            continue
+        try:
+            if int(getattr(ci2, 'cost', 0) or 0) > self_cost:
+                return True
+        except Exception:
+            pass
+    return False
+
+
+def _stage_has_three_distinct_hasunosora_members(gs: "GameState", cards_db: Dict[str, CardInfo]) -> bool:
+    names = []
+    for pos in ('L', 'C', 'R'):
+        slot = (gs.stage or {}).get(pos)
+        if not slot or not getattr(slot, 'active', False):
+            return False
+        ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+        if not ci or _is_live_ci(ci):
+            return False
+        if '蓮ノ空' not in str(getattr(ci, 'group', '') or ''):
+            return False
+        nm = str(getattr(ci, 'cardname', '') or getattr(ci, 'name', '') or '').strip()
+        if not nm:
+            return False
+        names.append(nm)
+    return len(names) == 3 and len(set(names)) == 3
+
+
+def _live_has_no_start_or_success_ability(ci_live: Optional[CardInfo]) -> bool:
+    if not ci_live or not _is_live_ci(ci_live):
+        return False
+    has_live_start = False
+    has_live_success = False
+    for ab in list(getattr(ci_live, 'abilities', None) or []):
+        if not isinstance(ab, dict):
+            continue
+        trig = str(ab.get('trigger', '') or '')
+        if 'ライブ開始時' in trig:
+            has_live_start = True
+        if 'ライブ成功時' in trig:
+            has_live_success = True
+    return (not has_live_start) and (not has_live_success)
+
+
+def _set_zone_has_live_without_start_or_success(gs: "GameState", cards_db: Dict[str, CardInfo]) -> bool:
+    for cn in list(getattr(gs, 'set_zone', []) or []):
+        ci = _get_card(cards_db, cn)
+        if _live_has_no_start_or_success_ability(ci):
+            return True
+    return False
+
+
+def _extra_attempt_total_score_bonus(gs: Optional["GameState"], cards_db: Dict[str, CardInfo]) -> int:
+    if gs is None:
+        return 0
+    if not _stage_has_three_distinct_hasunosora_members(gs, cards_db):
+        return 0
+    bonus = 0
+    for pos in ('L', 'C', 'R'):
+        slot = (gs.stage or {}).get(pos)
+        if not slot or not getattr(slot, 'active', False):
+            continue
+        try:
+            canon = _canon_cardno(getattr(slot, 'cardnumber', '') or '')
+        except Exception:
+            canon = str(getattr(slot, 'cardnumber', '') or '')
+        if canon == 'PL!HS-bp1-003':
+            bonus += 1
+    return int(bonus)
+
+
 def owned_base_hearts(gs: GameState, cards_db: Dict[str, CardInfo]) -> Dict[str, int]:
     pool: Dict[str, int] = {}
     # Check exactly-2-member condition once (PL!N-PR-020 / PL!S-PR-037)
@@ -2033,6 +2127,13 @@ def owned_base_hearts(gs: GameState, cards_db: Dict[str, CardInfo]) -> Dict[str,
         # 常時 BODY: ステージのメンバーがちょうど2人のとき、青ハート+1 (PL!N-PR-020 / PL!S-PR-037)
         if has_exactly2 and _has_body_always_2member_blade_heart(c):
             pool['blue'] = pool.get('blue', 0) + 1
+        # PL!-bp4-002 絢瀬絵里: ライブ中のライブカードにライブ開始時能力もライブ成功時能力も持たないカードがある限り、紫+2
+        try:
+            canon_self = _canon_cardno(getattr(slot, 'cardnumber', '') or '')
+        except Exception:
+            canon_self = str(getattr(slot, 'cardnumber', '') or '')
+        if canon_self == 'PL!-bp4-002' and _set_zone_has_live_without_start_or_success(gs, cards_db):
+            pool['purple'] = pool.get('purple', 0) + 2
 
     # Live-start buff: gain chosen heart per card in success live storage (until end of live)
     try:
@@ -4084,6 +4185,10 @@ def _compute_attempt_score_breakdown(lives, cards_db, gs_turn, gs=None):
         eff = base + delta
         total += eff
         rows.append({'cn': cn, 'base': base, 'delta': delta, 'score': eff})
+    extra_total = int(_extra_attempt_total_score_bonus(gs, cards_db)) if gs is not None else 0
+    if extra_total > 0:
+        total += extra_total
+        rows.append({'cn': '[STAGE BONUS]', 'base': 0, 'delta': extra_total, 'score': extra_total})
     return total, rows
 
 
