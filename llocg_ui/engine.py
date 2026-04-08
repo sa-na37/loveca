@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_start_group3_fix_20260408a_58
+# BUILD_TAG: live_start_group3_fix_20260408d_66
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -1886,6 +1886,49 @@ def _stage_has_other_higher_cost_member(gs: 'GameState', cards_db: Dict[str, Car
         pass
     return False
 
+
+
+def _stage_has_all_distinct_hasunosora_members(gs: 'GameState', cards_db: Dict[str, CardInfo]) -> bool:
+    """Return True if all three stage areas are occupied by Hasunosora members with distinct names."""
+    names = []
+    try:
+        for pos in ('L', 'C', 'R'):
+            slot = (gs.stage or {}).get(pos)
+            if not slot or not getattr(slot, 'cardnumber', ''):
+                return False
+            ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+            if not ci or _is_live_ci(ci):
+                return False
+            if '蓮ノ空' not in str(getattr(ci, 'group', '') or ''):
+                return False
+            nm = str(getattr(ci, 'name', '') or getattr(ci, 'cardname', '') or '')
+            if not nm:
+                return False
+            names.append(nm)
+        return len(set(names)) == 3
+    except Exception:
+        return False
+
+
+def _slot_always_score_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, slot) -> int:
+    """Return always-on total score bonus granted by a stage member slot."""
+    try:
+        if not slot or not getattr(slot, 'cardnumber', ''):
+            return 0
+        ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+        if not ci or _is_live_ci(ci):
+            return 0
+        bonus = 0
+        # PL!HS-bp1-003 乙宗梢: all three stage areas are Hasunosora members with distinct names -> total score +1
+        try:
+            if _canon_cardno(getattr(slot, 'cardnumber', '') or '') == 'PL!HS-bp1-003':
+                if _stage_has_all_distinct_hasunosora_members(gs, cards_db):
+                    bonus += 1
+        except Exception:
+            pass
+        return int(bonus)
+    except Exception:
+        return 0
 
 def _has_body_always_2member_blade_heart(ci: Optional[CardInfo]) -> bool:
     """Return True if the card has a 常時(BODY) ability that grants blue heart +1 and blade +1
@@ -4402,6 +4445,14 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
     # Result & UI banner
     if ok_all:
         total_score, score_rows = _compute_attempt_score_breakdown(lives, cards_db, int(getattr(gs, 'turn', 0) or 0), gs)
+        stage_score_bonus = 0
+        try:
+            for pos, slot in (gs.stage or {}).items():
+                if not slot:
+                    continue
+                stage_score_bonus += int(_slot_always_score_bonus(gs, cards_db, pos, slot) or 0)
+        except Exception:
+            stage_score_bonus = 0
         for r in score_rows:
             cn = r.get('cn', '')
             base_s = int(r.get('base', 0) or 0)
@@ -4411,6 +4462,9 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
                 gs.log.append(f"  score: {cn} = {eff_s} ({base_s}+{delta_s})")
             else:
                 gs.log.append(f"  score: {cn} = {eff_s}")
+        if stage_score_bonus:
+            gs.log.append(f"  score: stage always bonus = +{stage_score_bonus}")
+            total_score += int(stage_score_bonus)
         gs.log.append(f"[ATTEMPT] result=SUCCESS total_score={total_score}")
         result_txt = f"SUCCESS (Score{total_score})"
     else:

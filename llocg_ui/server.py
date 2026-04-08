@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: popup_icon_tokens_20260408b_58hotfix
+# BUILD_TAG: popup_icon_tokens_20260408d_66
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1010,6 +1010,7 @@ class App:
                         "temp_hearts": dict(getattr(v, "temp_hearts", {}) or {}),
                         # 常時BODYブレード加算（コスト13以上条件）
                         "always_blade_bonus": self._always_blade_bonus_for(k, v),
+                        "always_score_bonus": self._always_score_bonus_for(k, v),
                         # PL!N-bp1-012 ランジュのライブ中ボーナス（UIアイコン表示用）
                         "lanzhu_blade_bonus": self._lanzhu_blade_bonus_for(k, v),
                         "lanzhu_heart_bonus": self._lanzhu_heart_bonus_for(k, v),
@@ -1077,6 +1078,15 @@ class App:
         except Exception:
             return 0
         return int(bonus)
+
+
+    def _always_score_bonus_for(self, pos: str, slot) -> int:
+        """常時のライブ合計スコア加算を返す（UI表示専用）。"""
+        from .engine import _slot_always_score_bonus
+        try:
+            return int(_slot_always_score_bonus(self.gs, self.cards_db, pos, slot) or 0)
+        except Exception:
+            return 0
 
     def _lanzhu_blade_bonus_for(self, pos: str, slot) -> int:
         """PL!N-bp1-012 ランジュのライブ中ブレードボーナスをUI表示用に返す。"""
@@ -2459,6 +2469,7 @@ HTML = r'''<!doctype html>
       if(det){
         const tmpBlade  = Number(det.temp_blade      || 0);
         const alwBlade0 = Number(det.always_blade_bonus || 0);
+        const alwScore  = Number(det.always_score_bonus || 0);
         const lzBlade   = Number(det.lanzhu_blade_bonus || 0);
         const lzHeart   = Number(det.lanzhu_heart_bonus || 0);
         const tmpHearts = Object.assign({}, det.temp_hearts || {});
@@ -2480,7 +2491,7 @@ HTML = r'''<!doctype html>
         }catch(e){}
         const totalBlade = tmpBlade + alwBlade + lzBlade;
 
-        const hasBonus = totalBlade > 0 || Object.keys(tmpHearts).some(k=>Number(tmpHearts[k])>0);
+        const hasBonus = totalBlade > 0 || alwScore > 0 || Object.keys(tmpHearts).some(k=>Number(tmpHearts[k])>0);
         if(hasBonus){
           const ICON_BASE = '/llocg_db_out_full/card_images/texticons/';
           const heartIconFile = {
@@ -2613,6 +2624,30 @@ HTML = r'''<!doctype html>
               fallbackColor: fc,
             }));
             ov.appendChild(makeIconRow(makeIconStack(icons, ''), `${fb}ハート +${n}（一時）`));
+          }
+
+          if(alwScore > 0){
+            const sb = document.createElement('div');
+            sb.title = `ライブ合計スコア +${alwScore}`;
+            sb.textContent = `SCORE +${alwScore}`;
+            sb.style.cssText = [
+              'position:absolute',
+              'top:-10px',
+              'left:50%',
+              'transform:translateX(-50%)',
+              'background:rgba(30,30,30,.88)',
+              'color:#fff',
+              'font-size:11px',
+              'font-weight:700',
+              'line-height:1',
+              'padding:4px 7px',
+              'border-radius:999px',
+              'pointer-events:none',
+              'z-index:55',
+              'box-shadow:0 1px 4px rgba(0,0,0,.35)',
+              'letter-spacing:.02em',
+            ].join(';');
+            card.appendChild(sb);
           }
 
           card.appendChild(ov);
