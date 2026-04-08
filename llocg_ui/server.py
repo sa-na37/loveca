@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: popup_icon_tokens_20260408d_66
+# BUILD_TAG: popup_icon_tokens_20260408e_scoreui
 from __future__ import annotations
 
 """llocg_ui.server
@@ -58,7 +58,7 @@ from .engine import (
     StageSlot,
 )
 
-APP_VERSION = "texticon_stack_overlay_20260331"
+APP_VERSION = "texticon_stack_overlay_20260408e_scoreui"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -990,6 +990,7 @@ class App:
             "stage": {k: (asdict(v) if v else None) for k, v in self.gs.stage.items()},
             "green_room": list(self.gs.green_room),
             "set_zone": list(self.gs.set_zone),
+            "set_zone_score_rows": self._set_zone_score_rows_for_ui(),
             "resolve_zone": list(self.gs.resolve_zone),
             "success_zone": list(getattr(self.gs, "success_zone", []) or []),
             "pending": list(self.gs.pending),
@@ -1024,6 +1025,40 @@ class App:
             "banner": banner,
             "ui_version": APP_VERSION,
         }
+    def _set_zone_score_rows_for_ui(self):
+        """Return per-card score breakdown rows parallel to set_zone for UI/debug display.
+
+        Each element is either None or a dict: {cardnumber, base, delta, score}.
+        Only LIVE cards in set_zone receive rows; non-LIVE entries stay None.
+        """
+        from .engine import _compute_attempt_score_breakdown
+        try:
+            items = list(getattr(self.gs, 'set_zone', []) or [])
+            rows_out = [None] * len(items)
+            live_cns = []
+            live_idxs = []
+            for i, cn in enumerate(items):
+                ci = _get_card(self.cards_db, cn)
+                t = str(getattr(ci, 'type', '') or '').upper() if ci else ''
+                if 'LIVE' in t:
+                    live_cns.append(cn)
+                    live_idxs.append(i)
+            if not live_cns:
+                return rows_out
+            _total, rows = _compute_attempt_score_breakdown(live_cns, self.cards_db, int(getattr(self.gs, 'turn', 0) or 0), self.gs)
+            for idx, r in zip(live_idxs, rows):
+                if not isinstance(r, dict):
+                    continue
+                rows_out[idx] = {
+                    'cardnumber': str(r.get('cn', '') or ''),
+                    'base': int(r.get('base', 0) or 0),
+                    'delta': int(r.get('delta', 0) or 0),
+                    'score': int(r.get('score', 0) or 0),
+                }
+            return rows_out
+        except Exception:
+            return []
+
     def _always_blade_bonus_for(self, pos: str, slot) -> int:
         """常時ブレードボーナスを返す（UI表示専用）。
 
@@ -2355,6 +2390,7 @@ HTML = r'''<!doctype html>
     const gap = Math.max(6, px(14));
     const slotW = (availW - gap*2) / 3;
     const slotsX = [0, slotW + gap, 2*(slotW + gap)];
+    const scoreRows = Array.isArray(st && st.set_zone_score_rows) ? st.set_zone_score_rows : [];
     for(let i=0;i<3;i++){
       const cn = (Array.isArray(cards) && i < cards.length) ? String(cards[i]) : null;
       if(!cn) continue;
@@ -2362,6 +2398,37 @@ HTML = r'''<!doctype html>
       const x = padX + slotsX[i] + (slotW - sz.w)/2;
       const y = padTop + Math.max(0, (availH - sz.h)/2);
       const card = makeCard(cn, 'landscape', x, y, sz.w, sz.h, '', null, false, 100+i);
+      try{
+        const row = (i < scoreRows.length) ? scoreRows[i] : null;
+        const delta = Number(row && row.delta || 0);
+        if(delta !== 0){
+          const sb = document.createElement('div');
+          const sign = delta > 0 ? '+' : '';
+          const base = Number(row && row.base || 0);
+          const eff = Number(row && row.score || 0);
+          sb.title = `スコア ${eff} (${base}${sign}${delta})`;
+          sb.textContent = `SCORE${sign}${delta}`;
+          sb.style.cssText = [
+            'position:absolute',
+            'top:-8px',
+            'left:50%',
+            'transform:translateX(-50%)',
+            'background:rgba(30,30,30,.88)',
+            'color:#fff',
+            'font-size:10px',
+            'font-weight:700',
+            'line-height:1',
+            'padding:3px 5px',
+            'border-radius:999px',
+            'pointer-events:none',
+            'z-index:55',
+            'box-shadow:0 1px 4px rgba(0,0,0,.35)',
+            'letter-spacing:0',
+            'white-space:nowrap',
+          ].join(';');
+          card.appendChild(sb);
+        }
+      }catch(e){}
       inner.appendChild(card);
     }
     const badge = document.createElement('div');
@@ -2629,23 +2696,24 @@ HTML = r'''<!doctype html>
           if(alwScore > 0){
             const sb = document.createElement('div');
             sb.title = `ライブ合計スコア +${alwScore}`;
-            sb.textContent = `SCORE +${alwScore}`;
+            sb.textContent = `SCORE+${alwScore}`;
             sb.style.cssText = [
               'position:absolute',
-              'top:-10px',
+              'top:-8px',
               'left:50%',
               'transform:translateX(-50%)',
               'background:rgba(30,30,30,.88)',
               'color:#fff',
-              'font-size:11px',
+              'font-size:10px',
               'font-weight:700',
               'line-height:1',
-              'padding:4px 7px',
+              'padding:3px 5px',
               'border-radius:999px',
               'pointer-events:none',
               'z-index:55',
               'box-shadow:0 1px 4px rgba(0,0,0,.35)',
-              'letter-spacing:.02em',
+              'letter-spacing:0',
+              'white-space:nowrap',
             ].join(';');
             card.appendChild(sb);
           }
