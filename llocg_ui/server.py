@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: popup_icon_tokens_20260408g_popup_anyheart
+# BUILD_TAG: popup_icon_tokens_20260408h_25
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1009,6 +1009,7 @@ class App:
                         # 一時的なブレード/ハート増加（UIアイコン表示用）
                         "temp_blade": int(getattr(v, "temp_blade", 0) or 0),
                         "temp_hearts": dict(getattr(v, "temp_hearts", {}) or {}),
+                        "always_hearts_bonus": dict(self._always_hearts_bonus_for(k, v) or {}),
                         # 常時BODYブレード加算（コスト13以上条件）
                         "always_blade_bonus": self._always_blade_bonus_for(k, v),
                         "always_score_bonus": self._always_score_bonus_for(k, v),
@@ -1130,6 +1131,14 @@ class App:
             return 0
         return int(bonus)
 
+
+    def _always_hearts_bonus_for(self, pos: str, slot) -> dict:
+        """常時のハート加算を返す（UI表示専用）。"""
+        from .engine import _slot_always_hearts_bonus
+        try:
+            return dict(_slot_always_hearts_bonus(self.gs, self.cards_db, pos, slot) or {})
+        except Exception:
+            return {}
 
     def _always_score_bonus_for(self, pos: str, slot) -> int:
         """常時のライブ合計スコア加算を返す（UI表示専用）。"""
@@ -2621,7 +2630,8 @@ inner.appendChild(card);
         const lzBlade   = Number(det.lanzhu_blade_bonus || 0);
         const lzHeart   = Number(det.lanzhu_heart_bonus || 0);
         const tmpHearts = Object.assign({}, det.temp_hearts || {});
-        if(lzHeart > 0) tmpHearts['all'] = (Number(tmpHearts['all'] || 0)) + lzHeart;
+        const alwHearts = Object.assign({}, det.always_hearts_bonus || {});
+        if(lzHeart > 0) alwHearts['all'] = (Number(alwHearts['all'] || 0)) + lzHeart;
 
         // Love wing bell の常時ブレードは、state_detail に乗らない環境でも
         // success_zone から再計算して可視バッジへ反映する
@@ -2639,7 +2649,7 @@ inner.appendChild(card);
         }catch(e){}
         const totalBlade = tmpBlade + alwBlade + lzBlade;
 
-        const hasBonus = totalBlade !== 0 || alwScore !== 0 || Object.keys(tmpHearts).some(k=>Number(tmpHearts[k])!==0);
+        const hasBonus = totalBlade !== 0 || alwScore !== 0 || Object.keys(alwHearts).some(k=>Number(alwHearts[k])!==0) || Object.keys(tmpHearts).some(k=>Number(tmpHearts[k])!==0);
         if(hasBonus){
           const ICON_BASE = '/llocg_db_out_full/card_images/texticons/';
           const heartIconFile = {
@@ -2759,7 +2769,24 @@ inner.appendChild(card);
             ov.appendChild(makeIconRow(totalBlade > 0 ? '＋' : '－', makeIconStack(icons, ''), titleStr));
           }
 
-          // ハートスタック（色別）
+          // 常時ハート（色別）
+          for(const [col, cnt] of Object.entries(alwHearts)){
+            const n = Number(cnt);
+            if(!n) continue;
+            const file = heartIconFile[col] || `heart_${col}.png`;
+            const fb   = heartFallback[col] || col;
+            const fc   = heartColor[col] || '#fff';
+            const absn = Math.abs(n);
+            const icons = Array.from({length: absn}, ()=>({
+              src: ICON_BASE + file,
+              alt: fb,
+              fallbackText: '♥',
+              fallbackColor: fc,
+            }));
+            ov.appendChild(makeIconRow(n > 0 ? '＋' : '－', makeIconStack(icons, ''), `${fb}ハート ${n > 0 ? '+' : ''}${n}`));
+          }
+
+          // 一時ハート（色別）
           for(const [col, cnt] of Object.entries(tmpHearts)){
             const n = Number(cnt);
             if(!n) continue;

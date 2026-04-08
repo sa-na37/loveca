@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_start_group3_fix_20260408g_popup_anyheart
+# BUILD_TAG: live_start_group3_fix_20260408h_25
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -1917,6 +1917,55 @@ def _stage_has_all_distinct_hasunosora_members(gs: 'GameState', cards_db: Dict[s
         return False
 
 
+def _live_has_trigger_ability(ci: Optional[CardInfo], trig_text: str) -> bool:
+    if not ci or not getattr(ci, 'abilities', None):
+        return False
+    want = str(trig_text or '')
+    for ab in (getattr(ci, 'abilities', None) or []):
+        if not isinstance(ab, dict):
+            continue
+        trig = str(ab.get('trigger', '') or '')
+        if want and want in trig:
+            return True
+    return False
+
+
+def _live_has_start_or_success_ability(ci: Optional[CardInfo]) -> bool:
+    try:
+        return _live_has_trigger_ability(ci, 'ライブ開始時') or _live_has_trigger_ability(ci, 'ライブ成功時')
+    except Exception:
+        return False
+
+
+def _slot_always_hearts_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, slot) -> Dict[str, int]:
+    """Return always-on heart bonus currently attached to a stage slot."""
+    try:
+        if not slot or not getattr(slot, 'cardnumber', ''):
+            return {}
+        ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+        if not ci or _is_live_ci(ci):
+            return {}
+        bonus: Dict[str, int] = {}
+        # PL!-bp4-002 絢瀬絵里: if any LIVE in set_zone has neither live-start nor live-success ability, purple +2
+        try:
+            if _canon_cardno(getattr(slot, 'cardnumber', '') or '') == 'PL!-bp4-002':
+                found_plain_live = False
+                for cn_live in list(getattr(gs, 'set_zone', []) or []):
+                    ci_live = _get_card(cards_db, cn_live)
+                    if not ci_live or not _is_live_ci(ci_live):
+                        continue
+                    if not _live_has_start_or_success_ability(ci_live):
+                        found_plain_live = True
+                        break
+                if found_plain_live:
+                    bonus['purple'] = int(bonus.get('purple', 0) or 0) + 2
+        except Exception:
+            pass
+        return {str(k): int(v) for k, v in bonus.items() if int(v or 0) != 0}
+    except Exception:
+        return {}
+
+
 def _slot_always_score_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, slot) -> int:
     """Return always-on total score bonus granted by a stage member slot."""
     try:
@@ -2095,7 +2144,7 @@ def owned_base_hearts(gs: GameState, cards_db: Dict[str, CardInfo]) -> Dict[str,
     # Check exactly-2-member condition once (PL!N-PR-020 / PL!S-PR-037)
     stage_member_n = _stage_member_count(gs, cards_db)
     has_exactly2 = (stage_member_n == 2)
-    for slot in gs.stage.values():
+    for pos, slot in (gs.stage or {}).items():
         if not slot:
             continue
         c = _get_card(cards_db, slot.cardnumber)
@@ -2111,6 +2160,8 @@ def owned_base_hearts(gs: GameState, cards_db: Dict[str, CardInfo]) -> Dict[str,
         else:
             for k, v in (c.base_hearts or {}).items():
                 pool[k] = pool.get(k, 0) + int(v)
+        for k, v in (_slot_always_hearts_bonus(gs, cards_db, pos, slot) or {}).items():
+            pool[k] = pool.get(k, 0) + int(v)
         for k, v in (getattr(slot, 'temp_hearts', {}) or {}).items():
             pool[k] = pool.get(k, 0) + int(v)
         # 常時 BODY: ステージのメンバーがちょうど2人のとき、青ハート+1 (PL!N-PR-020 / PL!S-PR-037)
