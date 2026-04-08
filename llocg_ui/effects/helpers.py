@@ -1,0 +1,719 @@
+# -*- coding: utf-8 -*-
+# BUILD_TAG: engine_effect_helpers_split_20260407a
+from __future__ import annotations
+
+"""llocg_ui.effects.helpers
+
+engine_effect の内部 helper 群。
+"""
+
+from typing import Any, Dict
+
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+def _add_temp_blade(eng: Dict[str, Any], slot: Any, n: int) -> None:
+    if not slot or n <= 0:
+        return
+    try:
+        slot.temp_blade = int(getattr(slot, "temp_blade", 0) or 0) + int(n)
+        slot.temp_until = "end_of_live"
+    except Exception:
+        pass
+
+
+def _add_temp_hearts(eng: Dict[str, Any], slot: Any, hearts: Dict[str, int]) -> None:
+    if not slot or not hearts:
+        return
+    try:
+        cur = dict(getattr(slot, "temp_hearts", {}) or {})
+    except Exception:
+        cur = {}
+    for k, v in (hearts or {}).items():
+        try:
+            iv = int(v or 0)
+        except Exception:
+            iv = 0
+        if iv <= 0:
+            continue
+        cur[str(k)] = int(cur.get(str(k), 0) or 0) + iv
+    try:
+        slot.temp_hearts = cur
+        slot.temp_until = "end_of_live"
+    except Exception:
+        pass
+
+
+def _active_stage_slots(gs: Any) -> list:
+    """Return list of active (non-None) StageSlots."""
+    out = []
+    try:
+        st = getattr(gs, "stage", None)
+        if isinstance(st, dict):
+            for pos in ("L", "C", "R"):
+                v = st.get(pos)
+                if v is not None and bool(getattr(v, "active", False)):
+                    out.append(v)
+    except Exception:
+        pass
+    return out
+
+
+def _all_stage_slots_filled(gs: Any) -> bool:
+    """Return True if all 3 stage positions (L/C/R) have an active member."""
+    try:
+        st = getattr(gs, "stage", None)
+        if not isinstance(st, dict):
+            return False
+        for pos in ("L", "C", "R"):
+            v = st.get(pos)
+            if v is None or not bool(getattr(v, "cardnumber", None)):
+                return False
+        return True
+    except Exception:
+        return False
+
+
+def _src_slot(gs: Any, ctx: Dict[str, Any]) -> Any:
+    """Return the StageSlot for the source member, or None."""
+    try:
+        src_pos = str(
+            (ctx or {}).get("src_pos") or (ctx or {}).get("pos") or ""
+        ).upper()
+        if src_pos not in ("L", "C", "R"):
+            return None
+        st = getattr(gs, "stage", None)
+        if isinstance(st, dict):
+            return st.get(src_pos)
+    except Exception:
+        pass
+    return None
+
+
+def _success_zone_cards(gs: Any) -> list:
+    """Return list of cards in the success live zone."""
+    try:
+        z = getattr(gs, "success_zone", None) or []
+        if not isinstance(z, list):
+            z = list(z)
+        return z
+    except Exception:
+        return []
+
+
+def _card_score(card: Any, cards_db: Dict[str, Any]) -> int:
+    """Return the score of a card (from cards_db or card attribute)."""
+    try:
+        cn = str(getattr(card, "cardnumber", None) or card or "")
+        info = cards_db.get(cn)
+        if info is not None:
+            s = getattr(info, "score", None)
+            if s is None:
+                s = (info if isinstance(info, dict) else {}). get("score")
+            if s is not None and str(s).strip() not in ("", "None"):
+                return int(str(s).strip())
+        # fallback: card itself may have score attr
+        sv = getattr(card, "score", None)
+        if sv is not None and str(sv).strip() not in ("", "None"):
+            return int(str(sv).strip())
+    except Exception:
+        pass
+    return 0
+
+
+def _lookup_cardinfo(cards_db: Dict[str, Any], card: Any) -> Any:
+    try:
+        cn = str(getattr(card, "cardnumber", None) or card or "").strip()
+        if not cn:
+            return None
+        info = cards_db.get(cn)
+        if info is not None:
+            return info
+        low = cn.lower()
+        for k, v in (cards_db or {}).items():
+            try:
+                if str(k).strip().lower() == low:
+                    return v
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return None
+
+def _card_group(card: Any, cards_db: Dict[str, Any]) -> str:
+    """Return the group string of a card."""
+    try:
+        info = _lookup_cardinfo(cards_db, card)
+        if info is not None:
+            g = getattr(info, "group", None)
+            if g is None:
+                g = (info if isinstance(info, dict) else {}).get("group")
+            if g:
+                return str(g)
+        g = getattr(card, "group", None)
+        if g:
+            return str(g)
+    except Exception:
+        pass
+    return ""
+
+
+def _card_unit(card: Any, cards_db: Dict[str, Any]) -> str:
+    """Return the unit string of a card."""
+    try:
+        info = _lookup_cardinfo(cards_db, card)
+        if info is not None:
+            u = getattr(info, "unit", None)
+            if u is None:
+                u = (info if isinstance(info, dict) else {}).get("unit")
+            if u:
+                return str(u)
+        u = getattr(card, "unit", None)
+        if u:
+            return str(u)
+    except Exception:
+        pass
+    return ""
+
+
+def _card_cost(card: Any, cards_db: Dict[str, Any]) -> int:
+    """Return the cost of a card as int."""
+    try:
+        cn = str(getattr(card, "cardnumber", None) or card or "")
+        info = cards_db.get(cn)
+        if info is not None:
+            c = getattr(info, "cost", None)
+            if c is None:
+                c = (info if isinstance(info, dict) else {}).get("cost")
+            if c is not None and str(c).strip() not in ("", "None"):
+                return int(str(c).strip())
+        cv = getattr(card, "cost", None)
+        if cv is not None and str(cv).strip() not in ("", "None"):
+            return int(str(cv).strip())
+    except Exception:
+        pass
+    return 0
+
+
+def _card_type_norm(card: Any, cards_db: Dict[str, Any]) -> str:
+    """Return the normalized card type string (MEMBER / LIVE / etc.)."""
+    try:
+        info = _lookup_cardinfo(cards_db, card)
+        if info is not None:
+            t = getattr(info, "card_type_norm", None)
+            if t is None:
+                t = (info if isinstance(info, dict) else {}).get("card_type_norm")
+            if t:
+                return str(t)
+
+            raw = getattr(info, "card_type_raw", None)
+            if raw is None:
+                raw = (info if isinstance(info, dict) else {}).get("card_type_raw")
+            if raw is None:
+                raw = getattr(info, "type", None)
+            if raw is None:
+                raw = (info if isinstance(info, dict) else {}).get("type")
+            if raw:
+                s = str(raw).strip().upper()
+                jp = str(raw).strip()
+                if s in ("MEMBER", "LIVE", "ENERGY"):
+                    return s
+                if jp == "メンバー":
+                    return "MEMBER"
+                if jp == "ライブ":
+                    return "LIVE"
+                if jp == "エネルギー":
+                    return "ENERGY"
+
+        t = getattr(card, "card_type_norm", None)
+        if t:
+            return str(t)
+
+        raw = getattr(card, "card_type_raw", None) or getattr(card, "type", None)
+        if raw:
+            s = str(raw).strip().upper()
+            jp = str(raw).strip()
+            if s in ("MEMBER", "LIVE", "ENERGY"):
+                return s
+            if jp == "メンバー":
+                return "MEMBER"
+            if jp == "ライブ":
+                return "LIVE"
+            if jp == "エネルギー":
+                return "ENERGY"
+    except Exception:
+        pass
+    return ""
+
+
+def _card_name(card: Any, cards_db: Dict[str, Any]) -> str:
+    """Return the cardname string of a card."""
+    try:
+        info = _lookup_cardinfo(cards_db, card)
+        if info is not None:
+            n = getattr(info, "cardname", None)
+            if n is None:
+                n = (info if isinstance(info, dict) else {}).get("cardname")
+            if n:
+                return str(n)
+        n = getattr(card, "cardname", None) or getattr(card, "name", None)
+        if n:
+            return str(n)
+    except Exception:
+        pass
+    return ""
+
+
+def _stage_member_cost_sum(gs: Any, cards_db: Dict[str, Any]) -> int:
+    """Sum of costs of all active stage members."""
+    total = 0
+    try:
+        st = getattr(gs, "stage", None)
+        if isinstance(st, dict):
+            for pos in ("L", "C", "R"):
+                slot = st.get(pos)
+                if slot is not None and bool(getattr(slot, "cardnumber", None)):
+                    total += _card_cost(slot, cards_db)
+    except Exception:
+        pass
+    return total
+
+
+def _opp_stage_member_cost_sum(gs: Any, cards_db: Dict[str, Any]) -> int:
+    """Sum of costs of all opponent active stage members."""
+    total = 0
+    try:
+        opp = getattr(gs, "opponent", None) or getattr(gs, "opp", None)
+        if opp is None:
+            return 0
+        st = getattr(opp, "stage", None)
+        if isinstance(st, dict):
+            for pos in ("L", "C", "R"):
+                slot = st.get(pos)
+                if slot is not None and bool(getattr(slot, "cardnumber", None)):
+                    total += _card_cost(slot, cards_db)
+    except Exception:
+        pass
+    return total
+
+
+def _has_opponent_state(gs: Any) -> bool:
+    """Best-effort check whether opponent state exists in this runtime."""
+    try:
+        opp = getattr(gs, "opponent", None) or getattr(gs, "opp", None)
+        if opp is None:
+            return False
+        return True
+    except Exception:
+        return False
+
+
+def _activate_energy(gs: Any, n: int) -> int:
+    """Move up to n energy from energy_wait to energy_active. Returns count moved.
+    energy_active / energy_wait are int fields in GameState (not lists).
+    """
+    moved = 0
+    try:
+        wait = int(getattr(gs, "energy_wait", 0) or 0)
+        take = min(max(0, n), wait)
+        if take > 0:
+            gs.energy_wait -= take
+            gs.energy_active += take
+            moved = take
+    except Exception:
+        pass
+    return moved
+
+
+def _draw_cards(eng: Dict[str, Any], gs: Any, n: int) -> int:
+    """Draw n cards from deck to hand. Returns count drawn."""
+    drawn = 0
+    try:
+        # Try using engine helper if available
+        draw_fn = eng.get("_draw") or eng.get("draw_cards")
+        if callable(draw_fn):
+            draw_fn(gs, n)
+            return n
+        # Fallback: direct list manipulation
+        deck = getattr(gs, "deck", None)
+        hand = getattr(gs, "hand", None)
+        if deck is None or hand is None:
+            return 0
+        for _ in range(n):
+            if not deck:
+                break
+            hand.append(deck.pop(0))
+            drawn += 1
+    except Exception:
+        pass
+    return drawn
+
+
+def _live_in_progress_cards(gs: Any) -> list:
+    """Return list of cards currently in the live zone (ライブ中のカード)."""
+    try:
+        # Try common field names
+        for attr in ("live_zone", "live_cards", "current_live_cards", "live_area"):
+            z = getattr(gs, attr, None)
+            if z is not None:
+                return list(z) if not isinstance(z, list) else z
+        # Fallback: try live dict
+        live = getattr(gs, "live", None)
+        if live is not None:
+            cards = getattr(live, "cards", None) or (live if isinstance(live, dict) else {}).get("cards")
+            if cards is not None:
+                return list(cards)
+    except Exception:
+        pass
+    return []
+
+
+def _live_score_total(gs: Any) -> int:
+    """Return current live total score (自分)."""
+    try:
+        for attr in ("live_score", "score", "current_score"):
+            v = getattr(gs, attr, None)
+            if v is not None:
+                return int(v)
+        live = getattr(gs, "live", None)
+        if live is not None:
+            v = getattr(live, "score", None) or (live if isinstance(live, dict) else {}).get("score")
+            if v is not None:
+                return int(v)
+    except Exception:
+        pass
+    return 0
+
+
+def _opp_live_score_total(gs: Any) -> int:
+    """Return opponent live total score."""
+    try:
+        for attr in ("opp_live_score", "opp_score"):
+            v = getattr(gs, attr, None)
+            if v is not None:
+                return int(v)
+        opp = getattr(gs, "opponent", None) or getattr(gs, "opp", None)
+        if opp is not None:
+            for attr in ("live_score", "score", "current_score"):
+                v = getattr(opp, attr, None)
+                if v is not None:
+                    return int(v)
+    except Exception:
+        pass
+    return 0
+
+
+def _stage_has_group(gs: Any, cards_db: Dict[str, Any], group_name: str) -> bool:
+    """Return True if any active stage member belongs to group_name."""
+    try:
+        st = getattr(gs, "stage", None)
+        if isinstance(st, dict):
+            for pos in ("L", "C", "R"):
+                slot = st.get(pos)
+                if slot is not None and bool(getattr(slot, "cardnumber", None)):
+                    if _card_group(slot, cards_db) == group_name:
+                        return True
+    except Exception:
+        pass
+    return False
+
+
+def _stage_all_group(gs: Any, cards_db: Dict[str, Any], group_name: str) -> bool:
+    """Return True if ALL occupied stage positions belong to group_name."""
+    try:
+        st = getattr(gs, "stage", None)
+        if not isinstance(st, dict):
+            return False
+        found_any = False
+        for pos in ("L", "C", "R"):
+            slot = st.get(pos)
+            if slot is None or not bool(getattr(slot, "cardnumber", None)):
+                continue
+            found_any = True
+            if _card_group(slot, cards_db) != group_name:
+                return False
+        return found_any
+    except Exception:
+        return False
+
+
+def _stage_unit_count(gs: Any, cards_db: Dict[str, Any], unit_name: str) -> int:
+    """Count active stage members belonging to unit_name."""
+    count = 0
+    try:
+        st = getattr(gs, "stage", None)
+        if isinstance(st, dict):
+            for pos in ("L", "C", "R"):
+                slot = st.get(pos)
+                if slot is not None and bool(getattr(slot, "cardnumber", None)):
+                    if _card_unit(slot, cards_db) == unit_name:
+                        count += 1
+    except Exception:
+        pass
+    return count
+
+
+def _stage_positions_with_group(gs: Any, cards_db: Dict[str, Any], group_name: str) -> list:
+    """Return list of (pos, slot) tuples for stage members matching group_name."""
+    result = []
+    try:
+        st = getattr(gs, "stage", None)
+        if isinstance(st, dict):
+            for pos in ("L", "C", "R"):
+                slot = st.get(pos)
+                if slot is not None and bool(getattr(slot, "cardnumber", None)):
+                    if _card_group(slot, cards_db) == group_name:
+                        result.append((pos, slot))
+    except Exception:
+        pass
+    return result
+
+
+def _stage_positions_with_unit(gs: Any, cards_db: Dict[str, Any], unit_name: str) -> list:
+    """Return list of (pos, slot) tuples for stage members matching unit_name."""
+    result = []
+    try:
+        st = getattr(gs, "stage", None)
+        if isinstance(st, dict):
+            for pos in ("L", "C", "R"):
+                slot = st.get(pos)
+                if slot is not None and bool(getattr(slot, "cardnumber", None)):
+                    if _card_unit(slot, cards_db) == unit_name:
+                        result.append((pos, slot))
+    except Exception:
+        pass
+    return result
+
+
+def _stage_positions_all_occupied(gs: Any) -> list:
+    """Return list of (pos, slot) tuples for all occupied stage positions."""
+    result = []
+    try:
+        st = getattr(gs, "stage", None)
+        if isinstance(st, dict):
+            for pos in ("L", "C", "R"):
+                slot = st.get(pos)
+                if slot is not None and bool(getattr(slot, "cardnumber", None)):
+                    result.append((pos, slot))
+    except Exception:
+        pass
+    return result
+
+
+def _green_room_top(gs: Any) -> Any:
+    """Return the most recently added card in green_room (控え室の最上位), or None."""
+    try:
+        gr = getattr(gs, "green_room", None)
+        if gr is None:
+            gr = (
+                getattr(gs, "waiting_room", None)
+                or getattr(gs, "graveyard", None)
+                or getattr(gs, "discard", None)
+            )
+        if gr and isinstance(gr, list) and len(gr) > 0:
+            return gr[-1]
+    except Exception:
+        pass
+    return None
+
+
+# ---------------------------------------------------------------------------
+# group3 helpers
+# ---------------------------------------------------------------------------
+
+def _green_room_list(gs: Any) -> list:
+    """Return the green_room (控え室) list, trying common field names."""
+    try:
+        for attr in ("green_room", "waiting_room", "graveyard", "discard"):
+            gr = getattr(gs, attr, None)
+            if gr is not None and isinstance(gr, list):
+                return gr
+    except Exception:
+        pass
+    return []
+
+
+def _label_matches_group_or_unit(card: Any, cards_db: Dict[str, Any], label: str) -> bool:
+    """Best-effort matcher for labels that may live in group or unit.
+    Accept exact match or containment in either field.
+    """
+    try:
+        lab = str(label or "").strip()
+        if not lab:
+            return False
+        g = str(_card_group(card, cards_db) or "").strip()
+        u = str(_card_unit(card, cards_db) or "").strip()
+        return (g == lab) or (u == lab) or (lab in g if g else False) or (lab in u if u else False)
+    except Exception:
+        return False
+
+
+def _green_room_members_by_group(gs: Any, cards_db: Dict[str, Any], group_name: str) -> list:
+    """Return list of MEMBER cards in green_room belonging to group_name/unit_name."""
+    result = []
+    for card in _green_room_list(gs):
+        try:
+            if _card_type_norm(card, cards_db) == "MEMBER" and _label_matches_group_or_unit(card, cards_db, group_name):
+                result.append(card)
+        except Exception:
+            pass
+    return result
+
+
+def _green_room_lives_by_group(gs: Any, cards_db: Dict[str, Any], group_name: str) -> list:
+    """Return list of LIVE cards in green_room belonging to group_name/unit_name."""
+    result = []
+    for card in _green_room_list(gs):
+        try:
+            if _card_type_norm(card, cards_db) == "LIVE" and _label_matches_group_or_unit(card, cards_db, group_name):
+                result.append(card)
+        except Exception:
+            pass
+    return result
+
+
+def _green_room_lives_by_group_score_le(
+    gs: Any, cards_db: Dict[str, Any], group_name: str, score_max: int
+) -> list:
+    """Return LIVE cards in green_room with group_name and score <= score_max."""
+    result = []
+    for card in _green_room_lives_by_group(gs, cards_db, group_name):
+        try:
+            if _card_score(card, cards_db) <= score_max:
+                result.append(card)
+        except Exception:
+            pass
+    return result
+
+
+def _green_room_cards_by_group_any_type(gs: Any, cards_db: Dict[str, Any], group_name: str) -> list:
+    """Return cards of any type in green_room belonging to group_name/unit_name."""
+    result = []
+    for card in _green_room_list(gs):
+        try:
+            if _label_matches_group_or_unit(card, cards_db, group_name):
+                result.append(card)
+        except Exception:
+            pass
+    return result
+
+
+def _move_card_from_green_to_hand(gs: Any, card: Any) -> bool:
+    """Remove card from green_room and add to hand. Returns True on success."""
+    try:
+        gr = _green_room_list(gs)
+        if card in gr:
+            gr.remove(card)
+        else:
+            # fallback: try to find by cardnumber
+            cn = str(getattr(card, "cardnumber", None) or card or "")
+            found = None
+            for c in list(gr):
+                if str(getattr(c, "cardnumber", None) or c or "") == cn:
+                    found = c
+                    break
+            if found is None:
+                return False
+            gr.remove(found)
+            card = found
+        hand = getattr(gs, "hand", None)
+        if hand is None:
+            return False
+        hand.append(card)
+        return True
+    except Exception:
+        return False
+
+
+def _opp_stage_has_wait_member(gs: Any) -> bool:
+    """Return True if opponent stage has any member in wait (active==False) state."""
+    try:
+        opp = getattr(gs, "opponent", None) or getattr(gs, "opp", None)
+        if opp is None:
+            return False
+        st = getattr(opp, "stage", None)
+        if not isinstance(st, dict):
+            return False
+        for pos in ("L", "C", "R"):
+            slot = st.get(pos)
+            if slot is None or not bool(getattr(slot, "cardnumber", None)):
+                continue
+            if not bool(getattr(slot, "active", True)):
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def _stage_other_member_exists(gs: Any, src_pos: str) -> bool:
+    """Return True if any stage position OTHER than src_pos has a member."""
+    try:
+        st = getattr(gs, "stage", None)
+        if not isinstance(st, dict):
+            return False
+        for pos in ("L", "C", "R"):
+            if pos == src_pos:
+                continue
+            slot = st.get(pos)
+            if slot is not None and bool(getattr(slot, "cardnumber", None)):
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def _stage_has_any_other_member(gs: Any, exclude_pos: str = "") -> bool:
+    """Return True if any member is on stage (optionally excluding exclude_pos)."""
+    try:
+        st = getattr(gs, "stage", None)
+        if not isinstance(st, dict):
+            return False
+        for pos in ("L", "C", "R"):
+            if pos == exclude_pos:
+                continue
+            slot = st.get(pos)
+            if slot is not None and bool(getattr(slot, "cardnumber", None)):
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def _slot_total_blade(slot: Any) -> int:
+    """Return total blade count of a slot (base + temp)."""
+    try:
+        base = int(getattr(slot, "blade", 0) or 0)
+        temp = int(getattr(slot, "temp_blade", 0) or 0)
+        return base + temp
+    except Exception:
+        return 0
+
+
+def _stage_unit_count_diff_names(gs: Any, cards_db: Dict[str, Any], unit_name: str) -> int:
+    """Count stage members with unit_name having DISTINCT cardnames."""
+    names_seen = set()
+    try:
+        st = getattr(gs, "stage", None)
+        if not isinstance(st, dict):
+            return 0
+        for pos in ("L", "C", "R"):
+            slot = st.get(pos)
+            if slot is None or not bool(getattr(slot, "cardnumber", None)):
+                continue
+            if not _label_matches_group_or_unit(slot, cards_db, unit_name):
+                continue
+            name = _card_name(slot, cards_db) or str(getattr(slot, "cardnumber", pos))
+            names_seen.add(name)
+    except Exception:
+        pass
+    return len(names_seen)
+
+
+# ---------------------------------------------------------------------------
+# Main dispatch
+
+
+__all__ = ['_add_temp_blade', '_add_temp_hearts', '_active_stage_slots', '_all_stage_slots_filled', '_src_slot', '_success_zone_cards', '_card_score', '_lookup_cardinfo', '_card_group', '_card_unit', '_card_cost', '_card_type_norm', '_card_name', '_stage_member_cost_sum', '_opp_stage_member_cost_sum', '_has_opponent_state', '_activate_energy', '_draw_cards', '_live_in_progress_cards', '_live_score_total', '_opp_live_score_total', '_stage_has_group', '_stage_all_group', '_stage_unit_count', '_stage_positions_with_group', '_stage_positions_with_unit', '_stage_positions_all_occupied', '_green_room_top', '_green_room_list', '_label_matches_group_or_unit', '_green_room_members_by_group', '_green_room_lives_by_group', '_green_room_lives_by_group_score_le', '_green_room_cards_by_group_any_type', '_move_card_from_green_to_hand', '_opp_stage_has_wait_member', '_stage_other_member_exists', '_stage_has_any_other_member', '_slot_total_blade', '_stage_unit_count_diff_names']
