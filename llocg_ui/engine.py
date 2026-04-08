@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_start_group3_fix_20260408d_66
+# BUILD_TAG: live_start_group3_fix_20260408e_live019_021
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -2483,7 +2483,7 @@ def _solve_multi_live_allocations(lives: List[str], cards_db: Dict[str, CardInfo
     # Also include any colors that appear only in req (rare, but safe)
     for cn in lives:
         c = _get_card(cards_db, cn)
-        req = _effective_live_required_hearts(cn, c, globals().get('_CURRENT_GS_FOR_ATTEMPT'))
+        req = _effective_live_required_hearts(cn, c, globals().get('_CURRENT_GS_FOR_ATTEMPT'), cards_db)
         for k in req.keys():
             kk = str(k).lower()
             if kk in ("any", "all"):
@@ -2500,7 +2500,7 @@ def _solve_multi_live_allocations(lives: List[str], cards_db: Dict[str, CardInfo
     reqs = []
     for cn in lives:
         ci = _get_card(cards_db, cn)
-        reqs.append((cn, _effective_live_required_hearts(cn, ci, globals().get('_CURRENT_GS_FOR_ATTEMPT'))))
+        reqs.append((cn, _effective_live_required_hearts(cn, ci, globals().get('_CURRENT_GS_FOR_ATTEMPT'), cards_db)))
 
     # try permutations of live card processing order to find any satisfiable plan
     import itertools
@@ -3099,6 +3099,8 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
             _NEO_SKY_CN_CANON,
             _TSUNAGARU_CONNECT_CN_CANON,
             _VIVID_WORLD_CN_CANON,
+            _BOKULIVE_BP3_019_CN_CANON,
+            _HEARTBEAT_BP4_021_CN_CANON,
         }
     except Exception:
         _generic_live_skip = set()
@@ -4126,6 +4128,33 @@ _VIVID_WORLD_CN_CANON = 'PL!N-bp4-025'
 _SHIZUKU_BP1_003_CN_CANON = 'PL!N-bp1-003'
 _NEO_SKY_CN_CANON = 'PL!N-bp4-031'
 _EMMA_BP3_008_CN_CANON = 'PL!N-bp3-008'
+_BOKULIVE_BP3_019_CN_CANON = 'PL!-bp3-019'
+_HEARTBEAT_BP4_021_CN_CANON = 'PL!-bp4-021'
+
+def _success_zone_score_sum(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
+    total = 0
+    for cn in list(getattr(gs, 'success_zone', []) or []):
+        ci = _get_card(cards_db, cn)
+        if not ci:
+            continue
+        try:
+            total += int(getattr(ci, 'score', 0) or 0)
+        except Exception:
+            pass
+    return int(total)
+
+def _mu_live_cards_in_set_zone_count(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
+    n = 0
+    for cn in list(getattr(gs, 'set_zone', []) or []):
+        ci = _get_card(cards_db, cn)
+        if not ci:
+            continue
+        if not _is_live_ci(ci):
+            continue
+        if "μ's" in str(getattr(ci, 'group', '') or ''):
+            n += 1
+    return int(n)
+
 def _live_score_delta_for_attempt(cn_live, lives_count, gs_turn):
     # Eutopia: if 3+ LIVE cards are set in this attempt, score +2 for Eutopia
     # Rise Up High!: if turn==1 live phase, score +1 for this card
@@ -4138,6 +4167,38 @@ def _live_score_delta_for_attempt(cn_live, lives_count, gs_turn):
     if canon == _RISE_UP_HIGH_CN_CANON and int(gs_turn or 0) == 1:
         return 1
     return 0
+
+def _heartbeat_required_any_reduction(cn_live, gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
+    try:
+        canon = _canon_cardno(cn_live)
+    except Exception:
+        canon = str(cn_live or '')
+    if canon != _HEARTBEAT_BP4_021_CN_CANON:
+        return 0
+    total = _success_zone_score_sum(gs, cards_db)
+    return 1 if int(total) >= 6 else 0
+
+
+def _heartbeat_score_bonus(cn_live, gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
+    try:
+        canon = _canon_cardno(cn_live)
+    except Exception:
+        canon = str(cn_live or '')
+    if canon != _HEARTBEAT_BP4_021_CN_CANON:
+        return 0
+    total = _success_zone_score_sum(gs, cards_db)
+    return 1 if int(total) >= 9 else 0
+
+
+def _bokulive_score_bonus(cn_live, gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
+    try:
+        canon = _canon_cardno(cn_live)
+    except Exception:
+        canon = str(cn_live or '')
+    if canon != _BOKULIVE_BP3_019_CN_CANON:
+        return 0
+    return 1 if _mu_live_cards_in_set_zone_count(gs, cards_db) >= 2 else 0
+
 
 def _compute_attempt_score_breakdown(lives, cards_db, gs_turn, gs=None):
     lives_count = len(lives or [])
@@ -4287,7 +4348,7 @@ def _emotion_required_any_bonus(cn_live, gs: GameState) -> int:
     return 3 * int(_emotion_success_count(gs))
 
 
-def _effective_live_required_hearts(cn_live, ci, gs: GameState) -> Dict[str, int]:
+def _effective_live_required_hearts(cn_live, ci, gs: GameState, cards_db: Optional[Dict[str, CardInfo]] = None) -> Dict[str, int]:
     req = dict((getattr(ci, 'required_hearts', {}) if ci else {}) or {})
     try:
         extra_any = int(_emotion_required_any_bonus(cn_live, gs))
@@ -4295,6 +4356,12 @@ def _effective_live_required_hearts(cn_live, ci, gs: GameState) -> Dict[str, int
         extra_any = 0
     if extra_any > 0:
         req['any'] = int(req.get('any', 0) or 0) + extra_any
+    try:
+        reduce_any = int(_heartbeat_required_any_reduction(cn_live, gs, cards_db=(cards_db or {})))
+    except Exception:
+        reduce_any = 0
+    if reduce_any > 0:
+        req['any'] = max(0, int(req.get('any', 0) or 0) - reduce_any)
     return req
 
 
@@ -4315,6 +4382,10 @@ def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[s
         return int(_monster_girls_wait_bonus(gs, cards_db))
     if canon == _EMOTION_CN_CANON:
         return 2 * int(_emotion_success_count(gs))
+    if canon == _BOKULIVE_BP3_019_CN_CANON:
+        return int(_bokulive_score_bonus(cn_live, gs, cards_db))
+    if canon == _HEARTBEAT_BP4_021_CN_CANON:
+        return int(_heartbeat_score_bonus(cn_live, gs, cards_db))
     if canon == _TSUNAGARU_CONNECT_CN_CANON:
         return int(getattr(gs, 'tsunagaru_connect_bonus_this_live', 0) or 0)
     if canon == _VIVID_WORLD_CN_CANON:
@@ -4407,7 +4478,7 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
             gs.last_attempt_excess_hearts = {}
         for cn in lives:
             c = _get_card(cards_db, cn)
-            req = _effective_live_required_hearts(cn, c, gs)
+            req = _effective_live_required_hearts(cn, c, gs, cards_db)
             alloc = alloc_map.get(cn, {}) or {}
             gs.log.append(f"  live: OK {cn} req={req} alloc={alloc}")
     else:
@@ -4418,7 +4489,7 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
         failed_at = None
         for cn in lives:
             c = _get_card(cards_db, cn)
-            req = _effective_live_required_hearts(cn, c, gs)
+            req = _effective_live_required_hearts(cn, c, gs, cards_db)
             ok, alloc = can_satisfy_req(req, pool_trace)
             gs.log.append(f"  live: {'OK' if ok else 'NG'} {cn} req={req} alloc={alloc}")
             if ok:
@@ -4435,7 +4506,7 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
                     continue
                 if seen_fail:
                     c = _get_card(cards_db, cn)
-                    req = _effective_live_required_hearts(cn, c, gs)
+                    req = _effective_live_required_hearts(cn, c, gs, cards_db)
                     gs.log.append(f"  live: NG {cn} req={req} alloc={{'reason': 'not reached'}}")
 
 
