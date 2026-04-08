@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: popup_icon_tokens_20260408f_livequeue_reqicons
+# BUILD_TAG: popup_icon_tokens_20260408g_popup_anyheart
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1965,7 +1965,7 @@ HTML = r'''<!doctype html>
       '<(緑)>':'heart_04.png',
       '<(青)>':'heart_05.png',
       '<(紫)>':'heart_06.png',
-      '<(任意)>':'icon_any.png',
+      '<(任意)>':'heart_00.png',
       '<(虹)>':'icon_all.png',
       '<(すべて)>':'icon_all.png',
     };
@@ -2452,7 +2452,7 @@ HTML = r'''<!doctype html>
     const heartIconFile2 = {
       pink:'heart_01.png', red:'heart_02.png', yellow:'heart_03.png',
       green:'heart_04.png', blue:'heart_05.png', purple:'heart_06.png',
-      any:'icon_any.png', all:'icon_all.png',
+      any:'heart_00.png', all:'icon_all.png',
     };
     const heartFallback2 = {
       pink:'桃', red:'赤', yellow:'黄', green:'緑', blue:'青', purple:'紫', any:'無', all:'ALL',
@@ -2499,7 +2499,7 @@ HTML = r'''<!doctype html>
       const n = Number(cnt || 0);
       if(!n) continue;
       const absn = Math.abs(n);
-      const file = heartIconFile2[col] || 'icon_any.png';
+      const file = heartIconFile2[col] || 'heart_00.png';
       const fb   = heartFallback2[col] || col;
       const fc   = heartColor2[col] || '#fff';
       const icons = Array.from({length: absn}, ()=>({src: ICON_BASE2 + file, alt: fb, fallbackText: fb, fallbackColor: fc}));
@@ -2645,7 +2645,7 @@ inner.appendChild(card);
           const heartIconFile = {
             pink:'heart_01.png', red:'heart_02.png', yellow:'heart_03.png',
             green:'heart_04.png', blue:'heart_05.png', purple:'heart_06.png',
-            any:'icon_any.png', all:'icon_all.png',
+            any:'heart_00.png', all:'icon_all.png',
           };
           const heartFallback = {
             pink:'桃', red:'赤', yellow:'黄', green:'緑', blue:'青', purple:'紫', any:'無', all:'ALL',

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_start_group3_fix_20260408e_live019_021
+# BUILD_TAG: live_start_group3_fix_20260408g_popup_anyheart
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -2833,7 +2833,7 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
     def _append_prompt(prompt: Dict[str, Any], label: str = '') -> None:
         pr = dict(prompt or {})
         txt = str(label or pr.get('text', '') or '')
-        cn = str(pr.get('cn', '') or '')
+        cn = str(pr.get('cn', '') or pr.get('source_cn', '') or '')
         triggers.append({
             'kind': 'enqueue_pending_prompt',
             'source_cn': cn,

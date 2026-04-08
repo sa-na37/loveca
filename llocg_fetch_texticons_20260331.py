@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# BUILD_TAG: fetch_texticons_20260408a_anyheart
 """
 Fetch official text icons (heart colors / all / blade) and store them under
 <root>/card_images/texticons/, plus write a manifest JSON under <root>.
