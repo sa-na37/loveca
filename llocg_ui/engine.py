@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: always_bonus_unified_20260408b
+# BUILD_TAG: always_bonus_unified_20260408c
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -119,6 +119,46 @@ _HEART_JP_MAP = {
     'pink': 'pink', 'red': 'red', 'yellow': 'yellow',
     'green': 'green', 'blue': 'blue', 'purple': 'purple',
 }
+
+
+
+def _lanzhu_bp1_012_live_bonus_count(gs: "GameState", cards_db: Dict[str, CardInfo]) -> int:
+    """Compatibility shim for server/UI imports.
+
+    Returns how many active Lanzhu (PL!N-bp1-012) currently satisfy the
+    live-only bonus condition: there are 3+ cards in set_zone and at least
+    one Nijigasaki LIVE card among them.
+    """
+    try:
+        live_cards = list(getattr(gs, "set_zone", []) or [])
+    except Exception:
+        live_cards = []
+    if len(live_cards) < 3:
+        return 0
+
+    has_niji_live = False
+    for cn in live_cards:
+        ci = _get_card(cards_db, cn)
+        if not ci:
+            continue
+        try:
+            is_live = is_live_type(getattr(ci, "type", "")) or str(getattr(ci, "card_type_norm", "") or "").upper() == "LIVE"
+        except Exception:
+            is_live = False
+        if is_live and ("虹ヶ咲" in str(getattr(ci, "group", "") or "")):
+            has_niji_live = True
+            break
+    if not has_niji_live:
+        return 0
+
+    n = 0
+    for p in ("L", "C", "R"):
+        slot = (getattr(gs, "stage", {}) or {}).get(p)
+        if not slot or not getattr(slot, "active", False):
+            continue
+        if _canon_cardno(getattr(slot, "cardnumber", "") or "") == "PL!N-bp1-012":
+            n += 1
+    return int(n)
 
 def _parse_heart_icons(icon_blob: str) -> Dict[str, int]:
     """Parse <(色)> icon string into color -> count dict (excluding blades)."""
