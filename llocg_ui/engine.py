@@ -1868,6 +1868,25 @@ def _stage_has_cost13_plus_member(gs: 'GameState', cards_db: Dict[str, CardInfo]
     return False
 
 
+def _stage_has_other_higher_cost_member(gs: 'GameState', cards_db: Dict[str, CardInfo], self_pos: str, self_cost: int) -> bool:
+    """Return True if another stage member has cost strictly greater than self_cost."""
+    try:
+        for pos, slot in (gs.stage or {}).items():
+            if pos == self_pos or not slot:
+                continue
+            ci = _get_card(cards_db, getattr(slot, 'cardnumber', ''))
+            if not ci or _is_live_ci(ci):
+                continue
+            try:
+                if int(getattr(ci, 'cost', 0) or 0) > int(self_cost or 0):
+                    return True
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return False
+
+
 def _has_body_always_2member_blade_heart(ci: Optional[CardInfo]) -> bool:
     """Return True if the card has a 常時(BODY) ability that grants blue heart +1 and blade +1
     when exactly 2 members are on stage.
@@ -1936,6 +1955,14 @@ def _slot_always_blade_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos: 
         try:
             if _canon_cardno(getattr(slot, 'cardnumber', '') or '') == 'PL!-sd1-001':
                 bonus += len(list(getattr(gs, 'success_zone', []) or []))
+        except Exception:
+            pass
+        # PL!HS-bp2-002 村野さやか: 自分より高コストのメンバーがいる場合 +3 blade
+        try:
+            if _canon_cardno(getattr(slot, 'cardnumber', '') or '') == 'PL!HS-bp2-002':
+                self_cost = int(getattr(c, 'cost', 0) or 0)
+                if _stage_has_other_higher_cost_member(gs, cards_db, pos, self_cost):
+                    bonus += 3
         except Exception:
             pass
         return int(bonus)

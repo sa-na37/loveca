@@ -1033,6 +1033,7 @@ class App:
         from .engine import (
             _has_body_always_cost13_blade_bonus,
             _stage_has_cost13_plus_member,
+            _stage_has_other_higher_cost_member,
             _love_wing_bell_success_bonus_count,
             _canon_cardno,
         )
@@ -1062,6 +1063,15 @@ class App:
             try:
                 if _canon_cardno(getattr(slot, 'cardnumber', '') or '') == 'PL!-sd1-001':
                     bonus += len(list(getattr(self.gs, 'success_zone', []) or []))
+            except Exception:
+                pass
+
+            # PL!HS-bp2-002 村野さやか: 自分より高コストのメンバーがいる場合 +3 blade
+            try:
+                if _canon_cardno(getattr(slot, 'cardnumber', '') or '') == 'PL!HS-bp2-002':
+                    self_cost = int(getattr(ci, 'cost', 0) or 0)
+                    if _stage_has_other_higher_cost_member(self.gs, self.cards_db, pos, self_cost):
+                        bonus += 3
             except Exception:
                 pass
         except Exception:
