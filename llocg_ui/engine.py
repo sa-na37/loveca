@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: always_bonus_unified_20260408c
+# BUILD_TAG: always_bonus_unified_20260408d
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -120,6 +120,27 @@ _HEART_JP_MAP = {
     'green': 'green', 'blue': 'blue', 'purple': 'purple',
 }
 
+
+
+def stage_blade(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
+    s = 0
+    for pos, slot in gs.stage.items():
+        if not slot or not slot.active:
+            continue
+        c = _get_card(cards_db, slot.cardnumber)
+        base_b = (int(c.blade) if c else 0)
+        temp_b = int(getattr(slot, "temp_blade", 0) or 0)
+        under_b = int(getattr(slot, "energy_under", 0) or 0) if _has_under_energy_blade_bonus(c) else 0
+        always_b = _slot_always_blade_bonus(gs, cards_db, pos, slot)
+        s += base_b + temp_b + under_b + always_b
+    # Lanzhu (PL!N-bp1-012) live-only bonus: +2 blade per copy when condition met
+    try:
+        n_lz = _lanzhu_bp1_012_live_bonus_count(gs, cards_db)
+    except Exception:
+        n_lz = 0
+    if n_lz > 0:
+        s += 2 * int(n_lz)
+    return s
 
 
 def _lanzhu_bp1_012_live_bonus_count(gs: "GameState", cards_db: Dict[str, CardInfo]) -> int:
