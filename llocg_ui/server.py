@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: popup_icon_tokens_20260408a_58
+# BUILD_TAG: popup_icon_tokens_20260408b_58hotfix
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1034,6 +1034,7 @@ class App:
             _has_body_always_cost13_blade_bonus,
             _stage_has_cost13_plus_member,
             _love_wing_bell_success_bonus_count,
+            _canon_cardno,
         )
         bonus = 0
         try:
