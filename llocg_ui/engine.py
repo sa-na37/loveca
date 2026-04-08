@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: always_bonus_unified_20260408d
+# BUILD_TAG: always_bonus_unified_20260408e
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -2069,7 +2069,7 @@ def _slot_always_score_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos: 
 
 def owned_base_hearts(gs: GameState, cards_db: Dict[str, CardInfo]) -> Dict[str, int]:
     pool: Dict[str, int] = {}
-    for slot in gs.stage.values():
+    for pos, slot in (getattr(gs, 'stage', {}) or {}).items():
         if not slot:
             continue
         c = _get_card(cards_db, slot.cardnumber)
