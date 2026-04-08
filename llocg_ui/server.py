@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: popup_icon_tokens_20260403m
+# BUILD_TAG: always_bonus_ui_20260408b
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1009,7 +1009,9 @@ class App:
                         "temp_blade": int(getattr(v, "temp_blade", 0) or 0),
                         "temp_hearts": dict(getattr(v, "temp_hearts", {}) or {}),
                         # 常時BODYブレード加算（コスト13以上条件）
-                        "always_blade_bonus": self._always_blade_bonus_for(k, v),
+                        "always_blade_bonus": self._always_bonus_detail_for(k, v).get("blade", 0),
+                        "always_hearts_bonus": self._always_bonus_detail_for(k, v).get("hearts", {}),
+                        "always_score_bonus": self._always_bonus_detail_for(k, v).get("score", 0),
                         # PL!N-bp1-012 ランジュのライブ中ボーナス（UIアイコン表示用）
                         "lanzhu_blade_bonus": self._lanzhu_blade_bonus_for(k, v),
                         "lanzhu_heart_bonus": self._lanzhu_heart_bonus_for(k, v),
@@ -1023,42 +1025,21 @@ class App:
             "banner": banner,
             "ui_version": APP_VERSION,
         }
-    def _always_blade_bonus_for(self, pos: str, slot) -> int:
-        """常時ブレードボーナスを返す（UI表示専用）。
-
-        含むもの:
-        - 常時BODY: コスト13以上条件の +2
-        - Love wing bell (PL!-bp4-020): success_zone にある間、センターの μ's に +1/copy
-        """
-        from .engine import (
-            _has_body_always_cost13_blade_bonus,
-            _stage_has_cost13_plus_member,
-            _love_wing_bell_success_bonus_count,
-        )
-        bonus = 0
+    def _always_bonus_detail_for(self, pos: str, slot) -> dict:
+        """常時/継続ボーナス詳細を返す（UI表示専用）。"""
+        from .engine import _slot_always_bonus_detail
         try:
-            if not slot or not getattr(slot, 'active', False):
-                return 0
-            ci = _get_card(self.cards_db, slot.cardnumber)
-            if not ci:
-                return 0
-
-            # 常時BODY: コスト13以上条件
-            try:
-                if _has_body_always_cost13_blade_bonus(ci) and _stage_has_cost13_plus_member(self.gs, self.cards_db):
-                    bonus += 2
-            except Exception:
-                pass
-
-            # Love wing bell: success_zone にある間、センターの μ's メンバーに +1/copy
-            try:
-                if pos == 'C' and ("μ's" in str(getattr(ci, 'group', '') or '')):
-                    bonus += int(_love_wing_bell_success_bonus_count(self.gs) or 0)
-            except Exception:
-                pass
+            det = _slot_always_bonus_detail(self.gs, self.cards_db, pos, slot)
+            if not isinstance(det, dict):
+                return {'blade': 0, 'hearts': {}, 'score': 0}
+            return {
+                'blade': int(det.get('blade', 0) or 0),
+                'hearts': dict(det.get('hearts', {}) or {}),
+                'score': int(det.get('score', 0) or 0),
+            }
         except Exception:
-            return 0
-        return int(bonus)
+            return {'blade': 0, 'hearts': {}, 'score': 0}
+
 
     def _lanzhu_blade_bonus_for(self, pos: str, slot) -> int:
         """PL!N-bp1-012 ランジュのライブ中ブレードボーナスをUI表示用に返す。"""
@@ -2439,12 +2420,13 @@ HTML = r'''<!doctype html>
       const sd  = (st && st.stage_detail) ? st.stage_detail : null;
       const det = sd ? sd[slotKey] : null;
       if(det){
-        const tmpBlade  = Number(det.temp_blade      || 0);
-        const alwBlade0 = Number(det.always_blade_bonus || 0);
-        const lzBlade   = Number(det.lanzhu_blade_bonus || 0);
-        const lzHeart   = Number(det.lanzhu_heart_bonus || 0);
-        const tmpHearts = Object.assign({}, det.temp_hearts || {});
-        if(lzHeart > 0) tmpHearts['all'] = (Number(tmpHearts['all'] || 0)) + lzHeart;
+        const tmpBlade   = Number(det.temp_blade || 0);
+        const alwBlade0  = Number(det.always_blade_bonus || 0);
+        const alwScore   = Number(det.always_score_bonus || 0);
+        const lzBlade    = Number(det.lanzhu_blade_bonus || 0);
+        const lzHeart    = Number(det.lanzhu_heart_bonus || 0);
+        const tmpHearts  = Object.assign({}, det.temp_hearts || {});
+        const alwHearts  = Object.assign({}, det.always_hearts_bonus || {});
 
         // Love wing bell の常時ブレードは、state_detail に乗らない環境でも
         // success_zone から再計算して可視バッジへ反映する
@@ -2453,7 +2435,6 @@ HTML = r'''<!doctype html>
           if(alwBlade <= 0 && slotKey === 'C'){
             const sz = Array.isArray(st && st.success_zone) ? st.success_zone : [];
             const cnSelf = String(cn || '');
-            // μ's カードは cardnumber が PL!- で始まる前提
             if(cnSelf.startsWith('PL!-')){
               const lwCount = sz.filter(x => String(x||'') === 'PL!-bp4-020').length;
               if(lwCount > 0) alwBlade += lwCount;
@@ -2462,7 +2443,12 @@ HTML = r'''<!doctype html>
         }catch(e){}
         const totalBlade = tmpBlade + alwBlade + lzBlade;
 
-        const hasBonus = totalBlade > 0 || Object.keys(tmpHearts).some(k=>Number(tmpHearts[k])>0);
+        const shownHearts = Object.assign({}, alwHearts);
+        for(const [k,v] of Object.entries(tmpHearts)) shownHearts[k] = (Number(shownHearts[k] || 0)) + Number(v || 0);
+        if(lzHeart > 0) shownHearts['all'] = (Number(shownHearts['all'] || 0)) + lzHeart;
+
+        const hasHeartBonus = Object.keys(shownHearts).some(k=>Number(shownHearts[k])>0);
+        const hasBonus = totalBlade > 0 || hasHeartBonus || alwScore > 0;
         if(hasBonus){
           const ICON_BASE = '/llocg_db_out_full/card_images/texticons/';
           const heartIconFile = {
@@ -2581,8 +2567,8 @@ HTML = r'''<!doctype html>
             ov.appendChild(makeIconRow(makeIconStack(icons, ''), titleStr));
           }
 
-          // ハートスタック（色別）
-          for(const [col, cnt] of Object.entries(tmpHearts)){
+          // ハートスタック（色別・常時と一時を合算表示）
+          for(const [col, cnt] of Object.entries(shownHearts)){
             const n = Number(cnt);
             if(!n || n <= 0) continue;
             const file = heartIconFile[col] || `heart_${col}.png`;
@@ -2594,10 +2580,35 @@ HTML = r'''<!doctype html>
               fallbackText: '♥',
               fallbackColor: fc,
             }));
-            ov.appendChild(makeIconRow(makeIconStack(icons, ''), `${fb}ハート +${n}（一時）`));
+            ov.appendChild(makeIconRow(makeIconStack(icons, ''), `${fb}ハート +${n}`));
           }
 
-          card.appendChild(ov);
+          if(totalBlade > 0 || hasHeartBonus){
+            card.appendChild(ov);
+          }
+
+          if(alwScore > 0){
+            const sb = document.createElement('div');
+            sb.textContent = `SCORE +${alwScore}`;
+            sb.style.cssText = [
+              'position:absolute',
+              'left:50%',
+              'top:-12px',
+              'transform:translateX(-50%)',
+              'padding:2px 8px',
+              'border-radius:999px',
+              'background:rgba(0,0,0,0.78)',
+              'border:1px solid rgba(255,255,255,0.18)',
+              'color:#ffe066',
+              'font-size:11px',
+              'font-weight:800',
+              'line-height:1.2',
+              'pointer-events:none',
+              'z-index:56',
+              'white-space:nowrap',
+            ].join(';');
+            card.appendChild(sb);
+          }
         }
       }
     }catch(e){}
@@ -3482,10 +3493,9 @@ HTML = r'''<!doctype html>
         const srcCn = srcSlot ? String(srcSlot.cardnumber || '') : '';
         const srcName = srcSlot ? String(srcSlot.cardname || srcSlot.name || srcCn || '') : '';
         elModalTitle.textContent = 'ポジションチェンジ';
-        const explicitPcText = pendingTextFor(p);
-        setRichText(elModalText, explicitPcText || (srcName
+        setRichText(elModalText, srcName
           ? `${srcName}${srcPos ? `（現在 ${srcPos}）` : ''} の移動先を選んでください。移動先にメンバーがいる場合は入れ替わります。`
-          : `移動先を選んでください。移動先にメンバーがいる場合は入れ替わります。`));
+          : `移動先を選んでください。移動先にメンバーがいる場合は入れ替わります。`);
         const row = document.createElement('div');
         row.className = 'choiceRow';
         const dimsP = standardSize('portrait');
