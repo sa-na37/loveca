@@ -188,6 +188,21 @@ EXTRA_EFFECT_RULES = [
         "effect_template": "<(桃)>/<(黄)>/<(紫)>のうち1つを選ぶ。ライブ終了時まで、選んだハートを1つ得る。",
         "ext_key": "live_start_choose_pinkYellowPurple_heart",
     },
+    {
+        "id": "live_start_discard1_choose_pink_yellow_purple_heart_v7h",
+        "effect_template": "<(桃)>か<(黄)>か<(紫)>のうち、1つを選ぶ。ライブ終了時まで、選んだハートを1つ得る。",
+        "ext_key": "live_start_choose_pinkYellowPurple_heart",
+    },
+    {
+        "id": "body_pick_live_req_yellow_ge3_from_green",
+        "effect_template": "控え室から必要ハートに<(黄)>を3以上含むライブカードを1枚手札に加える。",
+        "ext_key": "body_pick_live_req_yellow_ge3_from_green",
+    },
+    {
+        "id": "body_pick_live_req_pink_ge3_from_green",
+        "effect_template": "自分の控え室から必要ハートに<(桃)>を3以上含むライブカードを1枚手札に加える。",
+        "ext_key": "body_pick_live_req_pink_ge3_from_green",
+    },
     # Prompt 73: PL!HS-bp2-001 日野下花帆 (起動)
     # コスト: <(E)><(E)> → engine 側起動コスト処理
     # 控え室からスコア3以下の 蓮ノ空 ライブカードを1枚手札に加える
@@ -375,6 +390,10 @@ def try_match_effect_template_ext(
          ["<(桃)>", "<(黄)>", "<(紫)>", "選んだハートを1つ得る。"]),
         ("live_start_no_mus_blade5_force_not_center",
          ["<(ブレード)>", "5つ以上持つ『μ's』のメンバーがいない場合", "センターエリア以外にポジションチェンジする。"]),
+        ("body_pick_live_req_yellow_ge3_from_green",
+         ["必要ハートに<(黄)>", "3以上含むライブカード", "1枚手札に加える。"]),
+        ("body_pick_live_req_pink_ge3_from_green",
+         ["必要ハートに<(桃)>", "3以上含むライブカード", "1枚手札に加える。"]),
     ]
     for ext_key, needles in fuzzy_rules:
         if all(_norm_ws(nd) in s_norm for nd in needles):
@@ -984,6 +1003,64 @@ def _green_room_cards_by_group_any_type(gs: Any, cards_db: Dict[str, Any], group
         except Exception:
             pass
     return result
+
+def _card_required_hearts(card: Any, cards_db: Dict[str, Any]) -> Dict[str, int]:
+    try:
+        info = _lookup_cardinfo(cards_db, card)
+        if info is not None:
+            d = getattr(info, 'required_hearts', None)
+            if d is None and isinstance(info, dict):
+                d = info.get('required_hearts')
+            if isinstance(d, dict):
+                return {str(k): int(v or 0) for k, v in d.items()}
+    except Exception:
+        pass
+    return {}
+
+
+def _green_room_lives_with_required_heart_ge(gs: Any, cards_db: Dict[str, Any], color: str, n: int) -> list:
+    result = []
+    key = str(color or '').strip().lower()
+    for card in _green_room_list(gs):
+        try:
+            if _card_type_norm(card, cards_db) != 'LIVE':
+                continue
+            req = _card_required_hearts(card, cards_db)
+            if int(req.get(key, 0) or 0) >= int(n or 0):
+                result.append(card)
+        except Exception:
+            pass
+    return result
+
+
+def _enqueue_pick_live_req_heart_from_green(gs: Any, cards_db: Dict[str, Any], color: str, n: int, src: str) -> bool:
+    cands = _green_room_lives_with_required_heart_ge(gs, cards_db, color, n)
+    if not cands:
+        try:
+            gs.log.append(f"[AUTO_EXT] no LIVE in green_room with required {color}>={n} ({src})")
+        except Exception:
+            pass
+        return True
+    if len(cands) == 1:
+        ok = _move_card_from_green_to_hand(gs, cands[0])
+        cn_str = str(getattr(cands[0], 'cardnumber', None) or cands[0] or '')
+        try:
+            gs.log.append(f"[AUTO_EXT] green->hand {cn_str} ({src}) ok={ok}")
+        except Exception:
+            pass
+        return True
+    cns = [str(getattr(c, 'cardnumber', None) or c or '') for c in cands]
+    payload = {
+        'kind': 'pick_live_from_green',
+        'text': f"控え室の必要ハートに<{color}>を{n}以上含むライブカードを1枚手札に加える",
+        'options': cns,
+    }
+    try:
+        getattr(gs, 'pending').append(payload)
+        gs.log.append(f"[PENDING] pick req-heart live from green color={color} n={n} opts={cns}")
+    except Exception:
+        pass
+    return True
 
 
 def _move_card_from_green_to_hand(gs: Any, card: Any) -> bool:
@@ -2141,6 +2218,17 @@ def try_apply_effect_by_rule_ext(
             except Exception:
                 pass
         return True
+
+    if ext_key == "body_pick_live_req_yellow_ge3_from_green":
+        src = str((ctx or {}).get("source_cn") or "PL!-PR-003")
+        return _enqueue_pick_live_req_heart_from_green(gs, cards_db, 'yellow', 3, src)
+
+    if ext_key == "body_pick_live_req_pink_ge3_from_green":
+        src = str((ctx or {}).get("source_cn") or "PL!-PR-004")
+        return _enqueue_pick_live_req_heart_from_green(gs, cards_db, 'pink', 3, src)
+
+    # ------------------------------------------------------------------
+    # Prompt 76: PL!HS-bp2-005 大沢瑠璃乃 (登場)
 
     # ------------------------------------------------------------------
     # Prompt 76: PL!HS-bp2-005 大沢瑠璃乃 (登場)

@@ -2938,6 +2938,60 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
         except Exception:
             pass
 
+        try:
+            if _canon_cardno(getattr(ci, 'cardnumber', '') or '') == 'PL!-sd1-003':
+                if len(list(getattr(gs, 'hand', []) or [])) >= 1:
+                    pr = {
+                        'kind': 'live_start_pay_effect',
+                        'pos': pos,
+                        'cn': getattr(ci, 'cardnumber', '') or '',
+                        'need_e': 0,
+                        'cost_kind': 'discard_from_hand',
+                        'cost_n': 1,
+                        'effect': '<(桃)>か<(黄)>か<(紫)>のうち、1つを選ぶ。ライブ終了時まで、選んだハートを1つ得る。',
+                        'text': f"{getattr(ci, 'cardnumber', '') or ''}[ライブ開始時]: 手札を1枚控え室に置いてもよい → 桃 / 黄 / 紫 から1つ選び、ライブ終了時までそのハートを1つ得る",
+                        'options': ['pay', 'skip'],
+                    }
+                    _append_prompt(pr, f"{pos}: {getattr(ci, 'cardnumber', '') or ''} ライブ開始時")
+                continue
+        except Exception:
+            pass
+
+        try:
+            if _canon_cardno(getattr(ci, 'cardnumber', '') or '') == 'PL!-bp4-005':
+                _has_heavy_mus = False
+                try:
+                    for _pp in ('L','C','R'):
+                        _sl = (gs.stage or {}).get(_pp)
+                        if not _sl or not bool(getattr(_sl, 'cardnumber', None)):
+                            continue
+                        if _card_group(_sl, cards_db) == "μ's" and _slot_total_blade(_sl) >= 5:
+                            _has_heavy_mus = True
+                            break
+                except Exception:
+                    _has_heavy_mus = False
+                if not _has_heavy_mus:
+                    if pos == 'C':
+                        _opts = ['L','R']
+                    elif pos == 'L':
+                        _opts = ['R']
+                    elif pos == 'R':
+                        _opts = ['L']
+                    else:
+                        _opts = ['L','R']
+                    pr = {
+                        'kind': 'position_change',
+                        'src_pos': pos,
+                        'optional': False,
+                        'options': _opts,
+                        'source_cn': getattr(ci, 'cardnumber', '') or '',
+                        'text': f"{getattr(ci, 'cardnumber', '') or ''}: 自分のステージにブレード5以上の『μ's』メンバーがいないため、センターエリア以外にポジションチェンジする",
+                    }
+                    _append_prompt(pr, f"{pos}: {getattr(ci, 'cardnumber', '') or ''} ライブ開始時")
+                continue
+        except Exception:
+            pass
+
         for ab in ci.abilities:
             if not isinstance(ab, dict):
                 continue
@@ -4243,7 +4297,13 @@ def _success_zone_score_sum(gs: GameState, cards_db: Dict[str, CardInfo]) -> int
 
 def _mu_live_cards_in_set_zone_count(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
     n = 0
-    for cn in list(getattr(gs, 'set_zone', []) or []):
+    try:
+        src = list(getattr(gs, 'set_zone', []) or [])
+        if not src:
+            src = list(getattr(gs, '_attempt_live_cards', []) or [])
+    except Exception:
+        src = []
+    for cn in list(src or []):
         ci = _get_card(cards_db, cn)
         if not ci:
             continue
@@ -4564,6 +4624,10 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
         gs.need_success_store_choice = False
         _clear_end_of_live_buffs(gs)
         gs.live_start_prompted = False
+        try:
+            gs._attempt_live_cards = []
+        except Exception:
+            pass
         return
 
     if gs.pending:
@@ -4573,6 +4637,11 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
     if _enqueue_live_start_prompts(gs, cards_db) > 0:
         gs.log.append("[INFO] attempt: resolve live-start prompts, then click Attempt again.")
         return
+
+    try:
+        gs._attempt_live_cards = []
+    except Exception:
+        pass
 
     lives = []
     live_idxs = []
@@ -4587,6 +4656,11 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
 
     if nonlives:
         gs.green_room.extend(nonlives)
+
+    try:
+        gs._attempt_live_cards = list(lives)
+    except Exception:
+        pass
 
     base = owned_base_hearts(gs, cards_db)
     cheer = cheer_hearts_from_resolve(gs, cards_db)
@@ -5350,6 +5424,10 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         gs.log.append(f"[ACT] success_store: moved {pick_cn} -> success storage")
         _clear_end_of_live_buffs(gs)
         gs.live_start_prompted = False
+        try:
+            gs._attempt_live_cards = []
+        except Exception:
+            pass
         return
 
     if kind == 'live_start_success_heart_by_success':
