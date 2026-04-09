@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_start_group3_fix_20260408h_25
+# BUILD_TAG: hime_faceup_live_set_limit_20260409a
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -1334,6 +1334,8 @@ class GameState:
     vivid_world_blue_mode_this_live: bool = False
     vivid_world_bonus_this_live: int = 0
     live_start_resolved_set_idxs: List[int] = field(default_factory=list)
+    next_live_set_limit_reduction: int = 0
+    current_live_set_limit: int = 3
 
 
 def post_process(gs: GameState) -> None:
@@ -1430,6 +1432,8 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
         "vivid_world_blue_mode_this_live": bool(getattr(gs, "vivid_world_blue_mode_this_live", False)),
         "vivid_world_bonus_this_live": int(getattr(gs, "vivid_world_bonus_this_live", 0) or 0),
         "live_start_resolved_set_idxs": list(getattr(gs, "live_start_resolved_set_idxs", []) or []),
+        "next_live_set_limit_reduction": int(getattr(gs, "next_live_set_limit_reduction", 0) or 0),
+        "current_live_set_limit": int(getattr(gs, "current_live_set_limit", 3) or 3),
     }
 
 
@@ -1480,6 +1484,8 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
         gs.live_start_resolved_set_idxs = [int(x) for x in (snap.get('live_start_resolved_set_idxs', getattr(gs, 'live_start_resolved_set_idxs', []) or []) or [])]
     except Exception:
         gs.live_start_resolved_set_idxs = []
+    gs.next_live_set_limit_reduction = int(snap.get('next_live_set_limit_reduction', getattr(gs, 'next_live_set_limit_reduction', 0) or 0) or 0)
+    gs.current_live_set_limit = int(snap.get('current_live_set_limit', getattr(gs, 'current_live_set_limit', 3) or 3) or 3)
 
 
 
@@ -3541,12 +3547,16 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
         clauses = ab.get('clauses', [])
         if not isinstance(clauses, list):
             continue
+        main_phase_only = False
         for cl in clauses:
             if not isinstance(cl, dict):
                 continue
             cost = str(cl.get('cost_template', '') or '')
             eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
             if not eff:
+                continue
+            if eff == '自分のメインフェイズの場合、' and not cost:
+                main_phase_only = True
                 continue
             # Cost template handling for [登場]
             if cost:
@@ -3587,18 +3597,47 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
                     })
                     gs.log.append(f"[PENDING] {canon}[登場]: pay/skip -> self-wait then {eff}")
                     return
+                need_e_main = _parse_energy_cost(cost)
+                if ((('自分のメインフェイズ' in cost) or main_phase_only) and need_e_main > 0 and _match_effect_template(eff)):
+                    if str(getattr(gs, 'phase', '') or '').upper() != 'MAIN':
+                        gs.log.append(f"[INFO] {canon}[登場]: main-phase-only cost skipped outside MAIN")
+                        main_phase_only = False
+                        continue
+                    if int(getattr(gs, 'energy_active', 0) or 0) < int(need_e_main):
+                        gs.log.append(f"[INFO] {canon}[登場]: not enough active energy for optional cost [E]{need_e_main}")
+                        main_phase_only = False
+                        continue
+                    pretty_cost = cost
+                    if main_phase_only and ('自分のメインフェイズ' not in pretty_cost):
+                        pretty_cost = '自分のメインフェイズの場合、' + pretty_cost
+                    ctx = {'pos': pos.upper(), 'source_cn': canon}
+                    gs.pending.append({
+                        'kind': 'pay_or_skip',
+                        'text': _pretty_optional_effect_prompt_text('登場', canon, pretty_cost, eff),
+                        'options': ['pay', 'skip'],
+                        'cost_kind': 'energy',
+                        'cost_n': int(need_e_main),
+                        'after_effect_template': eff,
+                        'ctx': ctx,
+                        'source_cn': canon,
+                    })
+                    gs.log.append(f"[PENDING] {canon}[登場]: pay/skip -> [E]{need_e_main} then {eff}")
+                    return
                 # unsupported cost template for now
                 gs.log.append(f"[INFO] {canon}[登場]: unsupported cost_template skipped: {cost}")
+                main_phase_only = False
                 continue
 
             # costless-only for now
             if _parse_energy_cost(cost) > 0 or _cost_requires_self_to_green(cost):
+                main_phase_only = False
                 continue
             ctx = {'pos': pos.upper(), 'source_cn': canon}
             if try_apply_effect_template(gs, rng, cards_db, eff, ctx):
                 gs.log.append(f"[AUTO] {canon}[登場]: applied {eff}")
                 if gs.pending:
                     return
+            main_phase_only = False
 
     # BODY効果（手札をすべて公開する）は起動効果のため cmd_activate_member で処理
 
@@ -3916,10 +3955,126 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
     gs.log.append(f"[WARN] auto_trigger: unknown kind={kind}")
 
 
+def _live_set_limit(gs: GameState) -> int:
+    try:
+        lim = int(getattr(gs, 'current_live_set_limit', 3) or 0)
+    except Exception:
+        lim = 3
+    return max(0, lim)
+
+
+def _bump_next_live_set_limit_reduction(gs: GameState, amount: int = 1, source_cn: str = '') -> int:
+    try:
+        cur = int(getattr(gs, 'next_live_set_limit_reduction', 0) or 0)
+    except Exception:
+        cur = 0
+    try:
+        add = int(amount or 0)
+    except Exception:
+        add = 0
+    if add <= 0:
+        return cur
+    cur += add
+    gs.next_live_set_limit_reduction = cur
+    if source_cn:
+        gs.log.append(f"[AUTO] {source_cn}: next LIVE_SET hand-placement limit -{add} (pending total -{cur})")
+    else:
+        gs.log.append(f"[AUTO] next LIVE_SET hand-placement limit -{add} (pending total -{cur})")
+    return cur
+
+
+def _apply_temp_blade_to_stage_pos(gs: GameState, pos: str, n: int, source_cn: str = '') -> bool:
+    p = str(pos or '').upper()
+    slot = (gs.stage or {}).get(p) if isinstance(getattr(gs, 'stage', None), dict) else None
+    if slot is None or not bool(getattr(slot, 'cardnumber', None)):
+        return False
+    try:
+        slot.temp_blade = int(getattr(slot, 'temp_blade', 0) or 0) + int(n or 0)
+        slot.temp_until = 'end_of_live'
+    except Exception:
+        return False
+    if source_cn:
+        gs.log.append(f"[AUTO] {source_cn}: {p} temp blade +{int(n or 0)} until end of live")
+    return True
+
+
+def _enqueue_dive_faceup_bonus_prompt(gs: GameState, cards_db: Dict[str, CardInfo], source_cn: str) -> None:
+    cands: List[str] = []
+    for p in ('L', 'C', 'R'):
+        slot = (gs.stage or {}).get(p) if isinstance(getattr(gs, 'stage', None), dict) else None
+        if slot is None or not bool(getattr(slot, 'cardnumber', None)):
+            continue
+        ci = _get_card(cards_db, slot.cardnumber)
+        grp = str(getattr(ci, 'group', '') or '') if ci else ''
+        unit = str(getattr(ci, 'unit', '') or '') if ci else ''
+        if ('虹ヶ咲' in grp) or ('虹ヶ咲' in unit):
+            cands.append(p)
+    if not cands:
+        gs.log.append(f"[AUTO] {source_cn}: no 虹ヶ咲 member on stage for face-up set bonus")
+        return
+    if len(cands) == 1:
+        _apply_temp_blade_to_stage_pos(gs, cands[0], 2, source_cn=source_cn)
+        return
+    gs.pending.append({
+        'kind': 'dive_faceup_pick_stage_member_blade2',
+        'source_cn': source_cn,
+        'text': 'DIVE! が表向きでライブカード置き場に置かれた：『虹ヶ咲』のメンバー1人にブレード+2（ライブ終了時まで）',
+        'options': cands,
+    })
+
+
+def _on_faceup_live_put_into_set_zone(gs: GameState, cards_db: Dict[str, CardInfo], cn: str, source_cn: str = '') -> None:
+    canon = _canon_cardno(str(cn or ''))
+    if canon == 'PL!N-bp4-026':
+        _enqueue_dive_faceup_bonus_prompt(gs, cards_db, source_cn=source_cn or canon)
+
+
+def _move_live_from_green_to_set_zone(gs: GameState, cards_db: Dict[str, CardInfo], cn: str, source_cn: str = '') -> bool:
+    pick_cn = None
+    target = _canon_cardno(str(cn or ''))
+    for x in list(getattr(gs, 'green_room', []) or []):
+        if _canon_cardno(x) == target:
+            pick_cn = x
+            break
+    if not pick_cn:
+        return False
+    ci = _get_card(cards_db, pick_cn)
+    if not _is_live(ci):
+        return False
+    gs.green_room.remove(pick_cn)
+    gs.set_zone.append(pick_cn)
+    gs.log.append(f"[AUTO] {source_cn or target}: green->set(face-up) {pick_cn}")
+    _on_faceup_live_put_into_set_zone(gs, cards_db, pick_cn, source_cn=source_cn or target)
+    return True
+
+
+def _move_named_live_from_hand_to_set_zone(gs: GameState, cards_db: Dict[str, CardInfo], choice_cn: str, required_name: str, source_cn: str = '') -> bool:
+    target = _canon_cardno(str(choice_cn or ''))
+    pick_cn = None
+    for x in list(getattr(gs, 'hand', []) or []):
+        if _canon_cardno(x) != target:
+            continue
+        ci = _get_card(cards_db, x)
+        nm = str(getattr(ci, 'name', '') or '') if ci else ''
+        if required_name and nm != required_name:
+            continue
+        if not _is_live(ci):
+            continue
+        pick_cn = x
+        break
+    if not pick_cn:
+        return False
+    gs.hand.remove(pick_cn)
+    gs.set_zone.append(pick_cn)
+    gs.log.append(f"[AUTO] {source_cn or target}: hand->set(face-up) {pick_cn}")
+    _on_faceup_live_put_into_set_zone(gs, cards_db, pick_cn, source_cn=source_cn or target)
+    return True
+
 
 def cmd_set(gs: GameState, rng: random.Random, indices: List[int]) -> None:
-    if len(indices) > 3:
-        gs.log.append("[ERR] set: max 3 cards")
+    limit = _live_set_limit(gs)
+    if len(indices) > limit:
+        gs.log.append(f"[ERR] set: max {limit} cards this LIVE_SET")
         return
     if any(i < 0 or i >= len(gs.hand) for i in indices):
         gs.log.append("[ERR] set: invalid indices")
@@ -3929,13 +4084,13 @@ def cmd_set(gs: GameState, rng: random.Random, indices: List[int]) -> None:
     for i in idxs:
         picked.append(gs.hand.pop(i))
     picked.reverse()
-    gs.set_zone = picked[:]
+    gs.set_zone.extend(picked)
     try:
         gs.live_start_resolved_set_idxs = []
     except Exception:
         pass
     drawn = draw(gs, len(picked), rng)
-    gs.log.append(f"[SET] set {len(picked)} cards, drew {drawn}")
+    gs.log.append(f"[SET] set {len(picked)} cards, drew {drawn} (live_set total={len(getattr(gs, 'set_zone', []) or [])})")
 
 
 def cmd_yell(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo]) -> None:
@@ -5269,6 +5424,30 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                 gs.pending.append(_r)
             return
 
+        if cost_kind == 'energy':
+            need_e = max(0, cost_n)
+            if need_e <= 0:
+                gs.log.append('[ERR] pay_or_skip: invalid energy cost')
+                return
+            if int(getattr(gs, 'energy_active', 0) or 0) < need_e:
+                gs.log.append(f'[ERR] pay_or_skip: not enough active energy (need {need_e})')
+                return
+            gs.energy_active -= need_e
+            gs.energy_wait += need_e
+            gs.log.append(f'[COST] {src}: paid [E]{need_e}')
+            applied = False
+            if after_eff:
+                try:
+                    rng = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
+                except Exception:
+                    rng = random.Random()
+                applied = bool(try_apply_effect_template(gs, rng, cards_db, after_eff, ctx0))
+            gs.log.append(f"[AUTO] {src}: energy cost -> {'applied' if applied else 'no_match'} {after_eff}")
+            _r = p.get('_resume') if isinstance(p, dict) else None
+            if _r:
+                gs.pending.append(_r)
+            return
+
         if cost_kind in ('', 'none', 'no_cost', 'immediate'):
             applied = False
             if after_eff:
@@ -6382,6 +6561,50 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             gs.log.append(f'[PENDING] {src_cn}[ライブ成功時] discard {cost_n} then {eff}')
         return
 
+# 2) Pick 1 LIVE from green room to face-up set_zone
+    if kind == 'pick_live_from_green_to_set_zone':
+        if choice_str.lower() in ('skip', 'no', 'n', '0', 'false'):
+            gs.log.append('[SKIP] pick live from green room to set_zone')
+            return
+        opts = p.get('options', [])
+        cn = _canon_cardno(choice_str)
+        if isinstance(opts, list) and opts and cn not in [_canon_cardno(x) for x in opts]:
+            gs.log.append(f"[ERR] pick live to set_zone: invalid choice {cn}")
+            return
+        src = str(p.get('source_cn', '') or '')
+        if not _move_live_from_green_to_set_zone(gs, cards_db, cn, source_cn=src or cn):
+            gs.log.append(f"[ERR] pick live to set_zone: could not move {cn}")
+            return
+        _bump_next_live_set_limit_reduction(gs, int(p.get('reduce_next_live_set', 1) or 1), source_cn=src or cn)
+        return
+
+    if kind == 'pick_named_live_from_hand_to_set_zone':
+        if choice_str.lower() in ('skip', 'no', 'n', '0', 'false'):
+            gs.log.append('[SKIP] pick named live from hand to set_zone')
+            return
+        opts = p.get('options', [])
+        cn = _canon_cardno(choice_str)
+        if isinstance(opts, list) and opts and cn not in [_canon_cardno(x) for x in opts]:
+            gs.log.append(f"[ERR] pick named live to set_zone: invalid choice {cn}")
+            return
+        required_name = str(p.get('required_name', '') or '')
+        src = str(p.get('source_cn', '') or '')
+        if not _move_named_live_from_hand_to_set_zone(gs, cards_db, cn, required_name, source_cn=src or cn):
+            gs.log.append(f"[ERR] pick named live to set_zone: could not move {cn}")
+            return
+        _bump_next_live_set_limit_reduction(gs, int(p.get('reduce_next_live_set', 1) or 1), source_cn=src or cn)
+        return
+
+    if kind == 'dive_faceup_pick_stage_member_blade2':
+        pos = str(choice_str or '').upper()
+        if pos not in ('L', 'C', 'R'):
+            gs.log.append(f"[ERR] dive faceup bonus: invalid choice {choice_str}")
+            return
+        src = str(p.get('source_cn', '') or 'PL!N-bp4-026')
+        if not _apply_temp_blade_to_stage_pos(gs, pos, 2, source_cn=src):
+            gs.log.append(f"[ERR] dive faceup bonus: no member at {pos}")
+        return
+
 # 2) Pick 1 LIVE from green room to hand
     if kind == "pick_live_from_green":
         if choice_str.lower() in ("skip", "no", "n", "0", "false"):
@@ -6636,10 +6859,13 @@ def cmd_end_turn(gs: GameState, rng: random.Random) -> None:
 
     # Enter Live phase (set step)
     gs.phase = "LIVE_SET"
-    gs.set_zone = []
+    red = int(getattr(gs, 'next_live_set_limit_reduction', 0) or 0)
+    gs.current_live_set_limit = max(0, 3 - red)
+    gs.next_live_set_limit_reduction = 0
     gs.live_start_prompted = False
     gs.turn_blade_bonus = 0
-    gs.log.append(f"[PHASE] LIVE_SET (choose up to 3 from hand) turn={gs.turn}")
+    preload = len(getattr(gs, 'set_zone', []) or [])
+    gs.log.append(f"[PHASE] LIVE_SET (choose up to {gs.current_live_set_limit} from hand; preloaded={preload}) turn={gs.turn}")
 
 
 def _advance_to_next_turn(gs: GameState, rng: random.Random) -> None:

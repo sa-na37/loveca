@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_group3_A7B2_20260407b
+# BUILD_TAG: engine_effect_hime_faceup_set_20260409a
 from __future__ import annotations
 
 """llocg_ui.engine_effect
@@ -202,6 +202,11 @@ EXTRA_EFFECT_RULES = [
         "id": "body_pick_live_req_pink_ge3_from_green",
         "effect_template": "自分の控え室から必要ハートに<(桃)>を3以上含むライブカードを1枚手札に加える。",
         "ext_key": "body_pick_live_req_pink_ge3_from_green",
+    },
+    {
+        "id": "green_live_faceup_set_reduce_next_live_set_limit",
+        "effect_template": "自分の控え室からライブカードを1枚、表向きにライブカード置き場に置く。次のライブカードセットフェイズで自分がライブカード置き場に置けるカード枚数の上限が1枚減る。",
+        "ext_key": "green_live_faceup_set_reduce_next_live_set_limit",
     },
     # Prompt 73: PL!HS-bp2-001 日野下花帆 (起動)
     # コスト: <(E)><(E)> → engine 側起動コスト処理
@@ -1031,6 +1036,49 @@ def _green_room_lives_with_required_heart_ge(gs: Any, cards_db: Dict[str, Any], 
         except Exception:
             pass
     return result
+
+
+def _enqueue_pick_live_faceup_to_set_from_green(eng: Dict[str, Any], gs: Any, cards_db: Dict[str, Any], src: str, label: str = '') -> bool:
+    cands = []
+    for card in _green_room_list(gs):
+        try:
+            if _card_type_norm(card, cards_db) == 'LIVE':
+                cands.append(card)
+        except Exception:
+            pass
+    if not cands:
+        try:
+            gs.log.append(f"[AUTO_EXT] no LIVE in green_room for face-up set ({src})")
+        except Exception:
+            pass
+        return True
+    move_fn = eng.get('_move_live_from_green_to_set_zone')
+    reduce_fn = eng.get('_bump_next_live_set_limit_reduction')
+    if len(cands) == 1 and callable(move_fn) and callable(reduce_fn):
+        cn_str = str(getattr(cands[0], 'cardnumber', None) or cands[0] or '')
+        ok = bool(move_fn(gs, cards_db, cn_str, source_cn=src))
+        if ok:
+            reduce_fn(gs, 1, source_cn=src)
+        try:
+            gs.log.append(f"[AUTO_EXT] green->set(face-up) {cn_str} ({src}) ok={ok}")
+        except Exception:
+            pass
+        return True
+    cns = [str(getattr(c, 'cardnumber', None) or c or '') for c in cands]
+    payload = {
+        'kind': 'pick_live_from_green_to_set_zone',
+        'text': label or '控え室のライブカード1枚を表向きでライブカード置き場に置く',
+        'options': cns,
+        'allow_skip': False,
+        'reduce_next_live_set': 1,
+        'source_cn': src,
+    }
+    try:
+        getattr(gs, 'pending').append(payload)
+        gs.log.append(f"[PENDING] pick LIVE from green to set_zone ({src}) opts={cns}")
+    except Exception:
+        pass
+    return True
 
 
 def _enqueue_pick_live_req_heart_from_green(gs: Any, cards_db: Dict[str, Any], color: str, n: int, src: str) -> bool:
@@ -2226,6 +2274,11 @@ def try_apply_effect_by_rule_ext(
     if ext_key == "body_pick_live_req_pink_ge3_from_green":
         src = str((ctx or {}).get("source_cn") or "PL!-PR-004")
         return _enqueue_pick_live_req_heart_from_green(gs, cards_db, 'pink', 3, src)
+
+    if ext_key == "green_live_faceup_set_reduce_next_live_set_limit":
+        src = str((ctx or {}).get('source_cn') or '')
+        label = '控え室のライブカード1枚を表向きでライブカード置き場に置く。次のライブカードセットフェイズで置ける枚数上限-1'
+        return _enqueue_pick_live_faceup_to_set_from_green(eng, gs, cards_db, src or 'LIVE', label=label)
 
     # ------------------------------------------------------------------
     # Prompt 76: PL!HS-bp2-005 大沢瑠璃乃 (登場)
