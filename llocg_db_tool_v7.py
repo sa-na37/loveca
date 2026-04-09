@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-LL-OCG DB Tool (single-file) v2
+LL-OCG DB Tool (single-file) v7
 
 Subcommands:
   scrape    : wiki -> cards_min.csv/json  (with normalize columns if enabled)
   normalize : postprocess effect_tokens_json: (E)/(ALL)/(ブレード)/(スコア+N)
+              + classify effect text into NO_ABILITY / HAS_TEXT
   mine      : mine frequent effect templates -> CSV + stub YAML
   audit     : audit CSV (missing, json parse, unknown tokens, cardno format)
   all       : scrape -> normalize -> mine -> audit
@@ -115,6 +116,8 @@ KNOWN_SIMPLE = {
     "(E)": "energy_icon_n",     # Energy
     "(ALL)": "all_heart_n",     # All-heart
 }
+
+NO_ABILITY_MARKERS = {"", "(なし)", "(テキストなし)"}
 
 
 # -------------------------
@@ -580,6 +583,13 @@ def normalize_effect_text(effect_text: str) -> str:
     return s
 
 
+def classify_effect_text_status(effect_text_raw: Any, effect_text_norm: Any = "") -> str:
+    raw = normalize_effect_text(effect_text_raw) if isinstance(effect_text_raw, str) else ""
+    norm = normalize_effect_text(effect_text_norm) if isinstance(effect_text_norm, str) else ""
+    s = norm or raw
+    return "NO_ABILITY" if s in NO_ABILITY_MARKERS else "HAS_TEXT"
+
+
 def extract_effect_tokens(effect_text_norm: str) -> Dict[str, Any]:
     tokens: Dict[str, Any] = {"hearts": {}, "blade_mentions": []}
     if not effect_text_norm:
@@ -677,7 +687,10 @@ def parse_card_page(url: str, html: str, key_set: Set[str], do_normalize: bool) 
         rec["blade_heart_tags_json"] = json.dumps(bh_tags, ensure_ascii=False)
 
         eff_norm = normalize_effect_text(effect_text)
+        eff_status = classify_effect_text_status(effect_text, eff_norm)
         rec["effect_text_norm"] = eff_norm
+        rec["effect_text_status"] = eff_status
+        rec["effect_text_is_no_ability"] = 1 if eff_status == "NO_ABILITY" else 0
         rec["effect_tokens_json"] = json.dumps(extract_effect_tokens(eff_norm), ensure_ascii=False)
 
     return rec
@@ -870,9 +883,12 @@ def cmd_normalize(csv_path: Path, json_path: Optional[Path], outdir: Path, suffi
 
     new_tokens_json = []
     tok_blade, tok_energy, tok_all, tok_score_delta, tok_unknown_n = [], [], [], [], []
+    effect_statuses, effect_no_ability_flags = [], []
     bad_json = 0
 
-    for s in df["effect_tokens_json"].tolist():
+    eff_norm_series = df["effect_text_norm"].tolist() if "effect_text_norm" in df.columns else [""] * len(df)
+
+    for s, eff_norm in zip(df["effect_tokens_json"].tolist(), eff_norm_series):
         ok, obj = safe_json_loads(s)
         if (not ok) or (obj is None) or (not isinstance(obj, dict)):
             bad_json += 1
@@ -887,8 +903,13 @@ def cmd_normalize(csv_path: Path, json_path: Optional[Path], outdir: Path, suffi
         tok_unknown_n.append(len(unk) if isinstance(unk, list) else 0)
 
         new_tokens_json.append(json.dumps(obj2, ensure_ascii=False))
+        st = classify_effect_text_status(eff_norm, eff_norm)
+        effect_statuses.append(st)
+        effect_no_ability_flags.append(1 if st == "NO_ABILITY" else 0)
 
     df["effect_tokens_json"] = new_tokens_json
+    df["effect_text_status"] = effect_statuses
+    df["effect_text_is_no_ability"] = effect_no_ability_flags
     df["tok_blade_icon_n"] = tok_blade
     df["tok_energy_icon_n"] = tok_energy
     df["tok_all_heart_n"] = tok_all
@@ -1436,6 +1457,17 @@ def cmd_audit(csv_path: Path, top_unknown: int = 30) -> None:
         print("\n[CARDNUMBER FORMAT]")
         print(f"  bad format count: {n_bad}")
 
+    if "effect_text_status" in df.columns:
+        print("\n[EFFECT TEXT STATUS]")
+        vc = df["effect_text_status"].fillna("").astype(str).value_counts(dropna=False)
+        for k, v in vc.items():
+            print(f"  {k or '(blank)':20s} {int(v)}")
+    elif "effect_text_norm" in df.columns:
+        print("\n[EFFECT TEXT STATUS]")
+        vc = df["effect_text_norm"].fillna("").astype(str).map(lambda s: classify_effect_text_status(s, s)).value_counts(dropna=False)
+        for k, v in vc.items():
+            print(f"  {k or '(blank)':20s} {int(v)}")
+
     # unknown tags tally
     if "effect_tokens_json" in df.columns:
         unknown = Counter()
@@ -1463,7 +1495,7 @@ def cmd_audit(csv_path: Path, top_unknown: int = 30) -> None:
 # CLI
 # -------------------------
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="llocg_db_tool_v2.py")
+    p = argparse.ArgumentParser(prog="llocg_db_tool_v7.py")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     ps = sub.add_parser("scrape")
