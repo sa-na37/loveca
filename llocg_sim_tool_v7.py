@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-LLOCG Sim Tool (v5) — compile + TODO mining (paren/icon stitching)
+LLOCG Sim Tool (v7) — compile + TODO mining (paren/icon stitching)
 
-Fixes vs v4:
+Fixes vs v7:
 - Adds stronger clause stitching to prevent "effect template fragments":
   - Parenthetical spans split across lines are re-joined.
   - Consecutive icon-only lines are collapsed and can be treated as cost prefixes.
@@ -31,6 +31,38 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 import yaml
+
+
+NO_ABILITY_TEXTS = {"", "(なし)", "(テキストなし)"}
+
+
+def _norm_effect_status(v: Any) -> str:
+    if v is None:
+        return ""
+    try:
+        s = str(v).strip()
+    except Exception:
+        return ""
+    return s.upper()
+
+
+def is_no_ability_row(row: pd.Series) -> bool:
+    status = _norm_effect_status(row.get("effect_text_status", ""))
+    if status == "NO_ABILITY":
+        return True
+
+    flag = row.get("effect_text_is_no_ability", None)
+    if flag is not None:
+        try:
+            if int(flag) == 1:
+                return True
+        except Exception:
+            sval = str(flag).strip().lower()
+            if sval in {"1", "true", "yes"}:
+                return True
+
+    effect_text = str(row.get("effect_text_norm", "") or "").strip()
+    return effect_text in NO_ABILITY_TEXTS
 
 
 def _auto_find_patterns(
@@ -407,43 +439,52 @@ def compile_cards(csv_path: Path, cost_yaml: Path, effect_yaml: Path, out_json: 
         cardno = str(r.get("cardnumber", "")).strip()
         name = str(r.get("cardname", "")).strip()
         ctype = str(r.get("card_type_norm", "")).strip()
-        effect_text = str(r.get("effect_text_norm", "") or "")
+        effect_text = str(r.get("effect_text_norm", "") or "").strip()
 
-        blocks = split_trigger_blocks(effect_text)
+        row_is_no_ability = is_no_ability_row(r)
+        parse_status = "NO_ABILITY" if row_is_no_ability else "OK"
+
         abilities: List[Dict[str, Any]] = []
+        if not row_is_no_ability:
+            blocks = split_trigger_blocks(effect_text)
 
-        for b in blocks:
-            clauses = split_cost_effect_clauses(b.get("text", ""))
-            conds = b.get("conditions", [])
-            conds_s = ";".join([c for c in conds if isinstance(c, str) and c.strip()])
+            for b in blocks:
+                clauses = split_cost_effect_clauses(b.get("text", ""))
+                conds = b.get("conditions", [])
+                conds_s = ";".join([c for c in conds if isinstance(c, str) and c.strip()])
 
-            compiled_clauses: List[Dict[str, Any]] = []
-            for cl in clauses:
-                cost_t = cl.get("cost_text", "").strip()
-                eff_t = cl.get("effect_text", "").strip()
-                cost_pat = cost_pats.get(cost_t) if cost_t else None
-                eff_pat = eff_pats.get(eff_t) if eff_t else None
+                compiled_clauses: List[Dict[str, Any]] = []
+                for cl in clauses:
+                    cost_t = cl.get("cost_text", "").strip()
+                    eff_t = cl.get("effect_text", "").strip()
+                    cost_pat = cost_pats.get(cost_t) if cost_t else None
+                    eff_pat = eff_pats.get(eff_t) if eff_t else None
 
-                compiled_clauses.append({
-                    "optional": bool(cl.get("optional", False)),
-                    "cost_template": cost_t,
-                    "effect_template": eff_t,
-                    "cost_op": asdict(cost_pat) if cost_pat else None,
-                    "effect_op": asdict(eff_pat) if eff_pat else None,
-                    "raw": cl.get("raw", ""),
+                    compiled_clauses.append({
+                        "optional": bool(cl.get("optional", False)),
+                        "cost_template": cost_t,
+                        "effect_template": eff_t,
+                        "cost_op": asdict(cost_pat) if cost_pat else None,
+                        "effect_op": asdict(eff_pat) if eff_pat else None,
+                        "raw": cl.get("raw", ""),
+                    })
+
+                abilities.append({
+                    "ability_type": b.get("ability_type", "UNKNOWN"),
+                    "trigger": b.get("trigger", "BODY"),
+                    "conditions": conds_s,
+                    "clauses": compiled_clauses,
                 })
 
-            abilities.append({
-                "ability_type": b.get("ability_type", "UNKNOWN"),
-                "trigger": b.get("trigger", "BODY"),
-                "conditions": conds_s,
-                "clauses": compiled_clauses,
-            })
+            # Defensive fallback: if text exists but nothing compiled, keep UNKNOWN for auditability.
+            if effect_text and not abilities:
+                parse_status = "UNKNOWN"
 
         compiled["cards"].append({
             "cardnumber": cardno,
             "cardname": name,
             "card_type": ctype,
+            "parse_status": parse_status,
             "abilities": abilities,
         })
 
