@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-LLOCG Sim Tool (v7) — compile + TODO mining (paren/icon stitching)
+LLOCG Sim Tool (v7) — compile + TODO mining (paren/icon stitching + trigger-context fixes)
 
 Fixes vs v7:
 - Adds stronger clause stitching to prevent "effect template fragments":
@@ -159,15 +159,27 @@ def split_trigger_blocks(effect_text_norm: str) -> List[Dict[str, Any]]:
             return m.group(1).strip()
         return None
 
+    def quote_delta(s: str) -> int:
+        return (s.count("「") + s.count("『")) - (s.count("」") + s.count("』"))
+
+    def ended_sentence(s: str) -> bool:
+        s = (s or "").strip()
+        return bool(s) and s.endswith(("。", "．", "!", "！", "?", "？", "」", "』"))
+
     blocks: List[Dict[str, Any]] = []
     cur_ability = "UNKNOWN"
     cur_trigger = "BODY"
     cur_conditions: List[str] = []
     cur_lines: List[str] = []
 
+    quote_depth = 0
+    prev_text_line = ""
+    prev_kind: Optional[str] = None
+
     def flush():
-        nonlocal cur_lines
-        if cur_lines:
+        nonlocal cur_lines, prev_text_line, quote_depth
+        txt = "\n".join(cur_lines).strip()
+        if txt:
             inferred = cur_ability
             if inferred == "UNKNOWN" and cur_trigger != "BODY":
                 inferred = "自動"
@@ -175,30 +187,67 @@ def split_trigger_blocks(effect_text_norm: str) -> List[Dict[str, Any]]:
                 "ability_type": inferred,
                 "trigger": cur_trigger,
                 "conditions": list(cur_conditions),
-                "text": "\n".join(cur_lines).strip(),
+                "text": txt,
             })
         cur_lines = []
+        prev_text_line = ""
+        quote_depth = 0
 
-    for ln in lines:
+    def header_allowed() -> bool:
+        if quote_depth > 0:
+            return False
+        if not prev_text_line:
+            return True
+        if ended_sentence(prev_text_line):
+            return True
+        if prev_kind in {"ability", "trigger", "condition", "slash"}:
+            return True
+        return False
+
+    i = 0
+    while i < len(lines):
+        ln = lines[i]
         h = parse_header_line(ln)
-        if h is not None:
+        if h is not None and header_allowed():
             kind, val = classify_header(h)
+
+            if kind == "trigger" and i + 2 < len(lines):
+                mid = lines[i + 1].strip()
+                h2 = parse_header_line(lines[i + 2])
+                if mid in {"/", "／"} and h2 is not None:
+                    kind2, val2 = classify_header(h2)
+                    if kind2 == "trigger":
+                        val = f"{val}/{val2}"
+                        prev_kind = "slash"
+                        i += 2
+
             if kind == "ability":
                 flush()
                 cur_ability = val
                 cur_trigger = "BODY"
                 cur_conditions = []
+                prev_kind = "ability"
+                i += 1
                 continue
             if kind == "trigger":
                 flush()
                 cur_ability = "自動"
                 cur_trigger = val
                 cur_conditions = []
+                prev_kind = "trigger"
+                i += 1
                 continue
             flush()
             cur_conditions.append(val)
+            prev_kind = "condition"
+            i += 1
             continue
+
         cur_lines.append(ln)
+        quote_depth = max(0, quote_depth + quote_delta(ln))
+        prev_text_line = ln
+        prev_kind = "text"
+        i += 1
 
     flush()
     return blocks
@@ -469,12 +518,13 @@ def compile_cards(csv_path: Path, cost_yaml: Path, effect_yaml: Path, out_json: 
                         "raw": cl.get("raw", ""),
                     })
 
-                abilities.append({
-                    "ability_type": b.get("ability_type", "UNKNOWN"),
-                    "trigger": b.get("trigger", "BODY"),
-                    "conditions": conds_s,
-                    "clauses": compiled_clauses,
-                })
+                if compiled_clauses or (b.get("text", "") or "").strip():
+                    abilities.append({
+                        "ability_type": b.get("ability_type", "UNKNOWN"),
+                        "trigger": b.get("trigger", "BODY"),
+                        "conditions": conds_s,
+                        "clauses": compiled_clauses,
+                    })
 
             # Defensive fallback: if text exists but nothing compiled, keep UNKNOWN for auditability.
             if effect_text and not abilities:
