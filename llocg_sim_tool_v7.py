@@ -164,7 +164,16 @@ def split_trigger_blocks(effect_text_norm: str) -> List[Dict[str, Any]]:
 
     def ended_sentence(s: str) -> bool:
         s = (s or "").strip()
-        return bool(s) and s.endswith(("。", "．", "!", "！", "?", "？", "」", "』"))
+        if not s:
+            return False
+        if s.endswith(("。", "．", "!", "！", "?", "？", "」", "』")):
+            return True
+        # Parenthetical note lines often end with a closing bracket after a full stop,
+        # e.g. "（...増やさない。）". Treat those as sentence ends so the next bare
+        # trigger header starts a new ability instead of being swallowed into BODY text.
+        if re.search(r"[。．!?！？][）)]$", s):
+            return True
+        return False
 
     blocks: List[Dict[str, Any]] = []
     cur_ability = "UNKNOWN"
@@ -383,6 +392,23 @@ def split_cost_effect_clauses(block_text: str) -> List[Dict[str, Any]]:
             i += 1
             continue
 
+        # Short conditional prefix before icon-cost lines, e.g.
+        # "自分のメインフェイズの場合、" + "<(E)><(E)>支払ってもよい：..."
+        if ln.endswith("場合、") and i + 1 < len(merged1):
+            nxt = merged1[i + 1].strip()
+            if icon_run.match(nxt) or nxt.startswith("<("):
+                merged1[i + 1] = ln + nxt
+                i += 1
+                continue
+
+        if merged2:
+            prev2 = merged2[-1]
+            prev_quote_open = (prev2.count("「") + prev2.count("『")) > (prev2.count("」") + prev2.count("』"))
+            if prev_quote_open:
+                merged2[-1] = prev2 + ln
+                i += 1
+                continue
+
         merged2.append(ln)
         i += 1
 
@@ -413,6 +439,24 @@ def split_cost_effect_clauses(block_text: str) -> List[Dict[str, Any]]:
     suffix_set = {"を得る。", "を得る", "減らす。", "少なくなる。", "になる。"}
 
     stitched: List[Dict[str, Any]] = []
+    inline_tag_re = re.compile(r"^<[^<>]+>$")
+    sentence_end = ("。", "．", "!", "！", "?", "？")
+    open_tail = ("「", "『", "（", "(", "、", "，", ",", "/", "／")
+
+    def _can_sentence_end(s: str) -> bool:
+        s = (s or "").strip()
+        return bool(s) and s.endswith(sentence_end)
+
+    def _quote_unclosed(s: str) -> bool:
+        s = (s or "")
+        return (s.count("「") + s.count("『")) > (s.count("」") + s.count("』"))
+
+    def _merge_prev(prev: Dict[str, Any], cur: Dict[str, Any]) -> None:
+        prev_eff = (prev.get("effect_text") or "").strip()
+        cur_eff = (cur.get("effect_text") or "").strip()
+        prev["effect_text"] = prev_eff + cur_eff
+        prev["raw"] = (prev.get("raw", "") + "\n" + cur.get("raw", "")).strip()
+
     for cl in clauses:
         if not stitched:
             stitched.append(cl)
@@ -420,25 +464,55 @@ def split_cost_effect_clauses(block_text: str) -> List[Dict[str, Any]]:
         prev = stitched[-1]
         cur_eff = (cl.get("effect_text") or "").strip()
         prev_eff = (prev.get("effect_text") or "").strip()
+        cur_cost = (cl.get("cost_text") or "").strip()
+        prev_cost = (prev.get("cost_text") or "").strip()
+
+        # If a cost-bearing clause ended right after the colon, the following no-cost clause
+        # is the actual effect body (e.g. cost: + icon/choice text on subsequent lines).
+        if prev_cost and not prev_eff and not cur_cost and cur_eff:
+            _merge_prev(prev, cl)
+            continue
 
         # icon-only + 得る => merge
         if icon_run_re.match(prev_eff) and cur_eff in {"を得る。", "を得る"}:
-            prev["effect_text"] = prev_eff + cur_eff
-            prev["raw"] = (prev.get("raw", "") + "\\n" + cl.get("raw", "")).strip()
+            _merge_prev(prev, cl)
+            continue
+
+        # icon-only + generic tail (e.g. "を3以上含む...", "減らす。") => merge
+        if icon_run_re.match(prev_eff) and not cur_cost and cur_eff.startswith("を"):
+            _merge_prev(prev, cl)
             continue
 
         # prefix + short suffix (where prev doesn't already end a sentence)
-        if cur_eff in suffix_set and prev_eff and not prev_eff.endswith("。") and not icon_run_re.match(cur_eff):
-            prev["effect_text"] = prev_eff + cur_eff
-            prev["raw"] = (prev.get("raw", "") + "\\n" + cl.get("raw", "")).strip()
+        if cur_eff in suffix_set and prev_eff and not _can_sentence_end(prev_eff) and not icon_run_re.match(cur_eff):
+            _merge_prev(prev, cl)
             continue
 
         # If current is icon-only, it is typically a parameter line (e.g., color/heart list).
         # Merge into previous unless the previous already ends a sentence.
-        if icon_run_re.match(cur_eff) and prev_eff and not prev_eff.endswith("。"):
-            prev["effect_text"] = prev_eff + cur_eff
-            prev["raw"] = (prev.get("raw", "") + "\n" + cl.get("raw", "")).strip()
+        if icon_run_re.match(cur_eff) and prev_eff and not _can_sentence_end(prev_eff):
+            _merge_prev(prev, cl)
             continue
+
+        # Inline control tags like <常時> / <ライブ開始時> inside quoted or body text
+        # are text fragments, not standalone clauses.
+        if not cur_cost and inline_tag_re.match(cur_eff) and not cur_eff.startswith("<("):
+            _merge_prev(prev, cl)
+            continue
+
+        # General no-cost fragment stitching:
+        # keep joining until the sentence actually ends. This also covers cost-bearing
+        # clauses whose effect spills to the following lines after icons/choices.
+        # Also keep joining while a Japanese quote is still open.
+        if not cur_cost and prev_eff:
+            if (
+                (not _can_sentence_end(prev_eff))
+                or prev_eff.endswith(open_tail)
+                or inline_tag_re.match(prev_eff)
+                or _quote_unclosed(prev_eff)
+            ):
+                _merge_prev(prev, cl)
+                continue
 
         stitched.append(cl)
 
