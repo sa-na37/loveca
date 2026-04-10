@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_hime_preload_20260410a
+# BUILD_TAG: engine_effect_hime_preload_20260410b
 from __future__ import annotations
 
 """llocg_ui.engine_effect
@@ -608,7 +608,13 @@ def _card_cost(card: Any, cards_db: Dict[str, Any]) -> int:
 
 
 def _card_type_norm(card: Any, cards_db: Dict[str, Any]) -> str:
-    """Return the normalized card type string (MEMBER / LIVE / etc.)."""
+    """Return the normalized card type string (MEMBER / LIVE / etc.).
+
+    Fallback note:
+    Some source rows are occasionally misclassified as MEMBER even though they clearly
+    have LIVE-only fields (required_hearts / score). In that case prefer LIVE so
+    green-room pickers do not silently collapse to a single candidate.
+    """
     try:
         info = _lookup_cardinfo(cards_db, card)
         if info is not None:
@@ -616,7 +622,21 @@ def _card_type_norm(card: Any, cards_db: Dict[str, Any]) -> str:
             if t is None:
                 t = (info if isinstance(info, dict) else {}).get("card_type_norm")
             if t:
-                return str(t)
+                ts = str(t).strip().upper()
+                if ts in ("MEMBER", "LIVE", "ENERGY"):
+                    # repair obvious LIVE rows even when normalized type is wrong
+                    try:
+                        req = getattr(info, 'required_hearts', None)
+                        if req is None and isinstance(info, dict):
+                            req = info.get('required_hearts')
+                        score = getattr(info, 'score', None)
+                        if score is None and isinstance(info, dict):
+                            score = info.get('score')
+                        if ts == 'MEMBER' and ((isinstance(req, dict) and any(int(v or 0) > 0 for v in req.values())) or (score is not None and str(score).strip() not in ('', 'None'))):
+                            return 'LIVE'
+                    except Exception:
+                        pass
+                    return ts
 
             raw = getattr(info, "card_type_raw", None)
             if raw is None:
@@ -629,8 +649,31 @@ def _card_type_norm(card: Any, cards_db: Dict[str, Any]) -> str:
                 s = str(raw).strip().upper()
                 jp = str(raw).strip()
                 if s in ("MEMBER", "LIVE", "ENERGY"):
+                    if s == 'MEMBER':
+                        try:
+                            req = getattr(info, 'required_hearts', None)
+                            if req is None and isinstance(info, dict):
+                                req = info.get('required_hearts')
+                            score = getattr(info, 'score', None)
+                            if score is None and isinstance(info, dict):
+                                score = info.get('score')
+                            if (isinstance(req, dict) and any(int(v or 0) > 0 for v in req.values())) or (score is not None and str(score).strip() not in ('', 'None')):
+                                return 'LIVE'
+                        except Exception:
+                            pass
                     return s
                 if jp == "メンバー":
+                    try:
+                        req = getattr(info, 'required_hearts', None)
+                        if req is None and isinstance(info, dict):
+                            req = info.get('required_hearts')
+                        score = getattr(info, 'score', None)
+                        if score is None and isinstance(info, dict):
+                            score = info.get('score')
+                        if (isinstance(req, dict) and any(int(v or 0) > 0 for v in req.values())) or (score is not None and str(score).strip() not in ('', 'None')):
+                            return 'LIVE'
+                    except Exception:
+                        pass
                     return "MEMBER"
                 if jp == "ライブ":
                     return "LIVE"

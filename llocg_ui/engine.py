@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: hime_enter_preload_live_20260410a
+# BUILD_TAG: hime_enter_preload_live_20260410b
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -378,7 +378,24 @@ def _count_blade_icons_from_tagblob(s: str) -> int:
 def _is_live_ci(ci: Optional[CardInfo]) -> bool:
     if not ci:
         return False
-    return "LIVE" in str(getattr(ci, 'type', '') or '').upper() or "ライブ" in str(getattr(ci, 'type', '') or '')
+    t = str(getattr(ci, 'type', '') or '')
+    if "LIVE" in t.upper() or "ライブ" in t:
+        return True
+    # DB fallback: a few compiled/min entries are misclassified as MEMBER while they
+    # clearly have LIVE-only fields (score / required_hearts). Treat them as LIVE here.
+    try:
+        req = getattr(ci, 'required_hearts', None)
+        if isinstance(req, dict) and any(int(v or 0) > 0 for v in req.values()):
+            return True
+    except Exception:
+        pass
+    try:
+        score = getattr(ci, 'score', None)
+        if score is not None and str(score).strip() not in ('', 'None'):
+            return True
+    except Exception:
+        pass
+    return False
 
 
 def _is_member_ci(ci: Optional[CardInfo]) -> bool:

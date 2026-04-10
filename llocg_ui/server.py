@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: hime_live_set_limit_ui_20260410a
+# BUILD_TAG: hime_live_set_limit_ui_20260410b
 from __future__ import annotations
 
 """llocg_ui.server
@@ -2885,6 +2885,8 @@ inner.appendChild(card);
   }
 
   function openCardListPopup(title, cards, {closable=true, helperText='', forcePortrait=false, forceLandscape=false } = {}){
+    // Do not overwrite an active pending/effect popup with an inspect-only popup.
+    if(popup && popup.type==='pending') return;
     let cardsList = cards.slice();
     // sort waiting room cards (spec update): by cardnumber asc, then card type
     try{
