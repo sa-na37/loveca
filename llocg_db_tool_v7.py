@@ -17,6 +17,8 @@ Deps:
 
 from __future__ import annotations
 
+BUILD_TAG = "db_tool_cardtype_infer_20260410a"
+
 import argparse
 import hashlib
 import json
@@ -557,10 +559,31 @@ def parse_heart_expr(raw: str) -> Tuple[Dict[str, int], Optional[int], List[str]
     return counts, total, tags
 
 
+def _has_text_value(v: Any) -> bool:
+    if v is None:
+        return False
+    try:
+        s = str(v).strip()
+    except Exception:
+        return False
+    if not s:
+        return False
+    return s not in {"nan", "None", "null"}
+
+
+def _canonical_card_type_raw(norm: str) -> str:
+    return {
+        "LIVE": "ライブ",
+        "MEMBER": "メンバー",
+        "EVENT": "イベント",
+        "SUPPORT": "サポート",
+    }.get((norm or "").strip().upper(), "")
+
+
 def norm_card_type(raw: str) -> str:
     if not raw:
         return ""
-    s = raw.strip()
+    s = str(raw).strip()
     if "ライブ" in s:
         return "LIVE"
     if "メンバー" in s:
@@ -570,6 +593,31 @@ def norm_card_type(raw: str) -> str:
     if "サポート" in s:
         return "SUPPORT"
     return s
+
+
+def infer_card_type(raw: Any, required_hearts_raw: Any = "", score: Any = "", cost: Any = "", blade: Any = "", base_hearts_raw: Any = "") -> Tuple[str, str]:
+    raw_norm = norm_card_type(str(raw or ""))
+
+    # Explicit non-member/live types stay authoritative.
+    if raw_norm in {"EVENT", "SUPPORT"}:
+        return raw_norm, _canonical_card_type_raw(raw_norm)
+
+    has_live_signals = _has_text_value(required_hearts_raw) or _has_text_value(score)
+    has_member_signals = _has_text_value(cost) or _has_text_value(blade) or _has_text_value(base_hearts_raw)
+
+    inferred = raw_norm
+    if has_live_signals and not has_member_signals:
+        inferred = "LIVE"
+    elif has_member_signals and not has_live_signals:
+        inferred = "MEMBER"
+    elif not inferred:
+        if has_live_signals:
+            inferred = "LIVE"
+        elif has_member_signals:
+            inferred = "MEMBER"
+
+    canonical_raw = _canonical_card_type_raw(inferred) if inferred in {"LIVE", "MEMBER", "EVENT", "SUPPORT"} else str(raw or "")
+    return inferred, canonical_raw
 
 
 def normalize_effect_text(effect_text: str) -> str:
@@ -668,7 +716,16 @@ def parse_card_page(url: str, html: str, key_set: Set[str], do_normalize: bool) 
     }
 
     if do_normalize:
-        rec["card_type_norm"] = norm_card_type(card_type_raw)
+        inferred_type, canonical_raw = infer_card_type(
+            card_type_raw,
+            required_hearts_raw=req_raw,
+            score=info.get("score", ""),
+            cost=info.get("cost", ""),
+            blade=info.get("blade", ""),
+            base_hearts_raw=base_raw,
+        )
+        rec["card_type_raw"] = canonical_raw or card_type_raw
+        rec["card_type_norm"] = inferred_type
 
         base_counts, base_total, base_tags = parse_heart_expr(base_raw)
         req_counts, req_total, req_tags = parse_heart_expr(req_raw)
@@ -884,11 +941,28 @@ def cmd_normalize(csv_path: Path, json_path: Optional[Path], outdir: Path, suffi
     new_tokens_json = []
     tok_blade, tok_energy, tok_all, tok_score_delta, tok_unknown_n = [], [], [], [], []
     effect_statuses, effect_no_ability_flags = [], []
+    repaired_type_norms, repaired_type_raws = [], []
     bad_json = 0
 
     eff_norm_series = df["effect_text_norm"].tolist() if "effect_text_norm" in df.columns else [""] * len(df)
 
-    for s, eff_norm in zip(df["effect_tokens_json"].tolist(), eff_norm_series):
+    req_series = df["required_hearts_raw"].tolist() if "required_hearts_raw" in df.columns else [""] * len(df)
+    score_series = df["score"].tolist() if "score" in df.columns else [""] * len(df)
+    cost_series = df["cost"].tolist() if "cost" in df.columns else [""] * len(df)
+    blade_series = df["blade"].tolist() if "blade" in df.columns else [""] * len(df)
+    base_series = df["base_hearts_raw"].tolist() if "base_hearts_raw" in df.columns else [""] * len(df)
+    raw_type_series = df["card_type_raw"].tolist() if "card_type_raw" in df.columns else [""] * len(df)
+
+    for s, eff_norm, req_raw, score, cost, blade, base_raw, raw_type in zip(
+        df["effect_tokens_json"].tolist(),
+        eff_norm_series,
+        req_series,
+        score_series,
+        cost_series,
+        blade_series,
+        base_series,
+        raw_type_series,
+    ):
         ok, obj = safe_json_loads(s)
         if (not ok) or (obj is None) or (not isinstance(obj, dict)):
             bad_json += 1
@@ -907,9 +981,22 @@ def cmd_normalize(csv_path: Path, json_path: Optional[Path], outdir: Path, suffi
         effect_statuses.append(st)
         effect_no_ability_flags.append(1 if st == "NO_ABILITY" else 0)
 
+        inferred_type, canonical_raw = infer_card_type(
+            raw_type,
+            required_hearts_raw=req_raw,
+            score=score,
+            cost=cost,
+            blade=blade,
+            base_hearts_raw=base_raw,
+        )
+        repaired_type_norms.append(inferred_type)
+        repaired_type_raws.append(canonical_raw or str(raw_type or ""))
+
     df["effect_tokens_json"] = new_tokens_json
     df["effect_text_status"] = effect_statuses
     df["effect_text_is_no_ability"] = effect_no_ability_flags
+    df["card_type_norm"] = repaired_type_norms
+    df["card_type_raw"] = repaired_type_raws
     df["tok_blade_icon_n"] = tok_blade
     df["tok_energy_icon_n"] = tok_energy
     df["tok_all_heart_n"] = tok_all
@@ -933,6 +1020,16 @@ def cmd_normalize(csv_path: Path, json_path: Optional[Path], outdir: Path, suffi
                     if (not ok) or (obj is None) or (not isinstance(obj, dict)):
                         obj = {}
                     r["effect_tokens_json"] = json.dumps(process_tokens(obj), ensure_ascii=False)
+                    inferred_type, canonical_raw = infer_card_type(
+                        r.get("card_type_raw", ""),
+                        required_hearts_raw=r.get("required_hearts_raw", ""),
+                        score=r.get("score", ""),
+                        cost=r.get("cost", ""),
+                        blade=r.get("blade", ""),
+                        base_hearts_raw=r.get("base_hearts_raw", ""),
+                    )
+                    r["card_type_norm"] = inferred_type
+                    r["card_type_raw"] = canonical_raw or str(r.get("card_type_raw", "") or "")
                 out_json = outdir / f"{json_path.stem}{suffix}.json"
                 out_json.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
                 print(f"[DONE] wrote: {out_json}")

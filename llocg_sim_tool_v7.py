@@ -22,6 +22,8 @@ Dependencies:
 """
 from __future__ import annotations
 
+BUILD_TAG = "sim_tool_cardtype_infer_20260410a"
+
 import argparse
 import json
 import re
@@ -34,6 +36,39 @@ import yaml
 
 
 NO_ABILITY_TEXTS = {"", "(なし)", "(テキストなし)"}
+
+
+def _has_text_value(v: Any) -> bool:
+    if v is None:
+        return False
+    try:
+        s = str(v).strip()
+    except Exception:
+        return False
+    if not s:
+        return False
+    return s not in {"nan", "None", "null"}
+
+
+def infer_card_type(raw_norm: Any, required_hearts_raw: Any = "", score: Any = "", cost: Any = "", blade: Any = "", base_hearts_raw: Any = "") -> str:
+    ctype = str(raw_norm or "").strip()
+    if ctype in {"EVENT", "SUPPORT"}:
+        return ctype
+
+    has_live_signals = _has_text_value(required_hearts_raw) or _has_text_value(score)
+    has_member_signals = _has_text_value(cost) or _has_text_value(blade) or _has_text_value(base_hearts_raw)
+
+    if has_live_signals and not has_member_signals:
+        return "LIVE"
+    if has_member_signals and not has_live_signals:
+        return "MEMBER"
+    if ctype:
+        return ctype
+    if has_live_signals:
+        return "LIVE"
+    if has_member_signals:
+        return "MEMBER"
+    return ctype
 
 
 def _norm_effect_status(v: Any) -> str:
@@ -561,7 +596,14 @@ def compile_cards(csv_path: Path, cost_yaml: Path, effect_yaml: Path, out_json: 
     for _, r in df.iterrows():
         cardno = str(r.get("cardnumber", "")).strip()
         name = str(r.get("cardname", "")).strip()
-        ctype = str(r.get("card_type_norm", "")).strip()
+        ctype = infer_card_type(
+            r.get("card_type_norm", ""),
+            required_hearts_raw=r.get("required_hearts_raw", ""),
+            score=r.get("score", ""),
+            cost=r.get("cost", ""),
+            blade=r.get("blade", ""),
+            base_hearts_raw=r.get("base_hearts_raw", ""),
+        )
         effect_text = str(r.get("effect_text_norm", "") or "").strip()
 
         row_is_no_ability = is_no_ability_row(r)
