@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: hime_live_set_limit_ui_20260410b
+# BUILD_TAG: dual_popup_and_dbfix_ui_20260410a
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1648,6 +1648,17 @@ HTML = r'''<!doctype html>
   #modalCards .surf{position:relative;height:1px;}
   #modalActions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap;flex:0 0 auto;}
   #modalActions .miniBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:6px 10px;border-radius:10px;cursor:pointer;}
+  /* secondary inspect popup (can coexist with pending/effect popup) */
+  #viewerLayer{position:absolute;inset:0;display:none;z-index:8800;pointer-events:none;}
+  #viewerModal{position:absolute;right:18px;top:74px;width:min(46%, 560px);max-height:min(74%, calc(var(--pmH) - 120px));overflow:hidden;background:#1b1b1b;border:1px solid rgba(255,255,255,.15);border-radius:16px;padding:12px;box-shadow:0 14px 60px rgba(0,0,0,.72);display:flex;flex-direction:column;pointer-events:auto;}
+  #viewerHeader{display:flex;align-items:center;justify-content:space-between;gap:12px;flex:0 0 auto;}
+  #viewerTitle{font-weight:700;min-width:0;}
+  #viewerClose{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:6px 10px;border-radius:10px;cursor:pointer;}
+  #viewerText{white-space:pre-wrap;line-height:1.45;color:#ddd;font-size:13px;margin-top:10px;flex:0 0 auto;}
+  #viewerCards{margin-top:10px;overflow-x:auto;overflow-y:auto;padding-bottom:6px;flex:1 1 auto;min-height:0;}
+  #viewerCards .surf{position:relative;height:1px;}
+  #viewerActions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap;flex:0 0 auto;}
+  #viewerActions .miniBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:6px 10px;border-radius:10px;cursor:pointer;}
 /* UI_FIX_PENDING_CARD_CHOICES */
   /* pending card choice list (image buttons) */
   .choiceRow{display:inline-flex;gap:8px;align-items:flex-start;overflow-x:auto;overflow-y:hidden;max-width:min(72vw, 1060px);padding:6px 2px 10px 2px;}
@@ -1711,6 +1722,18 @@ HTML = r'''<!doctype html>
         </div>
       </div>
     </div>
+
+    <div id="viewerLayer">
+      <div id="viewerModal">
+        <div id="viewerHeader">
+          <div id="viewerTitle">カード一覧</div>
+          <button id="viewerClose">Close</button>
+        </div>
+        <div id="viewerText"></div>
+        <div id="viewerCards"></div>
+        <div id="viewerActions"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1767,12 +1790,21 @@ HTML = r'''<!doctype html>
   const elModalCards = document.getElementById('modalCards');
   const elModalActions = document.getElementById('modalActions');
 
+  const elViewerLayer = document.getElementById('viewerLayer');
+  const elViewerModal = document.getElementById('viewerModal');
+  const elViewerTitle = document.getElementById('viewerTitle');
+  const elViewerText = document.getElementById('viewerText');
+  const elViewerCards = document.getElementById('viewerCards');
+  const elViewerActions = document.getElementById('viewerActions');
+  const elViewerClose = document.getElementById('viewerClose');
+
   const btnDbg = document.getElementById('btnDbg');
 
   let debug = false;
   let st = null;
   let selHand = []; // indices
   let popup = {type:null};
+  let viewerPopup = {type:null};
   let bannerTimer = null;
   let stdPortrait = null;
   let stdLandscape = null;
@@ -1786,6 +1818,7 @@ HTML = r'''<!doctype html>
   const elCdClose     = document.getElementById('cdClose');
 
   elCdClose.addEventListener('click', ()=>{ elCardDetail.classList.remove('visible'); });
+  elViewerClose.addEventListener('click', ()=>{ closeViewerPopup(); });
   document.addEventListener('keydown', ev=>{ if(ev.key==='Escape') elCardDetail.classList.remove('visible'); });
   document.addEventListener('click', ev=>{
     if(elCardDetail.classList.contains('visible') && !elCardDetail.contains(ev.target)){
@@ -2885,8 +2918,6 @@ inner.appendChild(card);
   }
 
   function openCardListPopup(title, cards, {closable=true, helperText='', forcePortrait=false, forceLandscape=false } = {}){
-    // Do not overwrite an active pending/effect popup with an inspect-only popup.
-    if(popup && popup.type==='pending') return;
     let cardsList = cards.slice();
     // sort waiting room cards (spec update): by cardnumber asc, then card type
     try{
@@ -2905,15 +2936,25 @@ inner.appendChild(card);
       }
     }catch(e){ cardsList = cards.slice(); }
 
-    popup = {type:'cardlist', title, cards: cardsList.slice(), closable, helperText};
+    const useViewer = !!closable;
+    if(useViewer){
+      viewerPopup = {type:'cardlist', title, cards: cardsList.slice(), closable:true, helperText};
+      elViewerTitle.textContent = title;
+      setRichText(elViewerText, helperText || '');
+      elViewerActions.innerHTML = '';
+      elViewerCards.innerHTML = '';
+    }else{
+      popup = {type:'cardlist', title, cards: cardsList.slice(), closable:false, helperText};
+      elModalTitle.textContent = title;
+      setRichText(elModalText, helperText || '');
+      elModalActions.innerHTML = '';
+      elModalCards.innerHTML = '';
+    }
 
-    elModalTitle.textContent = title;
-    setRichText(elModalText, helperText || '');
-    elModalActions.innerHTML = '';
-    elModalCards.innerHTML = '';
+    const targetCards = useViewer ? elViewerCards : elModalCards;
+    const targetActions = useViewer ? elViewerActions : elModalActions;
 
     // layout card list with overlap + horizontal scroll
-    // Use the standard (hand-based) card size in popups
     const dimsP = standardSize('portrait');
     const dimsL = standardSize('landscape');
     const maxW = Math.max(dimsP.w, dimsL.w);
@@ -2922,7 +2963,7 @@ inner.appendChild(card);
     const surf = document.createElement('div');
     surf.className = 'surf';
     surf.style.height = (maxH + 12) + 'px';
-    const step = maxW * 0.45; // overlap ~55% (spec: 1/2~2/3)
+    const step = maxW * 0.45;
     const minW = (cardsList.length<=1) ? (maxW + 24) : (maxW + step*(cardsList.length-1) + 24);
     surf.style.minWidth = minW + 'px';
 
@@ -2935,17 +2976,18 @@ inner.appendChild(card);
       surf.appendChild(c);
     });
 
-    elModalCards.appendChild(surf);
+    targetCards.appendChild(surf);
 
-    if(closable){
+    if(useViewer){
       const close = document.createElement('button');
       close.className = 'miniBtn';
       close.textContent = 'Close';
-      close.addEventListener('click', ()=>{ closePopup(); });
-      elModalActions.appendChild(close);
+      close.addEventListener('click', ()=>{ closeViewerPopup(); });
+      targetActions.appendChild(close);
+      elViewerLayer.style.display = 'block';
+    }else{
+      elMask.style.display = 'block';
     }
-
-    elMask.style.display = 'block';
   }
 
   function openCardPickPopup(title, cards, {helperText='', forcePortrait=false, forceLandscape=false, allowSkip=true } = {}){
@@ -3011,6 +3053,15 @@ inner.appendChild(card);
     elModalCards.innerHTML = '';
     elModalText.textContent = '';
     elModalActions.innerHTML = '';
+  }
+
+  function closeViewerPopup(){
+    viewerPopup = {type:null};
+    elViewerLayer.style.display = 'none';
+    elViewerCards.innerHTML = '';
+    elViewerText.textContent = '';
+    elViewerActions.innerHTML = '';
+    elViewerTitle.textContent = 'カード一覧';
   }
 
   function showReorderPopup(p){
@@ -4103,6 +4154,8 @@ inner.appendChild(card);
 
   btnDbg.addEventListener('click', ()=>{ debug = !debug; render(); });
   elMask.addEventListener('click', (ev)=>{ if(popup && popup.type==='cardlist' && popup.closable){ closePopup(); } });
+  elViewerLayer.addEventListener('click', (ev)=>{ if(ev.target === elViewerLayer){ closeViewerPopup(); } });
+  elViewerModal.addEventListener('click', (ev)=>{ ev.stopPropagation(); });
 
   // init
   cssScale();

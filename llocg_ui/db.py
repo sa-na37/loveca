@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
+# BUILD_TAG: db_live_type_repair_20260410a
 
 """llocg_ui.db
 
@@ -113,6 +114,43 @@ def is_live_type(card_type_norm: str) -> bool:
     return False
 
 
+def _looks_like_live_payload(required_hearts: Dict[str, int], score: int, cost: int = 0, blade: int = 0, base_hearts: Optional[Dict[str, int]] = None) -> bool:
+    """Heuristic DB repair for obvious LIVE rows mis-exported as MEMBER.
+
+    Prefer explicit required_hearts. As a weaker fallback, accept score>0 only when
+    the row has no member-like payload (cost/blade/base_hearts).
+    """
+    try:
+        req = required_hearts or {}
+        if isinstance(req, dict) and any(int(v or 0) > 0 for v in req.values()):
+            return True
+    except Exception:
+        pass
+    try:
+        if int(score or 0) > 0 and int(cost or 0) == 0 and int(blade or 0) == 0 and not (base_hearts or {}):
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _repair_cardinfo_type(ci: "CardInfo") -> "CardInfo":
+    try:
+        raw = str(getattr(ci, 'type', '') or '').strip()
+        looks_live = _looks_like_live_payload(
+            getattr(ci, 'required_hearts', {}) or {},
+            getattr(ci, 'score', 0) or 0,
+            getattr(ci, 'cost', 0) or 0,
+            getattr(ci, 'blade', 0) or 0,
+            getattr(ci, 'base_hearts', {}) or {},
+        )
+        if looks_live and (not raw or is_member_type(raw)):
+            ci.type = 'LIVE'
+    except Exception:
+        pass
+    return ci
+
+
 def _norm_cardno_for_filename(cardno: str) -> str:
     parts = (cardno or "").split("-")
     if not parts:
@@ -206,7 +244,7 @@ def load_tokv1_json(path: Path) -> Dict[str, CardInfo]:
         cn = _canon_cardno(cn_raw)
         if not cn:
             continue
-        ci = CardInfo(
+        ci = _repair_cardinfo_type(CardInfo(
             cardnumber=cn,
             name=str(r.get("cardname", "")).strip(),
             type=str(r.get("card_type_norm", "") or r.get("card_type_raw", "") or "").strip(),
@@ -220,7 +258,7 @@ def load_tokv1_json(path: Path) -> Dict[str, CardInfo]:
             # NOTE: some tokv1.json exports include these columns; keep if present.
             group=str(r.get("group", "") or "").strip(),
             unit=str(r.get("unit", "") or "").strip(),
-        )
+        ))
         for k in _cardno_variants(cn_raw):
             out[k] = ci
         out[cn] = ci
@@ -302,6 +340,12 @@ def load_cards_db(root: Path, compiled_path: Optional[Path] = None, tokv1_path: 
                 # abilities: tokv1 has none; compiled carries them
                 if (not getattr(db[k], "abilities", None)) and getattr(ci, "abilities", None):
                     db[k].abilities = ci.abilities
+    seen = set()
+    for ci in list(db.values()):
+        if id(ci) in seen:
+            continue
+        seen.add(id(ci))
+        _repair_cardinfo_type(ci)
     return db
 def load_cards_min(root: Path) -> Dict[str, CardInfo]:
     p = root / "cards_min_tokv1.csv"
@@ -314,7 +358,7 @@ def load_cards_min(root: Path) -> Dict[str, CardInfo]:
             cn = str(r.get("cardnumber", "") or r.get("\ufeffcardnumber", "") or "").strip()
             if not cn:
                 continue
-            out[cn] = CardInfo(
+            out[cn] = _repair_cardinfo_type(CardInfo(
                 cardnumber=cn,
                 name=str(r.get("cardname", "")).strip(),
                 type=str(r.get("card_type_norm", "")).strip(),
@@ -327,7 +371,7 @@ def load_cards_min(root: Path) -> Dict[str, CardInfo]:
                 blade_heart_tags_json=str(r.get("blade_heart_tags_json", "[]")) or "[]",
                 group=str(r.get("group", "") or "").strip(),
                 unit=str(r.get("unit", "") or "").strip(),
-            )
+            ))
     return out
 
 
