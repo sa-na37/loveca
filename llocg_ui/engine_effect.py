@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_hime_faceup_set_20260409a
+# BUILD_TAG: engine_effect_hime_preload_20260410a
 from __future__ import annotations
 
 """llocg_ui.engine_effect
@@ -203,11 +203,6 @@ EXTRA_EFFECT_RULES = [
         "effect_template": "自分の控え室から必要ハートに<(桃)>を3以上含むライブカードを1枚手札に加える。",
         "ext_key": "body_pick_live_req_pink_ge3_from_green",
     },
-    {
-        "id": "green_live_faceup_set_reduce_next_live_set_limit",
-        "effect_template": "自分の控え室からライブカードを1枚、表向きにライブカード置き場に置く。次のライブカードセットフェイズで自分がライブカード置き場に置けるカード枚数の上限が1枚減る。",
-        "ext_key": "green_live_faceup_set_reduce_next_live_set_limit",
-    },
     # Prompt 73: PL!HS-bp2-001 日野下花帆 (起動)
     # コスト: <(E)><(E)> → engine 側起動コスト処理
     # 控え室からスコア3以下の 蓮ノ空 ライブカードを1枚手札に加える
@@ -223,6 +218,11 @@ EXTRA_EFFECT_RULES = [
         "id": "enter_discard1_other_member_exists_pick_mirakupark_from_green",
         "effect_template": "自分のステージにほかのメンバーがいる場合、自分の控え室から『みらくらぱーく！』のカードを1枚手札に加える。",
         "ext_key": "enter_other_member_exists_pick_mirakupark_from_green",
+    },
+    {
+        "id": "enter_main_pay2_faceup_live_to_set_reduce_next_live_set",
+        "effect_template": "自分の控え室からライブカードを1枚、表向きにライブカード置き場に置く。次のライブカードセットフェイズで自分がライブカード置き場に置けるカード枚数の上限が1枚減る。",
+        "ext_key": "enter_main_pay2_faceup_live_to_set_reduce_next_live_set",
     },
     # Prompt 27: PL!-bp4-005 星空凛 (ライブ開始時)
     # ブレード5以上の μ's メンバーがいない場合、センター以外へ強制ポジションチェンジ
@@ -1038,49 +1038,6 @@ def _green_room_lives_with_required_heart_ge(gs: Any, cards_db: Dict[str, Any], 
     return result
 
 
-def _enqueue_pick_live_faceup_to_set_from_green(eng: Dict[str, Any], gs: Any, cards_db: Dict[str, Any], src: str, label: str = '') -> bool:
-    cands = []
-    for card in _green_room_list(gs):
-        try:
-            if _card_type_norm(card, cards_db) == 'LIVE':
-                cands.append(card)
-        except Exception:
-            pass
-    if not cands:
-        try:
-            gs.log.append(f"[AUTO_EXT] no LIVE in green_room for face-up set ({src})")
-        except Exception:
-            pass
-        return True
-    move_fn = eng.get('_move_live_from_green_to_set_zone')
-    reduce_fn = eng.get('_bump_next_live_set_limit_reduction')
-    if len(cands) == 1 and callable(move_fn) and callable(reduce_fn):
-        cn_str = str(getattr(cands[0], 'cardnumber', None) or cands[0] or '')
-        ok = bool(move_fn(gs, cards_db, cn_str, source_cn=src))
-        if ok:
-            reduce_fn(gs, 1, source_cn=src)
-        try:
-            gs.log.append(f"[AUTO_EXT] green->set(face-up) {cn_str} ({src}) ok={ok}")
-        except Exception:
-            pass
-        return True
-    cns = [str(getattr(c, 'cardnumber', None) or c or '') for c in cands]
-    payload = {
-        'kind': 'pick_live_from_green_to_set_zone',
-        'text': label or '控え室のライブカード1枚を表向きでライブカード置き場に置く',
-        'options': cns,
-        'allow_skip': False,
-        'reduce_next_live_set': 1,
-        'source_cn': src,
-    }
-    try:
-        getattr(gs, 'pending').append(payload)
-        gs.log.append(f"[PENDING] pick LIVE from green to set_zone ({src}) opts={cns}")
-    except Exception:
-        pass
-    return True
-
-
 def _enqueue_pick_live_req_heart_from_green(gs: Any, cards_db: Dict[str, Any], color: str, n: int, src: str) -> bool:
     cands = _green_room_lives_with_required_heart_ge(gs, cards_db, color, n)
     if not cands:
@@ -1136,6 +1093,49 @@ def _move_card_from_green_to_hand(gs: Any, card: Any) -> bool:
         return True
     except Exception:
         return False
+
+
+def _move_live_from_green_to_set_zone(gs: Any, card: Any) -> bool:
+    """Remove LIVE card from green_room and append to set_zone (face-up by current UI contract)."""
+    try:
+        gr = _green_room_list(gs)
+        found = None
+        if card in gr:
+            found = card
+        else:
+            cn = str(getattr(card, "cardnumber", None) or card or "")
+            for c in list(gr):
+                if str(getattr(c, "cardnumber", None) or c or "") == cn:
+                    found = c
+                    break
+        if found is None:
+            return False
+        gr.remove(found)
+        sz = getattr(gs, "set_zone", None)
+        if sz is None:
+            setattr(gs, "set_zone", [])
+            sz = getattr(gs, "set_zone")
+        sz.append(found)
+        return True
+    except Exception:
+        return False
+
+
+def _reserve_next_live_set_limit_delta(gs: Any, delta: int, src: str = "") -> int:
+    try:
+        cur = int(getattr(gs, "next_live_set_limit_delta", 0) or 0)
+    except Exception:
+        cur = 0
+    new_val = cur + int(delta or 0)
+    try:
+        setattr(gs, "next_live_set_limit_delta", new_val)
+    except Exception:
+        pass
+    try:
+        gs.log.append(f"[AUTO_EXT] reserved next live-set limit delta {new_val:+d} ({src})")
+    except Exception:
+        pass
+    return new_val
 
 
 def _opp_stage_has_wait_member(gs: Any) -> bool:
@@ -2275,11 +2275,6 @@ def try_apply_effect_by_rule_ext(
         src = str((ctx or {}).get("source_cn") or "PL!-PR-004")
         return _enqueue_pick_live_req_heart_from_green(gs, cards_db, 'pink', 3, src)
 
-    if ext_key == "green_live_faceup_set_reduce_next_live_set_limit":
-        src = str((ctx or {}).get('source_cn') or '')
-        label = '控え室のライブカード1枚を表向きでライブカード置き場に置く。次のライブカードセットフェイズで置ける枚数上限-1'
-        return _enqueue_pick_live_faceup_to_set_from_green(eng, gs, cards_db, src or 'LIVE', label=label)
-
     # ------------------------------------------------------------------
     # Prompt 76: PL!HS-bp2-005 大沢瑠璃乃 (登場)
 
@@ -2395,6 +2390,72 @@ def try_apply_effect_by_rule_ext(
         try:
             getattr(gs, "pending").append(payload)
             gs.log.append(f"[PENDING] 星空凛: force position_change to {options} from {src_pos}")
+        except Exception:
+            pass
+        return True
+
+    # ------------------------------------------------------------------
+    # Prompt 80: PL!HS-bp2-018 安養寺姫芽 (登場)
+    # MAIN 中に [E][E] を任意支払い → green の LIVE を表向きで set_zone に置き、
+    # 次の LIVE_SET で手札から置ける上限を 1 減らす。
+    # effect_template only; optional energy cost prompt は engine.py 側。
+    # ------------------------------------------------------------------
+    if ext_key == "enter_main_pay2_faceup_live_to_set_reduce_next_live_set":
+        src = str((ctx or {}).get("source_cn") or "安養寺姫芽")
+        phase = str(getattr(gs, "phase", "") or "").upper()
+        if phase != 'MAIN':
+            try:
+                gs.log.append(f"[AUTO_EXT] not MAIN, no effect ({src})")
+            except Exception:
+                pass
+            return True
+
+        chosen_cn = str((ctx or {}).get("chosen_cn") or (ctx or {}).get("choice") or "").strip()
+        if chosen_cn:
+            ok = _move_live_from_green_to_set_zone(gs, chosen_cn)
+            try:
+                gs.log.append(f"[AUTO_EXT] green->set_zone {chosen_cn} ({src}) ok={ok}")
+            except Exception:
+                pass
+            if ok:
+                _reserve_next_live_set_limit_delta(gs, -1, src)
+            return True
+
+        candidates = [c for c in _green_room_list(gs) if _card_type_norm(c, cards_db) == 'LIVE']
+        try:
+            gs.log.append(f"[AUTO_EXT] {src}: green LIVE candidates={len(candidates)}")
+        except Exception:
+            pass
+        if not candidates:
+            try:
+                gs.log.append(f"[AUTO_EXT] no LIVE in green_room ({src})")
+            except Exception:
+                pass
+            return True
+        if len(candidates) == 1:
+            cn_str = str(getattr(candidates[0], "cardnumber", None) or candidates[0] or "")
+            ok = _move_live_from_green_to_set_zone(gs, candidates[0])
+            try:
+                gs.log.append(f"[AUTO_EXT] green->set_zone {cn_str} ({src}) ok={ok}")
+            except Exception:
+                pass
+            if ok:
+                _reserve_next_live_set_limit_delta(gs, -1, src)
+            return True
+        cns = [str(getattr(c, "cardnumber", None) or c or "") for c in candidates]
+        payload = {
+            "kind": "choose_live_from_green",
+            "text": "控え室のライブカードを1枚選び、表向きでライブカード置き場に置く",
+            "options": cns,
+            "want_kind": "LIVE",
+            "remaining_picks": 1,
+            "after_ext_key": "enter_main_pay2_faceup_live_to_set_reduce_next_live_set",
+            "ctx": dict(ctx or {}),
+            "source_cn": src,
+        }
+        try:
+            getattr(gs, "pending").append(payload)
+            gs.log.append(f"[PENDING] {src}: choose LIVE from green for set_zone {cns}")
         except Exception:
             pass
         return True

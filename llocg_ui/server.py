@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_set_limit_ui_20260409a
+# BUILD_TAG: hime_live_set_limit_ui_20260410a
 from __future__ import annotations
 
 """llocg_ui.server
@@ -990,7 +990,7 @@ class App:
             "stage": {k: (asdict(v) if v else None) for k, v in self.gs.stage.items()},
             "green_room": list(self.gs.green_room),
             "set_zone": list(self.gs.set_zone),
-            "live_set_limit": int(getattr(self.gs, "current_live_set_limit", 3) or 3),
+            "live_set_limit": int(getattr(self.gs, "live_set_limit", 3) or 3),
             "set_zone_score_rows": self._set_zone_score_rows_for_ui(),
             "resolve_zone": list(self.gs.resolve_zone),
             "success_zone": list(getattr(self.gs, "success_zone", []) or []),
@@ -2064,7 +2064,10 @@ HTML = r'''<!doctype html>
   function selLimit(){
     if(!st) return 1;
     if(String(st.phase||'').toUpperCase()==='MULLIGAN') return (st.hand? st.hand.length : 6) || 6;
-    if(st.phase === 'LIVE_SET') return Math.max(0, Number(st.live_set_limit || 3));
+    if(String(st.phase||'') === 'LIVE_SET'){
+      const n = Number(st.live_set_limit);
+      return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 3;
+    }
     return 1;
   }
   function toggleSel(i){
