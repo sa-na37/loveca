@@ -1,19 +1,17 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_helpers_split_20260407a
+# BUILD_TAG: engine_effect_helpers_sync_20260413a
 from __future__ import annotations
 
 """llocg_ui.effects.helpers
 
-engine_effect の内部 helper 群。
+engine_effect の共通 helper 群の正本。
+
+注意:
+- ここには zone 移動、card 参照、draw、temp bonus 集計などの小部品だけを置く
+- matcher や dispatcher 本体は置かない
 """
 
 from typing import Any, Dict
-
-
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
 
 def _add_temp_blade(eng: Dict[str, Any], slot: Any, n: int) -> None:
     if not slot or n <= 0:
@@ -199,7 +197,52 @@ def _card_cost(card: Any, cards_db: Dict[str, Any]) -> int:
 
 
 def _card_type_norm(card: Any, cards_db: Dict[str, Any]) -> str:
-    """Return the normalized card type string (MEMBER / LIVE / etc.)."""
+    """Return the normalized card type string (MEMBER / LIVE / etc.).
+
+    Conservative rule:
+    - Prefer explicit normalized/raw DB type when present.
+    - Only fall back to LIVE when the row is obviously LIVE-shaped.
+    - Never treat score=0 on MEMBER rows as evidence for LIVE.
+    """
+    def _infer_live_from_shape(info: Any) -> bool:
+        try:
+            req = getattr(info, 'required_hearts', None)
+            if req is None and isinstance(info, dict):
+                req = info.get('required_hearts')
+            if isinstance(req, dict) and any(int(v or 0) > 0 for v in req.values()):
+                return True
+        except Exception:
+            pass
+        try:
+            score = getattr(info, 'score', None)
+            if score is None and isinstance(info, dict):
+                score = info.get('score')
+            score_i = int(score or 0)
+        except Exception:
+            score_i = 0
+        try:
+            cost = getattr(info, 'cost', None)
+            if cost is None and isinstance(info, dict):
+                cost = info.get('cost')
+            cost_i = int(cost or 0)
+        except Exception:
+            cost_i = 0
+        try:
+            blade = getattr(info, 'blade', None)
+            if blade is None and isinstance(info, dict):
+                blade = info.get('blade')
+            blade_i = int(blade or 0)
+        except Exception:
+            blade_i = 0
+        try:
+            base = getattr(info, 'base_hearts', None)
+            if base is None and isinstance(info, dict):
+                base = info.get('base_hearts')
+            has_base = isinstance(base, dict) and any(int(v or 0) > 0 for v in base.values())
+        except Exception:
+            has_base = False
+        return bool(score_i > 0 and cost_i <= 0 and blade_i <= 0 and not has_base)
+
     try:
         info = _lookup_cardinfo(cards_db, card)
         if info is not None:
@@ -207,7 +250,11 @@ def _card_type_norm(card: Any, cards_db: Dict[str, Any]) -> str:
             if t is None:
                 t = (info if isinstance(info, dict) else {}).get("card_type_norm")
             if t:
-                return str(t)
+                ts = str(t).strip().upper()
+                if ts in ("MEMBER", "LIVE", "ENERGY"):
+                    if ts == 'MEMBER' and _infer_live_from_shape(info):
+                        return 'LIVE'
+                    return ts
 
             raw = getattr(info, "card_type_raw", None)
             if raw is None:
@@ -220,9 +267,11 @@ def _card_type_norm(card: Any, cards_db: Dict[str, Any]) -> str:
                 s = str(raw).strip().upper()
                 jp = str(raw).strip()
                 if s in ("MEMBER", "LIVE", "ENERGY"):
+                    if s == 'MEMBER' and _infer_live_from_shape(info):
+                        return 'LIVE'
                     return s
                 if jp == "メンバー":
-                    return "MEMBER"
+                    return 'LIVE' if _infer_live_from_shape(info) else "MEMBER"
                 if jp == "ライブ":
                     return "LIVE"
                 if jp == "エネルギー":
@@ -230,7 +279,7 @@ def _card_type_norm(card: Any, cards_db: Dict[str, Any]) -> str:
 
         t = getattr(card, "card_type_norm", None)
         if t:
-            return str(t)
+            return str(t).strip().upper()
 
         raw = getattr(card, "card_type_raw", None) or getattr(card, "type", None)
         if raw:
@@ -600,6 +649,64 @@ def _green_room_cards_by_group_any_type(gs: Any, cards_db: Dict[str, Any], group
             pass
     return result
 
+def _card_required_hearts(card: Any, cards_db: Dict[str, Any]) -> Dict[str, int]:
+    try:
+        info = _lookup_cardinfo(cards_db, card)
+        if info is not None:
+            d = getattr(info, 'required_hearts', None)
+            if d is None and isinstance(info, dict):
+                d = info.get('required_hearts')
+            if isinstance(d, dict):
+                return {str(k): int(v or 0) for k, v in d.items()}
+    except Exception:
+        pass
+    return {}
+
+
+def _green_room_lives_with_required_heart_ge(gs: Any, cards_db: Dict[str, Any], color: str, n: int) -> list:
+    result = []
+    key = str(color or '').strip().lower()
+    for card in _green_room_list(gs):
+        try:
+            if _card_type_norm(card, cards_db) != 'LIVE':
+                continue
+            req = _card_required_hearts(card, cards_db)
+            if int(req.get(key, 0) or 0) >= int(n or 0):
+                result.append(card)
+        except Exception:
+            pass
+    return result
+
+
+def _enqueue_pick_live_req_heart_from_green(gs: Any, cards_db: Dict[str, Any], color: str, n: int, src: str) -> bool:
+    cands = _green_room_lives_with_required_heart_ge(gs, cards_db, color, n)
+    if not cands:
+        try:
+            gs.log.append(f"[AUTO_EXT] no LIVE in green_room with required {color}>={n} ({src})")
+        except Exception:
+            pass
+        return True
+    if len(cands) == 1:
+        ok = _move_card_from_green_to_hand(gs, cands[0])
+        cn_str = str(getattr(cands[0], 'cardnumber', None) or cands[0] or '')
+        try:
+            gs.log.append(f"[AUTO_EXT] green->hand {cn_str} ({src}) ok={ok}")
+        except Exception:
+            pass
+        return True
+    cns = [str(getattr(c, 'cardnumber', None) or c or '') for c in cands]
+    payload = {
+        'kind': 'pick_live_from_green',
+        'text': f"控え室の必要ハートに<{color}>を{n}以上含むライブカードを1枚手札に加える",
+        'options': cns,
+    }
+    try:
+        getattr(gs, 'pending').append(payload)
+        gs.log.append(f"[PENDING] pick req-heart live from green color={color} n={n} opts={cns}")
+    except Exception:
+        pass
+    return True
+
 
 def _move_card_from_green_to_hand(gs: Any, card: Any) -> bool:
     """Remove card from green_room and add to hand. Returns True on success."""
@@ -626,6 +733,49 @@ def _move_card_from_green_to_hand(gs: Any, card: Any) -> bool:
         return True
     except Exception:
         return False
+
+
+def _move_live_from_green_to_set_zone(gs: Any, card: Any) -> bool:
+    """Remove LIVE card from green_room and append to set_zone (face-up by current UI contract)."""
+    try:
+        gr = _green_room_list(gs)
+        found = None
+        if card in gr:
+            found = card
+        else:
+            cn = str(getattr(card, "cardnumber", None) or card or "")
+            for c in list(gr):
+                if str(getattr(c, "cardnumber", None) or c or "") == cn:
+                    found = c
+                    break
+        if found is None:
+            return False
+        gr.remove(found)
+        sz = getattr(gs, "set_zone", None)
+        if sz is None:
+            setattr(gs, "set_zone", [])
+            sz = getattr(gs, "set_zone")
+        sz.append(found)
+        return True
+    except Exception:
+        return False
+
+
+def _reserve_next_live_set_limit_delta(gs: Any, delta: int, src: str = "") -> int:
+    try:
+        cur = int(getattr(gs, "next_live_set_limit_delta", 0) or 0)
+    except Exception:
+        cur = 0
+    new_val = cur + int(delta or 0)
+    try:
+        setattr(gs, "next_live_set_limit_delta", new_val)
+    except Exception:
+        pass
+    try:
+        gs.log.append(f"[AUTO_EXT] reserved next live-set limit delta {new_val:+d} ({src})")
+    except Exception:
+        pass
+    return new_val
 
 
 def _opp_stage_has_wait_member(gs: Any) -> bool:
@@ -714,6 +864,4 @@ def _stage_unit_count_diff_names(gs: Any, cards_db: Dict[str, Any], unit_name: s
 
 # ---------------------------------------------------------------------------
 # Main dispatch
-
-
-__all__ = ['_add_temp_blade', '_add_temp_hearts', '_active_stage_slots', '_all_stage_slots_filled', '_src_slot', '_success_zone_cards', '_card_score', '_lookup_cardinfo', '_card_group', '_card_unit', '_card_cost', '_card_type_norm', '_card_name', '_stage_member_cost_sum', '_opp_stage_member_cost_sum', '_has_opponent_state', '_activate_energy', '_draw_cards', '_live_in_progress_cards', '_live_score_total', '_opp_live_score_total', '_stage_has_group', '_stage_all_group', '_stage_unit_count', '_stage_positions_with_group', '_stage_positions_with_unit', '_stage_positions_all_occupied', '_green_room_top', '_green_room_list', '_label_matches_group_or_unit', '_green_room_members_by_group', '_green_room_lives_by_group', '_green_room_lives_by_group_score_le', '_green_room_cards_by_group_any_type', '_move_card_from_green_to_hand', '_opp_stage_has_wait_member', '_stage_other_member_exists', '_stage_has_any_other_member', '_slot_total_blade', '_stage_unit_count_diff_names']
+# ---------------------------------------------------------------------------

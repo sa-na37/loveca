@@ -1,16 +1,19 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_apply_split_20260407a
+# BUILD_TAG: engine_effect_apply_sync_20260413a
 from __future__ import annotations
 
 """llocg_ui.effects.apply
 
-engine_effect の apply dispatcher。
+engine_effect の apply dispatcher の正本。
+
+注意:
+- ext_key ベースの effect 処理をここで受ける
+- helper は effects.helpers から参照する
+- 未対応時は False を返し、engine.py 側既存実装へフォールバックさせる
 """
 
 from typing import Any, Dict
 from .helpers import *  # noqa: F403
-
-# ---------------------------------------------------------------------------
 
 def try_apply_effect_by_rule_ext(
     eng: Dict[str, Any],
@@ -378,6 +381,175 @@ def try_apply_effect_by_rule_ext(
                 pass
         return True
 
+
+
+    # ==================================================================
+    # bp2_batch2_20260410b Claude merge (GPT debugged)
+    # ==================================================================
+
+    # PL!HS-bp2-002 村野さやか (登場)
+    if ext_key == "enter_pick_cost_le2_member_from_green_up_to_2":
+        src = str((ctx or {}).get("source_cn") or "")
+        candidates = [
+            c for c in _green_room_list(gs)
+            if _card_type_norm(c, cards_db) == 'MEMBER' and _card_cost(c, cards_db) <= 2
+        ]
+        try:
+            gs.log.append(f"[AUTO_EXT] 村野さやか: candidates={len(candidates)} (multi-pick) ({src})")
+        except Exception:
+            pass
+        if not candidates:
+            return True
+        cns = [str(getattr(c, 'cardnumber', None) or c or '') for c in candidates]
+        payload = {
+            'kind': 'choose_member_from_green_multi_up_to',
+            'text': '【村野さやか】控え室からコスト2以下のメンバーカードを0〜2枚選んで手札に加える',
+            'options': cns,
+            'min_picks': 0,
+            'max_picks': min(2, len(cns)),
+            'want_kind': 'MEMBER',
+            'source_cn': src,
+        }
+        try:
+            getattr(gs, 'pending').append(payload)
+            gs.log.append(f"[PENDING] 村野さやか: multi-pick cost<=2 MEMBER opts={cns}")
+        except Exception:
+            pass
+        return True
+
+    # PL!HS-bp2-002 村野さやか (BODY)
+    if ext_key == "body_higher_cost_member_exists_blade3":
+        slot = _src_slot(gs, ctx)
+        src = str((ctx or {}).get('source_cn') or '')
+        if slot is None:
+            return True
+        my_cost = _card_cost(slot, cards_db)
+        src_pos = str((ctx or {}).get('src_pos') or (ctx or {}).get('pos') or '').upper()
+        found_higher = False
+        try:
+            st = getattr(gs, 'stage', None)
+            if isinstance(st, dict):
+                for pos in ('L','C','R'):
+                    if pos == src_pos:
+                        continue
+                    other = st.get(pos)
+                    if other is None or not bool(getattr(other, 'cardnumber', None)):
+                        continue
+                    if _card_type_norm(other, cards_db) == 'MEMBER' and _card_cost(other, cards_db) > my_cost:
+                        found_higher = True
+                        break
+        except Exception:
+            pass
+        try:
+            gs.log.append(f"[AUTO_EXT] 村野さやか BODY: my_cost={my_cost} found_higher={found_higher} ({src})")
+        except Exception:
+            pass
+        if found_higher:
+            _add_temp_blade(eng, slot, 3)
+        return True
+
+    # PL!HS-bp2-003 / PL!HS-bp2-016
+    if ext_key in ('reorder_from_top3', 'reorder_from_top2'):
+        k = 3 if ext_key == 'reorder_from_top3' else 2
+        fn = eng.get('_enqueue_reorder_from_topk_keep_any')
+        label = '乙宗梢 bp2-003' if k == 3 else '百生吟子 bp2-016'
+        if callable(fn):
+            try:
+                fn(gs, k, rng)
+                gs.log.append(f"[AUTO_EXT] {label}: enqueue reorder_from_top{k}")
+            except Exception as e:
+                try:
+                    gs.log.append(f"[ERR] {label}: _enqueue_reorder_from_topk_keep_any failed: {e}")
+                except Exception:
+                    pass
+        else:
+            try:
+                gs.log.append(f"[ERR] {label}: _enqueue_reorder_from_topk_keep_any not found")
+            except Exception:
+                pass
+        return True
+
+    # PL!HS-bp2-006 藤島慈 (BODY)
+    if ext_key == 'body_mirakupark_others_count_blade':
+        slot = _src_slot(gs, ctx)
+        src_pos = str((ctx or {}).get('src_pos') or (ctx or {}).get('pos') or '').upper()
+        if slot is None:
+            return True
+        count = 0
+        try:
+            st = getattr(gs, 'stage', None)
+            if isinstance(st, dict):
+                for pos in ('L','C','R'):
+                    if pos == src_pos:
+                        continue
+                    other = st.get(pos)
+                    if other is None or not bool(getattr(other, 'cardnumber', None)):
+                        continue
+                    if _card_type_norm(other, cards_db) == 'MEMBER' and _label_matches_group_or_unit(other, cards_db, 'みらくらぱーく！'):
+                        count += 1
+        except Exception:
+            pass
+        if count > 0:
+            _add_temp_blade(eng, slot, count)
+        try:
+            gs.log.append(f"[AUTO_EXT] 藤島慈 BODY: みらくらぱーく！ others={count}")
+        except Exception:
+            pass
+        return True
+
+    # PL!HS-bp2-010 / 012 / 013 top5 filtered optional
+    if ext_key in ('enter_top5_member_optional_pick', 'body_stage_to_green_top5_member_optional', 'body_stage_to_green_top5_live_optional'):
+        filter_kind = 'LIVE' if ext_key == 'body_stage_to_green_top5_live_optional' else 'MEMBER'
+        label = (
+            '日野下花帆 bp2-010' if ext_key == 'enter_top5_member_optional_pick' else
+            '乙宗梢 bp2-012' if ext_key == 'body_stage_to_green_top5_member_optional' else
+            '夕霧綴理 bp2-013'
+        )
+        fn = eng.get('_enqueue_choose_from_topk_filtered')
+        if callable(fn):
+            try:
+                fn(gs, 5, rng, cards_db, filter_kind=filter_kind, optional=True)
+                gs.log.append(f"[AUTO_EXT] {label}: enqueue choose_from_top5 filter_kind={filter_kind} optional=True")
+            except Exception as e:
+                try:
+                    gs.log.append(f"[ERR] {label}: _enqueue_choose_from_topk_filtered failed: {e}")
+                except Exception:
+                    pass
+        else:
+            try:
+                gs.log.append(f"[ERR] {label}: _enqueue_choose_from_topk_filtered not found")
+            except Exception:
+                pass
+        return True
+
+    # PL!HS-bp2-017 徒町小鈴 (登場)
+    if ext_key == 'enter_green_ge10_draw1':
+        green_count = len(_green_room_list(gs))
+        if green_count >= 10:
+            drawn = _draw_cards(eng, gs, 1)
+            try:
+                gs.log.append(f"[AUTO_EXT] 徒町小鈴: green>=10 -> draw {drawn}")
+            except Exception:
+                pass
+        else:
+            try:
+                gs.log.append(f"[AUTO_EXT] 徒町小鈴: green_room={green_count}<10, no draw")
+            except Exception:
+                pass
+        return True
+
+    # PL!HS-bp2-014 大沢瑠璃乃 (登場)
+    if ext_key == 'enter_draw1_and_cannot_live_until_end_of_live':
+        drawn = _draw_cards(eng, gs, 1)
+        try:
+            gs.cannot_live_until_end_of_live = True
+        except Exception:
+            setattr(gs, 'cannot_live_until_end_of_live', True)
+        try:
+            gs.log.append(f"[AUTO_EXT] 大沢瑠璃乃 bp2-014: draw {drawn}; cannot live until end of live")
+        except Exception:
+            pass
+        return True
     # ==================================================================
     # group2_single_target_20260402 新規実装
     # ==================================================================
@@ -701,6 +873,18 @@ def try_apply_effect_by_rule_ext(
         return True
 
     # ------------------------------------------------------------------
+    # bp2_batch3_local_20260413f
+    {
+        "id": "enter_sayaka_bp2011_mill5",
+        "effect_template": "デッキの上からカードを5枚控え室に置く。",
+        "ext_key": "enter_mill5",
+    },
+    {
+        "id": "body_megumi_bp2015_leave_stage_draw2_discard1",
+        "effect_template": "このメンバーがステージから控え室に置かれたとき、カードを2枚引き、手札を1枚控え室に置く。",
+        "ext_key": "body_leave_stage_draw2_discard1",
+    },
+
     # Prompt 80: PL!HS-bp2-007 百生吟子 (ライブ開始時)
     # cost=手札を1枚控え室に置いてもよい → engine 側 pay_or_skip
     # 控え室に置いたカードがメンバーカードなら、同名ステージメンバーに green+1 blade+1
@@ -1053,6 +1237,17 @@ def try_apply_effect_by_rule_ext(
                 pass
         return True
 
+    if ext_key == "body_pick_live_req_yellow_ge3_from_green":
+        src = str((ctx or {}).get("source_cn") or "PL!-PR-003")
+        return _enqueue_pick_live_req_heart_from_green(gs, cards_db, 'yellow', 3, src)
+
+    if ext_key == "body_pick_live_req_pink_ge3_from_green":
+        src = str((ctx or {}).get("source_cn") or "PL!-PR-004")
+        return _enqueue_pick_live_req_heart_from_green(gs, cards_db, 'pink', 3, src)
+
+    # ------------------------------------------------------------------
+    # Prompt 76: PL!HS-bp2-005 大沢瑠璃乃 (登場)
+
     # ------------------------------------------------------------------
     # Prompt 76: PL!HS-bp2-005 大沢瑠璃乃 (登場)
     # cost=手札1枚控え室へ → engine 側 pay_or_skip
@@ -1170,10 +1365,138 @@ def try_apply_effect_by_rule_ext(
         return True
 
     # ------------------------------------------------------------------
+    # Prompt 80: PL!HS-bp2-018 安養寺姫芽 (登場)
+    # MAIN 中に [E][E] を任意支払い → green の LIVE を表向きで set_zone に置き、
+    # 次の LIVE_SET で手札から置ける上限を 1 減らす。
+    # effect_template only; optional energy cost prompt は engine.py 側。
+    # ------------------------------------------------------------------
+    if ext_key == "enter_main_pay2_faceup_live_to_set_reduce_next_live_set":
+        src = str((ctx or {}).get("source_cn") or "安養寺姫芽")
+        phase = str(getattr(gs, "phase", "") or "").upper()
+        if phase != 'MAIN':
+            try:
+                gs.log.append(f"[AUTO_EXT] not MAIN, no effect ({src})")
+            except Exception:
+                pass
+            return True
+
+        chosen_cn = str((ctx or {}).get("chosen_cn") or (ctx or {}).get("choice") or "").strip()
+        if chosen_cn:
+            ok = _move_live_from_green_to_set_zone(gs, chosen_cn)
+            try:
+                gs.log.append(f"[AUTO_EXT] green->set_zone {chosen_cn} ({src}) ok={ok}")
+            except Exception:
+                pass
+            if ok:
+                _reserve_next_live_set_limit_delta(gs, -1, src)
+            return True
+
+        candidates = [c for c in _green_room_list(gs) if _card_type_norm(c, cards_db) == 'LIVE']
+        try:
+            gs.log.append(f"[AUTO_EXT] {src}: green LIVE candidates={len(candidates)}")
+        except Exception:
+            pass
+        if not candidates:
+            try:
+                gs.log.append(f"[AUTO_EXT] no LIVE in green_room ({src})")
+            except Exception:
+                pass
+            return True
+        if len(candidates) == 1:
+            cn_str = str(getattr(candidates[0], "cardnumber", None) or candidates[0] or "")
+            ok = _move_live_from_green_to_set_zone(gs, candidates[0])
+            try:
+                gs.log.append(f"[AUTO_EXT] green->set_zone {cn_str} ({src}) ok={ok}")
+            except Exception:
+                pass
+            if ok:
+                _reserve_next_live_set_limit_delta(gs, -1, src)
+            return True
+        cns = [str(getattr(c, "cardnumber", None) or c or "") for c in candidates]
+        payload = {
+            "kind": "choose_live_from_green",
+            "text": "控え室のライブカードを1枚選び、表向きでライブカード置き場に置く",
+            "options": cns,
+            "want_kind": "LIVE",
+            "remaining_picks": 1,
+            "after_ext_key": "enter_main_pay2_faceup_live_to_set_reduce_next_live_set",
+            "ctx": dict(ctx or {}),
+            "source_cn": src,
+        }
+        try:
+            getattr(gs, "pending").append(payload)
+            gs.log.append(f"[PENDING] {src}: choose LIVE from green for set_zone {cns}")
+        except Exception:
+            pass
+        return True
+
+    # ------------------------------------------------------------------
     # Prompt 56: PL!-pb1-030 Cutie Panther (ライブ成功時) — 後半のみ EFFECT_ONLY
     # ステージに名前の異なる BiBi が2人以上 → 控え室から BiBi メンバー1枚手札へ
     # 前半（必要ハート減算）は NEEDS_ENGINE のため未実装。
     # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # bp2_batch3_local_20260413f: PL!HS-bp2-011 村野さやか (登場)
+    # デッキ上からカードを5枚控え室に置く。
+    # ------------------------------------------------------------------
+    if ext_key == "enter_mill5":
+        milled = 0
+        try:
+            deck = getattr(gs, "deck", None)
+            waiting = getattr(gs, "green_room", None)
+            if waiting is None:
+                waiting = (
+                    getattr(gs, "waiting_room", None)
+                    or getattr(gs, "graveyard", None)
+                    or getattr(gs, "discard", None)
+                )
+            if deck is not None and waiting is not None:
+                for _ in range(5):
+                    if not deck:
+                        break
+                    waiting.append(deck.pop(0))
+                    milled += 1
+        except Exception:
+            pass
+        try:
+            gs.log.append(f"[AUTO_EXT] mill {milled}/5 cards to waiting_room (村野さやか bp2-011)")
+        except Exception:
+            pass
+        return True
+
+    # ------------------------------------------------------------------
+    # bp2_batch3_local_20260413f: PL!HS-bp2-015 藤島慈 (自動/BODY)
+    # leave-stage -> draw2, discard1
+    # ------------------------------------------------------------------
+    if ext_key == "body_leave_stage_draw2_discard1":
+        trigger = str((ctx or {}).get("trigger") or "").lower()
+        if trigger and trigger not in ("leave_stage", "stage_to_green", "stage_leave"):
+            try:
+                gs.log.append(f"[AUTO_EXT] 藤島慈 bp2-015: trigger={trigger!r} not leave-stage, skip")
+            except Exception:
+                pass
+            return True
+        drawn = _draw_cards(eng, gs, 2)
+        try:
+            gs.log.append(f"[AUTO_EXT] 藤島慈 bp2-015: draw {drawn} (leave-stage)")
+        except Exception:
+            pass
+        enqueue_discard = eng.get("_enqueue_discard_from_hand")
+        if callable(enqueue_discard):
+            try:
+                enqueue_discard(gs, 1, label="【藤島慈】手札を1枚控え室に置く")
+            except Exception as e:
+                try:
+                    gs.log.append(f"[ERR] 藤島慈 bp2-015: enqueue_discard_from_hand failed: {e}")
+                except Exception:
+                    pass
+        else:
+            try:
+                gs.log.append("[ERR] 藤島慈 bp2-015: _enqueue_discard_from_hand not found")
+            except Exception:
+                pass
+        return True
+
     if ext_key == "live_success_bibi_2diff_pick_bibi_member_from_green":
         src = str((ctx or {}).get("source_cn") or "")
         diff_count = _stage_unit_count_diff_names(gs, cards_db, "BiBi")
@@ -1215,4 +1538,3 @@ def try_apply_effect_by_rule_ext(
         return True
 
     return False
-
