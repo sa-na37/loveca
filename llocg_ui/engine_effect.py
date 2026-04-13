@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_hime_bp2batch2_no_live_flag_20260413d
+# BUILD_TAG: engine_effect_bp2batch3_merge_20260413e
 from __future__ import annotations
 
 """llocg_ui.engine_effect
@@ -346,6 +346,35 @@ EXTRA_EFFECT_RULES = [
         "effect_template": "自分のステージにいる『Printemps』のメンバーを1人までアクティブにする。",
         "ext_key": "enter_printemps_activate_up_to_1",
     },
+
+# -----------------------------------------------------------------------
+# bp2_batch3_20260413e 新規追加
+# -----------------------------------------------------------------------
+{
+    "id": "body_tsuzuri_bp2004_self_to_green_pick_live_from_green",
+    "effect_template": "自分の控え室からライブカードを1枚手札に加える。",
+    "ext_key": "body_pick_any_live_from_green",
+},
+{
+    "id": "enter_sayaka_bp2011_mill5",
+    "effect_template": "デッキの上からカードを5枚控え室に置く。",
+    "ext_key": "enter_mill5",
+},
+{
+    "id": "body_tsuzuri_bp2015_leave_stage_draw2_discard1",
+    "effect_template": "このメンバーがステージから控え室に置かれたとき、カードを2枚引き、手札を1枚控え室に置く。",
+    "ext_key": "body_leave_stage_draw2_discard1",
+},
+{
+    "id": "live_start_aokharuka_bp2022_cerisebouquet_live_ge3_score1",
+    "effect_template": "自分の控え室に『スリーズブーケ』のライブカードが3枚以上ある場合、このカードのスコアを+1する。",
+    "ext_key": "live_start_green_cerisebouquet_live_ge3_score1",
+},
+{
+    "id": "live_start_bp3019_live_mus_ge2_score1",
+    "effect_template": "自分のライブ中の『μ's』のカードが2枚以上ある場合、このカードのスコアを+1する。",
+    "ext_key": "live_start_live_mus_ge2_score1",
+},
     # Prompt 80: PL!HS-bp2-007 百生吟子 (ライブ開始時)
     # cost=手札を1枚控え室に置いてもよい → engine 側 pay_or_skip
     # 控え室に置いたカードがメンバーカードなら、同名ステージメンバーに green+1 blade+1
@@ -420,6 +449,15 @@ def try_match_effect_template_ext(
         # Prompt 14: exact should normally hit, but keep a safe fallback
         ("enter_pick_mus_member_from_green",
          lambda t: ("『μ's』のメンバーカードを1枚手札に加える。" in t and "控え室から" in t)),
+
+("body_pick_any_live_from_green",
+ lambda t: ("控え室からライブカードを1枚手札に加える。" in t)),
+("body_leave_stage_draw2_discard1",
+ lambda t: ("ステージから控え室に置かれたとき" in t and "カードを2枚引き" in t and "手札を1枚控え室に置く。" in t)),
+("live_start_green_cerisebouquet_live_ge3_score1",
+ lambda t: ("スリーズブーケ" in t and "ライブカードが3枚以上" in t and "スコアを+1" in t)),
+("live_start_live_mus_ge2_score1",
+ lambda t: ("ライブ中の『μ's』のカードが2枚以上" in t and "スコアを+1" in t)),
     ]
     for ext_key, pred in fragment_rules:
         try:
@@ -2778,5 +2816,142 @@ def try_apply_effect_by_rule_ext(
         except Exception:
             pass
         return True
+
+
+# ------------------------------------------------------------------
+# bp2_batch3_20260413e
+# ------------------------------------------------------------------
+if ext_key == "body_pick_any_live_from_green":
+    src = str((ctx or {}).get("source_cn") or "夕霧綴理 bp2-004")
+    candidates = [c for c in _green_room_list(gs) if _card_type_norm(c, cards_db) == "LIVE"]
+    try:
+        gs.log.append(f"[AUTO_EXT] 夕霧綴理 bp2-004: LIVE candidates={len(candidates)} ({src})")
+    except Exception:
+        pass
+    if not candidates:
+        return True
+    if len(candidates) == 1:
+        ok = _move_card_from_green_to_hand(gs, candidates[0])
+        try:
+            gs.log.append(f"[AUTO_EXT] green->hand {getattr(candidates[0], 'cardnumber', candidates[0])} (夕霧綴理 bp2-004) ok={ok}")
+        except Exception:
+            pass
+        return True
+    cns = [str(getattr(c, "cardnumber", None) or c or "") for c in candidates]
+    payload = {
+        "kind": "choose_live_from_green",
+        "text": "【夕霧綴理】控え室からライブカードを1枚手札に加える",
+        "options": cns,
+        "want_kind": "LIVE",
+        "remaining_picks": 1,
+        "source_cn": src,
+    }
+    try:
+        getattr(gs, "pending").append(payload)
+        gs.log.append(f"[PENDING] 夕霧綴理 bp2-004: choose LIVE from green {cns}")
+    except Exception:
+        pass
+    return True
+
+if ext_key == "enter_mill5":
+    milled = 0
+    try:
+        deck = getattr(gs, "deck", None)
+        waiting = getattr(gs, "green_room", None) or getattr(gs, "waiting_room", None) or getattr(gs, "graveyard", None) or getattr(gs, "discard", None)
+        if deck is not None and waiting is not None:
+            for _ in range(5):
+                if not deck:
+                    break
+                waiting.append(deck.pop(0))
+                milled += 1
+    except Exception:
+        pass
+    try:
+        gs.log.append(f"[AUTO_EXT] mill {milled}/5 cards to waiting_room (村野さやか bp2-011)")
+    except Exception:
+        pass
+    return True
+
+if ext_key == "body_leave_stage_draw2_discard1":
+    trigger = str((ctx or {}).get("trigger") or "").lower()
+    if trigger and trigger not in ("leave_stage", "stage_to_green", "stage_leave"):
+        try:
+            gs.log.append(f"[AUTO_EXT] 藤島慈 bp2-015: trigger='{trigger}' not leave_stage, skip")
+        except Exception:
+            pass
+        return True
+    drawn = _draw_cards(eng, gs, 2)
+    try:
+        gs.log.append(f"[AUTO_EXT] 藤島慈 bp2-015: draw {drawn} (leave_stage)")
+    except Exception:
+        pass
+    hand = getattr(gs, "hand", None)
+    if hand and len(hand) > 0:
+        payload = {
+            "kind": "choose_card_from_green",
+            "candidates": [str(getattr(c, "cardnumber", None) or c or "") for c in hand],
+            "optional": False,
+            "after_ext_key": "body_leave_stage_draw2_discard1__discard_resolve",
+            "source_cn": str((ctx or {}).get("source_cn") or "藤島慈 bp2-015"),
+            "label": "【藤島慈】手札を1枚控え室に置いてください",
+            "_from_hand": True,
+        }
+        try:
+            getattr(gs, "pending").append(payload)
+            gs.log.append(f"[PENDING] 藤島慈 bp2-015: choose hand card to discard ({len(hand)} cards)")
+        except Exception:
+            pass
+    return True
+
+if ext_key == "body_leave_stage_draw2_discard1__discard_resolve":
+    chosen_cn = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_cn") or "").strip()
+    hand = getattr(gs, "hand", None)
+    gr = _green_room_list(gs)
+    found = None
+    if hand:
+        for c in list(hand):
+            if str(getattr(c, "cardnumber", None) or c or "").strip() == chosen_cn:
+                found = c
+                break
+    if found is not None:
+        try:
+            hand.remove(found)
+            gr.append(found)
+            gs.log.append(f"[AUTO_EXT] hand->green {chosen_cn} (藤島慈 bp2-015 discard resolve)")
+        except Exception:
+            pass
+    return True
+
+if ext_key == "live_start_green_cerisebouquet_live_ge3_score1":
+    count = sum(
+        1 for c in _green_room_list(gs)
+        if _card_type_norm(c, cards_db) == "LIVE" and _label_matches_group_or_unit(c, cards_db, "スリーズブーケ")
+    )
+    try:
+        gs.log.append(f"[AUTO_EXT] アオクハルカ bp2-022: スリーズブーケ LIVE in green={count}")
+    except Exception:
+        pass
+    if count >= 3:
+        try:
+            gs.score_delta = int(getattr(gs, "score_delta", 0) or 0) + 1
+            gs.log.append("[AUTO_EXT] アオクハルカ bp2-022: スリーズブーケ LIVE >=3 -> score+1")
+        except Exception:
+            pass
+    return True
+
+if ext_key == "live_start_live_mus_ge2_score1":
+    live_cards = _live_in_progress_cards(gs)
+    mus_count = sum(1 for c in live_cards if _label_matches_group_or_unit(c, cards_db, "μ's"))
+    try:
+        gs.log.append(f"[AUTO_EXT] 僕らのLIVE bp3-019: μ's in live_cards={mus_count}/{len(live_cards)}")
+    except Exception:
+        pass
+    if mus_count >= 2:
+        try:
+            gs.score_delta = int(getattr(gs, "score_delta", 0) or 0) + 1
+            gs.log.append("[AUTO_EXT] 僕らのLIVE bp3-019: μ's >=2 -> score+1")
+        except Exception:
+            pass
+    return True
 
     return False
