@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: hime_bp2batch3_merge_scorefix_20260413f
+# BUILD_TAG: hime_bp2batch3_merge_scorefix_20260413g
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -3236,6 +3236,7 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
             _TSUNAGARU_CONNECT_CN_CANON,
             _VIVID_WORLD_CN_CANON,
             _BOKULIVE_BP3_019_CN_CANON,
+            'PL!HS-bp2-022',
             _HEARTBEAT_BP4_021_CN_CANON,
         }
     except Exception:
