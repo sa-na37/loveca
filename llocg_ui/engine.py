@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: hime_bp2batch2_no_live_flag_20260413d
+# BUILD_TAG: hime_bp2batch3_merge_scorefix_20260413f
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -3433,6 +3433,16 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                     'options': ['ok'],
                 }
                 _append_prompt(pr, pr['text'])
+            elif _canon_live == 'PL!HS-bp2-022':
+                pr = {
+                    'kind': 'live_start_numeric_effect',
+                    'source_cn': _cn_live,
+                    'set_idx': int(_set_idx),
+                    'effect_code': 'bp2_022_score',
+                    "text": f"LIVE{_set_idx+1}: {_cn_live} ライブ開始時 → 控え室に『スリーズブーケ』のライブカードが3枚以上あるなら、このカードのスコアを+1する。",
+                    'options': ['ok'],
+                }
+                _append_prompt(pr, pr['text'])
             elif _canon_live == _HEARTBEAT_BP4_021_CN_CANON:
                 pr = {
                     'kind': 'live_start_numeric_effect',
@@ -4425,6 +4435,42 @@ def _mu_live_cards_in_set_zone_count(gs: GameState, cards_db: Dict[str, CardInfo
     return int(n)
 
 
+def _ci_matches_group_or_unit(ci: Optional[CardInfo], label: str) -> bool:
+    if not ci:
+        return False
+    lab = str(label or '').strip()
+    if not lab:
+        return False
+    g = str(getattr(ci, 'group', '') or '').strip()
+    u = str(getattr(ci, 'unit', '') or '').strip()
+    return (g == lab) or (u == lab) or (lab in g if g else False) or (lab in u if u else False)
+
+
+def _green_live_count_by_group_or_unit(gs: GameState, cards_db: Dict[str, CardInfo], label: str) -> int:
+    n = 0
+    for cn in list(getattr(gs, 'green_room', []) or []):
+        ci = _get_card(cards_db, cn)
+        if not ci:
+            continue
+        if not _is_live_ci(ci):
+            continue
+        if _ci_matches_group_or_unit(ci, label):
+            n += 1
+    return int(n)
+
+
+def _aokuharuka_score_bonus(cn_live, gs: GameState, cards_db: Dict[str, CardInfo], set_idx: Optional[int] = None) -> int:
+    try:
+        canon = _canon_cardno(cn_live)
+    except Exception:
+        canon = str(cn_live or '')
+    if canon != 'PL!HS-bp2-022':
+        return 0
+    if not _live_start_set_idx_resolved(gs, set_idx):
+        return 0
+    return 1 if _green_live_count_by_group_or_unit(gs, cards_db, 'スリーズブーケ') >= 3 else 0
+
+
 
 def _live_start_set_idx_resolved(gs: Optional[GameState], set_idx: Optional[int]) -> bool:
     try:
@@ -4684,6 +4730,8 @@ def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[s
         return 2 * int(_emotion_success_count(gs))
     if canon == _BOKULIVE_BP3_019_CN_CANON:
         return int(_bokulive_score_bonus(cn_live, gs, cards_db, set_idx=set_idx))
+    if canon == 'PL!HS-bp2-022':
+        return int(_aokuharuka_score_bonus(cn_live, gs, cards_db, set_idx=set_idx))
     if canon == _HEARTBEAT_BP4_021_CN_CANON:
         return int(_heartbeat_score_bonus(cn_live, gs, cards_db, set_idx=set_idx))
     if canon == _TSUNAGARU_CONNECT_CN_CANON:
@@ -4827,9 +4875,6 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
                     gs.log.append(f"  live: NG {cn} req={req} alloc={{'reason': 'not reached'}}")
 
 
-    # clear set zone (attempted)
-    gs.set_zone = []
-
     # Result & UI banner
     if ok_all:
         total_score, score_rows = _compute_attempt_score_breakdown(lives, cards_db, int(getattr(gs, 'turn', 0) or 0), gs, live_set_indices=live_idxs)
@@ -4863,6 +4908,9 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
     gs.banner_text = result_txt
     gs.banner_ts = time.time()
     gs.banner_ttl = 4.0
+
+    # clear set zone after score computation; some live-start score bonuses inspect the current set cards.
+    gs.set_zone = []
 
     # Move attempted LIVE cards: by default they go to waiting room (green_room).
     if lives:
@@ -5398,6 +5446,9 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         eff_code = str(p.get('effect_code', '') or '')
         if eff_code == 'bp3_019_score':
             bonus = int(_bokulive_score_bonus(src, gs, cards_db, set_idx=set_idx))
+            gs.log.append(f"[AUTO] {src}[ライブ開始時]: score {bonus:+d}")
+        elif eff_code == 'bp2_022_score':
+            bonus = int(_aokuharuka_score_bonus(src, gs, cards_db, set_idx=set_idx))
             gs.log.append(f"[AUTO] {src}[ライブ開始時]: score {bonus:+d}")
         elif eff_code == 'bp4_021_req_score':
             red = int(_heartbeat_required_any_reduction(src, gs, cards_db, set_idx=set_idx))
