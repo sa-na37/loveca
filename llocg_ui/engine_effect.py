@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_hime_bp2batch2_typefix_20260413a
+# BUILD_TAG: engine_effect_hime_bp2batch2_multiselect_20260413b
 from __future__ import annotations
 
 """llocg_ui.engine_effect
@@ -1701,116 +1701,29 @@ def try_apply_effect_by_rule_ext(
     # PL!HS-bp2-002 村野さやか (登場)
     if ext_key == "enter_pick_cost_le2_member_from_green_up_to_2":
         src = str((ctx or {}).get("source_cn") or "")
-        remaining = int((ctx or {}).get("remaining_picks", 2) or 2)
-        confirmed = bool((ctx or {}).get("confirmed_pick", False))
-        chosen_cn = str((ctx or {}).get("chosen_cn") or (ctx or {}).get("choice") or "").strip()
-
-        # resolve chosen card when called back from choose_member_from_green
-        if chosen_cn and chosen_cn != 'SKIP':
-            gr = _green_room_list(gs)
-            found = None
-            for c in list(gr):
-                if str(getattr(c, 'cardnumber', None) or c or '').strip() == chosen_cn:
-                    found = c
-                    break
-            ok = _move_card_from_green_to_hand(gs, found) if found is not None else False
-            try:
-                gs.log.append(f"[AUTO_EXT] 村野さやか: green->hand {chosen_cn} ok={ok} ({src})")
-            except Exception:
-                pass
-            remaining = max(0, remaining - 1)
-            candidates_after = [
-                c for c in _green_room_list(gs)
-                if _card_type_norm(c, cards_db) == 'MEMBER' and _card_cost(c, cards_db) <= 2
-            ]
-            if remaining > 0 and candidates_after:
-                payload = {
-                    'kind': 'confirm_effect',
-                    'text': '【村野さやか】控え室からさらにコスト2以下のメンバーカードを1枚手札に加えますか？',
-                    'options': ['使う', 'スキップ'],
-                    'after_effect_template': '自分の控え室からコスト2以下のメンバーカードを2枚まで手札に加える。',
-                    'ctx': {'source_cn': src, 'remaining_picks': remaining, 'confirmed_pick': True},
-                    'source_cn': src,
-                }
-                try:
-                    getattr(gs, 'pending').append(payload)
-                    gs.log.append(f"[PENDING] 村野さやか: confirm another pick remaining={remaining}")
-                except Exception:
-                    pass
-            return True
-
         candidates = [
             c for c in _green_room_list(gs)
             if _card_type_norm(c, cards_db) == 'MEMBER' and _card_cost(c, cards_db) <= 2
         ]
         try:
-            gs.log.append(f"[AUTO_EXT] 村野さやか: candidates={len(candidates)} remaining={remaining} confirmed={confirmed} ({src})")
+            gs.log.append(f"[AUTO_EXT] 村野さやか: candidates={len(candidates)} (multi-pick) ({src})")
         except Exception:
             pass
-        if remaining <= 0 or not candidates:
+        if not candidates:
             return True
-
-        # initial invocation is optional because card text says "up to 2"
-        if not confirmed:
-            payload = {
-                'kind': 'confirm_effect',
-                'text': '【村野さやか】控え室からコスト2以下のメンバーカードを手札に加えますか？',
-                'options': ['使う', 'スキップ'],
-                'after_effect_template': '自分の控え室からコスト2以下のメンバーカードを2枚まで手札に加える。',
-                'ctx': {'source_cn': src, 'remaining_picks': remaining, 'confirmed_pick': True},
-                'source_cn': src,
-            }
-            try:
-                getattr(gs, 'pending').append(payload)
-                gs.log.append(f"[PENDING] 村野さやか: confirm first pick remaining={remaining}")
-            except Exception:
-                pass
-            return True
-
-        if len(candidates) == 1:
-            only = candidates[0]
-            cn_str = str(getattr(only, 'cardnumber', None) or only or '')
-            ok = _move_card_from_green_to_hand(gs, only)
-            try:
-                gs.log.append(f"[AUTO_EXT] 村野さやか: auto green->hand {cn_str} ok={ok} ({src})")
-            except Exception:
-                pass
-            remaining = max(0, remaining - 1)
-            candidates_after = [
-                c for c in _green_room_list(gs)
-                if _card_type_norm(c, cards_db) == 'MEMBER' and _card_cost(c, cards_db) <= 2
-            ]
-            if remaining > 0 and candidates_after:
-                payload = {
-                    'kind': 'confirm_effect',
-                    'text': '【村野さやか】控え室からさらにコスト2以下のメンバーカードを1枚手札に加えますか？',
-                    'options': ['使う', 'スキップ'],
-                    'after_effect_template': '自分の控え室からコスト2以下のメンバーカードを2枚まで手札に加える。',
-                    'ctx': {'source_cn': src, 'remaining_picks': remaining, 'confirmed_pick': True},
-                    'source_cn': src,
-                }
-                try:
-                    getattr(gs, 'pending').append(payload)
-                    gs.log.append(f"[PENDING] 村野さやか: confirm another pick remaining={remaining}")
-                except Exception:
-                    pass
-            return True
-
         cns = [str(getattr(c, 'cardnumber', None) or c or '') for c in candidates]
         payload = {
-            'kind': 'choose_member_from_green',
-            'text': '【村野さやか】控え室からコスト2以下のメンバーカードを1枚手札に加える',
+            'kind': 'choose_member_from_green_multi_up_to',
+            'text': '【村野さやか】控え室からコスト2以下のメンバーカードを0〜2枚選んで手札に加える',
             'options': cns,
+            'min_picks': 0,
+            'max_picks': min(2, len(cns)),
             'want_kind': 'MEMBER',
-            'want_group': '',
-            'remaining_picks': 1,
-            'after_ext_key': 'enter_pick_cost_le2_member_from_green_up_to_2',
-            'ctx': {'source_cn': src, 'remaining_picks': remaining, 'confirmed_pick': True},
             'source_cn': src,
         }
         try:
             getattr(gs, 'pending').append(payload)
-            gs.log.append(f"[PENDING] 村野さやか: choose cost<=2 MEMBER from green opts={cns} remaining={remaining}")
+            gs.log.append(f"[PENDING] 村野さやか: multi-pick cost<=2 MEMBER opts={cns}")
         except Exception:
             pass
         return True

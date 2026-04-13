@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: hime_bp2batch2_typefix_stagegreen_20260413a
+# BUILD_TAG: hime_bp2batch2_multiselect_topkgray_20260413b
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -642,7 +642,7 @@ def _enqueue_choose_from_topk_filtered(
         'text': f'デッキ上{len(pool)}枚から{label}を1枚手札へ{suffix}',
         'options': opts,
         'pool': list(pool),
-        'display_cards': list(candidates),
+        'display_cards': list(pool),
         'display_pool_all': list(pool),
         'candidates': list(candidates),
         'optional': optional,
@@ -5705,6 +5705,48 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                 gs.pending.append(resume)
         return
 
+
+
+    if kind == 'choose_member_from_green_multi_up_to':
+        max_picks = int(p.get('max_picks', 0) or 0)
+        min_picks = int(p.get('min_picks', 0) or 0)
+        options = list(p.get('options', []) or [])
+        raw_picks = [s.strip() for s in choice_str.split(',') if s.strip() and s.strip().lower() not in ('__done__', 'done', 'skip')]
+        if len(raw_picks) < min_picks or len(raw_picks) > max_picks:
+            gs.log.append(f"[ERR] choose_member_from_green_multi_up_to: invalid pick count {len(raw_picks)} (min={min_picks}, max={max_picks})")
+            gs.pending.insert(0, p)
+            return
+        opts_canon = [_canon_cardno(x) for x in options]
+        green_copy = list(gs.green_room)
+        picked = []
+        for raw in raw_picks:
+            cn = _canon_cardno(raw)
+            if cn not in opts_canon:
+                gs.log.append(f"[ERR] choose_member_from_green_multi_up_to: {cn} not in options")
+                gs.pending.insert(0, p)
+                return
+            found_idx = None
+            found_cn = None
+            for i, gcn in enumerate(green_copy):
+                if _canon_cardno(gcn) == cn:
+                    ci2 = _get_card(cards_db, gcn)
+                    if not _is_member_ci(ci2):
+                        gs.log.append(f"[ERR] choose_member_from_green_multi_up_to: not MEMBER {gcn}")
+                        gs.pending.insert(0, p)
+                        return
+                    found_idx = i
+                    found_cn = gcn
+                    break
+            if found_idx is None:
+                gs.log.append(f"[ERR] choose_member_from_green_multi_up_to: {cn} not in waiting room")
+                gs.pending.insert(0, p)
+                return
+            picked.append(found_cn)
+            green_copy.pop(found_idx)
+        gs.green_room = green_copy
+        gs.hand.extend(picked)
+        gs.log.append(f"[ACT] choose_member_from_green_multi_up_to: picked={picked} -> hand")
+        return
 
     if kind in ('choose_live_from_green','choose_member_from_green'):
         want_kind = 'LIVE' if kind=='choose_live_from_green' else 'MEMBER'

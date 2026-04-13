@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: dual_popup_layers_bp2batch2_20260410c
+# BUILD_TAG: dual_popup_layers_multiselect_gray_20260413b
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1078,59 +1078,12 @@ class App:
             return []
 
     def _always_blade_bonus_for(self, pos: str, slot) -> int:
-        """常時ブレードボーナスを返す（UI表示専用）。
-
-        含むもの:
-        - 常時BODY: コスト13以上条件の +2
-        - Love wing bell (PL!-bp4-020): success_zone にある間、センターの μ's に +1/copy
-        """
-        from .engine import (
-            _has_body_always_cost13_blade_bonus,
-            _stage_has_cost13_plus_member,
-            _stage_has_other_higher_cost_member,
-            _love_wing_bell_success_bonus_count,
-            _canon_cardno,
-        )
-        bonus = 0
+        """常時ブレードボーナスを返す（UI表示専用）。"""
+        from .engine import _slot_always_blade_bonus
         try:
-            if not slot or not getattr(slot, 'active', False):
-                return 0
-            ci = _get_card(self.cards_db, slot.cardnumber)
-            if not ci:
-                return 0
-
-            # 常時BODY: コスト13以上条件
-            try:
-                if _has_body_always_cost13_blade_bonus(ci) and _stage_has_cost13_plus_member(self.gs, self.cards_db):
-                    bonus += 2
-            except Exception:
-                pass
-
-            # Love wing bell: success_zone にある間、センターの μ's メンバーに +1/copy
-            try:
-                if pos == 'C' and ("μ's" in str(getattr(ci, 'group', '') or '')):
-                    bonus += int(_love_wing_bell_success_bonus_count(self.gs) or 0)
-            except Exception:
-                pass
-
-            # PL!-sd1-001 高坂穂乃果: 成功ライブカード置き場1枚につき +1 blade
-            try:
-                if _canon_cardno(getattr(slot, 'cardnumber', '') or '') == 'PL!-sd1-001':
-                    bonus += len(list(getattr(self.gs, 'success_zone', []) or []))
-            except Exception:
-                pass
-
-            # PL!HS-bp2-002 村野さやか: 自分より高コストのメンバーがいる場合 +3 blade
-            try:
-                if _canon_cardno(getattr(slot, 'cardnumber', '') or '') == 'PL!HS-bp2-002':
-                    self_cost = int(getattr(ci, 'cost', 0) or 0)
-                    if _stage_has_other_higher_cost_member(self.gs, self.cards_db, pos, self_cost):
-                        bonus += 3
-            except Exception:
-                pass
+            return int(_slot_always_blade_bonus(self.gs, self.cards_db, pos, slot) or 0)
         except Exception:
             return 0
-        return int(bonus)
 
 
     def _always_hearts_bonus_for(self, pos: str, slot) -> dict:
@@ -1649,7 +1602,7 @@ HTML = r'''<!doctype html>
   #modalActions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap;flex:0 0 auto;}
   #modalActions .miniBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:6px 10px;border-radius:10px;cursor:pointer;}
   /* secondary inspect popup (can coexist with pending/effect popup) */
-  #viewerLayer{position:absolute;inset:0;display:none;z-index:8800;pointer-events:none;}
+  #viewerLayer{position:absolute;inset:0;display:none;z-index:9200;pointer-events:none;}
   #viewerModal{position:absolute;right:18px;top:74px;width:min(46%, 560px);max-height:min(74%, calc(var(--pmH) - 120px));overflow:hidden;background:#1b1b1b;border:1px solid rgba(255,255,255,.15);border-radius:16px;padding:12px;box-shadow:0 14px 60px rgba(0,0,0,.72);display:flex;flex-direction:column;pointer-events:auto;}
   #viewerHeader{display:flex;align-items:center;justify-content:space-between;gap:12px;flex:0 0 auto;}
   #viewerTitle{font-weight:700;min-width:0;}
@@ -1967,7 +1920,8 @@ HTML = r'''<!doctype html>
     if(kind === 'choose_heart_color' || kind === 'choose_heart_color_for_other') return 'ハートの色を選択';
     if(kind === 'discard_from_hand' || kind === 'discard_named_cards_from_hand') return '手札から選択';
     if(kind === 'position_change') return '移動先を選択';
-    if(kind === 'choose_from_topk' || kind === 'choose_top_keep_one' || kind === 'topdeck_from_green' || kind === 'choose_card_from_green' || kind === 'choose_live_from_green' || kind === 'choose_member_from_green') return 'カードを選択';
+    if(kind === 'choose_from_topk' || kind === 'choose_top_keep_one' || kind === 'topdeck_from_green') return 'カードを選択';
+    if(kind === 'choose_member_from_green_multi_up_to') return 'カードを選択';
     if(kind === 'auto_order') return '解決順を選択';
     return '効果の選択';
   }
@@ -1987,13 +1941,13 @@ HTML = r'''<!doctype html>
     if(explicit) return explicit;
     const kind = String((p && p.kind) || '').trim();
     if(kind === 'pay_or_skip' || kind === 'confirm_effect') return 'この効果を使うか、スキップするかを選んでください。';
+    if(kind === 'choose_member_from_green_multi_up_to') return '控え室からカードを0〜指定枚数まで選び、確定を押してください。';
     if(kind === 'choose_stage_member_to_activate') return '対象にするメンバーを選んでください。';
     if(kind === 'choose_heart_color' || kind === 'choose_heart_color_for_other') return '付与するハートの色を選んでください。';
     if(kind === 'discard_from_hand' || kind === 'discard_named_cards_from_hand') return '手札から選ぶカードを選択してください。';
     if(kind === 'choose_effects') return '解決する効果を選んでください。';
     if(kind === 'auto_order') return '解決順を選んでください。';
     if(kind === 'position_change') return '移動先のエリアを選んでください。';
-    if(kind === 'choose_card_from_green' || kind === 'choose_live_from_green' || kind === 'choose_member_from_green') return '控え室から選ぶカードを選択してください。';
     return pendingSourceCn(p) ? '効果を解決するため、対象または選択肢を選んでください。' : '';
   }
   function setRichText(el, raw){
@@ -3541,6 +3495,118 @@ inner.appendChild(card);
       });
       elModalActions.appendChild(bSkip);
 
+      elMask.style.display = 'block';
+      return;
+    }
+
+    // Multi-select: choose_member_from_green_multi_up_to（控え室から0〜N枚選択→手札へ）
+    if(kind === 'choose_member_from_green_multi_up_to'){
+      const maxPicks = (p && p.max_picks != null) ? parseInt(p.max_picks) : ((p && p.maxPicks != null) ? parseInt(p.maxPicks) : 0);
+      const minPicks = (p && p.min_picks != null) ? parseInt(p.min_picks) : 0;
+      const opts = (p && Array.isArray(p.options)) ? p.options : [];
+      const title = String((p && (p.text || p.prompt || p.message)) ? (p.text || p.prompt || p.message) : `控え室から0〜${maxPicks}枚選択`);
+
+      popup = {type:'pending', closable:false};
+      elModalTitle.textContent = '選択';
+      setRichText(elModalText, title);
+      elModalCards.innerHTML = '';
+      elModalActions.innerHTML = '';
+
+      const selected = [];
+      const dimsP = standardSize('portrait');
+      const row = document.createElement('div');
+      row.className = 'choiceRow';
+
+      const counter = document.createElement('div');
+      counter.style.cssText = 'width:100%;text-align:center;color:#fff;font-size:13px;margin-bottom:4px;padding:2px 0;';
+
+      const doneBtn = document.createElement('button');
+      doneBtn.className = 'miniBtn';
+
+      const btnMap = {};
+      const dupCount = {};
+      opts.forEach(o => { const k=String(o).trim(); dupCount[k]=(dupCount[k]||0)+1; });
+      const dupSeen = {};
+
+      function updateCounter(){
+        const n = selected.length;
+        counter.textContent = `選択: ${n} / 0〜${maxPicks}`;
+        doneBtn.textContent = `確定 (${n}/${maxPicks})`;
+        doneBtn.disabled = (n < minPicks || n > maxPicks);
+        doneBtn.style.opacity = doneBtn.disabled ? '0.5' : '1';
+
+        opts.forEach((cn, i) => {
+          const b = btnMap[i];
+          if(!b) return;
+          const k = String(cn).trim();
+          const timesThisIdx = selected.filter(x => x === i).length;
+          if(timesThisIdx > 0){
+            b.style.outline = `3px solid #ffe066`;
+            b.style.outlineOffset = '-3px';
+            const cap = b.querySelector('.choiceCap');
+            if(cap) cap.textContent = k + (timesThisIdx > 1 ? ` ×${timesThisIdx}` : ' ✓');
+          } else {
+            b.style.outline = '';
+            b.style.outlineOffset = '';
+            const dup = opts.filter(x => String(x).trim() === k).length;
+            const nth = opts.slice(0, i).filter(x => String(x).trim() === k).length + 1;
+            const cap = b.querySelector('.choiceCap');
+            if(cap) cap.textContent = (dup > 1) ? `${k} (${nth}/${dup})` : k;
+          }
+        });
+      }
+
+      opts.forEach((opt, i) => {
+        const cn = String(opt).trim();
+        const b = document.createElement('button');
+        b.className = 'choiceBtn';
+        b.style.width = dimsP.w + 'px';
+        b.style.height = dimsP.h + 'px';
+
+        const img = document.createElement('img');
+        img.src = imgUrl(cn);
+        img.alt = cn;
+        b.appendChild(img);
+
+        const cap = document.createElement('div');
+        cap.className = 'choiceCap';
+        dupSeen[cn] = (dupSeen[cn]||0) + 1;
+        cap.textContent = cardChoiceCaption(cn, dupSeen[cn], dupCount[cn]);
+        b.appendChild(cap);
+
+        btnMap[i] = b;
+
+        b.addEventListener('click', ev => {
+          ev.stopPropagation();
+          const alreadyIdx = selected.lastIndexOf(i);
+          if(alreadyIdx >= 0){
+            selected.splice(alreadyIdx, 1);
+          } else if(selected.length < maxPicks){
+            selected.push(i);
+          }
+          updateCounter();
+        });
+
+        row.appendChild(b);
+      });
+
+      let submitting = false;
+      doneBtn.addEventListener('click', async ev => {
+        ev.stopPropagation();
+        if(doneBtn.disabled) return;
+        if(submitting) return;
+        submitting = true;
+        const choiceStr = selected.map(i => String(opts[i]).trim()).join(',');
+        st = await apiCmd('resolve_pending', {idx:0, choice: choiceStr});
+        selHand = [];
+        updateTop();
+        render();
+      });
+
+      updateCounter();
+      elModalCards.appendChild(counter);
+      elModalCards.appendChild(row);
+      elModalActions.appendChild(doneBtn);
       elMask.style.display = 'block';
       return;
     }
