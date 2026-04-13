@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-# BUILD_TAG: db_live_type_repair_20260410a
+# BUILD_TAG: db_out_full_prefer_cardtype_repair_20260410b
 
 """llocg_ui.db
 
@@ -286,14 +286,30 @@ def load_compiled_json(path: Path) -> Dict[str, CardInfo]:
         out[cn] = ci
     return out
 
+def _search_roots(root: Path) -> List[Path]:
+    roots: List[Path] = []
+    db_out = Path(root) / 'llocg_db_out_full'
+    if db_out.exists() and db_out.is_dir():
+        roots.append(db_out)
+    roots.append(Path(root))
+    seen: List[Path] = []
+    out: List[Path] = []
+    for r in roots:
+        if r not in seen:
+            seen.append(r)
+            out.append(r)
+    return out
+
+
 def detect_one_file(root: Path, patterns: List[str]) -> Optional[Path]:
-    hits: List[Path] = []
-    for pat in patterns:
-        hits.extend([p for p in root.glob(pat) if p.is_file()])
-    if not hits:
-        return None
-    hits.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-    return hits[0]
+    for base in _search_roots(root):
+        hits: List[Path] = []
+        for pat in patterns:
+            hits.extend([p for p in base.glob(pat) if p.is_file()])
+        if hits:
+            hits.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+            return hits[0]
+    return None
 
 def load_cards_db(root: Path, compiled_path: Optional[Path] = None, tokv1_path: Optional[Path] = None) -> Dict[str, CardInfo]:
     # tokv1 (stats) first, then compiled (type/abilities) as fill
@@ -307,8 +323,8 @@ def load_cards_db(root: Path, compiled_path: Optional[Path] = None, tokv1_path: 
             db.update(load_tokv1_json(tokv1_path))
             # IMPORTANT: cards_min_tokv1.json may omit group/unit columns.
             # If so, fill them from the CSV when available.
-            csv_path = root / "cards_min_tokv1.csv"
-            if csv_path.exists():
+            csv_path = detect_one_file(root, ["cards_min_tokv1.csv"])
+            if csv_path and csv_path.exists():
                 try:
                     csv_db = load_cards_min(root)
                     for cn_csv, ci_csv in csv_db.items():
@@ -348,8 +364,8 @@ def load_cards_db(root: Path, compiled_path: Optional[Path] = None, tokv1_path: 
         _repair_cardinfo_type(ci)
     return db
 def load_cards_min(root: Path) -> Dict[str, CardInfo]:
-    p = root / "cards_min_tokv1.csv"
-    if not p.exists():
+    p = detect_one_file(root, ["cards_min_tokv1.csv"])
+    if not p or not p.exists():
         return {}
     out: Dict[str, CardInfo] = {}
     with p.open("r", encoding="utf-8-sig", newline="") as f:
