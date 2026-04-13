@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: dual_popup_and_dbfix_ui_20260410a
+# BUILD_TAG: dual_popup_layers_20260410b
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1649,7 +1649,7 @@ HTML = r'''<!doctype html>
   #modalActions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap;flex:0 0 auto;}
   #modalActions .miniBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:6px 10px;border-radius:10px;cursor:pointer;}
   /* secondary inspect popup (can coexist with pending/effect popup) */
-  #viewerLayer{position:absolute;inset:0;display:none;z-index:8800;pointer-events:none;}
+  #viewerLayer{position:absolute;inset:0;display:none;z-index:9200;pointer-events:none;}
   #viewerModal{position:absolute;right:18px;top:74px;width:min(46%, 560px);max-height:min(74%, calc(var(--pmH) - 120px));overflow:hidden;background:#1b1b1b;border:1px solid rgba(255,255,255,.15);border-radius:16px;padding:12px;box-shadow:0 14px 60px rgba(0,0,0,.72);display:flex;flex-direction:column;pointer-events:auto;}
   #viewerHeader{display:flex;align-items:center;justify-content:space-between;gap:12px;flex:0 0 auto;}
   #viewerTitle{font-weight:700;min-width:0;}
