@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_hime_bp2batch2_multiselect_20260413b
+# BUILD_TAG: engine_effect_hime_bp2batch2_no_live_flag_20260413c
 from __future__ import annotations
 
 """llocg_ui.engine_effect
@@ -286,6 +286,11 @@ EXTRA_EFFECT_RULES = [
         "id": "enter_kosuzu_bp2017_green_ge10_draw1",
         "effect_template": "自分の控え室にカードが10枚以上ある場合、カードを1枚引く。",
         "ext_key": "enter_green_ge10_draw1",
+    },
+    {
+        "id": "enter_rurino_bp2014_draw1_cannot_live_until_end_of_live",
+        "effect_template": "カードを1枚引く。ライブ終了時まで、自分はライブできない。",
+        "ext_key": "enter_draw1_and_cannot_live_until_end_of_live",
     },
     # -----------------------------------------------------------------------
     # group2_single_target_20260402 新規追加
@@ -1847,6 +1852,19 @@ def try_apply_effect_by_rule_ext(
                 gs.log.append(f"[AUTO_EXT] 徒町小鈴: green_room={green_count}<10, no draw")
             except Exception:
                 pass
+        return True
+
+    # PL!HS-bp2-014 大沢瑠璃乃 (登場)
+    if ext_key == 'enter_draw1_and_cannot_live_until_end_of_live':
+        drawn = _draw_cards(eng, gs, 1)
+        try:
+            gs.cannot_live_until_end_of_live = True
+        except Exception:
+            setattr(gs, 'cannot_live_until_end_of_live', True)
+        try:
+            gs.log.append(f"[AUTO_EXT] 大沢瑠璃乃 bp2-014: draw {drawn}; cannot live until end of live")
+        except Exception:
+            pass
         return True
     # ==================================================================
     # group2_single_target_20260402 新規実装

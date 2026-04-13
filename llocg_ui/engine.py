@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: hime_bp2batch2_multiselect_topkgray_20260413b
+# BUILD_TAG: hime_bp2batch2_no_live_flag_20260413c
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -1383,6 +1383,7 @@ class GameState:
     vivid_world_blue_mode_this_live: bool = False
     vivid_world_bonus_this_live: int = 0
     live_start_resolved_set_idxs: List[int] = field(default_factory=list)
+    cannot_live_until_end_of_live: bool = False
 
 
 def post_process(gs: GameState) -> None:
@@ -3511,6 +3512,10 @@ def _clear_end_of_live_buffs(gs: GameState) -> None:
         gs.butterfly_paid_this_live = 0
     except Exception:
         pass
+    try:
+        gs.cannot_live_until_end_of_live = False
+    except Exception:
+        pass
 
 def cmd_play(gs: GameState, cards_db: Dict[str, CardInfo], hand_idx: int, pos: str) -> None:
     pos = pos.upper()
@@ -4081,6 +4086,9 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
 
 
 def cmd_set(gs: GameState, rng: random.Random, indices: List[int]) -> None:
+    if bool(getattr(gs, "cannot_live_until_end_of_live", False)):
+        gs.log.append("[ERR] set: you cannot live until end of live")
+        return
     limit = _current_live_set_limit(gs)
     if len(indices) > limit:
         gs.log.append(f"[ERR] set: max {limit} cards this LIVE_SET")
@@ -4716,6 +4724,18 @@ def _enqueue_next_poppin_prompt(gs: GameState) -> bool:
     return False
 
 def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
+    if bool(getattr(gs, "cannot_live_until_end_of_live", False)):
+        gs.log.append("[ATTEMPT] blocked: you cannot live until end of live")
+        gs.last_attempt_excess_hearts = {}
+        gs.butterfly_paid_this_live = 0
+        gs.tsunagaru_connect_bonus_this_live = 0
+        gs.vivid_world_blue_mode_this_live = False
+        gs.vivid_world_bonus_this_live = 0
+        gs.last_attempt_lives = []
+        gs.last_attempt_ok = False
+        gs.need_live_success_triggers = False
+        gs.need_success_store_choice = False
+        return
     if not gs.set_zone:
         gs.last_attempt_excess_hearts = {}
         gs.butterfly_paid_this_live = 0
@@ -7000,6 +7020,8 @@ def cmd_end_turn(gs: GameState, rng: random.Random) -> None:
     gs.live_start_prompted = False
     gs.turn_blade_bonus = 0
     gs.log.append(f"[PHASE] LIVE_SET (hand choose up to {gs.live_set_limit}; preloaded={len(gs.set_zone)}) turn={gs.turn}")
+    if bool(getattr(gs, "cannot_live_until_end_of_live", False)):
+        gs.log.append("[INFO] live_set: you cannot live until end of live; do not set live cards this turn")
 
 
 def _advance_to_next_turn(gs: GameState, rng: random.Random) -> None:
@@ -7126,10 +7148,9 @@ def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], i
             gs.log.append("[WARN] next: resolve_zone still not empty after ACK; abort.")
             return
 
-        # Defensive cleanup if success-store prompt was skipped by older saves
-        if bool(getattr(gs, 'last_attempt_ok', False)) and list(getattr(gs, 'last_attempt_lives', []) or []):
-            _clear_end_of_live_buffs(gs)
-            gs.live_start_prompted = False
+        # End-of-live cleanup (always), including no-live / cannot-live cases.
+        _clear_end_of_live_buffs(gs)
+        gs.live_start_prompted = False
 
         # Clear per-live cheer reveal tracker
         try:
