@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: hime_bp2batch2_no_live_flag_20260413c
+# BUILD_TAG: hime_bp2batch2_no_live_flag_20260413d
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -4086,9 +4086,6 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
 
 
 def cmd_set(gs: GameState, rng: random.Random, indices: List[int]) -> None:
-    if bool(getattr(gs, "cannot_live_until_end_of_live", False)):
-        gs.log.append("[ERR] set: you cannot live until end of live")
-        return
     limit = _current_live_set_limit(gs)
     if len(indices) > limit:
         gs.log.append(f"[ERR] set: max {limit} cards this LIVE_SET")
@@ -7021,7 +7018,7 @@ def cmd_end_turn(gs: GameState, rng: random.Random) -> None:
     gs.turn_blade_bonus = 0
     gs.log.append(f"[PHASE] LIVE_SET (hand choose up to {gs.live_set_limit}; preloaded={len(gs.set_zone)}) turn={gs.turn}")
     if bool(getattr(gs, "cannot_live_until_end_of_live", False)):
-        gs.log.append("[INFO] live_set: you cannot live until end of live; do not set live cards this turn")
+        gs.log.append("[INFO] live_set: you cannot live until end of live; any set cards will not start a live and will go to green room")
 
 
 def _advance_to_next_turn(gs: GameState, rng: random.Random) -> None:
@@ -7058,6 +7055,15 @@ def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], i
             gs.log.append("[INFO] confirm: set_zone empty; skipping live.")
             gs.phase = "LIVE_RESOLVE"
             gs.log.append(f"[PHASE] LIVE_RESOLVE (no live) turn={gs.turn}")
+            return
+
+        if bool(getattr(gs, "cannot_live_until_end_of_live", False)):
+            sent = list(gs.set_zone)
+            gs.green_room.extend(sent)
+            gs.set_zone = []
+            gs.log.append(f"[INFO] confirm: cannot live until end of live; set cards {len(sent)} -> green room, live does not start")
+            gs.phase = "LIVE_RESOLVE"
+            gs.log.append(f"[PHASE] LIVE_RESOLVE (live forbidden) turn={gs.turn}")
             return
 
         lives: List[str] = []
