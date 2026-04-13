@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_hime_bp2batch2_20260410c
+# BUILD_TAG: engine_effect_hime_bp2batch2_typefix_20260413a
 from __future__ import annotations
 
 """llocg_ui.engine_effect
@@ -659,11 +659,50 @@ def _card_cost(card: Any, cards_db: Dict[str, Any]) -> int:
 def _card_type_norm(card: Any, cards_db: Dict[str, Any]) -> str:
     """Return the normalized card type string (MEMBER / LIVE / etc.).
 
-    Fallback note:
-    Some source rows are occasionally misclassified as MEMBER even though they clearly
-    have LIVE-only fields (required_hearts / score). In that case prefer LIVE so
-    green-room pickers do not silently collapse to a single candidate.
+    Conservative rule:
+    - Prefer explicit normalized/raw DB type when present.
+    - Only fall back to LIVE when the row is obviously LIVE-shaped.
+    - Never treat score=0 on MEMBER rows as evidence for LIVE.
     """
+    def _infer_live_from_shape(info: Any) -> bool:
+        try:
+            req = getattr(info, 'required_hearts', None)
+            if req is None and isinstance(info, dict):
+                req = info.get('required_hearts')
+            if isinstance(req, dict) and any(int(v or 0) > 0 for v in req.values()):
+                return True
+        except Exception:
+            pass
+        try:
+            score = getattr(info, 'score', None)
+            if score is None and isinstance(info, dict):
+                score = info.get('score')
+            score_i = int(score or 0)
+        except Exception:
+            score_i = 0
+        try:
+            cost = getattr(info, 'cost', None)
+            if cost is None and isinstance(info, dict):
+                cost = info.get('cost')
+            cost_i = int(cost or 0)
+        except Exception:
+            cost_i = 0
+        try:
+            blade = getattr(info, 'blade', None)
+            if blade is None and isinstance(info, dict):
+                blade = info.get('blade')
+            blade_i = int(blade or 0)
+        except Exception:
+            blade_i = 0
+        try:
+            base = getattr(info, 'base_hearts', None)
+            if base is None and isinstance(info, dict):
+                base = info.get('base_hearts')
+            has_base = isinstance(base, dict) and any(int(v or 0) > 0 for v in base.values())
+        except Exception:
+            has_base = False
+        return bool(score_i > 0 and cost_i <= 0 and blade_i <= 0 and not has_base)
+
     try:
         info = _lookup_cardinfo(cards_db, card)
         if info is not None:
@@ -673,18 +712,8 @@ def _card_type_norm(card: Any, cards_db: Dict[str, Any]) -> str:
             if t:
                 ts = str(t).strip().upper()
                 if ts in ("MEMBER", "LIVE", "ENERGY"):
-                    # repair obvious LIVE rows even when normalized type is wrong
-                    try:
-                        req = getattr(info, 'required_hearts', None)
-                        if req is None and isinstance(info, dict):
-                            req = info.get('required_hearts')
-                        score = getattr(info, 'score', None)
-                        if score is None and isinstance(info, dict):
-                            score = info.get('score')
-                        if ts == 'MEMBER' and ((isinstance(req, dict) and any(int(v or 0) > 0 for v in req.values())) or (score is not None and str(score).strip() not in ('', 'None'))):
-                            return 'LIVE'
-                    except Exception:
-                        pass
+                    if ts == 'MEMBER' and _infer_live_from_shape(info):
+                        return 'LIVE'
                     return ts
 
             raw = getattr(info, "card_type_raw", None)
@@ -698,32 +727,11 @@ def _card_type_norm(card: Any, cards_db: Dict[str, Any]) -> str:
                 s = str(raw).strip().upper()
                 jp = str(raw).strip()
                 if s in ("MEMBER", "LIVE", "ENERGY"):
-                    if s == 'MEMBER':
-                        try:
-                            req = getattr(info, 'required_hearts', None)
-                            if req is None and isinstance(info, dict):
-                                req = info.get('required_hearts')
-                            score = getattr(info, 'score', None)
-                            if score is None and isinstance(info, dict):
-                                score = info.get('score')
-                            if (isinstance(req, dict) and any(int(v or 0) > 0 for v in req.values())) or (score is not None and str(score).strip() not in ('', 'None')):
-                                return 'LIVE'
-                        except Exception:
-                            pass
+                    if s == 'MEMBER' and _infer_live_from_shape(info):
+                        return 'LIVE'
                     return s
                 if jp == "メンバー":
-                    try:
-                        req = getattr(info, 'required_hearts', None)
-                        if req is None and isinstance(info, dict):
-                            req = info.get('required_hearts')
-                        score = getattr(info, 'score', None)
-                        if score is None and isinstance(info, dict):
-                            score = info.get('score')
-                        if (isinstance(req, dict) and any(int(v or 0) > 0 for v in req.values())) or (score is not None and str(score).strip() not in ('', 'None')):
-                            return 'LIVE'
-                    except Exception:
-                        pass
-                    return "MEMBER"
+                    return 'LIVE' if _infer_live_from_shape(info) else "MEMBER"
                 if jp == "ライブ":
                     return "LIVE"
                 if jp == "エネルギー":
@@ -731,7 +739,7 @@ def _card_type_norm(card: Any, cards_db: Dict[str, Any]) -> str:
 
         t = getattr(card, "card_type_norm", None)
         if t:
-            return str(t)
+            return str(t).strip().upper()
 
         raw = getattr(card, "card_type_raw", None) or getattr(card, "type", None)
         if raw:

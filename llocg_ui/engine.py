@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: hime_preload_plus_bp2batch2_20260410c
+# BUILD_TAG: hime_bp2batch2_typefix_stagegreen_20260413a
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -381,8 +381,11 @@ def _is_live_ci(ci: Optional[CardInfo]) -> bool:
     t = str(getattr(ci, 'type', '') or '')
     if "LIVE" in t.upper() or "ライブ" in t:
         return True
-    # DB fallback: a few compiled/min entries are misclassified as MEMBER while they
-    # clearly have LIVE-only fields (score / required_hearts). Treat them as LIVE here.
+    if "MEMBER" in t.upper() or "メンバー" in t:
+        return False
+    # Conservative fallback only for obviously LIVE-shaped rows.
+    # Important: MEMBER rows in CardInfo often carry score=0 by default, so
+    # score-is-not-None must NOT be treated as LIVE.
     try:
         req = getattr(ci, 'required_hearts', None)
         if isinstance(req, dict) and any(int(v or 0) > 0 for v in req.values()):
@@ -390,11 +393,24 @@ def _is_live_ci(ci: Optional[CardInfo]) -> bool:
     except Exception:
         pass
     try:
-        score = getattr(ci, 'score', None)
-        if score is not None and str(score).strip() not in ('', 'None'):
-            return True
+        score = int(getattr(ci, 'score', 0) or 0)
     except Exception:
-        pass
+        score = 0
+    try:
+        cost = int(getattr(ci, 'cost', 0) or 0)
+    except Exception:
+        cost = 0
+    try:
+        blade = int(getattr(ci, 'blade', 0) or 0)
+    except Exception:
+        blade = 0
+    try:
+        base = getattr(ci, 'base_hearts', None)
+        has_base = isinstance(base, dict) and any(int(v or 0) > 0 for v in base.values())
+    except Exception:
+        has_base = False
+    if score > 0 and cost <= 0 and blade <= 0 and not has_base:
+        return True
     return False
 
 
@@ -571,10 +587,9 @@ def _enqueue_choose_from_topk_filtered(
         if not ci:
             return False
         if filter_kind:
-            t = str(getattr(ci, 'type', '') or '').upper()
-            if filter_kind == 'LIVE' and 'LIVE' not in t:
+            if filter_kind == 'LIVE' and not _is_live_ci(ci):
                 return False
-            if filter_kind == 'MEMBER' and 'MEMBER' not in t:
+            if filter_kind == 'MEMBER' and not _is_member_ci(ci):
                 return False
         if filter_group:
             if filter_group not in str(getattr(ci, 'group', '') or ''):
@@ -627,7 +642,8 @@ def _enqueue_choose_from_topk_filtered(
         'text': f'デッキ上{len(pool)}枚から{label}を1枚手札へ{suffix}',
         'options': opts,
         'pool': list(pool),
-        'display_cards': list(pool),
+        'display_cards': list(candidates),
+        'display_pool_all': list(pool),
         'candidates': list(candidates),
         'optional': optional,
     })
@@ -2105,6 +2121,23 @@ def _slot_always_blade_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos: 
                     bonus += 3
         except Exception:
             pass
+        # PL!HS-bp2-006 藤島慈: ほかの『みらくらぱーく！』メンバー1人につき +1 blade
+        try:
+            if _canon_cardno(getattr(slot, 'cardnumber', '') or '') == 'PL!HS-bp2-006':
+                miraku_others = 0
+                for pos2, slot2 in (gs.stage or {}).items():
+                    if pos2 == pos or not slot2:
+                        continue
+                    ci2 = _get_card(cards_db, getattr(slot2, 'cardnumber', '') or '')
+                    if not ci2 or _is_live_ci(ci2):
+                        continue
+                    g2 = str(getattr(ci2, 'group', '') or '')
+                    u2 = str(getattr(ci2, 'unit', '') or '')
+                    if ('みらくらぱーく！' in g2) or ('みらくらぱーく！' in u2):
+                        miraku_others += 1
+                bonus += int(miraku_others)
+        except Exception:
+            pass
         return int(bonus)
     except Exception:
         return 0
@@ -3533,7 +3566,13 @@ def cmd_play(gs: GameState, cards_db: Dict[str, CardInfo], hand_idx: int, pos: s
 
     # Auto abilities can trigger simultaneously on this "member enters stage" event.
     # If multiple triggers exist, let the user choose the resolution order.
-    triggers = _collect_auto_triggers_on_member_enter(gs, cards_db, entered_pos=pos, entered_cn=cn)
+    triggers: List[Dict[str, Any]] = []
+    if baton_old_cn is not None:
+        try:
+            triggers.extend(_collect_auto_triggers_on_member_leave_stage(gs, cards_db, left_pos=pos, left_cn=baton_old_cn))
+        except Exception:
+            pass
+    triggers.extend(_collect_auto_triggers_on_member_enter(gs, cards_db, entered_pos=pos, entered_cn=cn))
     if len(triggers) >= 2:
         opts2: List[str] = []
         for t in triggers:
@@ -3891,6 +3930,54 @@ def _list_active_ai_cost10_positions(gs: GameState, cards_db: Dict[str, CardInfo
 def _has_active_ai_cost10_trigger(gs: GameState, cards_db: Dict[str, CardInfo], entered_cn: str) -> bool:
     return bool(_list_active_ai_cost10_positions(gs, cards_db, entered_cn))
 
+
+def _collect_auto_triggers_on_member_leave_stage(gs: GameState, cards_db: Dict[str, CardInfo], left_pos: str, left_cn: str) -> List[Dict[str, Any]]:
+    """Collect auto triggers that happen when a MEMBER leaves your stage and goes to green room.
+
+    Narrow support for cards whose compiled clause keeps the full trigger text inside
+    effect_template, e.g.
+      - このメンバーがステージから控え室に置かれたとき、...
+    """
+    out: List[Dict[str, Any]] = []
+    canon_left = _canon_cardno(left_cn)
+    ci_left = _get_card(cards_db, canon_left)
+    if not ci_left or _is_live_ci(ci_left):
+        return out
+    for ab in getattr(ci_left, 'abilities', []) or []:
+        if not isinstance(ab, dict):
+            continue
+        trig = str(ab.get('trigger', '') or '')
+        # Compiled DB may store these as BODY-style clauses with the trigger phrase inline.
+        if trig not in ('BODY', '自動', '') and ('控え室に置かれたとき' not in trig):
+            continue
+        clauses = ab.get('clauses', [])
+        if not isinstance(clauses, list):
+            continue
+        for cl in clauses:
+            if not isinstance(cl, dict):
+                continue
+            cost = str(cl.get('cost_template', '') or '')
+            eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+            if not eff:
+                continue
+            if 'このメンバーがステージから控え室に置かれたとき' not in eff:
+                continue
+            if cost:
+                # leave-stage triggers in current scope are costless only
+                continue
+            if not _match_effect_template(eff):
+                continue
+            out.append({
+                'kind': 'stage_to_green_auto',
+                'source_cn': canon_left,
+                'pos': str(left_pos or 'C').upper(),
+                'cn': left_cn,
+                'effect': eff,
+                'label': f'{canon_left}[stage->green]',
+            })
+    return out
+
+
 def _collect_auto_triggers_on_member_enter(gs: GameState, cards_db: Dict[str, CardInfo], entered_pos: str, entered_cn: str) -> List[Dict[str, Any]]:
     """Collect auto triggers that happen when a MEMBER enters your stage.
 
@@ -3950,6 +4037,21 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         prm = dict((trig or {}).get('prompt', {}) or {})
         if prm:
             gs.pending.append(prm)
+        return
+    if kind == 'stage_to_green_auto':
+        eff = str((trig or {}).get('effect', '') or '').strip()
+        src_cn = str((trig or {}).get('source_cn', '') or '').strip()
+        pos = str((trig or {}).get('pos', '') or '').upper()
+        if eff:
+            try:
+                rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0) + 17)
+            except Exception:
+                rng2 = random.Random(17)
+            ctx = {'source_cn': src_cn}
+            if pos:
+                ctx.update({'pos': pos, 'src_pos': pos})
+            try_apply_effect_template(gs, rng2, cards_db, eff, ctx)
+            gs.log.append(f"[AUTO] {src_cn or '?'}[stage->green]: applied {eff}")
         return
     if kind == 'live_start_apply_effect':
         eff = str((trig or {}).get('effect', '') or '').strip()
@@ -4949,9 +5051,30 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                 gs.log.append(f"[COST] moved 1 energy under {pos} from {src} (under={int(getattr(slot,'energy_under',0) or 0)}; E active={gs.energy_active} wait={gs.energy_wait})")
 
             if _cost_requires_self_to_green(cost):
-                gs.green_room.append(slot.cardnumber)
+                leaving_cn = str(getattr(slot, 'cardnumber', '') or '')
+                gs.green_room.append(leaving_cn)
                 gs.stage[pos] = None
-                gs.log.append(f"[COST] {pos}: {slot.cardnumber} -> waiting room")
+                gs.log.append(f"[COST] {pos}: {leaving_cn} -> waiting room")
+                try:
+                    leave_trigs = _collect_auto_triggers_on_member_leave_stage(gs, cards_db, left_pos=pos, left_cn=leaving_cn)
+                except Exception:
+                    leave_trigs = []
+                if len(leave_trigs) >= 2:
+                    opts2 = []
+                    for t in leave_trigs:
+                        scn = _canon_cardno(str((t or {}).get('source_cn', '') or ''))
+                        if scn:
+                            opts2.append(scn)
+                    gs.pending.append({
+                        'kind': 'auto_order',
+                        'text': '自動効果が複数発生：解決するカードを選択（1つずつ）',
+                        'options': opts2,
+                        'queue': leave_trigs,
+                    })
+                    gs.log.append(f"[PENDING] auto_order triggers={len(leave_trigs)}")
+                    return
+                for t in leave_trigs:
+                    _exec_auto_trigger(gs, cards_db, t)
 
             # Cost: self-wait (member stays on stage but becomes WAIT)
             if _cost_requires_self_wait(cost) and not _cost_requires_self_to_green(cost):
