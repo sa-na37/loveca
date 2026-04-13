@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: hime_enter_preload_live_20260410b
+# BUILD_TAG: hime_preload_plus_bp2batch2_20260410c
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -5646,6 +5646,73 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         if _r:
             gs.pending.append(_r)
         return
+
+    if kind == 'choose_card_from_green':
+        allow_skip = bool(p.get('allow_skip', False) or p.get('optional', False))
+        low = choice_str.lower()
+        if allow_skip and low in ('skip', '__skip__', 'no', 'n', '0', 'false', '使わない', 'いいえ', 'スキップ'):
+            gs.log.append(f"[SKIP] choose_card_from_green: skipped")
+            after_ext_key = str(p.get('after_ext_key', '') or '').strip()
+            if after_ext_key:
+                src = str(p.get('source_cn', '') or '')
+                ctx2 = dict(p.get('ctx', {}) or {})
+                if src and not ctx2.get('source_cn'):
+                    ctx2['source_cn'] = src
+                ctx2['choice'] = 'SKIP'
+                ctx2['chosen_cn'] = 'SKIP'
+                try:
+                    rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
+                except Exception:
+                    rng2 = random.Random()
+                _apply_effect_by_rule(gs, rng2, cards_db, {'op':'__ext__','ext_key':after_ext_key}, {}, ctx2)
+            return
+        cn = _canon_cardno(choice_str)
+        candidates = list(p.get('candidates', []) or p.get('options', []) or [])
+        pick_cn = None
+        for x in list(gs.green_room):
+            if _canon_cardno(x) == cn:
+                if candidates and (not any(_canon_cardno(c) == cn for c in candidates)):
+                    continue
+                pick_cn = x
+                break
+        if not pick_cn:
+            gs.log.append(f"[ERR] choose_card_from_green: not in waiting room {cn}")
+            return
+        after_ext_key = str(p.get('after_ext_key', '') or '').strip()
+        if after_ext_key:
+            src = str(p.get('source_cn', '') or '')
+            ctx2 = dict(p.get('ctx', {}) or {})
+            if src and not ctx2.get('source_cn'):
+                ctx2['source_cn'] = src
+            ctx2['choice'] = pick_cn
+            ctx2['chosen_cn'] = pick_cn
+            try:
+                rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
+            except Exception:
+                rng2 = random.Random()
+            try:
+                _apply_effect_by_rule(gs, rng2, cards_db, {'op':'__ext__','ext_key':after_ext_key}, {}, ctx2)
+                applied = True
+            except Exception:
+                applied = False
+                raise
+            finally:
+                try:
+                    gs.log.append(f"[AUTO] choose_card_from_green -> {'applied' if applied else 'error'} {after_ext_key} ({pick_cn})")
+                except Exception:
+                    pass
+            _r = p.get('_resume') if isinstance(p, dict) else None
+            if _r:
+                gs.pending.append(_r)
+            return
+        gs.green_room.remove(pick_cn)
+        gs.hand.append(pick_cn)
+        gs.log.append(f"[ACT] retrieved CARD {pick_cn} -> hand")
+        _r = p.get('_resume') if isinstance(p, dict) else None
+        if _r:
+            gs.pending.append(_r)
+        return
+
 
     if kind == 'view_topk_no_match':
         # User confirmed viewing the pool; send all to green room

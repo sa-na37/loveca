@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: dual_popup_layers_20260410b
+# BUILD_TAG: dual_popup_layers_bp2batch2_20260410c
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1649,7 +1649,7 @@ HTML = r'''<!doctype html>
   #modalActions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap;flex:0 0 auto;}
   #modalActions .miniBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:6px 10px;border-radius:10px;cursor:pointer;}
   /* secondary inspect popup (can coexist with pending/effect popup) */
-  #viewerLayer{position:absolute;inset:0;display:none;z-index:9200;pointer-events:none;}
+  #viewerLayer{position:absolute;inset:0;display:none;z-index:8800;pointer-events:none;}
   #viewerModal{position:absolute;right:18px;top:74px;width:min(46%, 560px);max-height:min(74%, calc(var(--pmH) - 120px));overflow:hidden;background:#1b1b1b;border:1px solid rgba(255,255,255,.15);border-radius:16px;padding:12px;box-shadow:0 14px 60px rgba(0,0,0,.72);display:flex;flex-direction:column;pointer-events:auto;}
   #viewerHeader{display:flex;align-items:center;justify-content:space-between;gap:12px;flex:0 0 auto;}
   #viewerTitle{font-weight:700;min-width:0;}
@@ -1967,7 +1967,7 @@ HTML = r'''<!doctype html>
     if(kind === 'choose_heart_color' || kind === 'choose_heart_color_for_other') return 'ハートの色を選択';
     if(kind === 'discard_from_hand' || kind === 'discard_named_cards_from_hand') return '手札から選択';
     if(kind === 'position_change') return '移動先を選択';
-    if(kind === 'choose_from_topk' || kind === 'choose_top_keep_one' || kind === 'topdeck_from_green') return 'カードを選択';
+    if(kind === 'choose_from_topk' || kind === 'choose_top_keep_one' || kind === 'topdeck_from_green' || kind === 'choose_card_from_green' || kind === 'choose_live_from_green' || kind === 'choose_member_from_green') return 'カードを選択';
     if(kind === 'auto_order') return '解決順を選択';
     return '効果の選択';
   }
@@ -1993,6 +1993,7 @@ HTML = r'''<!doctype html>
     if(kind === 'choose_effects') return '解決する効果を選んでください。';
     if(kind === 'auto_order') return '解決順を選んでください。';
     if(kind === 'position_change') return '移動先のエリアを選んでください。';
+    if(kind === 'choose_card_from_green' || kind === 'choose_live_from_green' || kind === 'choose_member_from_green') return '控え室から選ぶカードを選択してください。';
     return pendingSourceCn(p) ? '効果を解決するため、対象または選択肢を選んでください。' : '';
   }
   function setRichText(el, raw){
