@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_helpers_sync_20260413a
+# BUILD_TAG: engine_effect_helpers_sync_20260413b
 from __future__ import annotations
 
 """llocg_ui.effects.helpers
@@ -865,3 +865,7 @@ def _stage_unit_count_diff_names(gs: Any, cards_db: Dict[str, Any], unit_name: s
 # ---------------------------------------------------------------------------
 # Main dispatch
 # ---------------------------------------------------------------------------
+
+
+# export underscore helpers explicitly so apply.py can use `from .helpers import *`
+__all__ = [name for name, obj in globals().items() if callable(obj) and name.startswith('_')]
