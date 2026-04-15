@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: hime_bp2batch3_merge_scorefix_live_start_normfix_batonfix_live_start_generalize_shioriko_20260414h
+# BUILD_TAG: hime_bp2batch3_merge_scorefix_live_start_normfix_batonfix_live_start_generalize_shiorikofix_20260414i
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -3500,7 +3500,7 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
     # Handle [登場] auto abilities for a member that just entered stage.
     canon = _canon_cardno(cn)
 
-        if rng is None:
+    if rng is None:
         rng = random.Random(gs.seed)
 
     ci = _get_card(cards_db, canon)
