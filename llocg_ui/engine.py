@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: hime_bp2batch3_merge_scorefix_live_start_normfix_batonfix_live_start_generalize_emmafix_20260414e
+# BUILD_TAG: hime_bp2batch3_merge_scorefix_live_start_normfix_batonfix_live_start_generalize_emmaactivate_20260414f
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -203,6 +203,49 @@ def _cost_requires_self_wait(cost_text: str) -> bool:
     return False
 
 
+def _cost_requires_other_group_member_wait(cost_text: str) -> Dict[str, Any]:
+    """Parse costs like:
+    このメンバー以外の『虹ヶ咲』のメンバー1人をウェイト状態にする
+    Returns {} when not matched.
+    """
+    t = _norm_digits_jp(str(cost_text or '').strip())
+    m = re.search(r"^このメンバー以外の『(?P<group>[^』]+)』のメンバー\s*(?P<n>\d+)人をウェイト状態にする$", t)
+    if not m:
+        return {}
+    try:
+        n = int(m.group('n') or 0)
+    except Exception:
+        n = 0
+    if n <= 0:
+        return {}
+    return {
+        'group': str(m.group('group') or ''),
+        'count': n,
+        'exclude_self': True,
+    }
+
+
+def _other_group_member_wait_candidates(gs: 'GameState', cards_db: Dict[str, CardInfo], src_pos: str, group_name: str) -> List[str]:
+    out: List[str] = []
+    src_pos = str(src_pos or '').upper()
+    gq = str(group_name or '')
+    for pos in ('L', 'C', 'R'):
+        if pos == src_pos:
+            continue
+        slot = (gs.stage or {}).get(pos)
+        if not slot or not bool(getattr(slot, 'active', False)):
+            continue
+        ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+        if not ci:
+            continue
+        if _is_live_ci(ci):
+            continue
+        if gq and gq not in str(getattr(ci, 'group', '') or ''):
+            continue
+        out.append(pos)
+    return out
+
+
 def _cost_requires_main_phase(cost_text: str) -> bool:
     t = str(cost_text or '').strip()
     return ('自分のメインフェイズ' in t) or ('メインフェイズの場合' in t)
@@ -303,13 +346,6 @@ def can_activate_in_state(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: s
     if not ci:
         return False
 
-    # Special-case: Emma Verde bp3-008 activated ability
-    if _canon_cardno(getattr(ci, 'cardnumber', '') or '') == _EMMA_BP3_008_CN_CANON:
-        key = f"{pos}:{_EMMA_BP3_008_CN_CANON}:emma_bp3_008_activate"
-        used = int((getattr(gs, 'used_this_turn', {}) or {}).get(key, 0) or 0)
-        if used >= 1:
-            return False
-        return bool(_emma_bp3_008_wait_candidates(gs, cards_db, pos))
 
     # check activated abilities for supported clauses + satisfiable costs + conditions
     for ab in _iter_activated_abilities(ci):
@@ -360,6 +396,12 @@ def can_activate_in_state(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: s
             # self-wait cost check: member must currently be active
             if _cost_requires_self_wait(cost) and not slot.active:
                 continue
+            # cost: other same/target group member(s) become WAIT
+            wait_other = _cost_requires_other_group_member_wait(cost)
+            if wait_other:
+                cands = _other_group_member_wait_candidates(gs, cards_db, pos, str(wait_other.get('group') or ''))
+                if len(cands) < int(wait_other.get('count') or 0):
+                    continue
             ok_any = True
         if ok_any:
             return True
@@ -4971,30 +5013,6 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
     if rng is None:
         rng = random.Random(gs.seed)
 
-    # Special-case: Emma Verde bp3-008
-    if _canon_cardno(getattr(ci, 'cardnumber', '') or '') == _EMMA_BP3_008_CN_CANON:
-        key = f"{pos}:{_EMMA_BP3_008_CN_CANON}:emma_bp3_008_activate"
-        used = int((getattr(gs, 'used_this_turn', {}) or {}).get(key, 0) or 0)
-        if used >= 1:
-            gs.log.append(f"[INFO] activate: already used this turn ({key})")
-            return
-        cands = _emma_bp3_008_wait_candidates(gs, cards_db, pos)
-        if not cands:
-            gs.log.append("[INFO] エマ・ヴェルデ: ウェイトにできる『虹ヶ咲』メンバーがいない")
-            return
-        opts = [_stage_pos_label(gs, cards_db, pp) for pp in cands]
-        gs.pending.append({
-            'kind': 'emma_bp3_008_wait_pick',
-            'text': '【エマ・ヴェルデ】ウェイトにする『虹ヶ咲』メンバーをクリックしてください',
-            'options': list(opts),
-            'pos_options': list(cands),
-            'source_pos': pos,
-            'source_cn': getattr(ci, 'cardnumber', '') or '',
-            'ability_key': key,
-        })
-        gs.log.append(f"[PENDING] Emma bp3-008: choose 1 Nijigasaki member to set WAIT ({len(cands)} candidates)")
-        return
-
     # 1) Generic activated abilities（BODY起動効果もこのループ内で処理）
     for ab in _iter_activated_abilities(ci):
         flags = _ability_usage_flags(ab if isinstance(ab, dict) else {})
@@ -5028,6 +5046,37 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                         slot.active = False
                         gs.log.append(f"[COST] {pos}: {getattr(slot,'cardnumber','?')} -> WAIT (self-wait cost, eff-empty clause)")
                 continue
+
+            # Cost: choose another on-stage group member to set WAIT
+            wait_other = _cost_requires_other_group_member_wait(cost)
+            if wait_other:
+                group_name = str(wait_other.get('group') or '')
+                total_need = int(wait_other.get('count') or 0)
+                cands = _other_group_member_wait_candidates(gs, cards_db, pos, group_name)
+                if len(cands) < total_need:
+                    gs.log.append(f"[INFO] activate: ウェイトにできる『{group_name}』メンバーがいない")
+                    return
+                if flags.get('once_per_turn'):
+                    try:
+                        gs.used_this_turn[akey] = 1
+                    except Exception:
+                        try:
+                            gs.used_this_turn = {akey: 1}
+                        except Exception:
+                            pass
+                opts = [_stage_pos_label(gs, cards_db, pp) for pp in cands]
+                gs.pending.append({
+                    'kind': 'choose_stage_member_to_wait',
+                    'text': f"【起動効果】ウェイトにする『{group_name}』メンバーを選んでください",
+                    'options': list(opts),
+                    'pos_options': list(cands),
+                    'remaining': total_need,
+                    'after_effect_template': eff,
+                    'after_ctx': {'pos': pos, 'source_cn': ci.cardnumber},
+                    'after_source_cn': ci.cardnumber,
+                })
+                gs.log.append(f"[PENDING] activate choose_stage_member_to_wait n={total_need} then {eff}")
+                return
 
             # Cost: discard from hand (required, BODY起動)
             m_req_discard = re.search(r'手札を(\d+)枚控え室に置く', cost)
@@ -6437,6 +6486,53 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         gs.log.append(f"[AUTO] {pos}: Shizuku bp1-003 -> temp heart +1 {col} (until end of live)")
         return
 
+    if kind == 'choose_stage_member_to_wait':
+        raw = str(choice_str or '').strip()
+        pos2 = (raw[:1].upper() if raw else '')
+        pos_opts = list(p.get('pos_options', []) or [])
+        rem = _safe_int(p.get('remaining', 1), 1)
+        after_eff = str(p.get('after_effect_template', '') or '').strip()
+        after_ctx = dict(p.get('after_ctx', {}) or {})
+        after_src = str(p.get('after_source_cn', '') or '')
+        if pos2 not in ('L','C','R') or (pos_opts and pos2 not in pos_opts):
+            gs.log.append(f"[ERR] choose_stage_member_to_wait: invalid target {choice_str}")
+            return
+        slot2 = (gs.stage or {}).get(pos2)
+        if not slot2:
+            gs.log.append(f"[ERR] choose_stage_member_to_wait: empty stage {pos2}")
+            return
+        slot2.active = False
+        after_ctx['waited_pos'] = pos2
+        try:
+            after_ctx.setdefault('waited_positions', [])
+            if pos2 not in after_ctx['waited_positions']:
+                after_ctx['waited_positions'].append(pos2)
+        except Exception:
+            pass
+        rem -= 1
+        gs.log.append(f"[ACT] stage {pos2} set WAIT (remaining={rem})")
+        if rem > 0:
+            remain_opts = [pp for pp in pos_opts if pp != pos2]
+            gs.pending.append({
+                'kind': 'choose_stage_member_to_wait',
+                'text': f'【起動効果】ウェイトにするメンバーをさらに選んでください（残り{rem}）',
+                'options': [_stage_pos_label(gs, cards_db, pp) for pp in remain_opts],
+                'pos_options': remain_opts,
+                'remaining': rem,
+                'after_effect_template': after_eff,
+                'after_ctx': after_ctx,
+                'after_source_cn': after_src,
+            })
+            return
+        if after_eff:
+            rng2 = random.Random(getattr(gs, 'seed', 1) or 1)
+            ok = try_apply_effect_template(gs, rng2, cards_db, after_eff, after_ctx)
+            if ok:
+                gs.log.append(f"[ACT] {after_src}: applied {after_eff}")
+            else:
+                gs.log.append(f"[WARN] {after_src}: after-cost effect not matchable {after_eff}")
+        return
+
     if kind == 'choose_stage_member_to_activate':
         # 汎用のステージメンバー選択 pending。
         # 既存用途: 選んだメンバーを ACTIVE 化。
@@ -6497,30 +6593,6 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             return
         slot2.active = True
         gs.log.append(f"[ACT] stage {pos2} set ACTIVE")
-        return
-
-    if kind == 'emma_bp3_008_wait_pick':
-        raw = str(choice_str or '').strip()
-        pos2 = (raw[:1].upper() if raw else '')
-        pos_opts = list(p.get('pos_options', []) or [])
-        src_pos = str(p.get('source_pos', '') or '').upper()
-        key = str(p.get('ability_key', '') or '')
-        if pos2 not in ('L','C','R') or (pos_opts and pos2 not in pos_opts):
-            gs.log.append(f"[ERR] Emma bp3-008: invalid target {choice_str}")
-            return
-        slot2 = (gs.stage or {}).get(pos2)
-        if not slot2:
-            gs.log.append(f"[ERR] Emma bp3-008: empty stage {pos2}")
-            return
-        slot2.active = False
-        rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
-        drew = draw(gs, 1, rng2)
-        if key:
-            try:
-                gs.used_this_turn[key] = 1
-            except Exception:
-                gs.used_this_turn = {key: 1}
-        gs.log.append(f"[ACT] Emma bp3-008: {pos2} set WAIT -> drew {drew}")
         return
 
     if kind == 'emma_bp3_008_live_start_pay':
