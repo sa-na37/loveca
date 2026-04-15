@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: hime_bp2batch3_merge_scorefix_live_start_normfix_batonfix_live_start_generalize_cost10draw_20260414j
+# BUILD_TAG: hime_bp2batch3_merge_scorefix_live_start_normfix_batonfix_live_start_generalize_cost10draw_rngfix_20260414l
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -3496,6 +3496,55 @@ def cmd_play(gs: GameState, cards_db: Dict[str, CardInfo], hand_idx: int, pos: s
     for t in triggers:
         _exec_auto_trigger(gs, cards_db, t)
 
+def _has_supported_enter_auto(ci: Optional[CardInfo]) -> bool:
+    if not ci or not getattr(ci, 'abilities', None):
+        return False
+    canon = _canon_cardno(getattr(ci, 'cardnumber', '') or '')    # Any costless, regex-matchable enter ability counts as supported.
+    for ab in _iter_triggered_abilities(ci, '登場'):
+        if not isinstance(ab, dict):
+            continue
+        clauses = ab.get('clauses', [])
+        if not isinstance(clauses, list):
+            continue
+        for cl in clauses:
+            if not isinstance(cl, dict):
+                continue
+            cost = str(cl.get('cost_template', '') or '')
+            eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+            if not eff:
+                continue
+
+            # allow optional discard-from-hand / energy / self-wait costs for [登場]
+            if cost:
+                m = re.search(r"手札を(\d+)枚控え室に置いてもよい", cost)
+                n = 0
+                if m:
+                    try:
+                        n = int(m.group(1) or 0)
+                    except Exception:
+                        n = 0
+                if n <= 0 and ("手札を1枚控え室に置いてもよい" in cost):
+                    n = 1
+                if n > 0 and _match_effect_template(eff):
+                    return True
+                if _parse_energy_cost(cost) > 0 and _match_effect_template(eff):
+                    return True
+                if _cost_requires_self_wait(cost) and not _cost_requires_self_to_green(cost) and _match_effect_template(eff):
+                    return True
+                # other cost templates unsupported for enter-auto support detection
+                continue
+
+            if _parse_energy_cost(cost) > 0 or _cost_requires_self_to_green(cost):
+                continue
+            if _match_effect_template(eff):
+                return True
+            # Mode-style (choose) header across clauses
+            if ('以下から' in eff) and ('選ぶ' in eff):
+                return True
+    return False
+
+
+
 def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn: str, rng: Optional[random.Random] = None) -> None:
     # Handle [登場] auto abilities for a member that just entered stage.
     canon = _canon_cardno(cn)
@@ -3745,6 +3794,11 @@ def handle_stage_cost10_member_enter_draw1(gs: GameState, cards_db: Dict[str, Ca
         entered_pos = str(entered_pos or '').upper()
     except Exception:
         entered_pos = 'C'
+    if rng is None:
+        try:
+            rng = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0) + 29)
+        except Exception:
+            rng = random.Random(29)
     try:
         source_pos_u = str(source_pos or '').upper()
     except Exception:
@@ -3917,7 +3971,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         handle_enter_auto(gs, cards_db, pos, cn)
         return
     if kind == 'cost10_enter_draw1_auto':
-        handle_stage_cost10_member_enter_draw1(gs, cards_db, entered_pos=str(trig.get('entered_pos','C') or 'C'), entered_cn=str(trig.get('entered_cn','') or ''), source_pos=str(trig.get('source_pos','') or ''), rng=rng)
+        handle_stage_cost10_member_enter_draw1(gs, cards_db, entered_pos=str(trig.get('entered_pos','C') or 'C'), entered_cn=str(trig.get('entered_cn','') or ''), source_pos=str(trig.get('source_pos','') or ''))
         return
     if kind == 'enqueue_pending_prompt':
         prm = dict((trig or {}).get('prompt', {}) or {})
