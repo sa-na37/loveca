@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: hime_bp2batch3_merge_scorefix_live_start_normfix_batonfix_live_start_generalize_cleanup_20260414g
+# BUILD_TAG: hime_bp2batch3_merge_scorefix_live_start_normfix_batonfix_live_start_generalize_shioriko_20260414h
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -3500,24 +3500,56 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
     # Handle [登場] auto abilities for a member that just entered stage.
     canon = _canon_cardno(cn)
 
-    # Hard-coded Shioriko (choice prompt)
-    if canon == "PL!N-pb1-010":
-        gs.pending.append({
-            "kind": "choose_shioriko_enter",
-            "cn": canon,
-            "pos": pos.upper(),
-            "text": "栞子[登場]: 効果を1つ選ぶ（エネルギー+1 / 控え室の虹ヶ咲LIVEを最大2枚デッキ上）",
-            "options": ["energy", "topdeck"],
-        })
-        gs.log.append("[AUTO] 栞子[登場]: choose mode -> pending")
-        return
-
-    if rng is None:
+        if rng is None:
         rng = random.Random(gs.seed)
 
     ci = _get_card(cards_db, canon)
     if not ci or not getattr(ci, 'abilities', None):
         return
+
+    # Generic mode-style [登場]:
+    # 先頭 clause が「以下から1つを選ぶ。」で、後続が costless & matchable な場合は
+    # 汎用 choose_enter_effect_mode として処理する。
+    for ab in _iter_triggered_abilities(ci, '登場'):
+        clauses = ab.get('clauses', [])
+        if not isinstance(clauses, list) or len(clauses) < 2:
+            continue
+        first = clauses[0] if isinstance(clauses[0], dict) else {}
+        first_eff = str(first.get('effect_template', '') or first.get('raw', '') or '').strip()
+        if ('以下から' not in first_eff) or ('選ぶ' not in first_eff):
+            continue
+
+        mode_effects = []
+        mode_labels = []
+        ok = True
+        for cl in clauses[1:]:
+            if not isinstance(cl, dict):
+                ok = False
+                break
+            cost = str(cl.get('cost_template', '') or '').strip()
+            eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+            if cost or (not eff):
+                ok = False
+                break
+            if not _match_effect_template(eff):
+                ok = False
+                break
+            mode_effects.append(eff)
+            label = eff.replace('。', '')
+            if len(label) > 36:
+                label = label[:36] + '…'
+            mode_labels.append(label)
+        if ok and mode_effects:
+            gs.pending.append({
+                'kind': 'choose_enter_effect_mode',
+                'text': f"{canon}[登場]: 効果を1つ選ぶ",
+                'options': list(mode_labels),
+                'effects': list(mode_effects),
+                'ctx': {'pos': pos.upper(), 'source_cn': canon},
+                'source_cn': canon,
+            })
+            gs.log.append(f"[PENDING] {canon}[登場]: choose mode from {len(mode_effects)} effects")
+            return
 
     for ab in _iter_triggered_abilities(ci, '登場'):
         clauses = ab.get('clauses', [])
@@ -3732,11 +3764,7 @@ def handle_stage_cost10_member_enter(gs: GameState, cards_db: Dict[str, CardInfo
 def _has_supported_enter_auto(ci: Optional[CardInfo]) -> bool:
     if not ci or not getattr(ci, 'abilities', None):
         return False
-    canon = _canon_cardno(getattr(ci, 'cardnumber', '') or '')
-    # Special-cased Shioriko is always supported.
-    if canon == 'PL!N-pb1-010':
-        return True
-    # Any costless, regex-matchable enter ability counts as supported.
+    canon = _canon_cardno(getattr(ci, 'cardnumber', '') or '')    # Any costless, regex-matchable enter ability counts as supported.
     for ab in _iter_triggered_abilities(ci, '登場'):
         if not isinstance(ab, dict):
             continue
@@ -6674,20 +6702,6 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         gs.hand.append(pick_cn)
         gs.log.append(f"[ACT] took MEMBER {pick_cn} from green room -> hand")
         return
-
-    # 3) Shioriko enter (PL!N-pb1-010): choose mode
-    #    - energy: move 1 energy from wait -> active automatically
-    #    - topdeck: choose up to 2 Nijigasaki LIVE from green room and place on deck top (order selectable)
-    if kind == "choose_shioriko_enter":
-        mode = choice_str.lower()
-        if mode in ("energy", "e", "0", "a"):
-            if gs.energy_wait > 0:
-                gs.energy_wait -= 1
-                gs.energy_active += 1
-                gs.log.append("[AUTO] 栞子[登場]: chose ENERGY -> moved 1 (wait->active)")
-            else:
-                gs.log.append("[AUTO] 栞子[登場]: chose ENERGY but no wait energy")
-            return
         if mode in ("topdeck", "deck", "b", "1"):
             cands: List[str] = []
             for x in list(gs.green_room):
@@ -6712,12 +6726,6 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             return
         gs.log.append(f"[ERR] 栞子[登場]: invalid mode '{choice_str}'")
         return
-
-    # 4) Shioriko topdeck pick #1
-    if kind == "shioriko_topdeck_pick1":
-        if choice_str.lower() in ("skip", "no", "n", "0", "false"):
-            gs.log.append("[SKIP] 栞子[登場]: topdeck 0 cards")
-            return
         opts = p.get("options", [])
         cn = _canon_cardno(choice_str)
         # find actual card in green room (allow variants)
@@ -6762,12 +6770,6 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         })
         gs.log.append(f"[PENDING] 栞子[登場]: pick topdeck #2 from {len(cands2)} candidates")
         return
-
-    # 5) Shioriko topdeck pick #2
-    if kind == "shioriko_topdeck_pick2":
-        if choice_str.lower() in ("skip", "no", "n", "0", "false"):
-            gs.log.append("[SKIP] 栞子[登場]: topdeck only 1 card")
-            return
         cn = _canon_cardno(choice_str)
         pick_cn = None
         if cn in gs.green_room:
@@ -6788,6 +6790,37 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         # place as 2nd card on top: insert at index 1
         gs.deck.insert(1 if len(gs.deck) >= 1 else 0, pick_cn)
         gs.log.append(f"[AUTO] 栞子[登場]: topdeck #2 -> {pick_cn}")
+        return
+
+    if kind == 'choose_enter_effect_mode':
+        opts = list(p.get('options', []) or [])
+        effs = list(p.get('effects', []) or [])
+        ctx2 = dict(p.get('ctx', {}) or {})
+        src = str(p.get('source_cn', '') or '')
+        idx = -1
+        raw = str(choice_str or '').strip()
+        if raw in opts:
+            idx = opts.index(raw)
+        else:
+            try:
+                idx_i = int(raw)
+                if 0 <= idx_i < len(effs):
+                    idx = idx_i
+            except Exception:
+                idx = -1
+        if idx < 0 or idx >= len(effs):
+            gs.log.append(f"[ERR] choose_enter_effect_mode: invalid choice {choice_str}")
+            return
+        eff = str(effs[idx] or '').strip()
+        try:
+            rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
+        except Exception:
+            rng2 = random.Random()
+        ok = try_apply_effect_template(gs, rng2, cards_db, eff, ctx2)
+        if ok:
+            gs.log.append(f"[AUTO] {src}[登場]: chose mode -> applied {eff}")
+        else:
+            gs.log.append(f"[WARN] {src}[登場]: chosen mode not matchable {eff}")
         return
 
     if kind == 'choose_heart_color':
