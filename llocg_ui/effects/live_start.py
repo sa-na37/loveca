@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_live_start_20260413l
+# BUILD_TAG: engine_effect_live_start_generalize_emmafix_20260414e
 from __future__ import annotations
 
 """llocg_ui.effects.live_start
@@ -498,6 +498,139 @@ def try_apply_live_start_ext(
     # cost=このメンバーをウェイトにしてもよい → engine 側 self_wait pay_or_skip
     # 控え室から μ's のメンバーカードを1枚手札に加える
     # ------------------------------------------------------------------
+
+    # ------------------------------------------------------------------
+    # Generalized from engine special-case: PL!N-bp3-008 エマ・ヴェルデ (ライブ開始時)
+    # 手札を2枚控え室に置いてもよい：
+    # このメンバー以外のウェイト状態のメンバー1人をアクティブにする。
+    # そうした場合、そのメンバーとこのメンバーはそれぞれ緑+1（ライブ終了時まで）
+    # ------------------------------------------------------------------
+    if ext_key == "live_start_activate_other_wait_member_both_green1":
+        src_pos = str((ctx or {}).get("src_pos") or (ctx or {}).get("pos") or "").upper()
+        src = str((ctx or {}).get("source_cn") or "")
+        st = getattr(gs, "stage", None)
+        if not isinstance(st, dict):
+            return True
+        cands = []
+        for pos, slot in st.items():
+            p = str(pos or "").upper()
+            if p not in ("L", "C", "R") or p == src_pos:
+                continue
+            if slot is None or bool(getattr(slot, "active", False)):
+                continue
+            info = _lookup_cardinfo(cards_db, getattr(slot, "cardnumber", "") or "")
+            ctype = ""
+            try:
+                ctype = str(getattr(info, "card_type", None) or (info if isinstance(info, dict) else {}).get("card_type") or "").upper()
+            except Exception:
+                ctype = ""
+            if ctype == "LIVE":
+                continue
+            cands.append(p)
+        if not cands:
+            try:
+                gs.log.append("[AUTO_EXT] Emma bp3-008: no other WAIT members")
+            except Exception:
+                pass
+            return True
+        if len(cands) == 1:
+            chosen = cands[0]
+            src_slot = st.get(src_pos)
+            dst_slot = st.get(chosen)
+            if dst_slot is not None:
+                dst_slot.active = True
+            if src_slot is not None:
+                _add_temp_hearts(eng, src_slot, {"green": 1})
+            if dst_slot is not None:
+                _add_temp_hearts(eng, dst_slot, {"green": 1})
+            try:
+                gs.log.append(f"[AUTO_EXT] Emma bp3-008: {chosen} ACTIVE; {src_pos} and {chosen} gain green +1")
+            except Exception:
+                pass
+            return True
+        payload = {
+            "kind": "choose_stage_member_to_activate",
+            "candidates": list(cands),
+            "optional": False,
+            "after_ext_key": "live_start_activate_other_wait_member_both_green1__resolve",
+            "source_cn": src,
+            "ctx": {"src_pos": src_pos, "source_cn": src},
+            "label": "【エマ・ヴェルデ】アクティブにするメンバーを選んでください",
+            "text": "【エマ・ヴェルデ】アクティブにするメンバーをクリックしてください",
+        }
+        try:
+            getattr(gs, "pending").append(payload)
+            gs.log.append(f"[PENDING] Emma bp3-008: choose WAIT member to activate from {cands}")
+        except Exception:
+            pass
+        return True
+
+    if ext_key == "live_start_activate_other_wait_member_both_green1__resolve":
+        src_pos = str((ctx or {}).get("src_pos") or "").upper()
+        chosen = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_pos") or "").upper()
+        st = getattr(gs, "stage", None)
+        if not isinstance(st, dict):
+            return True
+        src_slot = st.get(src_pos)
+        dst_slot = st.get(chosen)
+        if dst_slot is None:
+            try:
+                gs.log.append(f"[ERR] Emma bp3-008 resolve: empty target {chosen}")
+            except Exception:
+                pass
+            return True
+        dst_slot.active = True
+        if src_slot is not None:
+            _add_temp_hearts(eng, src_slot, {"green": 1})
+        _add_temp_hearts(eng, dst_slot, {"green": 1})
+        try:
+            gs.log.append(f"[AUTO_EXT] Emma bp3-008 resolve: {chosen} ACTIVE; {src_pos} and {chosen} gain green +1")
+        except Exception:
+            pass
+        return True
+        src_slot = st.get(src_pos)
+        dst_slot = st.get(chosen)
+        if dst_slot is None:
+            try:
+                gs.log.append(f"[ERR] Emma bp3-008 resolve: empty target {chosen}")
+            except Exception:
+                pass
+            return True
+        dst_slot.active = True
+        if src_slot is not None:
+            _add_temp_hearts(eng, src_slot, {"green": 1})
+        _add_temp_hearts(eng, dst_slot, {"green": 1})
+        try:
+            gs.log.append(f"[AUTO_EXT] Emma bp3-008 resolve: {chosen} ACTIVE; {src_pos} and {chosen} gain green +1")
+        except Exception:
+            pass
+        return True
+
+
+    # ------------------------------------------------------------------
+    # Generalized from engine special-case: PL!N-bp1-003 桜坂しずく (ライブ開始時)
+    # cost=<(E)> は engine 側 live_start_pay_effect
+    # 好きなハート色を1つ指定する。ライブ終了時まで、そのハートを1つ得る。
+    # ------------------------------------------------------------------
+    if ext_key == "live_start_choose_any_heart":
+        src_pos = str((ctx or {}).get("src_pos") or (ctx or {}).get("pos") or "").upper()
+        src = str((ctx or {}).get("source_cn") or "")
+        payload = {
+            "kind": "choose_heart_color",
+            "pos": src_pos,
+            "n": 1,
+            "text": f"{src}: 好きなハートの色を1つ指定する → ライブ終了時まで+1",
+            "options": ["桃", "赤", "黄", "緑", "青", "紫"],
+            "source_cn": src,
+            "src_pos": src_pos,
+        }
+        try:
+            getattr(gs, "pending").append(payload)
+            gs.log.append("[PENDING] 桜坂しずく bp1-003: choose any heart color")
+        except Exception:
+            pass
+        return True
+
     # ------------------------------------------------------------------
     # Prompt 60: PL!-sd1-003 南ことり (ライブ開始時)
     # cost=手札1枚控え室へ → engine 側 pay_or_skip

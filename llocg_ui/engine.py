@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: hime_bp2batch3_merge_scorefix_20260413g
+# BUILD_TAG: hime_bp2batch3_merge_scorefix_live_start_normfix_batonfix_live_start_generalize_emmafix_20260414e
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -2977,42 +2977,6 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
         if not ci or not ci.abilities:
             continue
 
-        # Special-case: 桜坂しずく bp1-003 live-start
-        try:
-            if _canon_cardno(getattr(ci, 'cardnumber', '') or '') == _SHIZUKU_BP1_003_CN_CANON:
-                if int(getattr(gs, 'energy_active', 0) or 0) >= 1:
-                    pr = {
-                        'kind': 'live_start_shizuku_bp1_003_pay',
-                        'pos': pos,
-                        'cn': getattr(ci, 'cardnumber', '') or '',
-                        'text': f"{pos}: {getattr(ci, 'cardnumber', '') or ''} ライブ開始時 [E]1 → 好きなハート色を1つ得る (ライブ終了時まで)",
-                        'options': ['pay', 'skip'],
-                    }
-                    _append_prompt(pr, pr['text'])
-                # special-case 処理済み → 汎用ループをスキップ
-                continue
-        except Exception:
-            pass
-
-        # Special-case: Emma Verde bp3-008 live-start
-        try:
-            if _canon_cardno(getattr(ci, 'cardnumber', '') or '') == _EMMA_BP3_008_CN_CANON:
-                cands0 = _emma_bp3_008_live_start_candidates(gs, cards_db, pos)
-                if cands0 and len(list(getattr(gs, 'hand', []) or [])) >= 2:
-                    pr = {
-                        'kind': 'emma_bp3_008_live_start_pay',
-                        'pos': pos,
-                        'cn': getattr(ci, 'cardnumber', '') or '',
-                        'text': '【エマ・ヴェルデ】ライブ開始時：手札を2枚控え室に置いてもよい → このメンバー以外のウェイト状態の『虹ヶ咲』メンバー1人をアクティブにする。そうした場合、そのメンバーとこのメンバーはライブ終了時まで緑ハート+1',
-                        'options': ['pay', 'skip'],
-                        'pos_options': list(cands0),
-                    }
-                    _append_prompt(pr, f"{pos}: {getattr(ci, 'cardnumber', '') or ''} ライブ開始時")
-                # special-case 処理済み → 汎用ループをスキップ
-                continue
-        except Exception:
-            pass
-
         for ab in ci.abilities:
             if not isinstance(ab, dict):
                 continue
@@ -3138,7 +3102,18 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                             _append_prompt(pr, f'{pos}: {ci.cardnumber} ライブ開始時')
                         continue
                     # コストなし・フリー効果（activate_stage_member等）
-                    if not cost.strip() or cost.strip() == eff.strip():
+                    # cards_compiled の raw にはアイコン前後の改行が残ることがあり、
+                    # cost_template が空の clause で cost=raw 扱いだと
+                    # `cost.strip() == eff.strip()` を外して free 判定に失敗する。
+                    # その場合 generic [E]1 / blade+N に誤ルーティングされるため、
+                    # 空白正規化 + アイコン前後空白除去でも同一なら free とみなす。
+                    cost_norm = re.sub(r'\s+', ' ', cost.strip())
+                    eff_norm = re.sub(r'\s+', ' ', eff.strip())
+                    cost_norm = re.sub(r' (<\([^)]*\)>)', r'\1', cost_norm)
+                    cost_norm = re.sub(r'(<\([^)]*\)>) ', r'\1', cost_norm)
+                    eff_norm = re.sub(r' (<\([^)]*\)>)', r'\1', eff_norm)
+                    eff_norm = re.sub(r'(<\([^)]*\)>) ', r'\1', eff_norm)
+                    if not cost.strip() or cost.strip() == eff.strip() or cost_norm == eff_norm:
                         m_free = _match_effect_template(eff)
                         if m_free:
                             r_free, gd_free = m_free
@@ -3566,15 +3541,18 @@ def cmd_play(gs: GameState, cards_db: Dict[str, CardInfo], hand_idx: int, pos: s
     cost = int(c.cost or 0)
     pay_cost = cost
     if baton_old_cn is not None:
-        # Always apply baton touch when the target stage area is occupied.
-        # Reduce the cost by the replaced member's cost (min 0), and send the replaced member to green room.
+        # Baton touch is only committed if the play itself succeeds.
+        # Compute the reduced cost first, but do not move the replaced card yet.
         pay_cost = max(0, cost - int(baton_old_cost or 0))
-        gs.green_room.append(baton_old_cn)
-        gs.log.append(f"[BATON] {pos}: {baton_old_cn} -> green room; reduce {cost} by {baton_old_cost} => pay {pay_cost}")
 
     if not pay_energy(gs, pay_cost):
         gs.log.append(f"[ERR] play: insufficient energy (need {pay_cost}, have {gs.energy_active})")
         return
+
+    if baton_old_cn is not None:
+        # Now that payment succeeded, commit the baton move.
+        gs.green_room.append(baton_old_cn)
+        gs.log.append(f"[BATON] {pos}: {baton_old_cn} -> green room; reduce {cost} by {baton_old_cost} => pay {pay_cost}")
 
     gs.hand.pop(hand_idx)
     gs.stage[pos] = StageSlot(cardnumber=(c.cardnumber if c else cn), active=True)
@@ -5007,7 +4985,7 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
         opts = [_stage_pos_label(gs, cards_db, pp) for pp in cands]
         gs.pending.append({
             'kind': 'emma_bp3_008_wait_pick',
-            'text': '【エマ・ヴェルデ】起動：このメンバー以外の『虹ヶ咲』メンバー1人をウェイト状態にする → カードを1枚引く',
+            'text': '【エマ・ヴェルデ】ウェイトにする『虹ヶ咲』メンバーをクリックしてください',
             'options': list(opts),
             'pos_options': list(cands),
             'source_pos': pos,
@@ -5785,6 +5763,54 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             gs.log.append(f"[ERR] choose_member_from_green_multi_up_to: invalid pick count {len(raw_picks)} (min={min_picks}, max={max_picks})")
             gs.pending.insert(0, p)
             return
+
+        # Reuse the multi-select UI for hand discard as well.
+        if str(p.get('source_zone', '') or '').lower() == 'hand' and str(p.get('action', '') or '') == 'discard_from_hand':
+            opts_canon = [_canon_cardno(x) for x in options]
+            hand_copy = list(gs.hand)
+            picked = []
+            for raw in raw_picks:
+                cn = _canon_cardno(raw)
+                if cn not in opts_canon:
+                    gs.log.append(f"[ERR] choose_member_from_green_multi_up_to(hand): {cn} not in options")
+                    gs.pending.insert(0, p)
+                    return
+                found_idx = None
+                found_cn = None
+                for i, hcn in enumerate(hand_copy):
+                    if _canon_cardno(hcn) == cn:
+                        found_idx = i
+                        found_cn = hcn
+                        break
+                if found_idx is None:
+                    gs.log.append(f"[ERR] choose_member_from_green_multi_up_to(hand): {cn} not in hand")
+                    gs.pending.insert(0, p)
+                    return
+                picked.append(found_cn)
+                hand_copy.pop(found_idx)
+            gs.hand = hand_copy
+            gs.green_room.extend(picked)
+            gs.log.append(f"[ACT] discard multi -> {picked}")
+            after_eff = str(p.get('after_effect_template', '') or '').strip()
+            after_ctx = dict(p.get('after_ctx', {}) or {})
+            after_src = str(p.get('after_source_cn', '') or '')
+            if picked:
+                try:
+                    after_ctx['discarded_cn'] = str(picked[-1] or '')
+                except Exception:
+                    pass
+            if after_eff:
+                rng2 = random.Random(getattr(gs, 'seed', 1) or 1)
+                ok = try_apply_effect_template(gs, rng2, cards_db, after_eff, after_ctx)
+                if ok:
+                    gs.log.append(f"[ACT] {after_src}: applied {after_eff}")
+                else:
+                    gs.log.append(f"[WARN] {after_src}: after-cost effect not matchable {after_eff}")
+            _r = p.get('_resume') if isinstance(p, dict) else None
+            if _r:
+                gs.pending.append(_r)
+            return
+
         opts_canon = [_canon_cardno(x) for x in options]
         green_copy = list(gs.green_room)
         picked = []
@@ -6646,15 +6672,29 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                 if len(gs.hand) < cost_n:
                     gs.log.append(f"[ERR] live_start_pay_effect: not enough cards in hand (need {cost_n})")
                     return
-                gs.pending.append({
-                    'kind': 'discard_from_hand',
-                    'remaining': cost_n,
-                    'text': f'手札を{cost_n}枚控え室に置く',
-                    'options': list(gs.hand),
-                    'after_effect_template': eff,
-                    'after_ctx': after_ctx,
-                    'after_source_cn': src_cn,
-                })
+                if cost_n > 1:
+                    gs.pending.append({
+                        'kind': 'choose_member_from_green_multi_up_to',
+                        'source_zone': 'hand',
+                        'action': 'discard_from_hand',
+                        'min_picks': cost_n,
+                        'max_picks': cost_n,
+                        'text': f'手札のカードを{cost_n}枚クリックして確定してください',
+                        'options': list(gs.hand),
+                        'after_effect_template': eff,
+                        'after_ctx': after_ctx,
+                        'after_source_cn': src_cn,
+                    })
+                else:
+                    gs.pending.append({
+                        'kind': 'discard_from_hand',
+                        'remaining': cost_n,
+                        'text': f'手札を{cost_n}枚控え室に置く',
+                        'options': list(gs.hand),
+                        'after_effect_template': eff,
+                        'after_ctx': after_ctx,
+                        'after_source_cn': src_cn,
+                    })
                 return
             # self-wait コスト → このメンバーをウェイトにして効果適用
             if cost_kind == 'self_wait':
