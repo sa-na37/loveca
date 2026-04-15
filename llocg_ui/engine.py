@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: hime_bp2batch3_merge_scorefix_live_start_normfix_batonfix_live_start_generalize_loveumyfriends_timingfix_20260414o
+# BUILD_TAG: hime_bp2batch3_merge_scorefix_live_start_normfix_batonfix_live_start_generalize_loveumyfriends_successphase_fix_20260414q
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -1346,7 +1346,6 @@ class GameState:
     # one-shot delta reserved for the next LIVE_SET phase (e.g. -1 by 安養寺姫芽)
     next_live_set_limit_delta: int = 0
     success_zone: List[str] = field(default_factory=list)  # 成功ライブカード置き場
-    success_zone_score_bonus: List[int] = field(default_factory=list)  # success_zone と同じ index の score bonus
     resolve_zone: List[str] = field(default_factory=list)
 
     pending: List[Dict[str, Any]] = field(default_factory=list)
@@ -1369,6 +1368,7 @@ class GameState:
 
     # last LIVE attempt result (for LIVE_RESOLVE timing / success-zone decision)
     last_attempt_lives: List[str] = field(default_factory=list)
+    last_attempt_score_bonus: List[int] = field(default_factory=list)  # aligned to last_attempt_lives; success-phase temporary bonuses
     last_attempt_ok: bool = False
     need_live_success_triggers: bool = False
     need_success_store_choice: bool = False
@@ -1460,13 +1460,13 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
         "live_set_limit": int(getattr(gs, "live_set_limit", 3) or 3),
         "next_live_set_limit_delta": int(getattr(gs, "next_live_set_limit_delta", 0) or 0),
         "success_zone": list(getattr(gs, "success_zone", []) or []),
-        "success_zone_score_bonus": [int(x) for x in (getattr(gs, "success_zone_score_bonus", []) or [])],
         "resolve_zone": list(gs.resolve_zone),
         "pending": json.loads(json.dumps(gs.pending)) if gs.pending else [],
         "live_start_prompted": bool(gs.live_start_prompted),
         "turn": int(gs.turn),
         "used_this_turn": dict(getattr(gs, "used_this_turn", {}) or {}),
         "last_attempt_lives": list(getattr(gs, 'last_attempt_lives', []) or []),
+        "last_attempt_score_bonus": [int(x) for x in (getattr(gs, 'last_attempt_score_bonus', []) or [])],
         "last_attempt_ok": bool(getattr(gs, 'last_attempt_ok', False)),
         "need_live_success_triggers": bool(getattr(gs, 'need_live_success_triggers', False)),
         "need_success_store_choice": bool(getattr(gs, 'need_success_store_choice', False)),
@@ -1506,14 +1506,6 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
     gs.live_set_limit = int(snap.get("live_set_limit", getattr(gs, "live_set_limit", 3) or 3) or 3)
     gs.next_live_set_limit_delta = int(snap.get("next_live_set_limit_delta", getattr(gs, "next_live_set_limit_delta", 0) or 0) or 0)
     gs.success_zone = list(snap.get("success_zone", getattr(gs, "success_zone", [])))
-    try:
-        gs.success_zone_score_bonus = [int(x) for x in (snap.get("success_zone_score_bonus", getattr(gs, "success_zone_score_bonus", []) or []) or [])]
-    except Exception:
-        gs.success_zone_score_bonus = [0 for _ in range(len(gs.success_zone))]
-    while len(gs.success_zone_score_bonus) < len(gs.success_zone):
-        gs.success_zone_score_bonus.append(0)
-    if len(gs.success_zone_score_bonus) > len(gs.success_zone):
-        gs.success_zone_score_bonus = gs.success_zone_score_bonus[:len(gs.success_zone)]
     gs.resolve_zone = list(snap.get("resolve_zone", gs.resolve_zone))
     gs.pending = list(snap.get("pending", gs.pending) or [])
     gs.live_start_prompted = bool(snap.get("live_start_prompted", gs.live_start_prompted))
@@ -1524,6 +1516,14 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
         gs.used_this_turn = {}
 
     gs.last_attempt_lives = list(snap.get('last_attempt_lives', getattr(gs, 'last_attempt_lives', []) or []))
+    try:
+        gs.last_attempt_score_bonus = [int(x) for x in (snap.get('last_attempt_score_bonus', getattr(gs, 'last_attempt_score_bonus', []) or []) or [])]
+    except Exception:
+        gs.last_attempt_score_bonus = []
+    while len(gs.last_attempt_score_bonus) < len(gs.last_attempt_lives):
+        gs.last_attempt_score_bonus.append(0)
+    if len(gs.last_attempt_score_bonus) > len(gs.last_attempt_lives):
+        gs.last_attempt_score_bonus = gs.last_attempt_score_bonus[:len(gs.last_attempt_lives)]
     gs.last_attempt_ok = bool(snap.get('last_attempt_ok', getattr(gs, 'last_attempt_ok', False)))
     gs.need_live_success_triggers = bool(snap.get('need_live_success_triggers', getattr(gs, 'need_live_success_triggers', False)))
     gs.need_success_store_choice = bool(snap.get('need_success_store_choice', getattr(gs, 'need_success_store_choice', False)))
@@ -4288,6 +4288,11 @@ def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict
                     gs.log.append("[INFO] PoppinUp: no Nijigasaki cards among yell reveals")
         except Exception:
             pass
+        if ci_live and _has_revealed_all_score_bonus_ability(ci_live):
+            bonus = int(_revealed_all_card_score_bonus(gs, cards_db))
+            if bonus != 0:
+                _add_last_attempt_live_score_bonus(gs, cn_live, bonus)
+                gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時]: score +{bonus}")
         if not ci_live or not getattr(ci_live, 'abilities', None):
             continue
         for ab in _iter_triggered_abilities(ci_live, 'ライブ成功時'):
@@ -4355,20 +4360,12 @@ _HEARTBEAT_BP4_021_CN_CANON = 'PL!-bp4-021'
 
 def _success_zone_score_sum(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
     total = 0
-    zs = list(getattr(gs, 'success_zone', []) or [])
-    bonuses = list(getattr(gs, 'success_zone_score_bonus', []) or [])
-    while len(bonuses) < len(zs):
-        bonuses.append(0)
-    for idx, cn in enumerate(zs):
+    for cn in list(getattr(gs, 'success_zone', []) or []):
         ci = _get_card(cards_db, cn)
         if not ci:
             continue
         try:
             total += int(getattr(ci, 'score', 0) or 0)
-        except Exception:
-            pass
-        try:
-            total += int(bonuses[idx] or 0)
         except Exception:
             pass
     return int(total)
@@ -4609,11 +4606,30 @@ def _revealed_all_card_score_bonus(gs: GameState, cards_db: Dict[str, CardInfo])
             return 1
     return 0
 
-def _success_store_score_bonus_for_live(cn_live, gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
-    """Return score bonus that should be committed when a successful LIVE is stored."""
-    ci_live = _get_card(cards_db, cn_live)
-    if _has_revealed_all_score_bonus_ability(ci_live):
-        return int(_revealed_all_card_score_bonus(gs, cards_db))
+def _add_last_attempt_live_score_bonus(gs: GameState, cn_live, bonus: int) -> None:
+    canon = _canon_cardno(cn_live)
+    lives = list(getattr(gs, 'last_attempt_lives', []) or [])
+    bonuses = list(getattr(gs, 'last_attempt_score_bonus', []) or [])
+    while len(bonuses) < len(lives):
+        bonuses.append(0)
+    for i, x in enumerate(lives):
+        if _canon_cardno(x) == canon:
+            bonuses[i] = int(bonuses[i] or 0) + int(bonus or 0)
+            gs.last_attempt_score_bonus = bonuses
+            return
+
+def _get_last_attempt_live_score_bonus(gs: GameState, cn_live) -> int:
+    canon = _canon_cardno(cn_live)
+    lives = list(getattr(gs, 'last_attempt_lives', []) or [])
+    bonuses = list(getattr(gs, 'last_attempt_score_bonus', []) or [])
+    while len(bonuses) < len(lives):
+        bonuses.append(0)
+    for i, x in enumerate(lives):
+        if _canon_cardno(x) == canon:
+            try:
+                return int(bonuses[i] or 0)
+            except Exception:
+                return 0
     return 0
 
 def _monster_girls_wait_bonus(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
@@ -4736,6 +4752,7 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
         gs.vivid_world_blue_mode_this_live = False
         gs.vivid_world_bonus_this_live = 0
         gs.last_attempt_lives = []
+        gs.last_attempt_score_bonus = []
         gs.last_attempt_ok = False
         gs.need_live_success_triggers = False
         gs.need_success_store_choice = False
@@ -4749,6 +4766,7 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
         gs.log.append("[ATTEMPT] no set cards")
         # clear end-of-live state defensively
         gs.last_attempt_lives = []
+        gs.last_attempt_score_bonus = []
         gs.last_attempt_ok = False
         gs.need_live_success_triggers = False
         gs.need_success_store_choice = False
@@ -4881,6 +4899,7 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
             # These are handled in LIVE_RESOLVE (8.4 timing) so the just-succeeded LIVE
             # does NOT count as being in success storage during its own success-effect resolution.
             gs.last_attempt_lives = list(lives)
+            gs.last_attempt_score_bonus = [0 for _ in range(len(lives))]
             gs.last_attempt_ok = True
             gs.need_live_success_triggers = True
             gs.need_success_store_choice = True
@@ -4894,6 +4913,7 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
             gs.live_start_prompted = False
     else:
         gs.last_attempt_lives = []
+        gs.last_attempt_score_bonus = []
         gs.last_attempt_ok = False
         gs.need_live_success_triggers = False
         gs.need_success_store_choice = False
@@ -5581,6 +5601,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         c0 = str(choice_str or '').strip()
         if c0.lower() == 'skip':
             gs.log.append('[ACT] success_store: skipped')
+            gs.last_attempt_score_bonus = []
             _clear_end_of_live_buffs(gs)
             gs.live_start_prompted = False
             return
@@ -5612,18 +5633,11 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                 gs.green_room.remove(pick_cn)
         except Exception:
             pass
-        bonus = int(_success_store_score_bonus_for_live(pick_cn, gs, cards_db))
         try:
             gs.success_zone.append(pick_cn)
         except Exception:
             gs.success_zone = list(getattr(gs, 'success_zone', []) or []) + [pick_cn]
-        try:
-            gs.success_zone_score_bonus.append(int(bonus))
-        except Exception:
-            gs.success_zone_score_bonus = list(getattr(gs, 'success_zone_score_bonus', []) or []) + [int(bonus)]
         gs.log.append(f"[ACT] success_store: moved {pick_cn} -> success storage")
-        if int(bonus) != 0:
-            gs.log.append(f"[AUTO] {pick_cn}[ライブ成功時]: score +{bonus} (stored)")
         _clear_end_of_live_buffs(gs)
         gs.live_start_prompted = False
         return
@@ -7119,6 +7133,26 @@ def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], i
                 if gs.pending:
                     return
 
+        # Recompute/log final compare score after <ライブ成功時> effects that change score.
+        try:
+            _bon = list(getattr(gs, 'last_attempt_score_bonus', []) or [])
+            _lvs = list(getattr(gs, 'last_attempt_lives', []) or [])
+            if _lvs and any(int(x or 0) != 0 for x in _bon):
+                _rows = []
+                _total = 0
+                for _i, _cn in enumerate(_lvs):
+                    _ci = _get_card(cards_db, _cn)
+                    _base = int(getattr(_ci, 'score', 0) or 0) if _ci else 0
+                    _delta = int(_bon[_i] or 0) if _i < len(_bon) else 0
+                    _rows.append((_cn, _base, _delta, _base + _delta))
+                    _total += (_base + _delta)
+                for _cn, _base, _delta, _eff in _rows:
+                    if _delta:
+                        gs.log.append(f"  success-score: {_cn} = {_eff} ({_base}+{_delta})")
+                gs.log.append(f"[COMPARE] final_score_after_success_effects={_total}")
+        except Exception:
+            pass
+
         # 2) Winner-based success storage decision (8.4.7).
         #    Since this simulator has no opponent, we let the user decide whether to store
         #    a successful LIVE into 成功ライブカード置き場 (skip allowed).
@@ -7156,6 +7190,7 @@ def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], i
 
         # Clear last-attempt helpers
         gs.last_attempt_lives = []
+        gs.last_attempt_score_bonus = []
         gs.last_attempt_ok = False
 
         _advance_to_next_turn(gs, rng)
