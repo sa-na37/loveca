@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: hime_bp2batch3_merge_scorefix_live_start_normfix_batonfix_live_start_generalize_greenmembertake_20260414m
+# BUILD_TAG: hime_bp2batch3_merge_scorefix_live_start_normfix_batonfix_live_start_generalize_loveumyfriends_20260414n
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -4552,7 +4552,36 @@ def _stars_we_chase_waiting_bonus(gs: GameState, cards_db: Dict[str, CardInfo]) 
         return 1
     return 0
 
-def _love_u_my_friends_success_bonus(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
+def _has_revealed_all_score_bonus_ability(ci: Optional[CardInfo]) -> bool:
+    """Detect LIVE text like:
+    エールにより公開された自分のカードの中に<(ALL)>を持つカードが1枚以上ある場合、このカードのスコアを+1する。
+    Generalized from PL!N-bp3-030 (Love U my friends).
+    """
+    if not ci:
+        return False
+    try:
+        abilities = list(getattr(ci, 'abilities', []) or [])
+    except Exception:
+        abilities = []
+    target = 'エールにより公開された自分のカードの中に<(ALL)>を持つカードが1枚以上ある場合、このカードのスコアを+1する。'
+    for ab in abilities:
+        if not isinstance(ab, dict):
+            continue
+        trig = str(ab.get('trigger', '') or '')
+        if 'ライブ成功時' not in trig:
+            continue
+        clauses = ab.get('clauses', [])
+        if not isinstance(clauses, list):
+            continue
+        for cl in clauses:
+            if not isinstance(cl, dict):
+                continue
+            eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip().replace('\n', '')
+            if eff == target:
+                return True
+    return False
+
+def _revealed_all_card_score_bonus(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
     for cn in list(getattr(gs, '_yell_revealed_this_live', []) or []):
         ci = _get_card(cards_db, cn)
         if not ci:
@@ -4630,8 +4659,9 @@ def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[s
         return int(_psycho_heart_success_bonus(gs, cards_db))
     if canon == _STARS_WE_CHASE_CN_CANON:
         return int(_stars_we_chase_waiting_bonus(gs, cards_db))
-    if canon == _LOVE_U_MY_FRIENDS_CN_CANON:
-        return int(_love_u_my_friends_success_bonus(gs, cards_db))
+    ci_live = _get_card(cards_db, cn_live)
+    if _has_revealed_all_score_bonus_ability(ci_live):
+        return int(_revealed_all_card_score_bonus(gs, cards_db))
     if canon == _MONSTER_GIRLS_CN_CANON:
         return int(_monster_girls_wait_bonus(gs, cards_db))
     if canon == _EMOTION_CN_CANON:
