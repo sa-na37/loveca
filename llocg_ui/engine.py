@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: hime_bp2batch3_merge_scorefix_live_start_normfix_batonfix_live_start_generalize_cost10draw_rngfix_20260414l
+# BUILD_TAG: hime_bp2batch3_merge_scorefix_live_start_normfix_batonfix_live_start_generalize_greenmembertake_20260414m
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -2636,13 +2636,34 @@ def _has_sacrifice_ability(ci: Optional[CardInfo]) -> bool:
     return False
 
 def _has_green_member_take_ability(ci: Optional[CardInfo]) -> bool:
-    """Detect a specific activated ability we actually implement.
+    """Detect activated abilities that move this member to green room and take 1 MEMBER from green room to hand.
 
-    PL!N-sd1-006: put this MEMBER into Green Room, then take 1 MEMBER from Green Room to hand.
+    Generalized from the former PL!N-sd1-006 special-case.
     """
-    if not ci:
+    if not ci or not ci.abilities:
         return False
-    return str(getattr(ci, "cardnumber", "") or "") == "PL!N-sd1-006"
+    for ab in ci.abilities:
+        if not isinstance(ab, dict):
+            continue
+        at = str(ab.get("ability_type", "") or "")
+        if "起動" not in at:
+            continue
+        clauses = ab.get("clauses", [])
+        if not isinstance(clauses, list):
+            continue
+        for cl in clauses:
+            if not isinstance(cl, dict):
+                continue
+            raw = str(cl.get("raw", "") or "")
+            eff = str(cl.get("effect_template", "") or "")
+            cost = str(cl.get("cost_template", "") or "")
+            blob = " ".join([raw, cost, eff])
+            # examples:
+            # 「このメンバーをステージから控え室に置く：自分の控え室からメンバーカードを1枚手札に加える。」
+            if ("このメンバー" in blob) and ("ステージから控え室に置" in blob or "控え室に置く" in blob):
+                if ("控え室" in blob) and ("メンバー" in blob) and ("手札" in blob) and ("加える" in blob or "戻" in blob):
+                    return True
+    return False
 
 def _has_green_live_take_ability(ci: Optional[CardInfo]) -> bool:
     """Detect 'put this member to green room' style activated ability that also takes 1 LIVE from green room to hand."""
