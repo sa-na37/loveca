@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: hime_bp2batch3_merge_scorefix_live_start_normfix_batonfix_live_start_generalize_shiorikofix_20260414i
+# BUILD_TAG: hime_bp2batch3_merge_scorefix_live_start_normfix_batonfix_live_start_generalize_cost10draw_20260414j
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -3706,23 +3706,49 @@ def _is_live_card(cards_db: Dict[str, CardInfo], cn: str) -> bool:
         return False
     return is_live_type(getattr(ci, 'type', '') or '')
 
-def handle_stage_cost10_member_enter(gs: GameState, cards_db: Dict[str, CardInfo], entered_pos: str, entered_cn: str, ai_pos: str = '', rng: Optional[random.Random] = None) -> None:
+def _has_auto_on_cost10_member_enter_draw1(ci: Optional[CardInfo]) -> bool:
+    if not ci:
+        return False
+    try:
+        abilities = list(getattr(ci, 'abilities', []) or [])
+    except Exception:
+        abilities = []
+    target = '自分のステージにコスト10のメンバーが登場したとき、カードを1枚引く。'
+    for ab in abilities:
+        if not isinstance(ab, dict):
+            continue
+        at = str(ab.get('ability_type', '') or '')
+        trig = str(ab.get('trigger', '') or '')
+        cond = str(ab.get('conditions', '') or '')
+        if ('自動' not in at) and ('BODY' not in trig) and ('自動' not in trig):
+            continue
+        if 'ターン1回' not in cond:
+            continue
+        clauses = ab.get('clauses', [])
+        if not isinstance(clauses, list):
+            continue
+        for cl in clauses:
+            if not isinstance(cl, dict):
+                continue
+            eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+            if eff == target:
+                return True
+    return False
+
+def handle_stage_cost10_member_enter_draw1(gs: GameState, cards_db: Dict[str, CardInfo], entered_pos: str, entered_cn: str, source_pos: str = '', rng: Optional[random.Random] = None) -> None:
     """Handle auto abilities that trigger when a cost-10 MEMBER enters your stage.
 
-    PL!N-pb1-005 (宮下愛):
+    Generalized from PL!N-pb1-005 (宮下愛):
       <自動><ターン1回> 自分のステージにコスト10のメンバーが登場したとき、カードを1枚引く。
-
-    NOTE: We resolve *one* Ai instance per trigger so that 2×Ai produces 2 separate triggers
-    that can be ordered and resolved independently (rule-consistent).
     """
     try:
         entered_pos = str(entered_pos or '').upper()
     except Exception:
         entered_pos = 'C'
     try:
-        ai_pos_u = str(ai_pos or '').upper()
+        source_pos_u = str(source_pos or '').upper()
     except Exception:
-        ai_pos_u = ''
+        source_pos_u = ''
 
     canon_enter = _canon_cardno(entered_cn)
     ci_enter = _get_card(cards_db, canon_enter)
@@ -3740,9 +3766,10 @@ def handle_stage_cost10_member_enter(gs: GameState, cards_db: Dict[str, CardInfo
         if not slot:
             return
         canon = _canon_cardno(slot.cardnumber)
-        if canon != 'PL!N-pb1-005':
+        ci_src = _get_card(cards_db, canon)
+        if not _has_auto_on_cost10_member_enter_draw1(ci_src):
             return
-        key = f"{p}:{canon}:auto_cost10_enter"
+        key = f"{p}:{canon}:auto_cost10_enter_draw1"
         used = int((getattr(gs, 'used_this_turn', {}) or {}).get(key, 0) or 0)
         if used >= 1:
             return
@@ -3753,80 +3780,15 @@ def handle_stage_cost10_member_enter(gs: GameState, cards_db: Dict[str, CardInfo
             gs.used_this_turn = {key: 1}
         gs.log.append(f"[AUTO] {canon}({p}): cost10 member entered ({canon_enter} @ {entered_pos}) -> drew {drew}")
 
-    if ai_pos_u in ('L', 'C', 'R'):
-        _resolve_one(ai_pos_u)
+    if source_pos_u in ('L', 'C', 'R'):
+        _resolve_one(source_pos_u)
         return
 
-    # Fallback: resolve all (legacy behavior)
     for p in ('L', 'C', 'R'):
         _resolve_one(p)
 
-def _has_supported_enter_auto(ci: Optional[CardInfo]) -> bool:
-    if not ci or not getattr(ci, 'abilities', None):
-        return False
-    canon = _canon_cardno(getattr(ci, 'cardnumber', '') or '')    # Any costless, regex-matchable enter ability counts as supported.
-    for ab in _iter_triggered_abilities(ci, '登場'):
-        if not isinstance(ab, dict):
-            continue
-        clauses = ab.get('clauses', [])
-        if not isinstance(clauses, list):
-            continue
-        for cl in clauses:
-            if not isinstance(cl, dict):
-                continue
-            cost = str(cl.get('cost_template', '') or '')
-            eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
-            if not eff:
-                continue
-
-            # allow optional discard-from-hand / energy / self-wait costs for [登場]
-            if cost:
-                m = re.search(r"手札を(\d+)枚控え室に置いてもよい", cost)
-                n = 0
-                if m:
-                    try:
-                        n = int(m.group(1) or 0)
-                    except Exception:
-                        n = 0
-                if n <= 0 and ("手札を1枚控え室に置いてもよい" in cost):
-                    n = 1
-                if n > 0 and _match_effect_template(eff):
-                    return True
-                if _parse_energy_cost(cost) > 0 and _match_effect_template(eff):
-                    return True
-                if _cost_requires_self_wait(cost) and not _cost_requires_self_to_green(cost) and _match_effect_template(eff):
-                    return True
-                # other cost templates unsupported for enter-auto support detection
-                continue
-
-            if _parse_energy_cost(cost) > 0 or _cost_requires_self_to_green(cost):
-                continue
-            if _match_effect_template(eff):
-                return True
-            # Mode-style (choose) header across clauses
-            if ('以下から' in eff) and ('選ぶ' in eff):
-                return True
-    return False
-
-def _has_body_activated_in_text(ci: Optional[CardInfo]) -> bool:
-    """Return True if the card has a BODY-style activated ability (手札をすべて公開する).
-    Uses the structured abilities field (trigger='BODY', ability_type='起動').
-    """
-    if not ci:
-        return False
-    for ab in _iter_activated_abilities(ci):
-        if str(ab.get('trigger', '') or '') != 'BODY':
-            continue
-        for cl in (ab.get('clauses', []) or []):
-            if not isinstance(cl, dict):
-                continue
-            cost = str(cl.get('cost_template', '') or '')
-            if '手札をすべて公開する' in cost:
-                return True
-    return False
-
-def _list_active_ai_cost10_positions(gs: GameState, cards_db: Dict[str, CardInfo], entered_cn: str) -> List[str]:
-    """Return stage positions of unused 宮下愛(PL!N-pb1-005) that would trigger on cost-10 member enter."""
+def _list_active_cost10_member_enter_draw_positions(gs: GameState, cards_db: Dict[str, CardInfo], entered_cn: str) -> List[str]:
+    """Return stage positions of unused members that would trigger on cost-10 member enter and draw 1."""
     canon_enter = _canon_cardno(entered_cn)
     ci_enter = _get_card(cards_db, canon_enter)
     if not ci_enter:
@@ -3843,16 +3805,17 @@ def _list_active_ai_cost10_positions(gs: GameState, cards_db: Dict[str, CardInfo
         if not slot:
             continue
         canon = _canon_cardno(slot.cardnumber)
-        if canon != 'PL!N-pb1-005':
+        ci_src = _get_card(cards_db, canon)
+        if not _has_auto_on_cost10_member_enter_draw1(ci_src):
             continue
-        key = f"{p}:{canon}:auto_cost10_enter"
+        key = f"{p}:{canon}:auto_cost10_enter_draw1"
         used = int((getattr(gs, 'used_this_turn', {}) or {}).get(key, 0) or 0)
         if used < 1:
             out.append(p)
     return out
 
-def _has_active_ai_cost10_trigger(gs: GameState, cards_db: Dict[str, CardInfo], entered_cn: str) -> bool:
-    return bool(_list_active_ai_cost10_positions(gs, cards_db, entered_cn))
+def _has_active_cost10_member_enter_draw_trigger(gs: GameState, cards_db: Dict[str, CardInfo], entered_cn: str) -> bool:
+    return bool(_list_active_cost10_member_enter_draw_positions(gs, cards_db, entered_cn))
 
 def _collect_auto_triggers_on_member_leave_stage(gs: GameState, cards_db: Dict[str, CardInfo], left_pos: str, left_cn: str) -> List[Dict[str, Any]]:
     """Collect auto triggers that happen when a MEMBER leaves your stage and goes to green room.
@@ -3919,12 +3882,14 @@ def _collect_auto_triggers_on_member_enter(gs: GameState, cards_db: Dict[str, Ca
             'cn': entered_cn,
         })
 
-    # 宮下愛(PL!N-pb1-005): one trigger per unused copy on stage
-    for ai_pos in _list_active_ai_cost10_positions(gs, cards_db, entered_cn):
+    # Generic: one trigger per unused member whose BODY says "when a cost-10 member enters, draw 1"
+    for src_pos in _list_active_cost10_member_enter_draw_positions(gs, cards_db, entered_cn):
+        slot = gs.stage.get(str(src_pos).upper())
+        src_cn = _canon_cardno(getattr(slot, 'cardnumber', '') or '') if slot else ''
         out.append({
-            'kind': 'ai_cost10_enter',
-            'source_cn': 'PL!N-pb1-005',
-            'ai_pos': str(ai_pos).upper(),
+            'kind': 'cost10_enter_draw1_auto',
+            'source_cn': src_cn,
+            'source_pos': str(src_pos).upper(),
             'entered_pos': str(entered_pos or 'C').upper(),
             'entered_cn': entered_cn,
         })
@@ -3951,8 +3916,8 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         cn = str(trig.get('cn', '') or '')
         handle_enter_auto(gs, cards_db, pos, cn)
         return
-    if kind == 'ai_cost10_enter':
-        handle_stage_cost10_member_enter(gs, cards_db, entered_pos=str(trig.get('entered_pos','C') or 'C'), entered_cn=str(trig.get('entered_cn','') or ''), ai_pos=str(trig.get('ai_pos','') or ''), rng=rng)
+    if kind == 'cost10_enter_draw1_auto':
+        handle_stage_cost10_member_enter_draw1(gs, cards_db, entered_pos=str(trig.get('entered_pos','C') or 'C'), entered_cn=str(trig.get('entered_cn','') or ''), source_pos=str(trig.get('source_pos','') or ''), rng=rng)
         return
     if kind == 'enqueue_pending_prompt':
         prm = dict((trig or {}).get('prompt', {}) or {})
