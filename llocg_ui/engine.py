@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: hime_bp2batch3_merge_scorefix_live_start_normfix_batonfix_live_start_generalize_loveumyfriends_20260414n
+# BUILD_TAG: hime_bp2batch3_merge_scorefix_live_start_normfix_batonfix_live_start_generalize_loveumyfriends_timingfix_20260414o
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -1346,6 +1346,7 @@ class GameState:
     # one-shot delta reserved for the next LIVE_SET phase (e.g. -1 by 安養寺姫芽)
     next_live_set_limit_delta: int = 0
     success_zone: List[str] = field(default_factory=list)  # 成功ライブカード置き場
+    success_zone_score_bonus: List[int] = field(default_factory=list)  # success_zone と同じ index の score bonus
     resolve_zone: List[str] = field(default_factory=list)
 
     pending: List[Dict[str, Any]] = field(default_factory=list)
@@ -1459,6 +1460,7 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
         "live_set_limit": int(getattr(gs, "live_set_limit", 3) or 3),
         "next_live_set_limit_delta": int(getattr(gs, "next_live_set_limit_delta", 0) or 0),
         "success_zone": list(getattr(gs, "success_zone", []) or []),
+        "success_zone_score_bonus": [int(x) for x in (getattr(gs, "success_zone_score_bonus", []) or [])],
         "resolve_zone": list(gs.resolve_zone),
         "pending": json.loads(json.dumps(gs.pending)) if gs.pending else [],
         "live_start_prompted": bool(gs.live_start_prompted),
@@ -1504,6 +1506,14 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
     gs.live_set_limit = int(snap.get("live_set_limit", getattr(gs, "live_set_limit", 3) or 3) or 3)
     gs.next_live_set_limit_delta = int(snap.get("next_live_set_limit_delta", getattr(gs, "next_live_set_limit_delta", 0) or 0) or 0)
     gs.success_zone = list(snap.get("success_zone", getattr(gs, "success_zone", [])))
+    try:
+        gs.success_zone_score_bonus = [int(x) for x in (snap.get("success_zone_score_bonus", getattr(gs, "success_zone_score_bonus", []) or []) or [])]
+    except Exception:
+        gs.success_zone_score_bonus = [0 for _ in range(len(gs.success_zone))]
+    while len(gs.success_zone_score_bonus) < len(gs.success_zone):
+        gs.success_zone_score_bonus.append(0)
+    if len(gs.success_zone_score_bonus) > len(gs.success_zone):
+        gs.success_zone_score_bonus = gs.success_zone_score_bonus[:len(gs.success_zone)]
     gs.resolve_zone = list(snap.get("resolve_zone", gs.resolve_zone))
     gs.pending = list(snap.get("pending", gs.pending) or [])
     gs.live_start_prompted = bool(snap.get("live_start_prompted", gs.live_start_prompted))
@@ -4345,12 +4355,20 @@ _HEARTBEAT_BP4_021_CN_CANON = 'PL!-bp4-021'
 
 def _success_zone_score_sum(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
     total = 0
-    for cn in list(getattr(gs, 'success_zone', []) or []):
+    zs = list(getattr(gs, 'success_zone', []) or [])
+    bonuses = list(getattr(gs, 'success_zone_score_bonus', []) or [])
+    while len(bonuses) < len(zs):
+        bonuses.append(0)
+    for idx, cn in enumerate(zs):
         ci = _get_card(cards_db, cn)
         if not ci:
             continue
         try:
             total += int(getattr(ci, 'score', 0) or 0)
+        except Exception:
+            pass
+        try:
+            total += int(bonuses[idx] or 0)
         except Exception:
             pass
     return int(total)
@@ -4591,6 +4609,13 @@ def _revealed_all_card_score_bonus(gs: GameState, cards_db: Dict[str, CardInfo])
             return 1
     return 0
 
+def _success_store_score_bonus_for_live(cn_live, gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
+    """Return score bonus that should be committed when a successful LIVE is stored."""
+    ci_live = _get_card(cards_db, cn_live)
+    if _has_revealed_all_score_bonus_ability(ci_live):
+        return int(_revealed_all_card_score_bonus(gs, cards_db))
+    return 0
+
 def _monster_girls_wait_bonus(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
     n = 0
     for pos in ('L', 'C', 'R'):
@@ -4659,9 +4684,6 @@ def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[s
         return int(_psycho_heart_success_bonus(gs, cards_db))
     if canon == _STARS_WE_CHASE_CN_CANON:
         return int(_stars_we_chase_waiting_bonus(gs, cards_db))
-    ci_live = _get_card(cards_db, cn_live)
-    if _has_revealed_all_score_bonus_ability(ci_live):
-        return int(_revealed_all_card_score_bonus(gs, cards_db))
     if canon == _MONSTER_GIRLS_CN_CANON:
         return int(_monster_girls_wait_bonus(gs, cards_db))
     if canon == _EMOTION_CN_CANON:
@@ -5590,11 +5612,18 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                 gs.green_room.remove(pick_cn)
         except Exception:
             pass
+        bonus = int(_success_store_score_bonus_for_live(pick_cn, gs, cards_db))
         try:
             gs.success_zone.append(pick_cn)
         except Exception:
             gs.success_zone = list(getattr(gs, 'success_zone', []) or []) + [pick_cn]
+        try:
+            gs.success_zone_score_bonus.append(int(bonus))
+        except Exception:
+            gs.success_zone_score_bonus = list(getattr(gs, 'success_zone_score_bonus', []) or []) + [int(bonus)]
         gs.log.append(f"[ACT] success_store: moved {pick_cn} -> success storage")
+        if int(bonus) != 0:
+            gs.log.append(f"[AUTO] {pick_cn}[ライブ成功時]: score +{bonus} (stored)")
         _clear_end_of_live_buffs(gs)
         gs.live_start_prompted = False
         return
