@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: hime_bp2batch3_merge_scorefix_live_start_normfix_batonfix_live_start_generalize_loveumyfriends_displayfix_20260414r
+# BUILD_TAG: hime_bp2batch3_merge_scorefix_live_start_normfix_batonfix_live_success_queue_20260414s
 from __future__ import annotations
 
 """llocg_ui.engine
@@ -1138,6 +1138,21 @@ def try_apply_effect_template(gs: 'GameState', rng: random.Random, cards_db: Dic
     rule, gd = m
     _apply_effect_by_rule(gs, rng, cards_db, rule, gd, ctx)
     return True
+
+def _ability_has_choose_header(ab: Dict[str, Any]) -> bool:
+    try:
+        clauses = ab.get('clauses', [])
+    except Exception:
+        clauses = []
+    if not isinstance(clauses, list):
+        return False
+    for cl in clauses:
+        if not isinstance(cl, dict):
+            continue
+        eff0 = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+        if ('以下から' in eff0) and ('選ぶ' in eff0):
+            return True
+    return False
 
 def _enqueue_choose_effects_from_ability(gs: 'GameState', cards_db: Dict[str, CardInfo], ab: Dict[str, Any], ctx: Dict[str, Any]) -> bool:
     """Handle 'mode' style abilities where the choice header and options are split across clauses.
@@ -4052,6 +4067,53 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         gs.vivid_world_blue_mode_this_live = True
         gs.log.append('[AUTO] VIVID WORLD live-start: cheer pink/red/yellow/green/purple/all -> blue until end of live')
         return
+    if kind == 'success_enqueue_choose_effects':
+        ab = dict((trig or {}).get('ability', {}) or {})
+        ctx = dict((trig or {}).get('ctx', {}) or {})
+        _enqueue_choose_effects_from_ability(gs, cards_db, ab, ctx)
+        return
+    if kind == 'success_enqueue_pay_effect':
+        prm = dict((trig or {}).get('prompt', {}) or {})
+        if prm:
+            gs.pending.append(prm)
+        return
+    if kind == 'success_apply_effect':
+        eff = str((trig or {}).get('effect', '') or '').strip()
+        src_cn = str((trig or {}).get('source_cn', '') or '').strip()
+        pos = str((trig or {}).get('pos', '') or '').upper()
+        ctx = dict((trig or {}).get('ctx', {}) or {})
+        if src_cn and not ctx.get('source_cn'):
+            ctx['source_cn'] = src_cn
+        if pos:
+            ctx.setdefault('pos', pos)
+        if eff:
+            try:
+                rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0) + 41)
+            except Exception:
+                rng2 = random.Random(41)
+            try_apply_effect_template(gs, rng2, cards_db, eff, ctx)
+            if pos:
+                gs.log.append(f"[AUTO] {pos}: {src_cn or '?'}[ライブ成功時] applied {eff}")
+            else:
+                gs.log.append(f"[AUTO] LIVE: {src_cn or '?'}[ライブ成功時] applied {eff}")
+        return
+    if kind == 'success_score_bonus_all':
+        cn_live = str((trig or {}).get('source_cn', '') or '')
+        bonus = int((trig or {}).get('bonus', 0) or 0)
+        if bonus:
+            _add_last_attempt_live_score_bonus(gs, cn_live, bonus)
+            gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時]: score +{bonus}")
+        return
+    if kind == 'success_auto_labella':
+        _put_wait_energy_from_deck(gs, 1, reason='La Bella Patria')
+        return
+    if kind == 'success_auto_poppin':
+        prm = dict((trig or {}).get('prompt', {}) or {})
+        if prm:
+            gs.pending.append(prm)
+        else:
+            gs.log.append('[INFO] PoppinUp: no pending queue')
+        return
     # Unknown trigger
     gs.log.append(f"[WARN] auto_trigger: unknown kind={kind}")
 
@@ -4185,19 +4247,15 @@ def _enqueue_success_auto_order(gs: GameState, triggers: List[Dict[str, Any]]) -
     return n
 
 def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], lives: List[str]) -> None:
-    try:
-        setattr(gs, '_poppin_pending_queue', [])
-    except Exception:
-        pass
     success_triggers: List[Dict[str, Any]] = []
-    """Run <ライブ成功時> triggers at LIVE_RESOLVE timing (before winner-based success storage).
+    """Collect and execute <ライブ成功時> triggers at LIVE_RESOLVE timing.
 
-    Some LIVE success effects conditionally depend on 成功ライブカード置き場 (e.g., Daydream Mermaid),
-    and the current successful LIVE may be placed there. Therefore we execute these triggers after the
-    optional 'store one successful LIVE card' prompt has been resolved.
+    All success triggers that occur at the same timing are first normalized into a
+    common queue. If multiple triggers exist, the user chooses the resolution order.
     """
-    # Stage-member success triggers (costless, regex-supported subset)
-    for pos in ('L','C','R'):
+
+    # Stage-member success triggers
+    for pos in ('L', 'C', 'R'):
         slot = gs.stage.get(pos)
         if not slot or not slot.active:
             continue
@@ -4206,8 +4264,15 @@ def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict
             continue
         for ab in _iter_triggered_abilities(ci_src, 'ライブ成功時'):
             ctx = {'pos': pos, 'source_cn': ci_src.cardnumber}
-            if isinstance(ab, dict) and _enqueue_choose_effects_from_ability(gs, cards_db, ab, ctx):
-                return
+            if isinstance(ab, dict) and _ability_has_choose_header(ab):
+                success_triggers.append({
+                    'kind': 'success_enqueue_choose_effects',
+                    'ability': dict(ab),
+                    'ctx': dict(ctx),
+                    'source_cn': ci_src.cardnumber,
+                    'label': f"{pos}: {ci_src.cardnumber}[ライブ成功時]",
+                })
+                continue
             clauses = ab.get('clauses', [])
             if not isinstance(clauses, list):
                 continue
@@ -4220,39 +4285,41 @@ def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict
                     continue
                 if _parse_energy_cost(cost) > 0 or _cost_requires_self_to_green(cost):
                     continue
-                # Optional hand-discard cost for retrieve_from_yell effects
                 m_opt = re.search(r'手札を(\d+)枚控え室に置いてもよい', cost)
                 if m_opt and _match_effect_template(eff) and 'retrieve_from_yell' == (_match_effect_template(eff) or [{}])[0].get('op', ''):
                     cost_n = int(m_opt.group(1))
-                    gs.pending.append({
-                        'kind': 'live_success_pay_effect',
-                        'pos': pos,
-                        'cn': ci_src.cardnumber,
-                        'cost_kind': 'discard_from_hand',
-                        'cost_n': cost_n,
-                        'effect': eff,
-                        'text': f"{pos}: {ci_src.cardnumber}[ライブ成功時] 手札を{cost_n}枚控え室に置いてもよい → {eff}",
-                        'options': ['pay', 'skip'],
+                    success_triggers.append({
+                        'kind': 'success_enqueue_pay_effect',
+                        'prompt': {
+                            'kind': 'live_success_pay_effect',
+                            'pos': pos,
+                            'cn': ci_src.cardnumber,
+                            'cost_kind': 'discard_from_hand',
+                            'cost_n': cost_n,
+                            'effect': eff,
+                            'text': f"{pos}: {ci_src.cardnumber}[ライブ成功時] 手札を{cost_n}枚控え室に置いてもよい → {eff}",
+                            'options': ['pay', 'skip'],
+                            'source_cn': ci_src.cardnumber,
+                            'ctx': {'pos': pos, 'source_cn': ci_src.cardnumber},
+                        },
                         'source_cn': ci_src.cardnumber,
-                        'ctx': {'pos': pos, 'source_cn': ci_src.cardnumber},
+                        'label': f"{pos}: {ci_src.cardnumber}[ライブ成功時]",
                     })
-                    gs.log.append(f"[PENDING] {pos}: {ci_src.cardnumber}[ライブ成功時] pay_or_skip -> {eff}")
-                    return
-                ctx = {'pos': pos, 'source_cn': ci_src.cardnumber}
-                if try_apply_effect_template(gs, rng, cards_db, eff, ctx):
-                    gs.log.append(f"[AUTO] {pos}: {ci_src.cardnumber}[ライブ成功時] applied {eff}")
-                    if gs.pending:
-                        return
-            if gs.pending:
-                return
-        if gs.pending:
-            return
+                    continue
+                success_triggers.append({
+                    'kind': 'success_apply_effect',
+                    'effect': eff,
+                    'source_cn': ci_src.cardnumber,
+                    'pos': pos,
+                    'ctx': {'pos': pos, 'source_cn': ci_src.cardnumber},
+                    'label': f"{pos}: {ci_src.cardnumber}[ライブ成功時]",
+                })
 
-    # Live-card success triggers (costless, regex-supported subset)
+    # Live-card success triggers
     for cn_live in list(lives or []):
         ci_live = _get_card(cards_db, cn_live)
 
-        # Special: La Bella Patria (PL!N-bp3-027)
+        # Special: La Bella Patria
         try:
             if _canon_cardno(str(cn_live or '')) == _LA_BELLA_PATRIA_CN_CANON:
                 if _la_bella_patria_can_trigger(gs, cards_db):
@@ -4266,7 +4333,7 @@ def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict
         except Exception:
             pass
 
-        # Special: Poppin' Up! (PL!N-bp1-026)
+        # Special: Poppin' Up!
         try:
             if _canon_cardno(str(cn_live or '')) == _POPPIN_UP_CN_CANON:
                 pool = list(getattr(gs, '_yell_revealed_this_live', []) or [])
@@ -4276,35 +4343,47 @@ def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict
                     if ci2 and ('虹ヶ咲' in str(getattr(ci2, 'group', '') or '')):
                         cands.append(cn2)
                 if cands:
-                    _pp_q = list(getattr(gs, '_poppin_pending_queue', []) or [])
-                    _pp_q.append({
-                        'kind': 'pick_poppinup_from_yell',
-                        'text': "【Poppin' Up!】ライブ成功時：相手より合計スコアが高い場合、エールで公開された自分の『虹ヶ咲』カードを1枚手札に加える（条件を満たさない場合はSkip可）",
-                        'options': list(cands),
-                        'source_cn': str(cn_live or ''),
-                    })
-                    setattr(gs, '_poppin_pending_queue', _pp_q)
                     success_triggers.append({
                         'kind': 'success_auto_poppin',
                         'source_cn': str(cn_live or ''),
                         'label': "PL!N-bp1-026 ライブ成功時",
+                        'prompt': {
+                            'kind': 'pick_poppinup_from_yell',
+                            'text': "【Poppin' Up!】ライブ成功時：相手より合計スコアが高い場合、エールで公開された自分の『虹ヶ咲』カードを1枚手札に加える（条件を満たさない場合はSkip可）",
+                            'options': list(cands),
+                            'source_cn': str(cn_live or ''),
+                        },
                     })
                     gs.log.append(f"[QUEUE] PoppinUp pick from yell ({len(cands)} candidates)")
                 else:
                     gs.log.append("[INFO] PoppinUp: no Nijigasaki cards among yell reveals")
         except Exception:
             pass
+
+        # Love U my friends style temporary score bonus
         if ci_live and _has_revealed_all_score_bonus_ability(ci_live):
             bonus = int(_revealed_all_card_score_bonus(gs, cards_db))
             if bonus != 0:
-                _add_last_attempt_live_score_bonus(gs, cn_live, bonus)
-                gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時]: score +{bonus}")
+                success_triggers.append({
+                    'kind': 'success_score_bonus_all',
+                    'source_cn': str(cn_live or ''),
+                    'bonus': int(bonus),
+                    'label': f"{cn_live}[ライブ成功時]",
+                })
+
         if not ci_live or not getattr(ci_live, 'abilities', None):
             continue
         for ab in _iter_triggered_abilities(ci_live, 'ライブ成功時'):
             ctx2 = {'source_cn': cn_live}
-            if isinstance(ab, dict) and _enqueue_choose_effects_from_ability(gs, cards_db, ab, ctx2):
-                return
+            if isinstance(ab, dict) and _ability_has_choose_header(ab):
+                success_triggers.append({
+                    'kind': 'success_enqueue_choose_effects',
+                    'ability': dict(ab),
+                    'ctx': dict(ctx2),
+                    'source_cn': cn_live,
+                    'label': f"{cn_live}[ライブ成功時]",
+                })
+                continue
             clauses = ab.get('clauses', [])
             if not isinstance(clauses, list):
                 continue
@@ -4317,52 +4396,20 @@ def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict
                     continue
                 if _parse_energy_cost(cost) > 0 or _cost_requires_self_to_green(cost):
                     continue
-                ctx2 = {'source_cn': cn_live}
-                if try_apply_effect_template(gs, rng, cards_db, eff, ctx2):
-                    gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時] applied {eff}")
-                    if gs.pending:
-                        return
-            if gs.pending:
-                return
-        if gs.pending:
-            return
+                success_triggers.append({
+                    'kind': 'success_apply_effect',
+                    'effect': eff,
+                    'source_cn': cn_live,
+                    'ctx': {'source_cn': cn_live},
+                    'label': f"{cn_live}[ライブ成功時]",
+                })
 
-    # Execute success triggers (Poppin / La Bella).
-    # If multiple triggers exist, show auto_order prompt for ordering.
     if success_triggers:
         if len(success_triggers) == 1:
-            trig = success_triggers[0]
-            k = str((trig or {}).get('kind', '') or '')
-            if k == 'success_auto_labella':
-                _put_wait_energy_from_deck(gs, 1, reason='La Bella Patria')
-            elif k == 'success_auto_poppin':
-                _pp_q = list(getattr(gs, '_poppin_pending_queue', []) or [])
-                if _pp_q:
-                    gs.pending.append(_pp_q[0])
-                    setattr(gs, '_poppin_pending_queue', _pp_q[1:])
+            _exec_auto_trigger(gs, cards_db, success_triggers[0])
         else:
             _enqueue_success_auto_order(gs, success_triggers)
 
-# ----------------------------
-# Step21: LIVE scoring helpers (UI)
-# ----------------------------
-_EUTOPIA_CN_CANON = 'PL!N-bp1-029'
-_RISE_UP_HIGH_CN_CANON = 'PL!N-bp4-029'
-
-_POPPIN_UP_CN_CANON = 'PL!N-bp1-026'
-_SOLITUDE_RAIN_CN_CANON = 'PL!N-bp1-027'
-_PSYCHO_HEART_CN_CANON = 'PL!N-bp3-026'
-_STARS_WE_CHASE_CN_CANON = 'PL!N-bp4-028'
-_LOVE_U_MY_FRIENDS_CN_CANON = 'PL!N-bp3-030'
-_MONSTER_GIRLS_CN_CANON = 'PL!N-bp3-031'
-_EMOTION_CN_CANON = 'PL!N-bp4-027'
-_LA_BELLA_PATRIA_CN_CANON = 'PL!N-bp3-027'
-_BUTTERFLY_CN_CANON = 'PL!N-bp1-028'
-_TSUNAGARU_CONNECT_CN_CANON = 'PL!N-bp3-028'
-_VIVID_WORLD_CN_CANON = 'PL!N-bp4-025'
-_NEO_SKY_CN_CANON = 'PL!N-bp4-031'
-_BOKULIVE_BP3_019_CN_CANON = 'PL!-bp3-019'
-_HEARTBEAT_BP4_021_CN_CANON = 'PL!-bp4-021'
 
 def _success_zone_score_sum(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
     total = 0
@@ -5409,17 +5456,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             gs.pending.append(p)
             return
         trig = queue.pop(pick_i)
-        if str(trig.get('kind','')) == 'success_auto_labella':
-            _put_wait_energy_from_deck(gs, 1, reason='La Bella Patria')
-        elif str(trig.get('kind','')) == 'success_auto_poppin':
-            _pp_q = list(getattr(gs, '_poppin_pending_queue', []) or [])
-            if _pp_q:
-                gs.pending.append(_pp_q[0])
-                setattr(gs, '_poppin_pending_queue', _pp_q[1:])
-            else:
-                gs.log.append('[INFO] PoppinUp: no pending queue')
-        else:
-            _exec_auto_trigger(gs, cards_db, trig)
+        _exec_auto_trigger(gs, cards_db, trig)
 
         # Defer remaining triggers until the current trigger (and any nested pending prompts) finishes.
         if queue:
