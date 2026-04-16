@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: generalize_live_success_conditionals_20260416b
+# BUILD_TAG: queue_live_success_even_single_20260416c
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -3964,11 +3964,10 @@ def _enqueue_success_auto_order(gs: GameState, triggers: List[Dict[str, Any]]) -
     n = len(triggers)
     if n <= 0:
         return 0
-    if n == 1:
-        return 1
+    text = 'ライブ成功時効果が発生：解決するカードを選択' if n == 1 else 'ライブ成功時効果が複数発生：解決するカードを選択（1つずつ）'
     gs.pending.append({
         'kind': 'auto_order',
-        'text': 'ライブ成功時効果が複数発生：解決するカードを選択（1つずつ）',
+        'text': text,
         'options': [_auto_trigger_option_text(t) for t in triggers if _auto_trigger_option_text(t)],
         'queue': list(triggers),
     })
@@ -4096,10 +4095,7 @@ def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict
                 if trig:
                     success_triggers.append(trig)
     if success_triggers:
-        if len(success_triggers) == 1:
-            _exec_auto_trigger(gs, cards_db, success_triggers[0])
-        else:
-            _enqueue_success_auto_order(gs, success_triggers)
+        _enqueue_success_auto_order(gs, success_triggers)
 # ----------------------------
 # Step21: LIVE scoring helpers (UI)
 # ----------------------------
