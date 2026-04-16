@@ -3767,22 +3767,22 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         gs.vivid_world_blue_mode_this_live = True
         gs.log.append('[AUTO] VIVID WORLD live-start: cheer pink/red/yellow/green/purple/all -> blue until end of live')
         return
-    if kind == 'success_enqueue_choose_effects':
+    if kind in ('enqueue_choose_effects_from_ability_on_live_success', 'success_enqueue_choose_effects'):
         ab = dict((trig or {}).get('ability', {}) or {})
         ctx = dict((trig or {}).get('ctx', {}) or {})
         _enqueue_choose_effects_from_ability(gs, cards_db, ab, ctx)
         return
-    if kind == 'success_enqueue_pay_effect':
+    if kind in ('enqueue_optional_discard_from_hand_for_effect_on_live_success', 'success_enqueue_pay_effect'):
         prm = dict((trig or {}).get('prompt', {}) or {})
         if prm:
             gs.pending.append(prm)
         return
-    if kind == 'success_enqueue_prompt':
+    if kind in ('enqueue_success_prompt', 'success_enqueue_prompt'):
         prm = dict((trig or {}).get('prompt', {}) or {})
         if prm:
             gs.pending.append(prm)
         return
-    if kind == 'success_apply_effect':
+    if kind in ('apply_effect_template_on_live_success', 'success_apply_effect'):
         eff = str((trig or {}).get('effect', '') or '').strip()
         src_cn = str((trig or {}).get('source_cn', '') or '').strip()
         pos = str((trig or {}).get('pos', '') or '').upper()
@@ -3802,7 +3802,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             else:
                 gs.log.append(f"[AUTO] LIVE: {src_cn or '?'}[ライブ成功時] applied {eff}")
         return
-    if kind == 'success_apply_effect_if_excess_color_and_stage_group':
+    if kind in ('apply_effect_template_if_excess_color_and_stage_group_on_live_success', 'success_apply_effect_if_excess_color_and_stage_group'):
         eff = str((trig or {}).get('effect', '') or '').strip()
         src_cn = str((trig or {}).get('source_cn', '') or '').strip()
         pos = str((trig or {}).get('pos', '') or '').upper()
@@ -3830,13 +3830,14 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             else:
                 gs.log.append(f"[AUTO] LIVE: {src_cn or '?'}[ライブ成功時] applied {eff}")
         return
-    if kind == 'success_score_bonus_all':
+    if kind in ('add_live_success_score_bonus', 'success_score_bonus_all'):
         cn_live = str((trig or {}).get('source_cn', '') or '')
         bonus = int((trig or {}).get('bonus', 0) or 0)
         if bonus:
             _add_last_attempt_live_score_bonus(gs, cn_live, bonus)
             gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時]: score +{bonus}")
         return
+    # legacy aliases kept for backward safety; current enqueue path no longer emits these
     if kind == 'success_auto_labella':
         _put_wait_energy_from_deck(gs, 1, reason='La Bella Patria')
         return
@@ -4048,7 +4049,7 @@ def _live_success_excess_color_and_stage_group_met(gs: GameState, cards_db: Dict
 def _build_live_success_trigger_from_effect(gs: GameState, cards_db: Dict[str, CardInfo], eff: str, source_cn: str, label: str, ctx: Dict[str, Any], pos: str = '') -> Optional[Dict[str, Any]]:
     eff_raw = str(eff or '').strip()
     eff_norm = eff_raw.replace('\n', '')
-    # Generalized from Poppin' Up! and similar cards.
+    # Generalized live-success conditional wrapper: opponent-score-higher -> confirm/skip, then existing template.
     # In this single-player simulator, conditions that compare with the opponent
     # cannot be auto-verified, so we normalize them into an explicit apply/skip prompt.
     m = re.match(r'^ライブの合計スコアが相手より高い場合、(?P<inner>.+)$', eff_norm)
@@ -4056,7 +4057,7 @@ def _build_live_success_trigger_from_effect(gs: GameState, cards_db: Dict[str, C
         inner = str(m.group('inner') or '').strip()
         if _match_effect_template(inner):
             return {
-                'kind': 'success_enqueue_prompt',
+                'kind': 'enqueue_success_prompt',
                 'prompt': {
                     'kind': 'confirm_effect',
                     'text': f'{label} 条件付き効果：ライブの合計スコアが相手より高い場合のみ解決します。条件を満たすなら Apply、満たさないなら Skip。',
@@ -4068,7 +4069,7 @@ def _build_live_success_trigger_from_effect(gs: GameState, cards_db: Dict[str, C
                 'source_cn': str(source_cn or ''),
                 'label': str(label or ''),
             }
-    # Generalized from La Bella Patria.
+    # Generalized live-success conditional wrapper: excess color + stage group -> resolve-time condition check.
     # Important: do not decide trigger occurrence here from the current board.
     # Simultaneous live-success effects may change the state before this resolves.
     m = re.match(r'^このターン、自分が余剰ハートに<\((?P<color>[^)]+)\)>を1つ以上持っており、かつ自分のステージに『(?P<group>[^』]+)』のメンバーがいる場合、(?P<inner>.+)$', eff_norm)
@@ -4078,7 +4079,7 @@ def _build_live_success_trigger_from_effect(gs: GameState, cards_db: Dict[str, C
         group_name = str(m.group('group') or '').strip()
         if _match_effect_template(inner):
             return {
-                'kind': 'success_apply_effect_if_excess_color_and_stage_group',
+                'kind': 'apply_effect_template_if_excess_color_and_stage_group_on_live_success',
                 'effect': inner,
                 'condition_color_jp': color_jp,
                 'condition_group_name': group_name,
@@ -4088,7 +4089,7 @@ def _build_live_success_trigger_from_effect(gs: GameState, cards_db: Dict[str, C
                 'label': str(label or ''),
             }
     return {
-        'kind': 'success_apply_effect',
+        'kind': 'apply_effect_template_on_live_success',
         'effect': eff_raw,
         'source_cn': str(source_cn or ''),
         'pos': str(pos or ''),
@@ -4127,7 +4128,7 @@ def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict
             ctx = {'pos': pos, 'source_cn': ci_src.cardnumber}
             if isinstance(ab, dict) and _ability_has_choose_header(ab):
                 success_triggers.append({
-                    'kind': 'success_enqueue_choose_effects',
+                    'kind': 'enqueue_choose_effects_from_ability_on_live_success',
                     'ability': dict(ab),
                     'ctx': dict(ctx),
                     'source_cn': ci_src.cardnumber,
@@ -4150,7 +4151,7 @@ def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict
                 if m_opt and _match_effect_template(eff) and 'retrieve_from_yell' == (_match_effect_template(eff) or [{}])[0].get('op', ''):
                     cost_n = int(m_opt.group(1))
                     success_triggers.append({
-                        'kind': 'success_enqueue_pay_effect',
+                        'kind': 'enqueue_optional_discard_from_hand_for_effect_on_live_success',
                         'prompt': {
                             'kind': 'live_success_pay_effect',
                             'pos': pos,
@@ -4188,7 +4189,7 @@ def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict
             bonus = int(_revealed_all_card_score_bonus(gs, cards_db))
             if bonus != 0:
                 success_triggers.append({
-                    'kind': 'success_score_bonus_all',
+                    'kind': 'add_live_success_score_bonus',
                     'source_cn': str(cn_live or ''),
                     'bonus': int(bonus),
                     'label': f"{cn_live}[ライブ成功時]",
@@ -4201,7 +4202,7 @@ def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict
             ctx2 = {'source_cn': cn_live}
             if isinstance(ab, dict) and _ability_has_choose_header(ab):
                 success_triggers.append({
-                    'kind': 'success_enqueue_choose_effects',
+                    'kind': 'enqueue_choose_effects_from_ability_on_live_success',
                     'ability': dict(ab),
                     'ctx': dict(ctx2),
                     'source_cn': cn_live,
