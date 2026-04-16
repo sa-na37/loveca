@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: queue_live_success_even_single_20260416c
+# BUILD_TAG: live_start_trigger_even_without_current_target_20260416e
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -2821,20 +2821,15 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                             r_free, gd_free = m_free
                             op_free = r_free.get('op', '')
                             if op_free == 'activate_stage_member':
-                                opts_act = [p2 for p2 in ('L','C','R') if gs.stage.get(p2) and not gs.stage[p2].active]
-                                if opts_act:
-                                    # may効果なので1人でも複数でも必ず画像選択ポップアップ一発（skip可）
-                                    wait_cns = [gs.stage[p2].cardnumber for p2 in opts_act if gs.stage.get(p2)]
-                                    pr = {
-                                        'kind': 'choose_stage_member_to_activate',
-                                        'text': f"{pos}: {ci.cardnumber} ライブ開始時 → ステージのメンバーを1人までアクティブにする（スキップ可）",
-                                        'options': opts_act + ['skip'],
-                                        'card_options': wait_cns,
-                                        'allow_skip': True,
-                                        'source_pos': pos,
-                                        'source_cn': ci.cardnumber,
-                                    }
-                                    _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
+                                # 対象が現在いなくても誘発自体は待機に積む。
+                                # 他の同時誘発の解決後にウェイト状態のメンバーが生じる可能性があるため、
+                                # ここでは候補有無で不発にしない。
+                                triggers.append({
+                                    'kind': 'live_start_choose_activate',
+                                    'source_cn': ci.cardnumber,
+                                    'label': f'{pos}: {ci.cardnumber} ライブ開始時',
+                                    'pos': pos.upper(),
+                                })
                             else:
                                 triggers.append({
                                     'kind': 'live_start_apply_effect',
@@ -3735,6 +3730,26 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
                 gs.log.append(f"[AUTO] {src_cn or '?'}[ライブ開始時]: applied {eff}")
             else:
                 gs.log.append(f"[AUTO] LIVE: {src_cn or '?'}[ライブ開始時] applied {eff}")
+        return
+    if kind == 'live_start_choose_activate':
+        src_cn = str((trig or {}).get('source_cn', '') or '').strip()
+        pos = str((trig or {}).get('pos', '') or '').upper()
+        wait_opts = [p2 for p2 in ('L','C','R') if gs.stage.get(p2) and not gs.stage[p2].active]
+        wait_cns = [gs.stage[p2].cardnumber for p2 in wait_opts if gs.stage.get(p2)]
+        text = f"{pos}: {src_cn} ライブ開始時 → ステージのメンバーを1人までアクティブにする（スキップ可）"
+        if not wait_opts:
+            text += ' / 現在対象なし'
+        gs.pending.append({
+            'kind': 'choose_stage_member_to_activate',
+            'text': text,
+            'options': wait_opts + ['skip'],
+            'card_options': wait_cns,
+            'allow_skip': True,
+            'source_pos': pos,
+            'source_cn': src_cn,
+            'candidates': wait_opts,
+        })
+        gs.log.append(f"[PENDING] {pos}: {src_cn} ライブ開始時 → activate member choice ({len(wait_opts)} candidates)")
         return
     if kind == 'live_start_vivid_world_auto':
         gs.vivid_world_blue_mode_this_live = True
