@@ -3685,7 +3685,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         })
         gs.log.append(f"[PENDING] {pos}: {src_cn} ライブ開始時 → activate member choice ({len(wait_opts)} candidates)")
         return
-    if kind == 'live_start_rise_up_high_deferred':
+    if kind in ('live_start_score_and_pick_group_member_temp_blade', 'live_start_rise_up_high_deferred'):
         group_name = str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')
         src_cn = str((trig or {}).get('source_cn', '') or _RISE_UP_HIGH_CN_CANON)
         if int(getattr(gs, 'turn', 0) or 0) != 1:
@@ -3717,24 +3717,24 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
                 _nm = ''
             opts.append(f"{_pp}: {_nm}" if _nm else str(_pp))
         gs.pending.append({
-            'kind': 'live_start_rise_up_high_pick',
+            'kind': 'pick_group_member_for_temp_blade',
             'cn': str((trig or {}).get('source_cn', '') or _RISE_UP_HIGH_CN_CANON),
             'text': f"【{str((trig or {}).get('source_cn', '') or _RISE_UP_HIGH_CN_CANON)}】ライブ開始時：『{str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')}』のメンバーを1人選ぶ（このライブ終了時まで、そのメンバーはブレード+1）",
             'options': list(opts),
             'pos_options': list(cands),
         })
-        gs.log.append(f"[PENDING] RiseUpHigh live-start target choice ({len(cands)} candidates)")
+        gs.log.append(f"[PENDING] group-member temp blade choice ({len(cands)} candidates)")
         return
-    if kind == 'live_start_butterfly_deferred':
+    if kind in ('live_start_optional_pay_energy_for_self_score_if_group', 'live_start_butterfly_deferred'):
         gs.pending.append({
-            'kind': 'live_start_butterfly_pay',
+            'kind': 'optional_pay_energy_for_self_score_if_group',
             'cn': str((trig or {}).get('source_cn', '') or _BUTTERFLY_CN_CANON),
             'condition_group_name': str((trig or {}).get('condition_group_name', '') or '虹ヶ咲'),
             'text': f"【{str((trig or {}).get('source_cn', '') or _BUTTERFLY_CN_CANON)}】ライブ開始時：エネルギー2枚を支払ってもよい。自分のステージに『{str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')}』のメンバーがいる場合、このカードのスコアを+1する。",
             'options': ['pay', 'skip'],
         })
         return
-    if kind == 'live_start_neo_sky_deferred':
+    if kind in ('live_start_if_stage_group_cost_then_draw_then_ordered_topdeck', 'live_start_neo_sky_deferred'):
         group_name = str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')
         min_cost = int((trig or {}).get('condition_min_cost', 20) or 20)
         src_cn = str((trig or {}).get('source_cn', '') or _NEO_SKY_CN_CANON)
@@ -3742,13 +3742,13 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             gs.log.append(f'[SKIP] {src_cn} live-start unresolved (condition not met at resolution)')
             return
         gs.pending.append({
-            'kind': 'neo_sky_execute',
+            'kind': 'execute_draw_then_choose_hand_cards_ordered_topdeck',
             'cn': src_cn,
             'text': f'【{src_cn}】ライブ開始時：条件達成 → 3枚引き、手札を3枚好きな順番でデッキの上に置く',
             'options': ['ok'],
         })
         return
-    if kind == 'live_start_tsunagaru_connect_deferred':
+    if kind in ('live_start_top_keep_one_then_reveal_top_score_if_live_by_group_count', 'live_start_tsunagaru_connect_deferred'):
         group_name = str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')
         src_cn = str((trig or {}).get('source_cn', '') or _TSUNAGARU_CONNECT_CN_CANON)
         _niji_n = _count_stage_group_members(gs, cards_db, group_name)
@@ -3756,7 +3756,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             gs.log.append(f'[SKIP] {src_cn} live-start unresolved (no {group_name} member at resolution)')
             return
         gs.pending.append({
-            'kind': 'tsunagaru_connect_execute',
+            'kind': 'execute_top_keep_one_then_reveal_top_score_if_live',
             'cn': src_cn,
             'text': f'【{src_cn}】ライブ開始時：ステージの『{group_name}』メンバー数ぶんデッキ上を見る → 1枚をデッキ上、残りを控え室。さらにデッキトップを公開し、ライブカードならスコア+1',
             'options': ['ok'],
@@ -3993,7 +3993,7 @@ def _build_live_start_trigger_from_effect(gs: GameState, cards_db: Dict[str, Car
     if m:
         group_name = str(m.group('group') or '').strip()
         return {
-            'kind': 'live_start_rise_up_high_deferred',
+            'kind': 'live_start_score_and_pick_group_member_temp_blade',
             'source_cn': str(source_cn or ''),
             'label': str(label or ''),
             'condition_group_name': group_name,
@@ -4003,7 +4003,7 @@ def _build_live_start_trigger_from_effect(gs: GameState, cards_db: Dict[str, Car
     if m:
         group_name = str(m.group('group') or '').strip()
         return {
-            'kind': 'live_start_butterfly_deferred',
+            'kind': 'live_start_optional_pay_energy_for_self_score_if_group',
             'source_cn': str(source_cn or ''),
             'label': str(label or ''),
             'condition_group_name': group_name,
@@ -4018,7 +4018,7 @@ def _build_live_start_trigger_from_effect(gs: GameState, cards_db: Dict[str, Car
         except Exception:
             min_cost = 0
         return {
-            'kind': 'live_start_neo_sky_deferred',
+            'kind': 'live_start_if_stage_group_cost_then_draw_then_ordered_topdeck',
             'source_cn': str(source_cn or ''),
             'label': str(label or ''),
             'condition_group_name': group_name,
@@ -4030,7 +4030,7 @@ def _build_live_start_trigger_from_effect(gs: GameState, cards_db: Dict[str, Car
     if m:
         group_name = str(m.group('group') or '').strip()
         return {
-            'kind': 'live_start_tsunagaru_connect_deferred',
+            'kind': 'live_start_top_keep_one_then_reveal_top_score_if_live_by_group_count',
             'source_cn': str(source_cn or ''),
             'label': str(label or ''),
             'condition_group_name': group_name,
@@ -6053,7 +6053,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         })
         gs.log.append(f"[PENDING] reorder_topk: picked {pick_cn}; remaining {len(pool)}")
         return
-    if kind == 'live_start_butterfly_pay':
+    if kind in ('optional_pay_energy_for_self_score_if_group', 'live_start_butterfly_pay'):
         src_cn = str(p.get('cn', '') or _BUTTERFLY_CN_CANON)
         group_name = str(p.get('condition_group_name', '') or '虹ヶ咲')
         low = str(choice_str or '').strip().lower()
@@ -6073,7 +6073,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         gs.butterfly_paid_this_live = int(getattr(gs, 'butterfly_paid_this_live', 0) or 0) + 1
         gs.log.append(f'[AUTO] {src_cn} live-start: paid E2 -> score +1')
         return
-    if kind == 'neo_sky_execute':
+    if kind in ('execute_draw_then_choose_hand_cards_ordered_topdeck', 'neo_sky_execute'):
         drew = draw(gs, 3, None)
         gs.log.append(f'[AUTO] NEO SKY, NEO MAP!: drew {drew}')
         opts = list(gs.hand)
@@ -6180,7 +6180,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             gs.pending.append(prompt)
         gs.log.append(f'[PENDING] topdeck_from_hand picked {pick_cn}; remaining {rem} ({label})')
         return
-    if kind == 'tsunagaru_connect_execute':
+    if kind in ('execute_top_keep_one_then_reveal_top_score_if_live', 'tsunagaru_connect_execute'):
         k = int(p.get('k', 0) or 0)
         _enqueue_choose_top_keep_one(gs, k, 'ツナガルコネクト')
         return
@@ -6435,7 +6435,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             gs.log.append(f"[SKIP] {pos}: live-start ability skipped")
         return
     # 1c) Live-start Rise Up High: choose 1 Nijigasaki member -> temp blade +1
-    if kind == 'live_start_rise_up_high_pick':
+    if kind in ('pick_group_member_for_temp_blade', 'live_start_rise_up_high_pick'):
         raw = str(choice_str or '').strip()
         pos = (raw[:1].upper() if raw else '')
         pos_opts = p.get('pos_options', None)
@@ -6450,7 +6450,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             return
         slot.temp_blade += 1
         slot.temp_until = 'end_of_live'
-        gs.log.append(f'[AUTO] RiseUpHigh: {pos} temp blade +1 (until end of live)')
+        gs.log.append(f'[AUTO] group-member temp blade: {pos} temp blade +1 (until end of live)')
         return
     # 1d) Live-success Poppin' Up!: pick 1 Nijigasaki card among yell reveals -> hand (Skip allowed)
     if kind == 'pick_poppinup_from_yell':
