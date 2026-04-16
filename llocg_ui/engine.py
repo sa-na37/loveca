@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_start_trigger_even_without_current_target_20260416e
+# BUILD_TAG: defer_success_condition_check_to_resolution_20260416f
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -3790,6 +3790,34 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             else:
                 gs.log.append(f"[AUTO] LIVE: {src_cn or '?'}[ライブ成功時] applied {eff}")
         return
+    if kind == 'success_apply_effect_if_excess_color_and_stage_group':
+        eff = str((trig or {}).get('effect', '') or '').strip()
+        src_cn = str((trig or {}).get('source_cn', '') or '').strip()
+        pos = str((trig or {}).get('pos', '') or '').upper()
+        ctx = dict((trig or {}).get('ctx', {}) or {})
+        color_jp = str((trig or {}).get('condition_color_jp', '') or '').strip()
+        group_name = str((trig or {}).get('condition_group_name', '') or '').strip()
+        if not _live_success_excess_color_and_stage_group_met(gs, cards_db, color_jp, group_name):
+            if pos:
+                gs.log.append(f"[SKIP] {pos}: {src_cn or '?'}[ライブ成功時] unresolved (condition not met at resolution: excess {color_jp} + stage {group_name})")
+            else:
+                gs.log.append(f"[SKIP] LIVE: {src_cn or '?'}[ライブ成功時] unresolved (condition not met at resolution: excess {color_jp} + stage {group_name})")
+            return
+        if src_cn and not ctx.get('source_cn'):
+            ctx['source_cn'] = src_cn
+        if pos:
+            ctx.setdefault('pos', pos)
+        if eff:
+            try:
+                rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0) + 41)
+            except Exception:
+                rng2 = random.Random(41)
+            try_apply_effect_template(gs, rng2, cards_db, eff, ctx)
+            if pos:
+                gs.log.append(f"[AUTO] {pos}: {src_cn or '?'}[ライブ成功時] applied {eff}")
+            else:
+                gs.log.append(f"[AUTO] LIVE: {src_cn or '?'}[ライブ成功時] applied {eff}")
+        return
     if kind == 'success_score_bonus_all':
         cn_live = str((trig or {}).get('source_cn', '') or '')
         bonus = int((trig or {}).get('bonus', 0) or 0)
@@ -3945,23 +3973,24 @@ def _build_live_success_trigger_from_effect(gs: GameState, cards_db: Dict[str, C
                 'label': str(label or ''),
             }
     # Generalized from La Bella Patria.
+    # Important: do not decide trigger occurrence here from the current board.
+    # Simultaneous live-success effects may change the state before this resolves.
     m = re.match(r'^このターン、自分が余剰ハートに<\((?P<color>[^)]+)\)>を1つ以上持っており、かつ自分のステージに『(?P<group>[^』]+)』のメンバーがいる場合、(?P<inner>.+)$', eff_norm)
     if m:
         inner = str(m.group('inner') or '').strip()
         color_jp = str(m.group('color') or '').strip()
         group_name = str(m.group('group') or '').strip()
         if _match_effect_template(inner):
-            if _live_success_excess_color_and_stage_group_met(gs, cards_db, color_jp, group_name):
-                return {
-                    'kind': 'success_apply_effect',
-                    'effect': inner,
-                    'source_cn': str(source_cn or ''),
-                    'pos': str(pos or ''),
-                    'ctx': dict(ctx or {}),
-                    'label': str(label or ''),
-                }
-            gs.log.append(f'[INFO] {source_cn or "?"}: live-success condition not met (excess {color_jp} + stage {group_name})')
-            return None
+            return {
+                'kind': 'success_apply_effect_if_excess_color_and_stage_group',
+                'effect': inner,
+                'condition_color_jp': color_jp,
+                'condition_group_name': group_name,
+                'source_cn': str(source_cn or ''),
+                'pos': str(pos or ''),
+                'ctx': dict(ctx or {}),
+                'label': str(label or ''),
+            }
     return {
         'kind': 'success_apply_effect',
         'effect': eff_raw,
