@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: defer_success_condition_check_to_resolution_20260416f
+# BUILD_TAG: generalize_live_start_wrappers_20260416h
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -2967,78 +2967,18 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                         continue
                     if not cost.strip() or cost.strip() == eff.strip():
                         src_live = getattr(ci_live, 'cardnumber', '') or str(cn_live or '')
-                        triggers.append({
-                            'kind': 'live_start_apply_effect',
-                            'source_cn': src_live,
-                            'label': f'{src_live} ライブ開始時',
-                            'effect': eff,
-                        })
-    except Exception:
-        pass
-    # LIVE-card live-start: Rise Up High! (PL!N-bp4-029)
-    # Queue the trigger even if there is currently no valid target.
-    # Another simultaneous live-start effect may change the stage before this resolves.
-    try:
-        for cn_live in list(getattr(gs, 'set_zone', []) or []):
-            if _canon_cardno(str(cn_live or '')) != _RISE_UP_HIGH_CN_CANON:
-                continue
-            triggers.append({
-                'kind': 'live_start_rise_up_high_deferred',
-                'source_cn': _RISE_UP_HIGH_CN_CANON,
-                'label': 'PL!N-bp4-029 ライブ開始時',
-            })
-            break
-    except Exception:
-        pass
-    try:
-        _bf_n = 0
-        for _cn0 in list(getattr(gs, 'set_zone', []) or []):
-            try:
-                _canon0 = _canon_cardno(_cn0)
-            except Exception:
-                _canon0 = str(_cn0 or '')
-            if _canon0 == _BUTTERFLY_CN_CANON:
-                _bf_n += 1
-        for _i in range(int(_bf_n or 0)):
-            triggers.append({
-                'kind': 'live_start_butterfly_deferred',
-                'source_cn': _BUTTERFLY_CN_CANON,
-                'label': 'PL!N-bp1-028 ライブ開始時',
-            })
-    except Exception:
-        pass
-    try:
-        _neo_n = 0
-        for _cn0 in list(getattr(gs, 'set_zone', []) or []):
-            try:
-                _canon0 = _canon_cardno(_cn0)
-            except Exception:
-                _canon0 = str(_cn0 or '')
-            if _canon0 == _NEO_SKY_CN_CANON:
-                _neo_n += 1
-        for _i in range(int(_neo_n or 0)):
-            triggers.append({
-                'kind': 'live_start_neo_sky_deferred',
-                'source_cn': _NEO_SKY_CN_CANON,
-                'label': 'PL!N-bp4-031 ライブ開始時',
-            })
-    except Exception:
-        pass
-    try:
-        _tc_n = 0
-        for _cn0 in list(getattr(gs, 'set_zone', []) or []):
-            try:
-                _canon0 = _canon_cardno(_cn0)
-            except Exception:
-                _canon0 = str(_cn0 or '')
-            if _canon0 == _TSUNAGARU_CONNECT_CN_CANON:
-                _tc_n += 1
-        for _i in range(int(_tc_n or 0)):
-            triggers.append({
-                'kind': 'live_start_tsunagaru_connect_deferred',
-                'source_cn': _TSUNAGARU_CONNECT_CN_CANON,
-                'label': 'PL!N-bp3-028 ライブ開始時',
-            })
+                        trig = _build_live_start_trigger_from_effect(
+                            gs, cards_db, eff, src_live, f'{src_live} ライブ開始時', {'source_cn': src_live}
+                        )
+                        if trig:
+                            triggers.append(trig)
+                        else:
+                            triggers.append({
+                                'kind': 'live_start_apply_effect',
+                                'source_cn': src_live,
+                                'label': f'{src_live} ライブ開始時',
+                                'effect': eff,
+                            })
     except Exception:
         pass
     # LIVE cards in set_zone: enqueue numeric live-start effects that should resolve in order
@@ -3715,6 +3655,8 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         gs.log.append(f"[PENDING] {pos}: {src_cn} ライブ開始時 → activate member choice ({len(wait_opts)} candidates)")
         return
     if kind == 'live_start_rise_up_high_deferred':
+        group_name = str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')
+        src_cn = str((trig or {}).get('source_cn', '') or _RISE_UP_HIGH_CN_CANON)
         cands = []
         for ppos in ('L','C','R'):
             slot2 = (gs.stage or {}).get(ppos)
@@ -3723,10 +3665,10 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             ci2 = _get_card(cards_db, getattr(slot2, 'cardnumber', '') or '')
             if not ci2:
                 continue
-            if '虹ヶ咲' in str(getattr(ci2, 'group', '') or ''):
+            if group_name in str(getattr(ci2, 'group', '') or ''):
                 cands.append(ppos)
         if not cands:
-            gs.log.append('[SKIP] Rise Up High live-start unresolved (no Nijigasaki member at resolution)')
+            gs.log.append(f'[SKIP] {src_cn} live-start unresolved (no {group_name} member at resolution)')
             return
         opts = []
         for _pp in list(cands):
@@ -3740,8 +3682,8 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             opts.append(f"{_pp}: {_nm}" if _nm else str(_pp))
         gs.pending.append({
             'kind': 'live_start_rise_up_high_pick',
-            'cn': _RISE_UP_HIGH_CN_CANON,
-            'text': '【Rise Up High!】ライブ開始時：『虹ヶ咲』のメンバーを1人選ぶ（このライブ終了時まで、そのメンバーはブレード+1）',
+            'cn': str((trig or {}).get('source_cn', '') or _RISE_UP_HIGH_CN_CANON),
+            'text': f"【{str((trig or {}).get('source_cn', '') or _RISE_UP_HIGH_CN_CANON)}】ライブ開始時：『{str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')}』のメンバーを1人選ぶ（このライブ終了時まで、そのメンバーはブレード+1）",
             'options': list(opts),
             'pos_options': list(cands),
         })
@@ -3750,31 +3692,37 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
     if kind == 'live_start_butterfly_deferred':
         gs.pending.append({
             'kind': 'live_start_butterfly_pay',
-            'cn': _BUTTERFLY_CN_CANON,
-            'text': '【Butterfly】ライブ開始時：エネルギー2枚を支払ってもよい。自分のステージに『虹ヶ咲』のメンバーがいる場合、このカードのスコアを+1する。',
+            'cn': str((trig or {}).get('source_cn', '') or _BUTTERFLY_CN_CANON),
+            'condition_group_name': str((trig or {}).get('condition_group_name', '') or '虹ヶ咲'),
+            'text': f"【{str((trig or {}).get('source_cn', '') or _BUTTERFLY_CN_CANON)}】ライブ開始時：エネルギー2枚を支払ってもよい。自分のステージに『{str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')}』のメンバーがいる場合、このカードのスコアを+1する。",
             'options': ['pay', 'skip'],
         })
         return
     if kind == 'live_start_neo_sky_deferred':
-        if not _neo_sky_stage_ready(gs, cards_db):
-            gs.log.append('[SKIP] NEO SKY, NEO MAP! live-start unresolved (condition not met at resolution)')
+        group_name = str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')
+        min_cost = int((trig or {}).get('condition_min_cost', 20) or 20)
+        src_cn = str((trig or {}).get('source_cn', '') or _NEO_SKY_CN_CANON)
+        if not _stage_all_group_cost_ready(gs, cards_db, group_name, min_cost):
+            gs.log.append(f'[SKIP] {src_cn} live-start unresolved (condition not met at resolution)')
             return
         gs.pending.append({
             'kind': 'neo_sky_execute',
-            'cn': _NEO_SKY_CN_CANON,
-            'text': '【NEO SKY, NEO MAP!】ライブ開始時：条件達成 → 3枚引き、手札を3枚好きな順番でデッキの上に置く',
+            'cn': src_cn,
+            'text': f'【{src_cn}】ライブ開始時：条件達成 → 3枚引き、手札を3枚好きな順番でデッキの上に置く',
             'options': ['ok'],
         })
         return
     if kind == 'live_start_tsunagaru_connect_deferred':
-        _niji_n = _count_nijigasaki_members_on_stage(gs, cards_db)
+        group_name = str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')
+        src_cn = str((trig or {}).get('source_cn', '') or _TSUNAGARU_CONNECT_CN_CANON)
+        _niji_n = _count_stage_group_members(gs, cards_db, group_name)
         if _niji_n <= 0:
-            gs.log.append('[SKIP] ツナガルコネクト live-start unresolved (no Nijigasaki member at resolution)')
+            gs.log.append(f'[SKIP] {src_cn} live-start unresolved (no {group_name} member at resolution)')
             return
         gs.pending.append({
             'kind': 'tsunagaru_connect_execute',
-            'cn': _TSUNAGARU_CONNECT_CN_CANON,
-            'text': '【ツナガルコネクト】ライブ開始時：ステージの『虹ヶ咲』メンバー数ぶんデッキ上を見る → 1枚をデッキ上、残りを控え室。さらにデッキトップを公開し、ライブカードならスコア+1',
+            'cn': src_cn,
+            'text': f'【{src_cn}】ライブ開始時：ステージの『{group_name}』メンバー数ぶんデッキ上を見る → 1枚をデッキ上、残りを控え室。さらにデッキトップを公開し、ライブカードならスコア+1',
             'options': ['ok'],
             'k': int(_niji_n),
         })
@@ -3969,6 +3917,90 @@ def _last_attempt_excess_color_count(gs: GameState, color_key: str) -> int:
     except Exception:
         pool = {}
     return int(pool.get(str(color_key or ''), 0) or 0)
+
+def _count_stage_group_members(gs: GameState, cards_db: Dict[str, CardInfo], group_name: str) -> int:
+    n = 0
+    for pos in ('L', 'C', 'R'):
+        slot = (gs.stage or {}).get(pos)
+        if not slot:
+            continue
+        ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+        if not ci:
+            continue
+        if str(group_name or '') and str(group_name or '') in str(getattr(ci, 'group', '') or ''):
+            n += 1
+    return n
+
+def _stage_all_group_cost_ready(gs: GameState, cards_db: Dict[str, CardInfo], group_name: str, min_cost: int) -> bool:
+    total = 0
+    for pos in ('L', 'C', 'R'):
+        slot = (gs.stage or {}).get(pos)
+        if not slot:
+            return False
+        ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+        if not ci:
+            return False
+        if str(group_name or '') not in str(getattr(ci, 'group', '') or ''):
+            return False
+        try:
+            total += int(getattr(ci, 'cost', 0) or 0)
+        except Exception:
+            pass
+    return int(total) >= int(min_cost or 0)
+
+
+def _build_live_start_trigger_from_effect(gs: GameState, cards_db: Dict[str, CardInfo], eff: str, source_cn: str, label: str, ctx: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    eff_raw = str(eff or '').strip()
+    eff_norm = eff_raw.replace('\n', '')
+    # Generalized from Rise Up High!
+    m = re.match(r'^このゲームの1ターン目のライブフェイズの場合、このカードのスコアを\+1し、ライブ終了時まで、自分のステージにいる『(?P<group>[^』]+)』のメンバー1人は、<\(ブレード\)>を得る。$', eff_norm)
+    if m:
+        group_name = str(m.group('group') or '').strip()
+        return {
+            'kind': 'live_start_rise_up_high_deferred',
+            'source_cn': str(source_cn or ''),
+            'label': str(label or ''),
+            'condition_group_name': group_name,
+        }
+    # Generalized from Butterfly.
+    m = re.match(r'^<\(E\)><\(E\)>支払ってもよい：自分のステージに『(?P<group>[^』]+)』のメンバーがいる場合、このカードのスコアを\+1する。$', eff_norm)
+    if m:
+        group_name = str(m.group('group') or '').strip()
+        return {
+            'kind': 'live_start_butterfly_deferred',
+            'source_cn': str(source_cn or ''),
+            'label': str(label or ''),
+            'condition_group_name': group_name,
+        }
+    # Generalized from NEO SKY, NEO MAP!
+    m = re.match(r'^自分のステージのエリアすべてに『(?P<group>[^』]+)』のメンバーがいて、かつそれらのコスト合計が(?P<cost>\d+)以上の場合、(?P<inner>.+)$', eff_norm)
+    if m:
+        group_name = str(m.group('group') or '').strip()
+        inner = str(m.group('inner') or '').strip()
+        try:
+            min_cost = int(m.group('cost') or 0)
+        except Exception:
+            min_cost = 0
+        return {
+            'kind': 'live_start_neo_sky_deferred',
+            'source_cn': str(source_cn or ''),
+            'label': str(label or ''),
+            'condition_group_name': group_name,
+            'condition_min_cost': min_cost,
+            'effect': inner,
+        }
+    # Generalized from ツナガルコネクト.
+    m = re.match(r'^自分のステージにいる『(?P<group>[^』]+)』のメンバー1人につき、自分のデッキの上からカードを1枚見る。その中から1枚をデッキの上に置き、残りを控え室に置く。自分のデッキの一番上のカードを1枚公開する。これによりライブカードを公開したとき、このカードのスコアを\+1する。$', eff_norm)
+    if m:
+        group_name = str(m.group('group') or '').strip()
+        return {
+            'kind': 'live_start_tsunagaru_connect_deferred',
+            'source_cn': str(source_cn or ''),
+            'label': str(label or ''),
+            'condition_group_name': group_name,
+        }
+    return None
+
 def _live_success_excess_color_and_stage_group_met(gs: GameState, cards_db: Dict[str, CardInfo], color_jp: str, group_name: str) -> bool:
     # IMPORTANT: only real colored excess counts here. ALL does not satisfy this condition.
     color_key = _HEART_ICON_COLOR_MAP.get(str(color_jp or '').strip())
@@ -5976,22 +6008,24 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         gs.log.append(f"[PENDING] reorder_topk: picked {pick_cn}; remaining {len(pool)}")
         return
     if kind == 'live_start_butterfly_pay':
+        src_cn = str(p.get('cn', '') or _BUTTERFLY_CN_CANON)
+        group_name = str(p.get('condition_group_name', '') or '虹ヶ咲')
         low = str(choice_str or '').strip().lower()
         if low in ('skip', '__skip__', 'no', 'n', '0', 'false'):
-            gs.log.append('[SKIP] Butterfly live-start skipped')
+            gs.log.append(f'[SKIP] {src_cn} live-start skipped')
             return
         if low not in ('pay', 'yes', 'y', '1', 'true'):
-            gs.log.append(f'[ERR] Butterfly live-start: invalid choice {choice_str}')
+            gs.log.append(f'[ERR] {src_cn} live-start: invalid choice {choice_str}')
             return
         if int(getattr(gs, 'energy_active', 0) or 0) < 2:
-            gs.log.append('[SKIP] Butterfly live-start unresolved (not enough active energy at resolution)')
+            gs.log.append(f'[SKIP] {src_cn} live-start unresolved (not enough active energy at resolution)')
             return
-        if not _has_nijigasaki_member_on_stage(gs, cards_db):
-            gs.log.append('[SKIP] Butterfly live-start unresolved (no Nijigasaki member at resolution)')
+        if not _has_group_member_on_stage(gs, cards_db, group_name):
+            gs.log.append(f'[SKIP] {src_cn} live-start unresolved (no {group_name} member at resolution)')
             return
         gs.energy_active = max(0, int(getattr(gs, 'energy_active', 0) or 0) - 2)
         gs.butterfly_paid_this_live = int(getattr(gs, 'butterfly_paid_this_live', 0) or 0) + 1
-        gs.log.append('[AUTO] Butterfly live-start: paid E2 -> score +1')
+        gs.log.append(f'[AUTO] {src_cn} live-start: paid E2 -> score +1')
         return
     if kind == 'neo_sky_execute':
         drew = draw(gs, 3, None)
