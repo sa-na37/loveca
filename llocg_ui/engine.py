@@ -1272,6 +1272,7 @@ class GameState:
     success_zone_heart_color: str = ""  # e.g., 'pink'/'yellow'/'purple'
     deck_refreshed_this_turn: bool = False
     butterfly_paid_this_live: int = 0
+    rise_up_high_bonus_this_live: int = 0
     tsunagaru_connect_bonus_this_live: int = 0
     vivid_world_blue_mode_this_live: bool = False
     vivid_world_bonus_this_live: int = 0
@@ -1363,6 +1364,7 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
         "success_zone_heart_color": str(getattr(gs, 'success_zone_heart_color', '') or ''),
         "deck_refreshed_this_turn": bool(getattr(gs, 'deck_refreshed_this_turn', False)),
         "butterfly_paid_this_live": int(getattr(gs, "butterfly_paid_this_live", 0) or 0),
+        "rise_up_high_bonus_this_live": int(getattr(gs, "rise_up_high_bonus_this_live", 0) or 0),
         "tsunagaru_connect_bonus_this_live": int(getattr(gs, "tsunagaru_connect_bonus_this_live", 0) or 0),
         "vivid_world_blue_mode_this_live": bool(getattr(gs, "vivid_world_blue_mode_this_live", False)),
         "vivid_world_bonus_this_live": int(getattr(gs, "vivid_world_bonus_this_live", 0) or 0),
@@ -1416,6 +1418,7 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
     gs.success_zone_heart_color = str(snap.get('success_zone_heart_color', getattr(gs, 'success_zone_heart_color', '') or '') or '')
     gs.deck_refreshed_this_turn = bool(snap.get('deck_refreshed_this_turn', getattr(gs, 'deck_refreshed_this_turn', False)))
     gs.butterfly_paid_this_live = int(snap.get('butterfly_paid_this_live', getattr(gs, 'butterfly_paid_this_live', 0) or 0) or 0)
+    gs.rise_up_high_bonus_this_live = int(snap.get('rise_up_high_bonus_this_live', getattr(gs, 'rise_up_high_bonus_this_live', 0) or 0) or 0)
     gs.tsunagaru_connect_bonus_this_live = int(snap.get('tsunagaru_connect_bonus_this_live', getattr(gs, 'tsunagaru_connect_bonus_this_live', 0) or 0) or 0)
     gs.vivid_world_blue_mode_this_live = bool(snap.get('vivid_world_blue_mode_this_live', getattr(gs, 'vivid_world_blue_mode_this_live', False)))
     gs.vivid_world_bonus_this_live = int(snap.get('vivid_world_bonus_this_live', getattr(gs, 'vivid_world_bonus_this_live', 0) or 0) or 0)
@@ -2899,10 +2902,6 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
     # existing hard-coded LIVE handlers below.
     try:
         _generic_live_skip = {
-            _RISE_UP_HIGH_CN_CANON,
-            _BUTTERFLY_CN_CANON,
-            _NEO_SKY_CN_CANON,
-            _TSUNAGARU_CONNECT_CN_CANON,
             _VIVID_WORLD_CN_CANON,
             _BOKULIVE_BP3_019_CN_CANON,
             'PL!HS-bp2-022',
@@ -2937,8 +2936,20 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                     raw = str(cl.get('raw', '') or '')
                     cost = str(cl.get('cost_template', '') or raw)
                     eff = str(cl.get('effect_template', '') or raw)
-                    # Only generic no-cost LIVE-card hooks here.  Paid/special cards
-                    # stay on the hard-coded paths below.
+                    build_text = eff
+                    try:
+                        if str(cost or '').strip() and str(cost or '').strip() != str(eff or '').strip():
+                            build_text = f"{str(cost).strip()}：{str(eff).strip()}"
+                    except Exception:
+                        build_text = eff
+                    src_live = getattr(ci_live, 'cardnumber', '') or str(cn_live or '')
+                    trig = _build_live_start_trigger_from_effect(
+                        gs, cards_db, build_text, src_live, f'{src_live} ライブ開始時', {'source_cn': src_live}
+                    )
+                    if trig:
+                        triggers.append(trig)
+                        continue
+                    # Only generic no-cost LIVE-card hooks here.
                     if ('<(E)>' in cost or '[E]' in cost or 'Ｅ' in cost or 'E' in cost):
                         continue
                     if _cost_requires_self_wait(cost) or _cost_requires_self_to_green(cost):
@@ -2966,19 +2977,12 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                             _append_prompt(pr, pr['text'])
                         continue
                     if not cost.strip() or cost.strip() == eff.strip():
-                        src_live = getattr(ci_live, 'cardnumber', '') or str(cn_live or '')
-                        trig = _build_live_start_trigger_from_effect(
-                            gs, cards_db, eff, src_live, f'{src_live} ライブ開始時', {'source_cn': src_live}
-                        )
-                        if trig:
-                            triggers.append(trig)
-                        else:
-                            triggers.append({
-                                'kind': 'live_start_apply_effect',
-                                'source_cn': src_live,
-                                'label': f'{src_live} ライブ開始時',
-                                'effect': eff,
-                            })
+                        triggers.append({
+                            'kind': 'live_start_apply_effect',
+                            'source_cn': src_live,
+                            'label': f'{src_live} ライブ開始時',
+                            'effect': eff,
+                        })
     except Exception:
         pass
     # LIVE cards in set_zone: enqueue numeric live-start effects that should resolve in order
@@ -3076,6 +3080,10 @@ def _clear_end_of_live_buffs(gs: GameState) -> None:
         pass
     try:
         gs.butterfly_paid_this_live = 0
+    except Exception:
+        pass
+    try:
+        gs.rise_up_high_bonus_this_live = 0
     except Exception:
         pass
     try:
@@ -3657,6 +3665,11 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
     if kind == 'live_start_rise_up_high_deferred':
         group_name = str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')
         src_cn = str((trig or {}).get('source_cn', '') or _RISE_UP_HIGH_CN_CANON)
+        if int(getattr(gs, 'turn', 0) or 0) != 1:
+            gs.log.append(f'[SKIP] {src_cn} live-start unresolved (not 1st turn at resolution)')
+            return
+        gs.rise_up_high_bonus_this_live = int(getattr(gs, 'rise_up_high_bonus_this_live', 0) or 0) + 1
+        gs.log.append(f'[AUTO] {src_cn} live-start: score +1')
         cands = []
         for ppos in ('L','C','R'):
             slot2 = (gs.stage or {}).get(ppos)
@@ -3668,7 +3681,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             if group_name in str(getattr(ci2, 'group', '') or ''):
                 cands.append(ppos)
         if not cands:
-            gs.log.append(f'[SKIP] {src_cn} live-start unresolved (no {group_name} member at resolution)')
+            gs.log.append(f'[SKIP] {src_cn} live-start blade target unresolved (no {group_name} member at resolution)')
             return
         opts = []
         for _pp in list(cands):
@@ -4287,15 +4300,12 @@ def _mark_live_start_set_idx_resolved(gs: GameState, set_idx: Optional[int]) -> 
         pass
 def _live_score_delta_for_attempt(cn_live, lives_count, gs_turn):
     # Eutopia: if 3+ LIVE cards are set in this attempt, score +2 for Eutopia
-    # Rise Up High!: if turn==1 live phase, score +1 for this card
     try:
         canon = _canon_cardno(cn_live)
     except Exception:
         canon = str(cn_live or '')
     if canon == _EUTOPIA_CN_CANON and int(lives_count) >= 3:
         return 2
-    if canon == _RISE_UP_HIGH_CN_CANON and int(gs_turn or 0) == 1:
-        return 1
     return 0
 def _heartbeat_required_any_reduction(cn_live, gs: GameState, cards_db: Dict[str, CardInfo], set_idx: Optional[int] = None) -> int:
     try:
@@ -4334,6 +4344,7 @@ def _compute_attempt_score_breakdown(lives, cards_db, gs_turn, gs=None, live_set
     total = 0
     rows = []
     _butterfly_paid_remaining = int(getattr(gs, 'butterfly_paid_this_live', 0) or 0) if gs is not None else 0
+    _rise_up_high_remaining = int(getattr(gs, 'rise_up_high_bonus_this_live', 0) or 0) if gs is not None else 0
     live_set_indices = list(live_set_indices or [])
     for _i, cn in enumerate((lives or [])):
         set_idx = live_set_indices[_i] if _i < len(live_set_indices) else None
@@ -4349,6 +4360,9 @@ def _compute_attempt_score_breakdown(lives, cards_db, gs_turn, gs=None, live_set
         if canon == _BUTTERFLY_CN_CANON and _butterfly_paid_remaining > 0:
             delta += 1
             _butterfly_paid_remaining -= 1
+        if canon == _RISE_UP_HIGH_CN_CANON and _rise_up_high_remaining > 0:
+            delta += 1
+            _rise_up_high_remaining -= 1
         eff = base + delta
         total += eff
         rows.append({'cn': cn, 'base': base, 'delta': delta, 'score': eff})
@@ -4604,6 +4618,7 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
         gs.log.append("[ATTEMPT] blocked: you cannot live until end of live")
         gs.last_attempt_excess_hearts = {}
         gs.butterfly_paid_this_live = 0
+        gs.rise_up_high_bonus_this_live = 0
         gs.tsunagaru_connect_bonus_this_live = 0
         gs.vivid_world_blue_mode_this_live = False
         gs.vivid_world_bonus_this_live = 0
@@ -4620,6 +4635,7 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
     if not gs.set_zone:
         gs.last_attempt_excess_hearts = {}
         gs.butterfly_paid_this_live = 0
+        gs.rise_up_high_bonus_this_live = 0
         gs.tsunagaru_connect_bonus_this_live = 0
         gs.vivid_world_blue_mode_this_live = False
         gs.vivid_world_bonus_this_live = 0
