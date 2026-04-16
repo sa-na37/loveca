@@ -3248,6 +3248,34 @@ inner.appendChild(card);
       return;
     }
 
+    // 公開カード確認（画像表示 + OK）
+    if(kind === 'show_revealed_cards_ack'){
+      const displayCards = Array.isArray(p.display_cards) ? p.display_cards : [];
+      const helperText = String((p && (p.text || p.prompt || p.message))
+                         ? (p.text || p.prompt || p.message)
+                         : '公開されたカードを確認');
+      openCardListPopup(String((p && p.label) ? p.label : '公開カード確認'), displayCards, {
+        closable: false,
+        helperText
+      });
+      popup = {type:'pending', closable:false};
+      const btnOk = document.createElement('button');
+      btnOk.className = 'miniBtn';
+      btnOk.textContent = '確認';
+      let _srcSubmitting = false;
+      btnOk.addEventListener('click', async ev => {
+        ev.stopPropagation();
+        if(_srcSubmitting) return;
+        _srcSubmitting = true;
+        st = await apiCmd('resolve_pending', {idx:0, choice:'ok'});
+        selHand = [];
+        updateTop();
+        render();
+      });
+      elModalActions.appendChild(btnOk);
+      return;
+    }
+
     // デッキ上K枚公開 → フィルタ不一致（全カード控え室へ）確認ポップアップ
     if(kind === 'view_topk_no_match'){
       const displayCards = Array.isArray(p.display_cards) ? p.display_cards : [];
@@ -3495,6 +3523,118 @@ inner.appendChild(card);
       });
       elModalActions.appendChild(bSkip);
 
+      elMask.style.display = 'block';
+      return;
+    }
+
+    // Multi-select: choose_hand_cards_ordered_topdeck（手札からN枚選択→クリック順でデッキ上へ）
+    if(kind === 'choose_hand_cards_ordered_topdeck'){
+      const maxPicks = (p && p.max_picks != null) ? parseInt(p.max_picks) : ((p && p.maxPicks != null) ? parseInt(p.maxPicks) : 0);
+      const minPicks = (p && p.min_picks != null) ? parseInt(p.min_picks) : 0;
+      const opts = (p && Array.isArray(p.options)) ? p.options : [];
+      const title = String((p && (p.text || p.prompt || p.message)) ? (p.text || p.prompt || p.message) : `手札から${maxPicks}枚選択`);
+
+      popup = {type:'pending', closable:false};
+      elModalTitle.textContent = '選択';
+      setRichText(elModalText, title);
+      elModalCards.innerHTML = '';
+      elModalActions.innerHTML = '';
+
+      const selected = [];
+      const dimsP = standardSize('portrait');
+      const row = document.createElement('div');
+      row.className = 'choiceRow';
+
+      const counter = document.createElement('div');
+      counter.style.cssText = 'width:100%;text-align:center;color:#fff;font-size:13px;margin-bottom:4px;padding:2px 0;';
+
+      const doneBtn = document.createElement('button');
+      doneBtn.className = 'miniBtn';
+
+      const btnMap = {};
+      const dupCount = {};
+      opts.forEach(o => { const k=String(o).trim(); dupCount[k]=(dupCount[k]||0)+1; });
+      const dupSeen = {};
+
+      function updateCounter(){
+        const n = selected.length;
+        counter.textContent = `選択: ${n} / ${maxPicks} （クリック順 = デッキ上に置く順）`;
+        doneBtn.textContent = `確定 (${n}/${maxPicks})`;
+        doneBtn.disabled = (n < minPicks || n > maxPicks);
+        doneBtn.style.opacity = doneBtn.disabled ? '0.5' : '1';
+
+        opts.forEach((cn, i) => {
+          const b = btnMap[i];
+          if(!b) return;
+          const k = String(cn).trim();
+          const orderIdx = selected.indexOf(i);
+          if(orderIdx >= 0){
+            b.style.outline = `3px solid #ffe066`;
+            b.style.outlineOffset = '-3px';
+            const cap = b.querySelector('.choiceCap');
+            if(cap) cap.textContent = `${k} [${orderIdx+1}]`;
+          } else {
+            b.style.outline = '';
+            b.style.outlineOffset = '';
+            const dup = opts.filter(x => String(x).trim() === k).length;
+            const nth = opts.slice(0, i).filter(x => String(x).trim() === k).length + 1;
+            const cap = b.querySelector('.choiceCap');
+            if(cap) cap.textContent = (dup > 1) ? `${k} (${nth}/${dup})` : k;
+          }
+        });
+      }
+
+      opts.forEach((opt, i) => {
+        const cn = String(opt).trim();
+        const b = document.createElement('button');
+        b.className = 'choiceBtn';
+        b.style.width = dimsP.w + 'px';
+        b.style.height = dimsP.h + 'px';
+
+        const img = document.createElement('img');
+        img.src = imgUrl(cn);
+        img.alt = cn;
+        b.appendChild(img);
+
+        const cap = document.createElement('div');
+        cap.className = 'choiceCap';
+        dupSeen[cn] = (dupSeen[cn]||0) + 1;
+        cap.textContent = cardChoiceCaption(cn, dupSeen[cn], dupCount[cn]);
+        b.appendChild(cap);
+
+        btnMap[i] = b;
+
+        b.addEventListener('click', ev => {
+          ev.stopPropagation();
+          const alreadyIdx = selected.indexOf(i);
+          if(alreadyIdx >= 0){
+            selected.splice(alreadyIdx, 1);
+          } else if(selected.length < maxPicks){
+            selected.push(i);
+          }
+          updateCounter();
+        });
+
+        row.appendChild(b);
+      });
+
+      let submitting = false;
+      doneBtn.addEventListener('click', async ev => {
+        ev.stopPropagation();
+        if(doneBtn.disabled) return;
+        if(submitting) return;
+        submitting = true;
+        const choiceStr = selected.map(i => String(opts[i]).trim()).join(',');
+        st = await apiCmd('resolve_pending', {idx:0, choice: choiceStr});
+        selHand = [];
+        updateTop();
+        render();
+      });
+
+      updateCounter();
+      elModalCards.appendChild(counter);
+      elModalCards.appendChild(row);
+      elModalActions.appendChild(doneBtn);
       elMask.style.display = 'block';
       return;
     }

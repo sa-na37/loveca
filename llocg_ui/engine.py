@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_start_wrapper_fix_and_compare_rows_20260416j
+# BUILD_TAG: finalscore_reveal_and_neosky_ui_20260416k
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -1356,6 +1356,7 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
         "used_this_turn": dict(getattr(gs, "used_this_turn", {}) or {}),
         "last_attempt_lives": list(getattr(gs, 'last_attempt_lives', []) or []),
         "last_attempt_score_bonus": [int(x) for x in (getattr(gs, 'last_attempt_score_bonus', []) or [])],
+        "last_attempt_score_rows": [dict(x) for x in (getattr(gs, 'last_attempt_score_rows', []) or [])],
         "last_attempt_attempt_score": int(getattr(gs, 'last_attempt_attempt_score', 0) or 0),
         "last_attempt_final_score": int(getattr(gs, 'last_attempt_final_score', 0) or 0),
         "last_attempt_ok": bool(getattr(gs, 'last_attempt_ok', False)),
@@ -2644,9 +2645,10 @@ def _resolve_choose_top_keep_one(gs: 'GameState', p: Dict[str, Any], choice_str:
         gs.log.append(f'[AUTO] Tsunagaru Connect: revealed non-LIVE on top ({reveal})')
     if reveal:
         gs.pending.append({
-            'kind': 'message_ack',
+            'kind': 'show_revealed_cards_ack',
             'label': 'ツナガルコネクト 公開カード確認',
-            'text': f'ツナガルコネクトで公開: {reveal}' + (f' / {reveal_name}' if reveal_name else ''),
+            'text': 'ツナガルコネクトで公開されたカードを確認',
+            'display_cards': [reveal],
             'options': ['ok'],
         })
     return True
@@ -6074,7 +6076,25 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
     if kind == 'neo_sky_execute':
         drew = draw(gs, 3, None)
         gs.log.append(f'[AUTO] NEO SKY, NEO MAP!: drew {drew}')
-        _enqueue_topdeck_from_hand(gs, 3, 'NEO SKY, NEO MAP!')
+        opts = list(gs.hand)
+        if not opts:
+            gs.log.append('[INFO] NEO SKY, NEO MAP!: hand empty after draw')
+            return
+        if len(opts) <= 3:
+            picked = list(opts)
+            gs.hand = []
+            gs.deck = picked + gs.deck
+            gs.log.append(f'[ACT] NEO SKY, NEO MAP!: placed {len(picked)} on top (auto)')
+            return
+        gs.pending.append({
+            'kind': 'choose_hand_cards_ordered_topdeck',
+            'text': 'NEO SKY, NEO MAP!：手札から3枚を選び、クリックした順にデッキの上へ置く（1枚目が一番上）',
+            'options': opts,
+            'min_picks': 3,
+            'max_picks': 3,
+            'label': 'NEO SKY, NEO MAP!',
+        })
+        gs.log.append('[PENDING] choose_hand_cards_ordered_topdeck hand=3 (NEO SKY, NEO MAP!)')
         return
     if kind == 'opponent_wait_notify':
         # 相手への効果通知：OKで閉じるだけ（相手盤面は手動処理）
@@ -6908,11 +6928,13 @@ def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], i
                     gs.log.append(f"  success-score: stage always bonus = +{_stage_bonus}")
                 gs.log.append(f"[COMPARE] final_score_after_success_effects={_total}")
                 gs.last_attempt_final_score = int(_total)
-                if _changed and _total != _attempt_total:
-                    gs.banner_text = f"SUCCESS (Final Score {_total})"
-                    gs.banner_ts = time.time()
-                    gs.banner_ttl = 4.0
+                gs.banner_text = f"SUCCESS (Final Score {_total})"
+                gs.banner_ts = time.time()
+                gs.banner_ttl = 4.0
+                if _total != _attempt_total:
                     gs.log.append(f"[DISPLAY] banner score updated: {_attempt_total} -> {_total}")
+                else:
+                    gs.log.append(f"[DISPLAY] banner score confirmed: {_total}")
         except Exception:
             pass
         # 2) Winner-based success storage decision (8.4.7).
