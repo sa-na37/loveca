@@ -2976,106 +2976,69 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
     except Exception:
         pass
     # LIVE-card live-start: Rise Up High! (PL!N-bp4-029)
+    # Queue the trigger even if there is currently no valid target.
+    # Another simultaneous live-start effect may change the stage before this resolves.
     try:
-        if int(getattr(gs, 'turn', 0) or 0) == 1:
-            for cn_live in list(getattr(gs, 'set_zone', []) or []):
-                if _canon_cardno(str(cn_live or '')) != _RISE_UP_HIGH_CN_CANON:
-                    continue
-                gs.log.append('[AUTO] LIVE: PL!N-bp4-029 live-start: score +1 (turn1)')
-                cands = []
-                for ppos in ('L','C','R'):
-                    slot2 = (gs.stage or {}).get(ppos)
-                    if not slot2 or not getattr(slot2, 'active', False):
-                        continue
-                    ci2 = _get_card(cards_db, getattr(slot2, 'cardnumber', '') or '')
-                    if not ci2:
-                        continue
-                    if '虹ヶ咲' in str(getattr(ci2, 'group', '') or ''):
-                        cands.append(ppos)
-                if cands:
-                    _rise_up_high_opts = []
-                    for _pp in list(cands):
-                        _sl = (gs.stage or {}).get(_pp)
-                        _nm = ''
-                        try:
-                            _ci = _get_card(cards_db, getattr(_sl, 'cardnumber', '') or '') if _sl else None
-                            _nm = str(getattr(_ci, 'name', '') or '') if _ci else ''
-                        except Exception:
-                            _nm = ''
-                        _rise_up_high_opts.append(f"{_pp}: {_nm}" if _nm else str(_pp))
-                    pr = {
-                        'kind': 'live_start_rise_up_high_pick',
-                        'cn': _RISE_UP_HIGH_CN_CANON,
-                        'text': '【Rise Up High!】ライブ開始時：『虹ヶ咲』のメンバーを1人選ぶ（このライブ終了時まで、そのメンバーはブレード+1）',
-                        'options': list(_rise_up_high_opts),
-                        'pos_options': list(cands),
-                    }
-                    _append_prompt(pr, 'PL!N-bp4-029 ライブ開始時')
-                else:
-                    gs.log.append('[INFO] Rise Up High: no Nijigasaki member on stage; blade bonus skipped')
-                break
+        for cn_live in list(getattr(gs, 'set_zone', []) or []):
+            if _canon_cardno(str(cn_live or '')) != _RISE_UP_HIGH_CN_CANON:
+                continue
+            triggers.append({
+                'kind': 'live_start_rise_up_high_deferred',
+                'source_cn': _RISE_UP_HIGH_CN_CANON,
+                'label': 'PL!N-bp4-029 ライブ開始時',
+            })
+            break
     except Exception:
         pass
     try:
-        if int(getattr(gs, 'energy_active', 0) or 0) >= 2 and _has_nijigasaki_member_on_stage(gs, cards_db):
-            _bf_n = 0
-            for _cn0 in list(getattr(gs, 'set_zone', []) or []):
-                try:
-                    _canon0 = _canon_cardno(_cn0)
-                except Exception:
-                    _canon0 = str(_cn0 or '')
-                if _canon0 == _BUTTERFLY_CN_CANON:
-                    _bf_n += 1
-            for _i in range(int(_bf_n or 0)):
-                pr = {
-                    'kind': 'live_start_butterfly_pay',
-                    'cn': _BUTTERFLY_CN_CANON,
-                    'text': '【Butterfly】ライブ開始時：エネルギー2枚を支払ってもよい。自分のステージに『虹ヶ咲』のメンバーがいる場合、このカードのスコアを+1する。',
-                    'options': ['pay', 'skip'],
-                }
-                _append_prompt(pr, 'PL!N-bp1-028 ライブ開始時')
+        _bf_n = 0
+        for _cn0 in list(getattr(gs, 'set_zone', []) or []):
+            try:
+                _canon0 = _canon_cardno(_cn0)
+            except Exception:
+                _canon0 = str(_cn0 or '')
+            if _canon0 == _BUTTERFLY_CN_CANON:
+                _bf_n += 1
+        for _i in range(int(_bf_n or 0)):
+            triggers.append({
+                'kind': 'live_start_butterfly_deferred',
+                'source_cn': _BUTTERFLY_CN_CANON,
+                'label': 'PL!N-bp1-028 ライブ開始時',
+            })
     except Exception:
         pass
     try:
-        if _neo_sky_stage_ready(gs, cards_db):
-            _neo_n = 0
-            for _cn0 in list(getattr(gs, 'set_zone', []) or []):
-                try:
-                    _canon0 = _canon_cardno(_cn0)
-                except Exception:
-                    _canon0 = str(_cn0 or '')
-                if _canon0 == _NEO_SKY_CN_CANON:
-                    _neo_n += 1
-            for _i in range(int(_neo_n or 0)):
-                pr = {
-                    'kind': 'neo_sky_execute',
-                    'cn': _NEO_SKY_CN_CANON,
-                    'text': '【NEO SKY, NEO MAP!】ライブ開始時：条件達成 → 3枚引き、手札を3枚好きな順番でデッキの上に置く',
-                    'options': ['ok'],
-                }
-                _append_prompt(pr, 'PL!N-bp4-031 ライブ開始時')
+        _neo_n = 0
+        for _cn0 in list(getattr(gs, 'set_zone', []) or []):
+            try:
+                _canon0 = _canon_cardno(_cn0)
+            except Exception:
+                _canon0 = str(_cn0 or '')
+            if _canon0 == _NEO_SKY_CN_CANON:
+                _neo_n += 1
+        for _i in range(int(_neo_n or 0)):
+            triggers.append({
+                'kind': 'live_start_neo_sky_deferred',
+                'source_cn': _NEO_SKY_CN_CANON,
+                'label': 'PL!N-bp4-031 ライブ開始時',
+            })
     except Exception:
         pass
     try:
-        _niji_n = _count_nijigasaki_members_on_stage(gs, cards_db)
-        if _niji_n > 0:
-            _tc_n = 0
-            for _cn0 in list(getattr(gs, 'set_zone', []) or []):
-                try:
-                    _canon0 = _canon_cardno(_cn0)
-                except Exception:
-                    _canon0 = str(_cn0 or '')
-                if _canon0 == _TSUNAGARU_CONNECT_CN_CANON:
-                    _tc_n += 1
-            for _i in range(int(_tc_n or 0)):
-                pr = {
-                    'kind': 'tsunagaru_connect_execute',
-                    'cn': _TSUNAGARU_CONNECT_CN_CANON,
-                    'text': '【ツナガルコネクト】ライブ開始時：ステージの『虹ヶ咲』メンバー数ぶんデッキ上を見る → 1枚をデッキ上、残りを控え室。さらにデッキトップを公開し、ライブカードならスコア+1',
-                    'options': ['ok'],
-                    'k': int(_niji_n),
-                }
-                _append_prompt(pr, 'PL!N-bp3-028 ライブ開始時')
+        _tc_n = 0
+        for _cn0 in list(getattr(gs, 'set_zone', []) or []):
+            try:
+                _canon0 = _canon_cardno(_cn0)
+            except Exception:
+                _canon0 = str(_cn0 or '')
+            if _canon0 == _TSUNAGARU_CONNECT_CN_CANON:
+                _tc_n += 1
+        for _i in range(int(_tc_n or 0)):
+            triggers.append({
+                'kind': 'live_start_tsunagaru_connect_deferred',
+                'source_cn': _TSUNAGARU_CONNECT_CN_CANON,
+                'label': 'PL!N-bp3-028 ライブ開始時',
+            })
     except Exception:
         pass
     # LIVE cards in set_zone: enqueue numeric live-start effects that should resolve in order
@@ -3750,6 +3713,71 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             'candidates': wait_opts,
         })
         gs.log.append(f"[PENDING] {pos}: {src_cn} ライブ開始時 → activate member choice ({len(wait_opts)} candidates)")
+        return
+    if kind == 'live_start_rise_up_high_deferred':
+        cands = []
+        for ppos in ('L','C','R'):
+            slot2 = (gs.stage or {}).get(ppos)
+            if not slot2 or not getattr(slot2, 'active', False):
+                continue
+            ci2 = _get_card(cards_db, getattr(slot2, 'cardnumber', '') or '')
+            if not ci2:
+                continue
+            if '虹ヶ咲' in str(getattr(ci2, 'group', '') or ''):
+                cands.append(ppos)
+        if not cands:
+            gs.log.append('[SKIP] Rise Up High live-start unresolved (no Nijigasaki member at resolution)')
+            return
+        opts = []
+        for _pp in list(cands):
+            _sl = (gs.stage or {}).get(_pp)
+            _nm = ''
+            try:
+                _ci = _get_card(cards_db, getattr(_sl, 'cardnumber', '') or '') if _sl else None
+                _nm = str(getattr(_ci, 'name', '') or '') if _ci else ''
+            except Exception:
+                _nm = ''
+            opts.append(f"{_pp}: {_nm}" if _nm else str(_pp))
+        gs.pending.append({
+            'kind': 'live_start_rise_up_high_pick',
+            'cn': _RISE_UP_HIGH_CN_CANON,
+            'text': '【Rise Up High!】ライブ開始時：『虹ヶ咲』のメンバーを1人選ぶ（このライブ終了時まで、そのメンバーはブレード+1）',
+            'options': list(opts),
+            'pos_options': list(cands),
+        })
+        gs.log.append(f"[PENDING] RiseUpHigh live-start target choice ({len(cands)} candidates)")
+        return
+    if kind == 'live_start_butterfly_deferred':
+        gs.pending.append({
+            'kind': 'live_start_butterfly_pay',
+            'cn': _BUTTERFLY_CN_CANON,
+            'text': '【Butterfly】ライブ開始時：エネルギー2枚を支払ってもよい。自分のステージに『虹ヶ咲』のメンバーがいる場合、このカードのスコアを+1する。',
+            'options': ['pay', 'skip'],
+        })
+        return
+    if kind == 'live_start_neo_sky_deferred':
+        if not _neo_sky_stage_ready(gs, cards_db):
+            gs.log.append('[SKIP] NEO SKY, NEO MAP! live-start unresolved (condition not met at resolution)')
+            return
+        gs.pending.append({
+            'kind': 'neo_sky_execute',
+            'cn': _NEO_SKY_CN_CANON,
+            'text': '【NEO SKY, NEO MAP!】ライブ開始時：条件達成 → 3枚引き、手札を3枚好きな順番でデッキの上に置く',
+            'options': ['ok'],
+        })
+        return
+    if kind == 'live_start_tsunagaru_connect_deferred':
+        _niji_n = _count_nijigasaki_members_on_stage(gs, cards_db)
+        if _niji_n <= 0:
+            gs.log.append('[SKIP] ツナガルコネクト live-start unresolved (no Nijigasaki member at resolution)')
+            return
+        gs.pending.append({
+            'kind': 'tsunagaru_connect_execute',
+            'cn': _TSUNAGARU_CONNECT_CN_CANON,
+            'text': '【ツナガルコネクト】ライブ開始時：ステージの『虹ヶ咲』メンバー数ぶんデッキ上を見る → 1枚をデッキ上、残りを控え室。さらにデッキトップを公開し、ライブカードならスコア+1',
+            'options': ['ok'],
+            'k': int(_niji_n),
+        })
         return
     if kind == 'live_start_vivid_world_auto':
         gs.vivid_world_blue_mode_this_live = True
@@ -5956,10 +5984,10 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             gs.log.append(f'[ERR] Butterfly live-start: invalid choice {choice_str}')
             return
         if int(getattr(gs, 'energy_active', 0) or 0) < 2:
-            gs.log.append('[ERR] Butterfly live-start: not enough active energy')
+            gs.log.append('[SKIP] Butterfly live-start unresolved (not enough active energy at resolution)')
             return
         if not _has_nijigasaki_member_on_stage(gs, cards_db):
-            gs.log.append('[INFO] Butterfly live-start: no Nijigasaki member on stage')
+            gs.log.append('[SKIP] Butterfly live-start unresolved (no Nijigasaki member at resolution)')
             return
         gs.energy_active = max(0, int(getattr(gs, 'energy_active', 0) or 0) - 2)
         gs.butterfly_paid_this_live = int(getattr(gs, 'butterfly_paid_this_live', 0) or 0) + 1
