@@ -3147,19 +3147,15 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
             gs.live_start_prompted = True
         return 0
     gs.live_start_prompted = True
-    if n >= 2:
-        gs.pending.append({
-            'kind': 'auto_order',
-            'text': 'ライブ開始時効果が複数発生：解決するカードを選択（1つずつ）',
-            'options': [_auto_trigger_option_text(t) for t in triggers if _auto_trigger_option_text(t)],
-            'queue': list(triggers),
-        })
-        gs.log.append(f'[PENDING] auto_order triggers={len(triggers)}')
-        gs.log.append(f'[PROMPT] live-start abilities queued: {n}')
-        return n
-    for t in triggers:
-        _exec_auto_trigger(gs, cards_db, t)
-    gs.log.append(f'[AUTO] live-start triggers queued={n}')
+    text = 'ライブ開始時効果が発生：解決するカードを選択' if n == 1 else 'ライブ開始時効果が複数発生：解決するカードを選択（1つずつ）'
+    gs.pending.append({
+        'kind': 'auto_order',
+        'text': text,
+        'options': [_auto_trigger_option_text(t) for t in triggers if _auto_trigger_option_text(t)],
+        'queue': list(triggers),
+    })
+    gs.log.append(f'[PENDING] auto_order triggers={len(triggers)}')
+    gs.log.append(f'[PROMPT] live-start abilities queued: {n}')
     return n
 def _clear_end_of_live_buffs(gs: GameState) -> None:
     for pos in ("L", "C", "R"):
