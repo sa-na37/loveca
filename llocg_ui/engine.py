@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: generalize_live_start_wrappers_20260416h
+# BUILD_TAG: live_start_wrapper_fix_and_compare_rows_20260416j
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -1263,6 +1263,7 @@ class GameState:
     # last LIVE attempt result (for LIVE_RESOLVE timing / success-zone decision)
     last_attempt_lives: List[str] = field(default_factory=list)
     last_attempt_score_bonus: List[int] = field(default_factory=list)  # aligned to last_attempt_lives; success-phase temporary bonuses
+    last_attempt_score_rows: List[Dict[str, int]] = field(default_factory=list)  # per-live rows from attempt: {cn, base, delta, score}
     last_attempt_attempt_score: int = 0
     last_attempt_final_score: int = 0
     last_attempt_ok: bool = False
@@ -1406,6 +1407,10 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
         gs.last_attempt_score_bonus = [int(x) for x in (snap.get('last_attempt_score_bonus', getattr(gs, 'last_attempt_score_bonus', []) or []) or [])]
     except Exception:
         gs.last_attempt_score_bonus = []
+    try:
+        gs.last_attempt_score_rows = [dict(x) for x in list(snap.get('last_attempt_score_rows', getattr(gs, 'last_attempt_score_rows', [])) or [])]
+    except Exception:
+        gs.last_attempt_score_rows = []
     while len(gs.last_attempt_score_bonus) < len(gs.last_attempt_lives):
         gs.last_attempt_score_bonus.append(0)
     if len(gs.last_attempt_score_bonus) > len(gs.last_attempt_lives):
@@ -2626,12 +2631,24 @@ def _resolve_choose_top_keep_one(gs: 'GameState', p: Dict[str, Any], choice_str:
     gs.deck = [keep] + deck
     reveal = gs.deck[0] if list(getattr(gs, 'deck', []) or []) else ''
     ci = _get_card(cards_db, reveal) if reveal else None
+    reveal_name = ''
+    try:
+        reveal_name = str(getattr(ci, 'name', '') or '') if ci else ''
+    except Exception:
+        reveal_name = ''
     if ci and _is_live_ci(ci):
         gs.tsunagaru_connect_bonus_this_live = 1
         gs.log.append(f'[AUTO] Tsunagaru Connect: revealed LIVE on top -> score +1 ({reveal})')
     else:
         gs.tsunagaru_connect_bonus_this_live = 0
         gs.log.append(f'[AUTO] Tsunagaru Connect: revealed non-LIVE on top ({reveal})')
+    if reveal:
+        gs.pending.append({
+            'kind': 'message_ack',
+            'label': 'ツナガルコネクト 公開カード確認',
+            'text': f'ツナガルコネクトで公開: {reveal}' + (f' / {reveal_name}' if reveal_name else ''),
+            'options': ['ok'],
+        })
     return True
 def _apply_vivid_world_blue_mode(pool: Dict[str, int]) -> Dict[str, int]:
     out = {str(k).lower(): int(v or 0) for k, v in (pool or {}).items()}
@@ -2934,11 +2951,15 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                     if not isinstance(cl, dict):
                         continue
                     raw = str(cl.get('raw', '') or '')
-                    cost = str(cl.get('cost_template', '') or raw)
-                    eff = str(cl.get('effect_template', '') or raw)
+                    cost_t = str(cl.get('cost_template', '') or '')
+                    eff_t = str(cl.get('effect_template', '') or '')
+                    cost = cost_t if cost_t else ''
+                    eff = eff_t if eff_t else raw
                     build_text = eff
                     try:
-                        if str(cost or '').strip() and str(cost or '').strip() != str(eff or '').strip():
+                        cost_cmp = re.sub(r'\s+', '', str(cost or ''))
+                        eff_cmp = re.sub(r'\s+', '', str(eff or ''))
+                        if str(cost or '').strip() and cost_cmp != eff_cmp:
                             build_text = f"{str(cost).strip()}：{str(eff).strip()}"
                     except Exception:
                         build_text = eff
@@ -4487,16 +4508,18 @@ def _get_last_attempt_live_score_bonus(gs: GameState, cn_live) -> int:
 def _compute_final_compare_score_after_success(gs: GameState, cards_db: Dict[str, CardInfo]) -> tuple[int, list[tuple[str, int, int, int]], int]:
     lives = list(getattr(gs, 'last_attempt_lives', []) or [])
     bonuses = list(getattr(gs, 'last_attempt_score_bonus', []) or [])
+    base_rows = [dict(x) for x in list(getattr(gs, 'last_attempt_score_rows', []) or [])]
     while len(bonuses) < len(lives):
         bonuses.append(0)
     rows = []
     total = 0
     for i, cn in enumerate(lives):
+        row0 = base_rows[i] if i < len(base_rows) else {}
         ci = _get_card(cards_db, cn)
-        base_s = int(getattr(ci, 'score', 0) or 0) if ci else 0
-        delta_s = int(bonuses[i] or 0) if i < len(bonuses) else 0
-        eff_s = int(base_s + delta_s)
-        rows.append((cn, base_s, delta_s, eff_s))
+        attempt_eff = int(row0.get('score', getattr(ci, 'score', 0) or 0) or 0)
+        success_delta = int(bonuses[i] or 0) if i < len(bonuses) else 0
+        eff_s = int(attempt_eff + success_delta)
+        rows.append((cn, attempt_eff, success_delta, eff_s))
         total += eff_s
     stage_score_bonus = 0
     try:
@@ -4624,6 +4647,7 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
         gs.vivid_world_bonus_this_live = 0
         gs.last_attempt_lives = []
         gs.last_attempt_score_bonus = []
+        gs.last_attempt_score_rows = []
         gs.last_attempt_attempt_score = 0
         gs.last_attempt_final_score = 0
         gs.last_attempt_attempt_score = 0
@@ -4643,6 +4667,7 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
         # clear end-of-live state defensively
         gs.last_attempt_lives = []
         gs.last_attempt_score_bonus = []
+        gs.last_attempt_score_rows = []
         gs.last_attempt_attempt_score = 0
         gs.last_attempt_final_score = 0
         gs.last_attempt_attempt_score = 0
@@ -4747,6 +4772,7 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
             gs.log.append(f"  score: stage always bonus = +{stage_score_bonus}")
             total_score += int(stage_score_bonus)
         gs.log.append(f"[ATTEMPT] result=SUCCESS total_score={total_score}")
+        gs.last_attempt_score_rows = [dict(r) for r in list(score_rows or [])]
         gs.last_attempt_attempt_score = int(total_score)
         gs.last_attempt_final_score = int(total_score)
         result_txt = f"SUCCESS (Attempt Score {total_score})"
@@ -4787,6 +4813,7 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
     else:
         gs.last_attempt_lives = []
         gs.last_attempt_score_bonus = []
+        gs.last_attempt_score_rows = []
         gs.last_attempt_attempt_score = 0
         gs.last_attempt_final_score = 0
         gs.last_attempt_attempt_score = 0
@@ -5415,6 +5442,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         if c0.lower() == 'skip':
             gs.log.append('[ACT] success_store: skipped')
             gs.last_attempt_score_bonus = []
+            gs.last_attempt_score_rows = []
             gs.last_attempt_final_score = 0
             gs.last_attempt_attempt_score = 0
             _clear_end_of_live_buffs(gs)
@@ -6051,6 +6079,9 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
     if kind == 'opponent_wait_notify':
         # 相手への効果通知：OKで閉じるだけ（相手盤面は手動処理）
         gs.log.append('[ACK] opponent_wait_notify: confirmed by user')
+        return
+    if kind == 'message_ack':
+        gs.log.append(f"[ACK] {str(p.get('label', p.get('text', 'message'))) }")
         return
     if kind == 'body_reveal_pick_live':
         pool = list(p.get('pool', []) or [])
@@ -6918,6 +6949,7 @@ def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], i
         # Clear last-attempt helpers
         gs.last_attempt_lives = []
         gs.last_attempt_score_bonus = []
+        gs.last_attempt_score_rows = []
         gs.last_attempt_attempt_score = 0
         gs.last_attempt_final_score = 0
         gs.last_attempt_ok = False
