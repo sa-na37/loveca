@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: fix_wrapper_state_and_success_zone_score_20260416t
+# BUILD_TAG: fix_live_start_wrapper_pending_setidx_20260416u
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -3751,6 +3751,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         gs.pending.append({
             'kind': 'live_start_score_if_live_zone_group_count_at_least',
             'source_cn': src_cn,
+            'set_idx': (trig or {}).get('set_idx', None),
             'condition_group_name': group_name,
             'condition_count': need,
             'score_delta': delta,
@@ -3766,6 +3767,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         gs.pending.append({
             'kind': 'live_start_score_if_green_live_group_count_at_least',
             'source_cn': src_cn,
+            'set_idx': (trig or {}).get('set_idx', None),
             'condition_group_name': group_name,
             'condition_count': need,
             'score_delta': delta,
@@ -3782,6 +3784,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         gs.pending.append({
             'kind': 'live_start_reduce_any_and_score_if_success_score_at_least',
             'source_cn': src_cn,
+            'set_idx': (trig or {}).get('set_idx', None),
             'reduce_threshold': reduce_th,
             'reduce_any': reduce_any,
             'score_threshold': score_th,
@@ -4463,7 +4466,9 @@ def _live_start_score_bonus_for_set_idx(gs: Optional[GameState], set_idx: Option
         if gs is None:
             return 0
         if set_idx is not None:
-            return int(dict(getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {}).get(int(set_idx), 0) or 0)
+            v = int(dict(getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {}).get(int(set_idx), 0) or 0)
+            if v > 0:
+                return v
         canon = _canon_cardno(str(source_cn or ''))
         if not canon:
             return 0
@@ -4476,7 +4481,9 @@ def _live_start_required_any_reduction_for_set_idx(gs: Optional[GameState], set_
         if gs is None:
             return 0
         if set_idx is not None:
-            return int(dict(getattr(gs, 'live_start_required_any_reduction_by_set_idx', {}) or {}).get(int(set_idx), 0) or 0)
+            v = int(dict(getattr(gs, 'live_start_required_any_reduction_by_set_idx', {}) or {}).get(int(set_idx), 0) or 0)
+            if v > 0:
+                return v
         canon = _canon_cardno(str(source_cn or ''))
         if not canon:
             return 0
