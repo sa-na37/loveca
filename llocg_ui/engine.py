@@ -4080,7 +4080,9 @@ def _build_live_success_trigger_from_effect(gs: GameState, cards_db: Dict[str, C
                 'label': str(label or ''),
             }
     # Generalized from VIVID WORLD.
-    m = re.match(r'^エールにより公開された自分の『(?P<group>[^』]+)』のメンバーが持つハートの中に<\(桃\)>、<\(赤\)>、<\(黄\)>、<\(緑\)>、<\(青\)>、<\(紫\)>がある場合、このカードのスコアを\+1する。$', eff_norm)
+    # DB text may or may not include Japanese comma separators between the six icons.
+    eff_compact = eff_norm.replace('、', '').replace('，', '').replace(' ', '')
+    m = re.match(r'^エールにより公開された自分の『(?P<group>[^』]+)』のメンバーが持つハートの中に<\(桃\)><\(赤\)><\(黄\)><\(緑\)><\(青\)><\(紫\)>がある場合、このカードのスコアを\+1する。$', eff_compact)
     if m:
         group_name = str(m.group('group') or '').strip()
         return {
@@ -4762,39 +4764,32 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
     gs.banner_text = result_txt
     gs.banner_ts = time.time()
     gs.banner_ttl = 4.0
-    # clear set zone after score computation; some live-start score bonuses inspect the current set cards.
-    gs.set_zone = []
-    # Move attempted LIVE cards: by default they go to waiting room (green_room).
+    # Keep attempted LIVE cards in the live card storage until LIVE_RESOLVE.
+    # Rules timing: after compare, the winner first moves one card from the live card
+    # storage to success storage (8.4.7), then cards remaining in the live card storage
+    # move to the waiting room (8.4.8). Do not move them to waiting room here.
     if lives:
-        gs.green_room.extend(lives)
+        gs.set_zone = list(lives)
         if ok_all:
-            gs.log.append(f"[ZONE] waiting +{len(lives)} (success live)")
-            # IMPORTANT (rules timing):
-            # - Do NOT move a successful LIVE to success storage here.
-            # - Do NOT run <ライブ成功時> triggers here.
-            # These are handled in LIVE_RESOLVE (8.4 timing) so the just-succeeded LIVE
-            # does NOT count as being in success storage during its own success-effect resolution.
+            gs.log.append(f"[ZONE] live storage holds {len(lives)} successful LIVE(s) until LIVE_RESOLVE")
             gs.last_attempt_lives = list(lives)
             gs.last_attempt_score_bonus = [0 for _ in range(len(lives))]
             gs.last_attempt_ok = True
             gs.need_live_success_triggers = True
             gs.need_success_store_choice = True
         else:
-            gs.log.append(f"[ZONE] waiting +{len(lives)} (failed live)")
+            gs.log.append(f"[ZONE] live storage holds {len(lives)} failed LIVE(s) until cleanup")
             gs.last_attempt_lives = []
             gs.last_attempt_attempt_score = 0
             gs.last_attempt_final_score = 0
             gs.last_attempt_ok = False
             gs.need_live_success_triggers = False
             gs.need_success_store_choice = False
-            _clear_end_of_live_buffs(gs)
-            gs.live_start_prompted = False
     else:
+        gs.set_zone = []
         gs.last_attempt_lives = []
         gs.last_attempt_score_bonus = []
         gs.last_attempt_score_rows = []
-        gs.last_attempt_attempt_score = 0
-        gs.last_attempt_final_score = 0
         gs.last_attempt_attempt_score = 0
         gs.last_attempt_final_score = 0
         gs.last_attempt_ok = False
@@ -5420,12 +5415,6 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         c0 = str(choice_str or '').strip()
         if c0.lower() == 'skip':
             gs.log.append('[ACT] success_store: skipped')
-            gs.last_attempt_score_bonus = []
-            gs.last_attempt_score_rows = []
-            gs.last_attempt_final_score = 0
-            gs.last_attempt_attempt_score = 0
-            _clear_end_of_live_buffs(gs)
-            gs.live_start_prompted = False
             return
         cn = _canon_cardno(c0)
         pick = None
@@ -5437,21 +5426,20 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             gs.log.append(f"[ERR] success_store: invalid choice {cn}")
             gs.pending.insert(idx, p)
             return
-        # move the chosen card from waiting room to success storage
+        # Move the chosen card from the live card storage to success storage.
         pick_cn = None
-        if pick in gs.green_room:
+        if pick in gs.set_zone:
             pick_cn = pick
         else:
             for v in _cardno_variants(pick):
-                if v in gs.green_room:
+                if v in gs.set_zone:
                     pick_cn = v
                     break
         if not pick_cn:
-            # it should exist, but don't crash
             pick_cn = pick
         try:
-            if pick_cn in gs.green_room:
-                gs.green_room.remove(pick_cn)
+            if pick_cn in gs.set_zone:
+                gs.set_zone.remove(pick_cn)
         except Exception:
             pass
         try:
@@ -5459,8 +5447,6 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         except Exception:
             gs.success_zone = list(getattr(gs, 'success_zone', []) or []) + [pick_cn]
         gs.log.append(f"[ACT] success_store: moved {pick_cn} -> success storage")
-        _clear_end_of_live_buffs(gs)
-        gs.live_start_prompted = False
         return
     if kind == 'live_start_success_heart_by_success':
         ch = str(choice_str or '').strip()
@@ -6890,7 +6876,19 @@ def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], i
                 gs.log.append(f"[PENDING] success store choice ({len(lives)} lives)")
                 return
             gs.need_success_store_choice = False
-        # 3) ACK revealed cards (resolve zone)
+        # 3) Move cards still remaining in the live card storage to the waiting room (8.4.8).
+        try:
+            _remain_live = list(getattr(gs, 'set_zone', []) or [])
+        except Exception:
+            _remain_live = []
+        if _remain_live:
+            try:
+                gs.green_room.extend(_remain_live)
+            except Exception:
+                gs.green_room = list(getattr(gs, 'green_room', []) or []) + list(_remain_live)
+            gs.log.append(f"[ZONE] waiting +{len(_remain_live)} (live storage cleanup)")
+            gs.set_zone = []
+        # 4) ACK revealed cards (resolve zone)
         if gs.resolve_zone:
             cmd_ack(gs, rng)
         if gs.resolve_zone:
