@@ -4082,7 +4082,7 @@ def _build_live_success_trigger_from_effect(gs: GameState, cards_db: Dict[str, C
     # Generalized from VIVID WORLD.
     # DB text may or may not include Japanese comma separators between the six icons.
     eff_compact = eff_norm.replace('、', '').replace('，', '').replace(' ', '')
-    m = re.match(r'^エールにより公開された自分の『(?P<group>[^』]+)』のメンバーが持つハートの中に<\(桃\)><\(赤\)><\(黄\)><\(緑\)><\(青\)><\(紫\)>がある場合、このカードのスコアを\+1する。$', eff_compact)
+    m = re.match(r'^エールにより公開された自分の『(?P<group>[^』]+)』のメンバーが持つハートの中に<\(桃\)><\(赤\)><\(黄\)><\(緑\)><\(青\)><\(紫\)>がある場合このカードのスコアを\+1する。?$', eff_compact)
     if m:
         group_name = str(m.group('group') or '').strip()
         return {
