@@ -3837,17 +3837,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             _add_last_attempt_live_score_bonus(gs, cn_live, bonus)
             gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時]: score +{bonus}")
         return
-    # legacy aliases kept for backward safety; current enqueue path no longer emits these
-    if kind == 'success_auto_labella':
-        _put_wait_energy_from_deck(gs, 1, reason='La Bella Patria')
-        return
-    if kind == 'success_auto_poppin':
-        prm = dict((trig or {}).get('prompt', {}) or {})
-        if prm:
-            gs.pending.append(prm)
-        else:
-            gs.log.append('[INFO] PoppinUp: no pending queue')
-        return
+    # legacy success_auto_* kinds are no longer emitted; keep the generic wrappers above as the single live-success path.
     # Unknown trigger
     gs.log.append(f"[WARN] auto_trigger: unknown kind={kind}")
 def cmd_set(gs: GameState, rng: random.Random, indices: List[int]) -> None:
@@ -4613,32 +4603,6 @@ def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[s
     if canon == _VIVID_WORLD_CN_CANON:
         return int(getattr(gs, 'vivid_world_bonus_this_live', 0) or 0)
     return 0
-def _enqueue_next_poppin_prompt(gs: GameState) -> bool:
-    if list(getattr(gs, 'pending', []) or []):
-        return False
-    q = list(getattr(gs, '_poppin_pending_queue', []) or [])
-    while q:
-        p0 = dict(q.pop(0))
-        pool = list(getattr(gs, '_yell_revealed_this_live', []) or [])
-        raw_opts = list(p0.get('options', []) or [])
-        counts: Dict[str, int] = {}
-        for x in pool:
-            cx = _canon_cardno(x)
-            counts[cx] = counts.get(cx, 0) + 1
-        filtered: List[str] = []
-        for x in raw_opts:
-            cx = _canon_cardno(x)
-            if counts.get(cx, 0) > 0:
-                filtered.append(x)
-                counts[cx] -= 1
-        if filtered:
-            p0['options'] = list(filtered)
-            gs.pending.append(p0)
-            setattr(gs, '_poppin_pending_queue', q)
-            gs.log.append(f"[PENDING] PoppinUp queued prompt ({len(filtered)} candidates)")
-            return True
-    setattr(gs, '_poppin_pending_queue', [])
-    return False
 def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
     if bool(getattr(gs, "cannot_live_until_end_of_live", False)):
         gs.log.append("[ATTEMPT] blocked: you cannot live until end of live")
@@ -6452,47 +6416,6 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         slot.temp_blade += 1
         slot.temp_until = 'end_of_live'
         gs.log.append(f'[AUTO] group-member temp blade: {pos} temp blade +1 (until end of live)')
-        return
-    # 1d) Live-success Poppin' Up!: pick 1 Nijigasaki card among yell reveals -> hand (Skip allowed)
-    if kind == 'pick_poppinup_from_yell':
-        if choice_str.lower() == 'skip':
-            gs.log.append("[SKIP] PoppinUp: skipped")
-            _enqueue_next_poppin_prompt(gs)
-            return
-        cn = _canon_cardno(choice_str)
-        opts = list(p.get('options', []) or [])
-        if opts and (not any(_canon_cardno(x) == cn for x in opts)):
-            gs.log.append(f"[ERR] PoppinUp: invalid choice {choice_str}")
-            return
-        moved = None
-        # remove from resolve_zone first, then green_room
-        for zone_name in ('resolve_zone', 'green_room'):
-            z = getattr(gs, zone_name, None)
-            if not isinstance(z, list):
-                continue
-            for i, x in enumerate(list(z)):
-                if _canon_cardno(x) == cn:
-                    moved = z.pop(i)
-                    break
-            if moved:
-                break
-        if not moved:
-            gs.log.append(f"[ERR] PoppinUp: chosen card not found in zones {cn}")
-            _enqueue_next_poppin_prompt(gs)
-            return
-        gs.hand.append(moved)
-        # remove one occurrence from tracker
-        try:
-            pool = list(getattr(gs, '_yell_revealed_this_live', []) or [])
-            for i, x in enumerate(list(pool)):
-                if _canon_cardno(x) == cn:
-                    pool.pop(i)
-                    break
-            setattr(gs, '_yell_revealed_this_live', pool)
-        except Exception:
-            pass
-        gs.log.append(f"[ACT] PoppinUp: took {moved} -> hand")
-        _enqueue_next_poppin_prompt(gs)
         return
     # 1e) Generic yell-retrieve: pick 1 card from yell reveals -> hand
     if kind == 'pick_from_yell':
