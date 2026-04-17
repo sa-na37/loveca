@@ -2923,14 +2923,7 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
     # LIVE cards, so generic LIVE cards with <ライブ開始時> abilities in set_zone
     # never triggered.  We first try generic no-cost clauses here, then keep the
     # existing hard-coded LIVE handlers below.
-    try:
-        _generic_live_skip = {
-            _BOKULIVE_BP3_019_CN_CANON,
-            'PL!HS-bp2-022',
-            _HEARTBEAT_BP4_021_CN_CANON,
-        }
-    except Exception:
-        _generic_live_skip = set()
+    _generic_live_skip = set()
     try:
         for cn_live in list(getattr(gs, 'set_zone', []) or []):
             try:
@@ -3009,47 +3002,6 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                             'label': f'{src_live} ライブ開始時',
                             'effect': eff,
                         })
-    except Exception:
-        pass
-    # LIVE cards in set_zone: enqueue numeric live-start effects that should resolve in order
-    try:
-        for _set_idx, _cn_live in enumerate(list(getattr(gs, 'set_zone', []) or [])):
-            _ci_live = _get_card(cards_db, _cn_live)
-            if not _ci_live or not _is_live_ci(_ci_live):
-                continue
-            _canon_live = _canon_cardno(_cn_live)
-            if _live_start_set_idx_resolved(gs, _set_idx):
-                continue
-            if _canon_live == _BOKULIVE_BP3_019_CN_CANON:
-                pr = {
-                    'kind': 'live_start_numeric_effect',
-                    'source_cn': _cn_live,
-                    'set_idx': int(_set_idx),
-                    'effect_code': 'bp3_019_score',
-                    "text": f"LIVE{_set_idx+1}: {_cn_live} ライブ開始時 → 自分のライブ中の『μ's』のカードが2枚以上なら、このカードのスコアを+1する。",
-                    'options': ['ok'],
-                }
-                _append_prompt(pr, pr['text'])
-            elif _canon_live == 'PL!HS-bp2-022':
-                pr = {
-                    'kind': 'live_start_numeric_effect',
-                    'source_cn': _cn_live,
-                    'set_idx': int(_set_idx),
-                    'effect_code': 'bp2_022_score',
-                    "text": f"LIVE{_set_idx+1}: {_cn_live} ライブ開始時 → 控え室に『スリーズブーケ』のライブカードが3枚以上あるなら、このカードのスコアを+1する。",
-                    'options': ['ok'],
-                }
-                _append_prompt(pr, pr['text'])
-            elif _canon_live == _HEARTBEAT_BP4_021_CN_CANON:
-                pr = {
-                    'kind': 'live_start_numeric_effect',
-                    'source_cn': _cn_live,
-                    'set_idx': int(_set_idx),
-                    'effect_code': 'bp4_021_req_score',
-                    "text": f"LIVE{_set_idx+1}: {_cn_live} ライブ開始時 → 成功ライブ置き場のスコア合計が6以上なら必要ハート(任意)-1、9以上ならさらにこのカードのスコアを+1する。",
-                    'options': ['ok'],
-                }
-                _append_prompt(pr, pr['text'])
     except Exception:
         pass
     n = len(triggers)
@@ -3967,6 +3919,42 @@ def _stage_all_group_cost_ready(gs: GameState, cards_db: Dict[str, CardInfo], gr
     return int(total) >= int(min_cost or 0)
 
 
+def _live_zone_group_card_count(gs: GameState, cards_db: Dict[str, CardInfo], group_name: str) -> int:
+    total = 0
+    g = str(group_name or '').strip()
+    if not g:
+        return 0
+    for cn in list(getattr(gs, 'set_zone', []) or []):
+        ci = _get_card(cards_db, cn)
+        if not ci or not _is_live_ci(ci):
+            continue
+        if g in str(getattr(ci, 'group', '') or ''):
+            total += 1
+    return int(total)
+
+def _green_live_group_count(gs: GameState, cards_db: Dict[str, CardInfo], group_name: str) -> int:
+    total = 0
+    g = str(group_name or '').strip()
+    if not g:
+        return 0
+    for cn in list(getattr(gs, 'green_room', []) or []):
+        ci = _get_card(cards_db, cn)
+        if not ci or not _is_live_ci(ci):
+            continue
+        if g in str(getattr(ci, 'group', '') or ''):
+            total += 1
+    return int(total)
+
+def _success_zone_score_total(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
+    total = 0
+    for cn in list(getattr(gs, 'success_zone', []) or []):
+        try:
+            total += int(_card_score_val(cards_db, cn))
+        except Exception:
+            pass
+    return int(total)
+
+
 def _build_live_start_trigger_from_effect(gs: GameState, cards_db: Dict[str, CardInfo], eff: str, source_cn: str, label: str, ctx: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     eff_raw = str(eff or '').strip()
     eff_norm = eff_raw.replace('\n', '')
@@ -4026,6 +4014,40 @@ def _build_live_start_trigger_from_effect(gs: GameState, cards_db: Dict[str, Car
             'source_cn': str(source_cn or ''),
             'label': str(label or ''),
             'target_color_jp': target_color_jp,
+        }
+    # Generalized from 僕らのLIVE 君とのLIFE / Eutopia.
+    m = re.match(r'^自分のライブ中の『(?P<group>[^』]+)』のカードが(?P<count>\d+)枚以上ある場合、このカードのスコアを\+(?P<delta>\d+)する。$', eff_norm)
+    if m:
+        return {
+            'kind': 'live_start_score_if_live_zone_group_count_at_least',
+            'source_cn': str(source_cn or ''),
+            'label': str(label or ''),
+            'condition_group_name': str(m.group('group') or '').strip(),
+            'condition_count': int(m.group('count') or 0),
+            'score_delta': int(m.group('delta') or 0),
+        }
+    # Generalized from 青とシャボン.
+    m = re.match(r'^控え室に『(?P<group>[^』]+)』のライブカードが(?P<count>\d+)枚以上あるなら、このカードのスコアを\+(?P<delta>\d+)する。$', eff_norm)
+    if m:
+        return {
+            'kind': 'live_start_score_if_green_live_group_count_at_least',
+            'source_cn': str(source_cn or ''),
+            'label': str(label or ''),
+            'condition_group_name': str(m.group('group') or '').strip(),
+            'condition_count': int(m.group('count') or 0),
+            'score_delta': int(m.group('delta') or 0),
+        }
+    # Generalized from ？←HEARTBEAT.
+    m = re.match(r'^自分の成功ライブカード置き場にあるカードのスコアの合計が(?P<reduce_th>\d+)以上の場合、このライブを成功させるための必要ハートを<\(任意\)>減らす。スコアの合計が(?P<score_th>\d+)以上の場合、さらにこのカードのスコアを\+(?P<delta>\d+)する。$', eff_norm)
+    if m:
+        return {
+            'kind': 'live_start_reduce_any_and_score_if_success_score_at_least',
+            'source_cn': str(source_cn or ''),
+            'label': str(label or ''),
+            'reduce_threshold': int(m.group('reduce_th') or 0),
+            'reduce_any': 1,
+            'score_threshold': int(m.group('score_th') or 0),
+            'score_delta': int(m.group('delta') or 0),
         }
     return None
 
@@ -5233,6 +5255,59 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                 rng = random.Random()
             applied = bool(try_apply_effect_template(gs, rng, cards_db, after_eff, ctx0))
         gs.log.append(f"[AUTO] {src}: confirm_effect -> {'applied' if applied else 'no_match'} {after_eff}")
+        _r = p.get('_resume') if isinstance(p, dict) else None
+        if _r:
+            gs.pending.append(_r)
+        return
+    if kind == 'live_start_score_if_live_zone_group_count_at_least':
+        low = choice_str.lower()
+        if low not in ('ok', 'apply', 'yes', 'y', '1', 'true', 'use', 'go', 'confirm', 'はい', '使う'):
+            gs.log.append(f"[ERR] {kind}: invalid choice {choice_str}")
+            gs.pending.append(p)
+            return
+        src = str(p.get('source_cn', '') or '')
+        group_name = str(p.get('condition_group_name', '') or '')
+        need = int(p.get('condition_count', 0) or 0)
+        delta = int(p.get('score_delta', 0) or 0)
+        cnt = int(_live_zone_group_card_count(gs, cards_db, group_name))
+        bonus = int(delta if cnt >= need else 0)
+        gs.log.append(f"[AUTO] {src}[ライブ開始時]: live-zone group({group_name})={cnt}/{need} -> score {bonus:+d}")
+        _r = p.get('_resume') if isinstance(p, dict) else None
+        if _r:
+            gs.pending.append(_r)
+        return
+    if kind == 'live_start_score_if_green_live_group_count_at_least':
+        low = choice_str.lower()
+        if low not in ('ok', 'apply', 'yes', 'y', '1', 'true', 'use', 'go', 'confirm', 'はい', '使う'):
+            gs.log.append(f"[ERR] {kind}: invalid choice {choice_str}")
+            gs.pending.append(p)
+            return
+        src = str(p.get('source_cn', '') or '')
+        group_name = str(p.get('condition_group_name', '') or '')
+        need = int(p.get('condition_count', 0) or 0)
+        delta = int(p.get('score_delta', 0) or 0)
+        cnt = int(_green_live_group_count(gs, cards_db, group_name))
+        bonus = int(delta if cnt >= need else 0)
+        gs.log.append(f"[AUTO] {src}[ライブ開始時]: green live group({group_name})={cnt}/{need} -> score {bonus:+d}")
+        _r = p.get('_resume') if isinstance(p, dict) else None
+        if _r:
+            gs.pending.append(_r)
+        return
+    if kind == 'live_start_reduce_any_and_score_if_success_score_at_least':
+        low = choice_str.lower()
+        if low not in ('ok', 'apply', 'yes', 'y', '1', 'true', 'use', 'go', 'confirm', 'はい', '使う'):
+            gs.log.append(f"[ERR] {kind}: invalid choice {choice_str}")
+            gs.pending.append(p)
+            return
+        src = str(p.get('source_cn', '') or '')
+        total = int(_success_zone_score_total(gs, cards_db))
+        reduce_th = int(p.get('reduce_threshold', 0) or 0)
+        reduce_any = int(p.get('reduce_any', 0) or 0)
+        score_th = int(p.get('score_threshold', 0) or 0)
+        delta = int(p.get('score_delta', 0) or 0)
+        red = int(reduce_any if total >= reduce_th else 0)
+        bonus = int(delta if total >= score_th else 0)
+        gs.log.append(f"[AUTO] {src}[ライブ開始時]: success score total={total} -> required(any) -{red}, score {bonus:+d}")
         _r = p.get('_resume') if isinstance(p, dict) else None
         if _r:
             gs.pending.append(_r)
