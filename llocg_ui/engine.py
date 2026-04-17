@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: fix_live_start_wrapper_pending_setidx_20260416u
+# BUILD_TAG: generalize_live_start_numeric_attempt_fallbacks_20260416v
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -4034,6 +4034,73 @@ def _success_zone_score_total(gs: GameState, cards_db: Dict[str, CardInfo]) -> i
     return int(_success_zone_score_sum(gs, cards_db))
 
 
+def _parse_live_start_score_if_live_zone_group_count(ci: Optional[CardInfo]) -> Optional[Tuple[str, int, int]]:
+    try:
+        if not ci or not getattr(ci, 'abilities', None):
+            return None
+        for ab in _iter_triggered_abilities(ci, 'ライブ開始時'):
+            clauses = ab.get('clauses', []) if isinstance(ab, dict) else []
+            if not isinstance(clauses, list):
+                continue
+            for cl in clauses:
+                if not isinstance(cl, dict):
+                    continue
+                eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+                if not eff:
+                    continue
+                eff_norm = eff.replace('\n', '')
+                m = re.match(r'^自分のライブ中の『(?P<group>[^』]+)』のカードが(?P<count>\d+)枚以上ある場合、このカードのスコアを\+(?P<delta>\d+)する。$', eff_norm)
+                if m:
+                    return (str(m.group('group') or '').strip(), int(m.group('count') or 0), int(m.group('delta') or 0))
+    except Exception:
+        return None
+    return None
+
+def _parse_live_start_score_if_green_live_group_count(ci: Optional[CardInfo]) -> Optional[Tuple[str, int, int]]:
+    try:
+        if not ci or not getattr(ci, 'abilities', None):
+            return None
+        for ab in _iter_triggered_abilities(ci, 'ライブ開始時'):
+            clauses = ab.get('clauses', []) if isinstance(ab, dict) else []
+            if not isinstance(clauses, list):
+                continue
+            for cl in clauses:
+                if not isinstance(cl, dict):
+                    continue
+                eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+                if not eff:
+                    continue
+                eff_norm = eff.replace('\n', '')
+                m = re.match(r'^控え室に『(?P<group>[^』]+)』のライブカードが(?P<count>\d+)枚以上あるなら、このカードのスコアを\+(?P<delta>\d+)する。$', eff_norm)
+                if m:
+                    return (str(m.group('group') or '').strip(), int(m.group('count') or 0), int(m.group('delta') or 0))
+    except Exception:
+        return None
+    return None
+
+def _parse_live_start_reduce_any_and_score_if_success_score(ci: Optional[CardInfo]) -> Optional[Tuple[int, int, int, int]]:
+    try:
+        if not ci or not getattr(ci, 'abilities', None):
+            return None
+        for ab in _iter_triggered_abilities(ci, 'ライブ開始時'):
+            clauses = ab.get('clauses', []) if isinstance(ab, dict) else []
+            if not isinstance(clauses, list):
+                continue
+            for cl in clauses:
+                if not isinstance(cl, dict):
+                    continue
+                eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+                if not eff:
+                    continue
+                eff_norm = eff.replace('\n', '')
+                m = re.match(r'^自分の成功ライブカード置き場にあるカードのスコアの合計が(?P<reduce_th>\d+)以上の場合、このライブを成功させるための必要ハートを<\(任意\)>減らす。スコアの合計が(?P<score_th>\d+)以上の場合、さらにこのカードのスコアを\+(?P<delta>\d+)する。$', eff_norm)
+                if m:
+                    return (int(m.group('reduce_th') or 0), 1, int(m.group('score_th') or 0), int(m.group('delta') or 0))
+    except Exception:
+        return None
+    return None
+
+
 def _build_live_start_trigger_from_effect(gs: GameState, cards_db: Dict[str, CardInfo], eff: str, source_cn: str, label: str, ctx: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     eff_raw = str(eff or '').strip()
     eff_norm = eff_raw.replace('\n', '')
@@ -4420,15 +4487,18 @@ def _green_live_count_by_group_or_unit(gs: GameState, cards_db: Dict[str, CardIn
             n += 1
     return int(n)
 def _aokuharuka_score_bonus(cn_live, gs: GameState, cards_db: Dict[str, CardInfo], set_idx: Optional[int] = None) -> int:
-    try:
-        canon = _canon_cardno(cn_live)
-    except Exception:
-        canon = str(cn_live or '')
-    if canon != 'PL!HS-bp2-022':
-        return 0
     if not _live_start_set_idx_resolved(gs, set_idx):
         return 0
-    return 1 if _green_live_count_by_group_or_unit(gs, cards_db, 'スリーズブーケ') >= 3 else 0
+    mapped = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
+    if mapped > 0:
+        return mapped
+    ci = _get_card(cards_db, cn_live)
+    parsed = _parse_live_start_score_if_green_live_group_count(ci)
+    if not parsed:
+        return 0
+    group_name, need, delta = parsed
+    cnt = int(_green_live_group_count(gs, cards_db, group_name))
+    return int(delta if cnt >= int(need) else 0)
 def _live_start_set_idx_resolved(gs: Optional[GameState], set_idx: Optional[int]) -> bool:
     try:
         if gs is None:
@@ -4492,46 +4562,44 @@ def _live_start_required_any_reduction_for_set_idx(gs: Optional[GameState], set_
         return 0
 
 def _heartbeat_required_any_reduction(cn_live, gs: GameState, cards_db: Dict[str, CardInfo], set_idx: Optional[int] = None) -> int:
-    try:
-        canon = _canon_cardno(cn_live)
-    except Exception:
-        canon = str(cn_live or '')
-    if canon != _HEARTBEAT_BP4_021_CN_CANON:
-        return 0
     if not _live_start_set_idx_resolved(gs, set_idx):
         return 0
     mapped = int(_live_start_required_any_reduction_for_set_idx(gs, set_idx, source_cn=cn_live))
     if mapped > 0:
         return mapped
+    ci = _get_card(cards_db, cn_live)
+    parsed = _parse_live_start_reduce_any_and_score_if_success_score(ci)
+    if not parsed:
+        return 0
+    reduce_th, reduce_any, _score_th, _delta = parsed
     total = _success_zone_score_sum(gs, cards_db)
-    return 1 if int(total) >= 6 else 0
+    return int(reduce_any if int(total) >= int(reduce_th) else 0)
 def _heartbeat_score_bonus(cn_live, gs: GameState, cards_db: Dict[str, CardInfo], set_idx: Optional[int] = None) -> int:
-    try:
-        canon = _canon_cardno(cn_live)
-    except Exception:
-        canon = str(cn_live or '')
-    if canon != _HEARTBEAT_BP4_021_CN_CANON:
-        return 0
     if not _live_start_set_idx_resolved(gs, set_idx):
         return 0
     mapped = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
     if mapped > 0:
         return mapped
+    ci = _get_card(cards_db, cn_live)
+    parsed = _parse_live_start_reduce_any_and_score_if_success_score(ci)
+    if not parsed:
+        return 0
+    _reduce_th, _reduce_any, score_th, delta = parsed
     total = _success_zone_score_sum(gs, cards_db)
-    return 1 if int(total) >= 9 else 0
+    return int(delta if int(total) >= int(score_th) else 0)
 def _bokulive_score_bonus(cn_live, gs: GameState, cards_db: Dict[str, CardInfo], set_idx: Optional[int] = None) -> int:
-    try:
-        canon = _canon_cardno(cn_live)
-    except Exception:
-        canon = str(cn_live or '')
-    if canon != _BOKULIVE_BP3_019_CN_CANON:
-        return 0
     if not _live_start_set_idx_resolved(gs, set_idx):
         return 0
     mapped = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
     if mapped > 0:
         return mapped
-    return 1 if _mu_live_cards_in_set_zone_count(gs, cards_db) >= 2 else 0
+    ci = _get_card(cards_db, cn_live)
+    parsed = _parse_live_start_score_if_live_zone_group_count(ci)
+    if not parsed:
+        return 0
+    group_name, need, delta = parsed
+    cnt = int(_live_zone_group_card_count(gs, cards_db, group_name))
+    return int(delta if cnt >= int(need) else 0)
 def _compute_attempt_score_breakdown(lives, cards_db, gs_turn, gs=None, live_set_indices=None):
     lives_count = len(lives or [])
     total = 0
@@ -4776,13 +4844,13 @@ def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[s
         return int(_monster_girls_wait_bonus(gs, cards_db))
     if canon == _EMOTION_CN_CANON:
         return 2 * int(_emotion_success_count(gs))
-    if canon == _BOKULIVE_BP3_019_CN_CANON:
+    if _parse_live_start_score_if_live_zone_group_count(_get_card(cards_db, cn_live)) is not None:
         _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
         return _m if _m > 0 else int(_bokulive_score_bonus(cn_live, gs, cards_db, set_idx=set_idx))
-    if canon == 'PL!HS-bp2-022':
+    if _parse_live_start_score_if_green_live_group_count(_get_card(cards_db, cn_live)) is not None:
         _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
         return _m if _m > 0 else int(_aokuharuka_score_bonus(cn_live, gs, cards_db, set_idx=set_idx))
-    if canon == _HEARTBEAT_BP4_021_CN_CANON:
+    if _parse_live_start_reduce_any_and_score_if_success_score(_get_card(cards_db, cn_live)) is not None:
         _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
         return _m if _m > 0 else int(_heartbeat_score_bonus(cn_live, gs, cards_db, set_idx=set_idx))
     if canon == _TSUNAGARU_CONNECT_CN_CANON:
