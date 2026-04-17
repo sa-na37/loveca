@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: finalscore_reveal_and_neosky_ui_20260416k
+# BUILD_TAG: fix_wrapper_state_and_success_zone_score_20260416t
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -1277,6 +1277,8 @@ class GameState:
     tsunagaru_connect_bonus_this_live: int = 0
     live_start_score_bonus_by_set_idx: Dict[int, int] = field(default_factory=dict)
     live_start_required_any_reduction_by_set_idx: Dict[int, int] = field(default_factory=dict)
+    live_start_score_bonus_by_cn: Dict[str, int] = field(default_factory=dict)
+    live_start_required_any_reduction_by_cn: Dict[str, int] = field(default_factory=dict)
     vivid_world_blue_mode_this_live: bool = False
     vivid_world_bonus_this_live: int = 0
     live_start_resolved_set_idxs: List[int] = field(default_factory=list)
@@ -1372,6 +1374,8 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
         "tsunagaru_connect_bonus_this_live": int(getattr(gs, "tsunagaru_connect_bonus_this_live", 0) or 0),
         "live_start_score_bonus_by_set_idx": {int(k): int(v) for k, v in dict(getattr(gs, "live_start_score_bonus_by_set_idx", {}) or {}).items()},
         "live_start_required_any_reduction_by_set_idx": {int(k): int(v) for k, v in dict(getattr(gs, "live_start_required_any_reduction_by_set_idx", {}) or {}).items()},
+        "live_start_score_bonus_by_cn": {str(k): int(v) for k, v in dict(getattr(gs, "live_start_score_bonus_by_cn", {}) or {}).items()},
+        "live_start_required_any_reduction_by_cn": {str(k): int(v) for k, v in dict(getattr(gs, "live_start_required_any_reduction_by_cn", {}) or {}).items()},
         "vivid_world_blue_mode_this_live": bool(getattr(gs, "vivid_world_blue_mode_this_live", False)),
         "vivid_world_bonus_this_live": int(getattr(gs, "vivid_world_bonus_this_live", 0) or 0),
         "live_start_resolved_set_idxs": list(getattr(gs, "live_start_resolved_set_idxs", []) or []),
@@ -1438,6 +1442,14 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
         gs.live_start_required_any_reduction_by_set_idx = {int(k): int(v) for k, v in dict(snap.get('live_start_required_any_reduction_by_set_idx', getattr(gs, 'live_start_required_any_reduction_by_set_idx', {}) or {}) or {}).items()}
     except Exception:
         gs.live_start_required_any_reduction_by_set_idx = {}
+    try:
+        gs.live_start_score_bonus_by_cn = {str(k): int(v) for k, v in dict(snap.get('live_start_score_bonus_by_cn', getattr(gs, 'live_start_score_bonus_by_cn', {}) or {}) or {}).items()}
+    except Exception:
+        gs.live_start_score_bonus_by_cn = {}
+    try:
+        gs.live_start_required_any_reduction_by_cn = {str(k): int(v) for k, v in dict(snap.get('live_start_required_any_reduction_by_cn', getattr(gs, 'live_start_required_any_reduction_by_cn', {}) or {}) or {}).items()}
+    except Exception:
+        gs.live_start_required_any_reduction_by_cn = {}
     gs.vivid_world_blue_mode_this_live = bool(snap.get('vivid_world_blue_mode_this_live', getattr(gs, 'vivid_world_blue_mode_this_live', False)))
     gs.vivid_world_bonus_this_live = int(snap.get('vivid_world_bonus_this_live', getattr(gs, 'vivid_world_bonus_this_live', 0) or 0) or 0)
     try:
@@ -1478,6 +1490,8 @@ def begin_turn(gs: GameState, rng: Optional[random.Random] = None) -> None:
     gs.live_start_resolved_set_idxs = []
     gs.live_start_score_bonus_by_set_idx = {}
     gs.live_start_required_any_reduction_by_set_idx = {}
+    gs.live_start_score_bonus_by_cn = {}
+    gs.live_start_required_any_reduction_by_cn = {}
     # Rules order (coarse): ACTIVE -> ENERGY -> DRAW -> MAIN
     gs.phase = "ACTIVE"
     refresh(gs)
@@ -4014,16 +4028,7 @@ def _green_live_group_count(gs: GameState, cards_db: Dict[str, CardInfo], group_
     return int(total)
 
 def _success_zone_score_total(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
-    total = 0
-    for cn in list(getattr(gs, 'success_zone', []) or []):
-        ci = _get_card(cards_db, cn)
-        if not ci:
-            continue
-        try:
-            total += int(getattr(ci, 'score', 0) or 0)
-        except Exception:
-            pass
-    return int(total)
+    return int(_success_zone_score_sum(gs, cards_db))
 
 
 def _build_live_start_trigger_from_effect(gs: GameState, cards_db: Dict[str, CardInfo], eff: str, source_cn: str, label: str, ctx: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -4359,14 +4364,24 @@ _VIVID_WORLD_CN_CANON = 'PL!N-bp4-025'
 _NEO_SKY_CN_CANON = 'PL!N-bp4-031'
 _BOKULIVE_BP3_019_CN_CANON = 'PL!-bp3-019'
 _HEARTBEAT_BP4_021_CN_CANON = 'PL!-bp4-021'
+def _effective_success_zone_live_score(cn_live, gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
+    ci = _get_card(cards_db, cn_live)
+    if not ci:
+        return 0
+    try:
+        base = int(getattr(ci, 'score', 0) or 0)
+    except Exception:
+        base = 0
+    bonus = 0
+    # Future success-zone score modifiers should be routed here so all
+    # "成功ライブカード置き場のスコア合計" references stay consistent.
+    return int(base + bonus)
+
 def _success_zone_score_sum(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
     total = 0
     for cn in list(getattr(gs, 'success_zone', []) or []):
-        ci = _get_card(cards_db, cn)
-        if not ci:
-            continue
         try:
-            total += int(getattr(ci, 'score', 0) or 0)
+            total += int(_effective_success_zone_live_score(cn, gs, cards_db) or 0)
         except Exception:
             pass
     return int(total)
@@ -4443,19 +4458,29 @@ def _live_score_delta_for_attempt(cn_live, lives_count, gs_turn):
         return 2
     return 0
 
-def _live_start_score_bonus_for_set_idx(gs: Optional[GameState], set_idx: Optional[int]) -> int:
+def _live_start_score_bonus_for_set_idx(gs: Optional[GameState], set_idx: Optional[int], source_cn: Optional[str] = None) -> int:
     try:
-        if gs is None or set_idx is None:
+        if gs is None:
             return 0
-        return int(dict(getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {}).get(int(set_idx), 0) or 0)
+        if set_idx is not None:
+            return int(dict(getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {}).get(int(set_idx), 0) or 0)
+        canon = _canon_cardno(str(source_cn or ''))
+        if not canon:
+            return 0
+        return int(dict(getattr(gs, 'live_start_score_bonus_by_cn', {}) or {}).get(canon, 0) or 0)
     except Exception:
         return 0
 
-def _live_start_required_any_reduction_for_set_idx(gs: Optional[GameState], set_idx: Optional[int]) -> int:
+def _live_start_required_any_reduction_for_set_idx(gs: Optional[GameState], set_idx: Optional[int], source_cn: Optional[str] = None) -> int:
     try:
-        if gs is None or set_idx is None:
+        if gs is None:
             return 0
-        return int(dict(getattr(gs, 'live_start_required_any_reduction_by_set_idx', {}) or {}).get(int(set_idx), 0) or 0)
+        if set_idx is not None:
+            return int(dict(getattr(gs, 'live_start_required_any_reduction_by_set_idx', {}) or {}).get(int(set_idx), 0) or 0)
+        canon = _canon_cardno(str(source_cn or ''))
+        if not canon:
+            return 0
+        return int(dict(getattr(gs, 'live_start_required_any_reduction_by_cn', {}) or {}).get(canon, 0) or 0)
     except Exception:
         return 0
 
@@ -4468,7 +4493,7 @@ def _heartbeat_required_any_reduction(cn_live, gs: GameState, cards_db: Dict[str
         return 0
     if not _live_start_set_idx_resolved(gs, set_idx):
         return 0
-    mapped = int(_live_start_required_any_reduction_for_set_idx(gs, set_idx))
+    mapped = int(_live_start_required_any_reduction_for_set_idx(gs, set_idx, source_cn=cn_live))
     if mapped > 0:
         return mapped
     total = _success_zone_score_sum(gs, cards_db)
@@ -4482,7 +4507,7 @@ def _heartbeat_score_bonus(cn_live, gs: GameState, cards_db: Dict[str, CardInfo]
         return 0
     if not _live_start_set_idx_resolved(gs, set_idx):
         return 0
-    mapped = int(_live_start_score_bonus_for_set_idx(gs, set_idx))
+    mapped = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
     if mapped > 0:
         return mapped
     total = _success_zone_score_sum(gs, cards_db)
@@ -4496,7 +4521,7 @@ def _bokulive_score_bonus(cn_live, gs: GameState, cards_db: Dict[str, CardInfo],
         return 0
     if not _live_start_set_idx_resolved(gs, set_idx):
         return 0
-    mapped = int(_live_start_score_bonus_for_set_idx(gs, set_idx))
+    mapped = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
     if mapped > 0:
         return mapped
     return 1 if _mu_live_cards_in_set_zone_count(gs, cards_db) >= 2 else 0
@@ -4723,7 +4748,7 @@ def _effective_live_required_hearts(cn_live, ci, gs: GameState, cards_db: Option
         reduce_any = 0
     if reduce_any <= 0:
         try:
-            reduce_any = int(_live_start_required_any_reduction_for_set_idx(gs, set_idx))
+            reduce_any = int(_live_start_required_any_reduction_for_set_idx(gs, set_idx, source_cn=cn_live))
         except Exception:
             reduce_any = 0
     if reduce_any > 0:
@@ -4745,13 +4770,13 @@ def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[s
     if canon == _EMOTION_CN_CANON:
         return 2 * int(_emotion_success_count(gs))
     if canon == _BOKULIVE_BP3_019_CN_CANON:
-        _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx))
+        _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
         return _m if _m > 0 else int(_bokulive_score_bonus(cn_live, gs, cards_db, set_idx=set_idx))
     if canon == 'PL!HS-bp2-022':
-        _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx))
+        _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
         return _m if _m > 0 else int(_aokuharuka_score_bonus(cn_live, gs, cards_db, set_idx=set_idx))
     if canon == _HEARTBEAT_BP4_021_CN_CANON:
-        _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx))
+        _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
         return _m if _m > 0 else int(_heartbeat_score_bonus(cn_live, gs, cards_db, set_idx=set_idx))
     if canon == _TSUNAGARU_CONNECT_CN_CANON:
         return int(getattr(gs, 'tsunagaru_connect_bonus_this_live', 0) or 0)
@@ -5394,10 +5419,16 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         delta = int(p.get('score_delta', 0) or 0)
         cnt = int(_live_zone_group_card_count(gs, cards_db, group_name))
         bonus = int(delta if cnt >= need else 0)
-        if bonus > 0 and set_idx is not None:
-            _m = dict(getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {})
-            _m[int(set_idx)] = int(_m.get(int(set_idx), 0) or 0) + int(bonus)
-            gs.live_start_score_bonus_by_set_idx = _m
+        if bonus > 0:
+            if set_idx is not None:
+                _m = dict(getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {})
+                _m[int(set_idx)] = int(_m.get(int(set_idx), 0) or 0) + int(bonus)
+                gs.live_start_score_bonus_by_set_idx = _m
+            else:
+                _m = dict(getattr(gs, 'live_start_score_bonus_by_cn', {}) or {})
+                _k = _canon_cardno(src)
+                _m[_k] = int(_m.get(_k, 0) or 0) + int(bonus)
+                gs.live_start_score_bonus_by_cn = _m
         gs.log.append(f"[AUTO] {src}[ライブ開始時]: live-zone group({group_name})={cnt}/{need} -> score {bonus:+d}")
         _r = p.get('_resume') if isinstance(p, dict) else None
         if _r:
@@ -5417,10 +5448,16 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         delta = int(p.get('score_delta', 0) or 0)
         cnt = int(_green_live_group_count(gs, cards_db, group_name))
         bonus = int(delta if cnt >= need else 0)
-        if bonus > 0 and set_idx is not None:
-            _m = dict(getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {})
-            _m[int(set_idx)] = int(_m.get(int(set_idx), 0) or 0) + int(bonus)
-            gs.live_start_score_bonus_by_set_idx = _m
+        if bonus > 0:
+            if set_idx is not None:
+                _m = dict(getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {})
+                _m[int(set_idx)] = int(_m.get(int(set_idx), 0) or 0) + int(bonus)
+                gs.live_start_score_bonus_by_set_idx = _m
+            else:
+                _m = dict(getattr(gs, 'live_start_score_bonus_by_cn', {}) or {})
+                _k = _canon_cardno(src)
+                _m[_k] = int(_m.get(_k, 0) or 0) + int(bonus)
+                gs.live_start_score_bonus_by_cn = _m
         gs.log.append(f"[AUTO] {src}[ライブ開始時]: green live group({group_name})={cnt}/{need} -> score {bonus:+d}")
         _r = p.get('_resume') if isinstance(p, dict) else None
         if _r:
@@ -5442,15 +5479,26 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         delta = int(p.get('score_delta', 0) or 0)
         red = int(reduce_any if total >= reduce_th else 0)
         bonus = int(delta if total >= score_th else 0)
-        if set_idx is not None:
-            if red > 0:
-                _rmap = dict(getattr(gs, 'live_start_required_any_reduction_by_set_idx', {}) or {})
-                _rmap[int(set_idx)] = max(int(_rmap.get(int(set_idx), 0) or 0), int(red))
-                gs.live_start_required_any_reduction_by_set_idx = _rmap
-            if bonus > 0:
-                _smap = dict(getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {})
-                _smap[int(set_idx)] = int(_smap.get(int(set_idx), 0) or 0) + int(bonus)
-                gs.live_start_score_bonus_by_set_idx = _smap
+        if red > 0 or bonus > 0:
+            _k = _canon_cardno(src)
+            if set_idx is not None:
+                if red > 0:
+                    _rmap = dict(getattr(gs, 'live_start_required_any_reduction_by_set_idx', {}) or {})
+                    _rmap[int(set_idx)] = max(int(_rmap.get(int(set_idx), 0) or 0), int(red))
+                    gs.live_start_required_any_reduction_by_set_idx = _rmap
+                if bonus > 0:
+                    _smap = dict(getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {})
+                    _smap[int(set_idx)] = int(_smap.get(int(set_idx), 0) or 0) + int(bonus)
+                    gs.live_start_score_bonus_by_set_idx = _smap
+            else:
+                if red > 0:
+                    _rmap = dict(getattr(gs, 'live_start_required_any_reduction_by_cn', {}) or {})
+                    _rmap[_k] = max(int(_rmap.get(_k, 0) or 0), int(red))
+                    gs.live_start_required_any_reduction_by_cn = _rmap
+                if bonus > 0:
+                    _smap = dict(getattr(gs, 'live_start_score_bonus_by_cn', {}) or {})
+                    _smap[_k] = int(_smap.get(_k, 0) or 0) + int(bonus)
+                    gs.live_start_score_bonus_by_cn = _smap
         gs.log.append(f"[AUTO] {src}[ライブ開始時]: success score total={total} -> required(any) -{red}, score {bonus:+d}")
         _r = p.get('_resume') if isinstance(p, dict) else None
         if _r:
