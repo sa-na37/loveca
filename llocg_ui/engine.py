@@ -2662,20 +2662,24 @@ def _apply_vivid_world_blue_mode(pool: Dict[str, int]) -> Dict[str, int]:
     if moved > 0:
         out['blue'] = int(out.get('blue', 0) or 0) + moved
     return out
-def _vivid_world_revealed_niji_has_all_six(gs: GameState, cards_db: Dict[str, CardInfo]) -> bool:
+def _revealed_group_members_have_all_six_colors(gs: GameState, cards_db: Dict[str, CardInfo], group_name: str) -> bool:
     cols = set()
+    group_name = str(group_name or '').strip()
     for cn in list(getattr(gs, '_yell_revealed_this_live', []) or []):
         ci = _get_card(cards_db, cn)
         if not ci:
             continue
         if not _is_member_ci(ci):
             continue
-        if '虹ヶ咲' not in str(getattr(ci, 'group', '') or ''):
+        if group_name and group_name not in str(getattr(ci, 'group', '') or ''):
             continue
         for k, v in ((getattr(ci, 'base_hearts', None) or {}) or {}).items():
             if k in ('pink', 'red', 'yellow', 'green', 'blue', 'purple') and int(v or 0) > 0:
                 cols.add(k)
     return len(cols) == 6
+
+def _vivid_world_revealed_niji_has_all_six(gs: GameState, cards_db: Dict[str, CardInfo]) -> bool:
+    return _revealed_group_members_have_all_six_colors(gs, cards_db, '虹ヶ咲')
 def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
     """Queue live-start auto effects once per live (until Attempt resolves)."""
     if gs.live_start_prompted:
@@ -2921,7 +2925,6 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
     # existing hard-coded LIVE handlers below.
     try:
         _generic_live_skip = {
-            _VIVID_WORLD_CN_CANON,
             _BOKULIVE_BP3_019_CN_CANON,
             'PL!HS-bp2-022',
             _HEARTBEAT_BP4_021_CN_CANON,
@@ -3047,23 +3050,6 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                     'options': ['ok'],
                 }
                 _append_prompt(pr, pr['text'])
-    except Exception:
-        pass
-    try:
-        _vw_n = 0
-        for _cn0 in list(getattr(gs, 'set_zone', []) or []):
-            try:
-                _canon0 = _canon_cardno(_cn0)
-            except Exception:
-                _canon0 = str(_cn0 or '')
-            if _canon0 == _VIVID_WORLD_CN_CANON:
-                _vw_n += 1
-        for _i in range(int(_vw_n or 0)):
-            triggers.append({
-                'kind': 'live_start_vivid_world_auto',
-                'source_cn': _VIVID_WORLD_CN_CANON,
-                'label': 'PL!N-bp4-025 ライブ開始時',
-            })
     except Exception:
         pass
     n = len(triggers)
@@ -3763,9 +3749,14 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             'k': int(_niji_n),
         })
         return
-    if kind == 'live_start_vivid_world_auto':
-        gs.vivid_world_blue_mode_this_live = True
-        gs.log.append('[AUTO] VIVID WORLD live-start: cheer pink/red/yellow/green/purple/all -> blue until end of live')
+    if kind in ('live_start_convert_revealed_colors_to_single_color_until_end_of_live', 'live_start_vivid_world_auto'):
+        target_color_jp = str((trig or {}).get('target_color_jp', '') or '青').strip()
+        target_key = _HEART_ICON_COLOR_MAP.get(target_color_jp, 'blue')
+        if target_key == 'blue':
+            gs.vivid_world_blue_mode_this_live = True
+            gs.log.append('[AUTO] VIVID WORLD live-start: cheer pink/red/yellow/green/purple/all -> blue until end of live')
+        else:
+            gs.log.append(f'[WARN] live-start color-convert unsupported target={target_color_jp}')
         return
     if kind in ('enqueue_choose_effects_from_ability_on_live_success', 'success_enqueue_choose_effects'):
         ab = dict((trig or {}).get('ability', {}) or {})
@@ -3830,6 +3821,17 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             else:
                 gs.log.append(f"[AUTO] LIVE: {src_cn or '?'}[ライブ成功時] applied {eff}")
         return
+    if kind in ('add_live_success_score_bonus_if_revealed_group_members_have_all_six_colors',):
+        cn_live = str((trig or {}).get('source_cn', '') or '')
+        group_name = str((trig or {}).get('condition_group_name', '') or '')
+        bonus = int((trig or {}).get('bonus', 0) or 0)
+        if _revealed_group_members_have_all_six_colors(gs, cards_db, group_name):
+            if bonus:
+                _add_last_attempt_live_score_bonus(gs, cn_live, bonus)
+                gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時]: score +{bonus}")
+        else:
+            gs.log.append(f"[SKIP] LIVE: {cn_live}[ライブ成功時] unresolved (revealed 『{group_name}』 members do not contain all six colors)")
+        return
     if kind in ('add_live_success_score_bonus', 'success_score_bonus_all'):
         cn_live = str((trig or {}).get('source_cn', '') or '')
         bonus = int((trig or {}).get('bonus', 0) or 0)
@@ -3889,17 +3891,6 @@ def cmd_yell(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo]) -
         setattr(gs, '_yell_revealed_this_live', _lst)
     except Exception:
         pass
-    try:
-        if bool(getattr(gs, 'vivid_world_blue_mode_this_live', False)):
-            gs.vivid_world_bonus_this_live = 1 if _vivid_world_revealed_niji_has_all_six(gs, cards_db) else 0
-            if int(getattr(gs, 'vivid_world_bonus_this_live', 0) or 0) > 0:
-                gs.log.append('[AUTO] VIVID WORLD: revealed Nijigasaki members contain all six colors -> score +1')
-            else:
-                gs.log.append('[AUTO] VIVID WORLD: revealed Nijigasaki members do not contain all six colors')
-        else:
-            gs.vivid_world_bonus_this_live = 0
-    except Exception:
-        gs.vivid_world_bonus_this_live = 0
     draw_n = 0
     for cn in revealed:
         c = _get_card(cards_db, cn)
@@ -4026,6 +4017,16 @@ def _build_live_start_trigger_from_effect(gs: GameState, cards_db: Dict[str, Car
             'label': str(label or ''),
             'condition_group_name': group_name,
         }
+    # Generalized from VIVID WORLD.
+    m = re.match(r'^ライブ終了時まで、エールによって公開される自分のカードが持つ<\(桃\)>、<\(赤\)>、<\(黄\)>、<\(緑\)>、<\(紫\)>、<\(ALL\)>は、すべて<\((?P<target>[^)]+)\)>になる。$', eff_norm)
+    if m:
+        target_color_jp = str(m.group('target') or '').strip()
+        return {
+            'kind': 'live_start_convert_revealed_colors_to_single_color_until_end_of_live',
+            'source_cn': str(source_cn or ''),
+            'label': str(label or ''),
+            'target_color_jp': target_color_jp,
+        }
     return None
 
 def _live_success_excess_color_and_stage_group_met(gs: GameState, cards_db: Dict[str, CardInfo], color_jp: str, group_name: str) -> bool:
@@ -4078,6 +4079,19 @@ def _build_live_success_trigger_from_effect(gs: GameState, cards_db: Dict[str, C
                 'ctx': dict(ctx or {}),
                 'label': str(label or ''),
             }
+    # Generalized from VIVID WORLD.
+    m = re.match(r'^エールにより公開された自分の『(?P<group>[^』]+)』のメンバーが持つハートの中に<\(桃\)>、<\(赤\)>、<\(黄\)>、<\(緑\)>、<\(青\)>、<\(紫\)>がある場合、このカードのスコアを\+1する。$', eff_norm)
+    if m:
+        group_name = str(m.group('group') or '').strip()
+        return {
+            'kind': 'add_live_success_score_bonus_if_revealed_group_members_have_all_six_colors',
+            'bonus': 1,
+            'condition_group_name': group_name,
+            'source_cn': str(source_cn or ''),
+            'pos': str(pos or ''),
+            'ctx': dict(ctx or {}),
+            'label': str(label or ''),
+        }
     return {
         'kind': 'apply_effect_template_on_live_success',
         'effect': eff_raw,
@@ -4600,8 +4614,6 @@ def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[s
         return int(_heartbeat_score_bonus(cn_live, gs, cards_db, set_idx=set_idx))
     if canon == _TSUNAGARU_CONNECT_CN_CANON:
         return int(getattr(gs, 'tsunagaru_connect_bonus_this_live', 0) or 0)
-    if canon == _VIVID_WORLD_CN_CANON:
-        return int(getattr(gs, 'vivid_world_bonus_this_live', 0) or 0)
     return 0
 def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
     if bool(getattr(gs, "cannot_live_until_end_of_live", False)):
