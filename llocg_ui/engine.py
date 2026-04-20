@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: fix_missing_numeric_live_start_dispatch_20260416wfix
+# BUILD_TAG: fix_emotion_nameerrors_20260416aa
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -1279,6 +1279,8 @@ class GameState:
     live_start_required_any_reduction_by_set_idx: Dict[int, int] = field(default_factory=dict)
     live_start_score_bonus_by_cn: Dict[str, int] = field(default_factory=dict)
     live_start_required_any_reduction_by_cn: Dict[str, int] = field(default_factory=dict)
+    live_start_required_any_increase_by_set_idx: Dict[int, int] = field(default_factory=dict)
+    live_start_required_any_increase_by_cn: Dict[str, int] = field(default_factory=dict)
     vivid_world_blue_mode_this_live: bool = False
     vivid_world_bonus_this_live: int = 0
     live_start_resolved_set_idxs: List[int] = field(default_factory=list)
@@ -1376,6 +1378,8 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
         "live_start_required_any_reduction_by_set_idx": {int(k): int(v) for k, v in dict(getattr(gs, "live_start_required_any_reduction_by_set_idx", {}) or {}).items()},
         "live_start_score_bonus_by_cn": {str(k): int(v) for k, v in dict(getattr(gs, "live_start_score_bonus_by_cn", {}) or {}).items()},
         "live_start_required_any_reduction_by_cn": {str(k): int(v) for k, v in dict(getattr(gs, "live_start_required_any_reduction_by_cn", {}) or {}).items()},
+        "live_start_required_any_increase_by_set_idx": {int(k): int(v) for k, v in dict(getattr(gs, "live_start_required_any_increase_by_set_idx", {}) or {}).items()},
+        "live_start_required_any_increase_by_cn": {str(k): int(v) for k, v in dict(getattr(gs, "live_start_required_any_increase_by_cn", {}) or {}).items()},
         "vivid_world_blue_mode_this_live": bool(getattr(gs, "vivid_world_blue_mode_this_live", False)),
         "vivid_world_bonus_this_live": int(getattr(gs, "vivid_world_bonus_this_live", 0) or 0),
         "live_start_resolved_set_idxs": list(getattr(gs, "live_start_resolved_set_idxs", []) or []),
@@ -1442,6 +1446,7 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
         gs.live_start_required_any_reduction_by_set_idx = {int(k): int(v) for k, v in dict(snap.get('live_start_required_any_reduction_by_set_idx', getattr(gs, 'live_start_required_any_reduction_by_set_idx', {}) or {}) or {}).items()}
     except Exception:
         gs.live_start_required_any_reduction_by_set_idx = {}
+        gs.live_start_required_any_increase_by_set_idx = {}
     try:
         gs.live_start_score_bonus_by_cn = {str(k): int(v) for k, v in dict(snap.get('live_start_score_bonus_by_cn', getattr(gs, 'live_start_score_bonus_by_cn', {}) or {}) or {}).items()}
     except Exception:
@@ -1450,6 +1455,17 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
         gs.live_start_required_any_reduction_by_cn = {str(k): int(v) for k, v in dict(snap.get('live_start_required_any_reduction_by_cn', getattr(gs, 'live_start_required_any_reduction_by_cn', {}) or {}) or {}).items()}
     except Exception:
         gs.live_start_required_any_reduction_by_cn = {}
+        gs.live_start_required_any_increase_by_cn = {}
+    gs.live_start_required_any_increase_by_set_idx = {}
+    gs.live_start_required_any_increase_by_cn = {}
+    try:
+        gs.live_start_required_any_increase_by_set_idx = {int(k): int(v) for k, v in dict(snap.get('live_start_required_any_increase_by_set_idx', getattr(gs, 'live_start_required_any_increase_by_set_idx', {}) or {}) or {}).items()}
+    except Exception:
+        gs.live_start_required_any_increase_by_set_idx = {}
+    try:
+        gs.live_start_required_any_increase_by_cn = {str(k): int(v) for k, v in dict(snap.get('live_start_required_any_increase_by_cn', getattr(gs, 'live_start_required_any_increase_by_cn', {}) or {}) or {}).items()}
+    except Exception:
+        gs.live_start_required_any_increase_by_cn = {}
     gs.vivid_world_blue_mode_this_live = bool(snap.get('vivid_world_blue_mode_this_live', getattr(gs, 'vivid_world_blue_mode_this_live', False)))
     gs.vivid_world_bonus_this_live = int(snap.get('vivid_world_bonus_this_live', getattr(gs, 'vivid_world_bonus_this_live', 0) or 0) or 0)
     try:
@@ -1492,6 +1508,8 @@ def begin_turn(gs: GameState, rng: Optional[random.Random] = None) -> None:
     gs.live_start_required_any_reduction_by_set_idx = {}
     gs.live_start_score_bonus_by_cn = {}
     gs.live_start_required_any_reduction_by_cn = {}
+    gs.live_start_required_any_increase_by_set_idx = {}
+    gs.live_start_required_any_increase_by_cn = {}
     # Rules order (coarse): ACTIVE -> ENERGY -> DRAW -> MAIN
     gs.phase = "ACTIVE"
     refresh(gs)
@@ -3078,6 +3096,7 @@ def _clear_end_of_live_buffs(gs: GameState) -> None:
     try:
         gs.live_start_score_bonus_by_set_idx = {}
         gs.live_start_required_any_reduction_by_set_idx = {}
+        gs.live_start_required_any_increase_by_set_idx = {}
     except Exception:
         pass
     try:
@@ -3775,55 +3794,19 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             'options': ['ok'],
         })
         return
-    if kind == 'live_start_score_per_stage_group_member_heart_color_kind':
+    if kind == 'live_start_score_and_increase_any_per_success_zone_cardname_count':
         src_cn = str((trig or {}).get('source_cn', '') or '')
-        group_name = str((trig or {}).get('condition_group_name', '') or '')
-        per = int((trig or {}).get('score_delta_per_kind', 0) or 0)
+        cardname = str((trig or {}).get('condition_cardname', '') or '')
+        per_score = int((trig or {}).get('score_delta_per', 0) or 0)
+        per_any = int((trig or {}).get('required_any_increase_per', 0) or 0)
         gs.pending.append({
-            'kind': 'live_start_score_per_stage_group_member_heart_color_kind',
+            'kind': 'live_start_score_and_increase_any_per_success_zone_cardname_count',
             'source_cn': src_cn,
             'set_idx': (trig or {}).get('set_idx', None),
-            'condition_group_name': group_name,
-            'score_delta_per_kind': per,
-            'text': f'【{src_cn}】ライブ開始時：自分のステージにいる『{group_name}』のメンバーが持つ6色のうち1色につき、このカードのスコアを+{per}する。',
-            'options': ['ok'],
-        })
-        return
-    if kind == 'live_start_score_if_success_zone_has_scores':
-        src_cn = str((trig or {}).get('source_cn', '') or '')
-        a = int((trig or {}).get('score_value_a', 0) or 0)
-        b = int((trig or {}).get('score_value_b', 0) or 0)
-        single = int((trig or {}).get('single_delta', 0) or 0)
-        both = int((trig or {}).get('both_delta', 0) or 0)
-        gs.pending.append({
-            'kind': 'live_start_score_if_success_zone_has_scores',
-            'source_cn': src_cn,
-            'set_idx': (trig or {}).get('set_idx', None),
-            'score_value_a': a,
-            'score_value_b': b,
-            'single_delta': single,
-            'both_delta': both,
-            'text': f'【{src_cn}】ライブ開始時：成功ライブカード置き場にスコア{a}か{b}のカードがある場合スコア+{single}、両方ある場合は代わりにスコア+{both}する。',
-            'options': ['ok'],
-        })
-        return
-    if kind == 'live_start_score_if_green_unique_live_names_group_count':
-        src_cn = str((trig or {}).get('source_cn', '') or '')
-        group_name = str((trig or {}).get('condition_group_name', '') or '')
-        th1 = int((trig or {}).get('threshold_1', 0) or 0)
-        d1 = int((trig or {}).get('score_delta_1', 0) or 0)
-        th2 = int((trig or {}).get('threshold_2', 0) or 0)
-        d2 = int((trig or {}).get('score_delta_2', 0) or 0)
-        gs.pending.append({
-            'kind': 'live_start_score_if_green_unique_live_names_group_count',
-            'source_cn': src_cn,
-            'set_idx': (trig or {}).get('set_idx', None),
-            'condition_group_name': group_name,
-            'threshold_1': th1,
-            'score_delta_1': d1,
-            'threshold_2': th2,
-            'score_delta_2': d2,
-            'text': f'【{src_cn}】ライブ開始時：控え室にカード名の異なる『{group_name}』のライブカードが{th1}枚以上ならスコア+{d1}、{th2}枚以上なら代わりにスコア+{d2}する。',
+            'condition_cardname': cardname,
+            'score_delta_per': per_score,
+            'required_any_increase_per': per_any,
+            'text': f'【{src_cn}】ライブ開始時：成功ライブカード置き場の「{cardname}」1枚につき、スコア+{per_score}、必要ハート<(任意)>を+{per_any}',
             'options': ['ok'],
         })
         return
@@ -3844,6 +3827,33 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             'text': f'【{src_cn}】ライブ開始時：成功ライブカード置き場のスコア合計が{reduce_th}以上なら必要ハート<(任意)>を-{reduce_any}、{score_th}以上ならさらにこのカードのスコアを+{delta}する。',
             'options': ['ok'],
         })
+        return
+    if kind == 'live_start_score_and_increase_any_per_success_zone_cardname_count':
+        src_cn = str((trig or {}).get('source_cn', '') or '')
+        cardname = str((trig or {}).get('condition_cardname', '') or '')
+        per_score = int((trig or {}).get('score_delta_per', 0) or 0)
+        per_any = int((trig or {}).get('required_any_increase_per', 0) or 0)
+        gs.pending.append({
+            'kind': 'live_start_score_and_increase_any_per_success_zone_cardname_count',
+            'source_cn': src_cn,
+            'set_idx': (trig or {}).get('set_idx', None),
+            'condition_cardname': cardname,
+            'score_delta_per': per_score,
+            'required_any_increase_per': per_any,
+            'text': f'【{src_cn}】ライブ開始時：成功ライブカード置き場の「{cardname}」1枚につき、スコア+{per_score}、必要ハート<(任意)>を+{per_any}',
+            'options': ['ok'],
+        })
+        return
+    if kind == 'add_live_success_score_bonus_per_weight_member':
+        cn_live = str((trig or {}).get('source_cn', '') or '')
+        per = int((trig or {}).get('bonus_per', 0) or 0)
+        n = int(_monster_girls_wait_bonus(gs, cards_db))
+        bonus = int(per * n)
+        if bonus > 0:
+            _add_last_attempt_live_score_bonus(gs, cn_live, bonus)
+            gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時]: wait members={n} -> score +{bonus}")
+        else:
+            gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時]: wait members=0 -> score +0")
         return
     if kind in ('enqueue_choose_effects_from_ability_on_live_success', 'success_enqueue_choose_effects'):
         ab = dict((trig or {}).get('ability', {}) or {})
@@ -3949,6 +3959,7 @@ def cmd_set(gs: GameState, rng: random.Random, indices: List[int]) -> None:
         gs.live_start_resolved_set_idxs = []
         gs.live_start_score_bonus_by_set_idx = {}
         gs.live_start_required_any_reduction_by_set_idx = {}
+        gs.live_start_required_any_increase_by_set_idx = {}
     except Exception:
         pass
     drawn = draw(gs, len(picked), rng)
@@ -4085,59 +4096,6 @@ def _green_live_group_count(gs: GameState, cards_db: Dict[str, CardInfo], group_
 def _success_zone_score_total(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
     return int(_success_zone_score_sum(gs, cards_db))
 
-def _stage_group_member_heart_color_kind_count(gs: GameState, cards_db: Dict[str, CardInfo], group_name: str) -> int:
-    cols = set()
-    g = str(group_name or '').strip()
-    if not g:
-        return 0
-    for pos in ('L', 'C', 'R'):
-        slot = (gs.stage or {}).get(pos)
-        if not slot or not getattr(slot, 'cardnumber', ''):
-            continue
-        ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
-        if not ci or _is_live_ci(ci):
-            continue
-        if g not in str(getattr(ci, 'group', '') or ''):
-            continue
-        for k, v in ((getattr(ci, 'base_hearts', None) or {}) or {}).items():
-            if k in ('pink', 'red', 'yellow', 'green', 'blue', 'purple') and int(v or 0) > 0:
-                cols.add(k)
-    return int(len(cols))
-
-def _green_unique_live_name_count(gs: GameState, cards_db: Dict[str, CardInfo], group_name: str) -> int:
-    names = set()
-    g = str(group_name or '').strip()
-    if not g:
-        return 0
-    for cn in list(getattr(gs, 'green_room', []) or []):
-        ci = _get_card(cards_db, cn)
-        if not ci or not _is_live_ci(ci):
-            continue
-        if g not in str(getattr(ci, 'group', '') or ''):
-            continue
-        nm = str(getattr(ci, 'cardname', '') or getattr(ci, 'name', '') or getattr(ci, 'title', '') or cn)
-        if nm:
-            names.add(nm)
-    return int(len(names))
-
-def _success_zone_has_score_values_bonus(gs: GameState, cards_db: Dict[str, CardInfo], score_a: int, score_b: int, single_delta: int, both_delta: int) -> int:
-    has_a = False
-    has_b = False
-    for cn in list(getattr(gs, 'success_zone', []) or []):
-        try:
-            sc = int(_effective_success_zone_live_score(cn, gs, cards_db) or 0)
-        except Exception:
-            sc = 0
-        if sc == int(score_a):
-            has_a = True
-        if sc == int(score_b):
-            has_b = True
-    if has_a and has_b:
-        return int(both_delta)
-    if has_a or has_b:
-        return int(single_delta)
-    return 0
-
 
 def _parse_live_start_score_if_live_zone_group_count(ci: Optional[CardInfo]) -> Optional[Tuple[str, int, int]]:
     try:
@@ -4206,68 +4164,19 @@ def _parse_live_start_reduce_any_and_score_if_success_score(ci: Optional[CardInf
     return None
 
 
-def _parse_live_start_score_per_stage_group_member_heart_color_kind(ci: Optional[CardInfo]) -> Optional[Tuple[str, int]]:
-    try:
-        if not ci or not getattr(ci, 'abilities', None):
-            return None
-        for ab in _iter_triggered_abilities(ci, 'ライブ開始時'):
-            clauses = ab.get('clauses', []) if isinstance(ab, dict) else []
-            if not isinstance(clauses, list):
-                continue
-            for cl in clauses:
-                if not isinstance(cl, dict):
-                    continue
-                eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
-                if not eff:
-                    continue
-                eff_norm = eff.replace('\n', '')
-                m = re.match(r'^自分のステージにいる『(?P<group>[^』]+)』のメンバーが持つ<\(桃\)><\(赤\)><\(黄\)><\(緑\)><\(青\)><\(紫\)>のうち1色につき、このカードのスコアを[\+＋](?P<delta>\d+)する。$', eff_norm)
-                if m:
-                    return (str(m.group('group') or '').strip(), int(m.group('delta') or 0))
-    except Exception:
+def _parse_live_start_score_and_increase_any_per_success_zone_cardname_count(ci: Optional[CardInfo]) -> Optional[Tuple[str, int, int]]:
+    txt = _effect_text_norm(ci)
+    if not txt:
         return None
-    return None
-
-def _parse_live_start_score_if_success_zone_has_scores(ci: Optional[CardInfo]) -> Optional[Tuple[int, int, int, int]]:
-    try:
-        if not ci or not getattr(ci, 'abilities', None):
-            return None
-        for ab in _iter_triggered_abilities(ci, 'ライブ開始時'):
-            clauses = ab.get('clauses', []) if isinstance(ab, dict) else []
-            if not isinstance(clauses, list):
-                continue
-            for cl in clauses:
-                if not isinstance(cl, dict):
-                    continue
-                eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
-                if not eff:
-                    continue
-                eff_norm = eff.replace('\n', '')
-                m = re.match(r'^自分の成功ライブカード置き場にスコアが(?P<a>\d+)か(?P<b>\d+)のカードがある場合、このカードのスコアを\+(?P<single>\d+)する。それらが両方ある場合、代わりにスコアを\+(?P<both>\d+)する。$', eff_norm)
-                if m:
-                    return (int(m.group('a') or 0), int(m.group('b') or 0), int(m.group('single') or 0), int(m.group('both') or 0))
-    except Exception:
+    m = re.search(r'自分の成功ライブカード置き場にあるカード名が「(?P<name>[^」]+)」のカード1枚につき、このカードのスコアを\+(?P<score>\d+)、成功させるための必要ハートを(?P<anys>(?:<\(任意\)>)+)増やす。', txt)
+    if not m:
         return None
-    return None
-
-def _parse_live_start_score_if_green_unique_live_names_group_count(ci: Optional[CardInfo]) -> Optional[Tuple[str, int, int, int, int]]:
     try:
-        if not ci or not getattr(ci, 'abilities', None):
-            return None
-        for ab in _iter_triggered_abilities(ci, 'ライブ開始時'):
-            clauses = ab.get('clauses', []) if isinstance(ab, dict) else []
-            if not isinstance(clauses, list):
-                continue
-            for cl in clauses:
-                if not isinstance(cl, dict):
-                    continue
-                eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
-                if not eff:
-                    continue
-                eff_norm = eff.replace('\n', '')
-                m = re.match(r'^自分の控え室にカード名の異なる『(?P<group>[^』]+)』のライブカードが(?P<th1>\d+)枚以上ある場合、このカードのスコアを\+(?P<d1>\d+)する。(?P<th2>\d+)枚以上ある場合、代わりにスコアを\+(?P<d2>\d+)する。$', eff_norm)
-                if m:
-                    return (str(m.group('group') or '').strip(), int(m.group('th1') or 0), int(m.group('d1') or 0), int(m.group('th2') or 0), int(m.group('d2') or 0))
+        cardname = str(m.group('name') or '').strip()
+        per_score = int(m.group('score') or 0)
+        per_any = len(re.findall(r'<\(任意\)>', str(m.group('anys') or '')))
+        if cardname and (per_score > 0 or per_any > 0):
+            return (cardname, per_score, per_any)
     except Exception:
         return None
     return None
@@ -4375,43 +4284,17 @@ def _build_live_start_trigger_from_effect(gs: GameState, cards_db: Dict[str, Car
             'score_threshold': int(m.group('score_th') or 0),
             'score_delta': int(m.group('delta') or 0),
         }
-    # Generalized from Solitude Rain.
-    m = re.match(r'^自分のステージにいる『(?P<group>[^』]+)』のメンバーが持つ<\(桃\)><\(赤\)><\(黄\)><\(緑\)><\(青\)><\(紫\)>のうち1色につき、このカードのスコアを[\+＋](?P<delta>\d+)する。$', eff_norm)
+    # Generalized from EMOTION.
+    m = re.match(r'^自分の成功ライブカード置き場にあるカード名が「(?P<name>[^」]+)」のカード1枚につき、このカードのスコアを\+(?P<score>\d+)、成功させるための必要ハートを(?P<anys>(?:<\(任意\)>)+)増やす。$', eff_norm)
     if m:
         return {
-            'kind': 'live_start_score_per_stage_group_member_heart_color_kind',
+            'kind': 'live_start_score_and_increase_any_per_success_zone_cardname_count',
             'source_cn': str(source_cn or ''),
             'set_idx': ctx.get('set_idx', None),
             'label': str(label or ''),
-            'condition_group_name': str(m.group('group') or '').strip(),
-            'score_delta_per_kind': int(m.group('delta') or 0),
-        }
-    # Generalized from サイコーハート.
-    m = re.match(r'^自分の成功ライブカード置き場にスコアが(?P<a>\d+)か(?P<b>\d+)のカードがある場合、このカードのスコアを\+(?P<single>\d+)する。それらが両方ある場合、代わりにスコアを\+(?P<both>\d+)する。$', eff_norm)
-    if m:
-        return {
-            'kind': 'live_start_score_if_success_zone_has_scores',
-            'source_cn': str(source_cn or ''),
-            'set_idx': ctx.get('set_idx', None),
-            'label': str(label or ''),
-            'score_value_a': int(m.group('a') or 0),
-            'score_value_b': int(m.group('b') or 0),
-            'single_delta': int(m.group('single') or 0),
-            'both_delta': int(m.group('both') or 0),
-        }
-    # Generalized from stars we chase.
-    m = re.match(r'^自分の控え室にカード名の異なる『(?P<group>[^』]+)』のライブカードが(?P<th1>\d+)枚以上ある場合、このカードのスコアを\+(?P<d1>\d+)する。(?P<th2>\d+)枚以上ある場合、代わりにスコアを\+(?P<d2>\d+)する。$', eff_norm)
-    if m:
-        return {
-            'kind': 'live_start_score_if_green_unique_live_names_group_count',
-            'source_cn': str(source_cn or ''),
-            'set_idx': ctx.get('set_idx', None),
-            'label': str(label or ''),
-            'condition_group_name': str(m.group('group') or '').strip(),
-            'threshold_1': int(m.group('th1') or 0),
-            'score_delta_1': int(m.group('d1') or 0),
-            'threshold_2': int(m.group('th2') or 0),
-            'score_delta_2': int(m.group('d2') or 0),
+            'condition_cardname': str(m.group('name') or '').strip(),
+            'score_delta_per': int(m.group('score') or 0),
+            'required_any_increase_per': len(re.findall(r'<\(任意\)>', str(m.group('anys') or ''))),
         }
     return None
 
@@ -4475,16 +4358,6 @@ def _build_live_success_trigger_from_effect(gs: GameState, cards_db: Dict[str, C
             'kind': 'add_live_success_score_bonus_if_revealed_group_members_have_all_six_colors',
             'bonus': 1,
             'condition_group_name': group_name,
-            'source_cn': str(source_cn or ''),
-            'pos': str(pos or ''),
-            'ctx': dict(ctx or {}),
-            'label': str(label or ''),
-        }
-    m = re.match(r'^自分のステージにいるウェイト状態のメンバー1人につき、このカードのスコアを\+(?P<delta>\d+)する。$', eff_norm)
-    if m:
-        return {
-            'kind': 'add_live_success_score_bonus_per_wait_stage_member',
-            'bonus_per_member': int(m.group('delta') or 0),
             'source_cn': str(source_cn or ''),
             'pos': str(pos or ''),
             'ctx': dict(ctx or {}),
@@ -4781,6 +4654,64 @@ def _live_start_required_any_reduction_for_set_idx(gs: Optional[GameState], set_
     except Exception:
         return 0
 
+
+
+def _live_start_required_any_increase_for_set_idx(gs: Optional[GameState], set_idx: Optional[int], source_cn: Optional[str] = None) -> int:
+    try:
+        if gs is None:
+            return 0
+        if set_idx is not None:
+            v = int(dict(getattr(gs, 'live_start_required_any_increase_by_set_idx', {}) or {}).get(int(set_idx), 0) or 0)
+            if v > 0:
+                return v
+        canon = _canon_cardno(str(source_cn or ''))
+        if not canon:
+            return 0
+        return int(dict(getattr(gs, 'live_start_required_any_increase_by_cn', {}) or {}).get(canon, 0) or 0)
+    except Exception:
+        return 0
+
+def _success_zone_cardname_count(gs: GameState, cards_db: Dict[str, CardInfo], cardname: str) -> int:
+    if gs is None:
+        return 0
+    target = str(cardname or '').strip()
+    if not target:
+        return 0
+    n = 0
+    for cn in list(getattr(gs, 'success_zone', []) or []):
+        ci = _get_card(cards_db, cn)
+        nm = str(getattr(ci, 'name', '') or '').strip() if ci else ''
+        if nm == target:
+            n += 1
+    return int(n)
+
+def _emotion_like_required_any_bonus(cn_live, gs: GameState, cards_db: Dict[str, CardInfo], set_idx: Optional[int] = None) -> int:
+    if not _live_start_set_idx_resolved(gs, set_idx):
+        return 0
+    mapped = int(_live_start_required_any_increase_for_set_idx(gs, set_idx, source_cn=cn_live))
+    if mapped > 0:
+        return mapped
+    ci = _get_card(cards_db, cn_live)
+    parsed = _parse_live_start_score_and_increase_any_per_success_zone_cardname_count(ci)
+    if not parsed:
+        return 0
+    cardname, per_score, per_any = parsed
+    cnt = int(_success_zone_cardname_count(gs, cards_db, cardname))
+    return int(per_any * cnt)
+
+def _emotion_like_score_bonus(cn_live, gs: GameState, cards_db: Dict[str, CardInfo], set_idx: Optional[int] = None) -> int:
+    if not _live_start_set_idx_resolved(gs, set_idx):
+        return 0
+    mapped = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
+    if mapped > 0:
+        return mapped
+    ci = _get_card(cards_db, cn_live)
+    parsed = _parse_live_start_score_and_increase_any_per_success_zone_cardname_count(ci)
+    if not parsed:
+        return 0
+    cardname, per_score, per_any = parsed
+    cnt = int(_success_zone_cardname_count(gs, cards_db, cardname))
+    return int(per_score * cnt)
 def _heartbeat_required_any_reduction(cn_live, gs: GameState, cards_db: Dict[str, CardInfo], set_idx: Optional[int] = None) -> int:
     if not _live_start_set_idx_resolved(gs, set_idx):
         return 0
@@ -5009,30 +4940,10 @@ def _monster_girls_wait_bonus(gs: GameState, cards_db: Dict[str, CardInfo]) -> i
             continue
         n += 1
     return int(n)
-def _emotion_success_count(gs: GameState) -> int:
-    if gs is None:
-        return 0
-    n = 0
-    for cn in list(getattr(gs, 'success_zone', []) or []):
-        try:
-            canon = _canon_cardno(cn)
-        except Exception:
-            canon = str(cn or '')
-        if canon == _EMOTION_CN_CANON:
-            n += 1
-    return int(n)
-def _emotion_required_any_bonus(cn_live, gs: GameState) -> int:
-    try:
-        canon = _canon_cardno(cn_live)
-    except Exception:
-        canon = str(cn_live or '')
-    if canon != _EMOTION_CN_CANON:
-        return 0
-    return 3 * int(_emotion_success_count(gs))
 def _effective_live_required_hearts(cn_live, ci, gs: GameState, cards_db: Optional[Dict[str, CardInfo]] = None, set_idx: Optional[int] = None) -> Dict[str, int]:
     req = dict((getattr(ci, 'required_hearts', {}) if ci else {}) or {})
     try:
-        extra_any = int(_emotion_required_any_bonus(cn_live, gs))
+        extra_any = int(_emotion_like_required_any_bonus(cn_live, gs, cards_db=(cards_db or {}), set_idx=set_idx))
     except Exception:
         extra_any = 0
     if extra_any > 0:
@@ -5054,48 +4965,19 @@ def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[s
         canon = _canon_cardno(cn_live)
     except Exception:
         canon = str(cn_live or '')
-    ci_live = _get_card(cards_db, cn_live)
-    if _parse_live_start_score_per_stage_group_member_heart_color_kind(ci_live) is not None:
-        _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
-        if _m > 0:
-            return _m
-        parsed = _parse_live_start_score_per_stage_group_member_heart_color_kind(ci_live)
-        if parsed and _live_start_set_idx_resolved(gs, set_idx):
-            group_name, delta_per = parsed
-            return int(_stage_group_member_heart_color_kind_count(gs, cards_db, group_name) * int(delta_per))
-        return 0
-    if _parse_live_start_score_if_success_zone_has_scores(ci_live) is not None:
-        _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
-        if _m > 0:
-            return _m
-        parsed = _parse_live_start_score_if_success_zone_has_scores(ci_live)
-        if parsed and _live_start_set_idx_resolved(gs, set_idx):
-            a, b, single, both = parsed
-            return int(_success_zone_has_score_values_bonus(gs, cards_db, a, b, single, both))
-        return 0
-    if _parse_live_start_score_if_green_unique_live_names_group_count(ci_live) is not None:
-        _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
-        if _m > 0:
-            return _m
-        parsed = _parse_live_start_score_if_green_unique_live_names_group_count(ci_live)
-        if parsed and _live_start_set_idx_resolved(gs, set_idx):
-            group_name, th1, d1, th2, d2 = parsed
-            cnt = int(_green_unique_live_name_count(gs, cards_db, group_name))
-            if cnt >= int(th2):
-                return int(d2)
-            if cnt >= int(th1):
-                return int(d1)
-        return 0
     if canon == _SOLITUDE_RAIN_CN_CANON:
         return int(_solitude_rain_stage_color_kinds(gs, cards_db))
     if canon == _PSYCHO_HEART_CN_CANON:
         return int(_psycho_heart_success_bonus(gs, cards_db))
     if canon == _STARS_WE_CHASE_CN_CANON:
         return int(_stars_we_chase_waiting_bonus(gs, cards_db))
-    if canon == _MONSTER_GIRLS_CN_CANON:
-        return int(_monster_girls_wait_bonus(gs, cards_db))
-    if canon == _EMOTION_CN_CANON:
-        return 2 * int(_emotion_success_count(gs))
+    ci_live = _get_card(cards_db, cn_live)
+    parsed_emotion = _parse_live_start_score_and_increase_any_per_success_zone_cardname_count(ci_live)
+    if parsed_emotion is not None:
+        _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
+        if _m > 0:
+            return _m
+        return int(_emotion_like_score_bonus(cn_live, gs, cards_db, set_idx=set_idx))
     if _parse_live_start_score_if_live_zone_group_count(_get_card(cards_db, cn_live)) is not None:
         _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
         return _m if _m > 0 else int(_bokulive_score_bonus(cn_live, gs, cards_db, set_idx=set_idx))
@@ -5108,7 +4990,6 @@ def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[s
     if canon == _TSUNAGARU_CONNECT_CN_CANON:
         return int(getattr(gs, 'tsunagaru_connect_bonus_this_live', 0) or 0)
     return 0
-
 def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
     if bool(getattr(gs, "cannot_live_until_end_of_live", False)):
         gs.log.append("[ATTEMPT] blocked: you cannot live until end of live")
@@ -5118,6 +4999,7 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
         gs.tsunagaru_connect_bonus_this_live = 0
         gs.live_start_score_bonus_by_set_idx = {}
         gs.live_start_required_any_reduction_by_set_idx = {}
+        gs.live_start_required_any_increase_by_set_idx = {}
         gs.vivid_world_blue_mode_this_live = False
         gs.vivid_world_bonus_this_live = 0
         gs.last_attempt_lives = []
@@ -5138,6 +5020,7 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
         gs.tsunagaru_connect_bonus_this_live = 0
         gs.live_start_score_bonus_by_set_idx = {}
         gs.live_start_required_any_reduction_by_set_idx = {}
+        gs.live_start_required_any_increase_by_set_idx = {}
         gs.vivid_world_blue_mode_this_live = False
         gs.vivid_world_bonus_this_live = 0
         gs.log.append("[ATTEMPT] no set cards")
@@ -5791,6 +5674,46 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         if _r:
             gs.pending.append(_r)
         return
+    if kind == 'live_start_score_and_increase_any_per_success_zone_cardname_count':
+        low = choice_str.lower()
+        if low not in ('ok', 'apply', 'yes', 'y', '1', 'true', 'use', 'go', 'confirm', 'はい', '使う'):
+            gs.log.append(f"[ERR] {kind}: invalid choice {choice_str}")
+            gs.pending.append(p)
+            return
+        src = str(p.get('source_cn', '') or '')
+        set_idx = p.get('set_idx', None)
+        _mark_live_start_set_idx_resolved(gs, set_idx)
+        cardname = str(p.get('condition_cardname', '') or '')
+        per_score = int(p.get('score_delta_per', 0) or 0)
+        per_any = int(p.get('required_any_increase_per', 0) or 0)
+        cnt = int(_success_zone_cardname_count(gs, cards_db, cardname))
+        bonus = int(per_score * cnt)
+        add_any = int(per_any * cnt)
+        if bonus > 0 or add_any > 0:
+            _k = _canon_cardno(src)
+            if set_idx is not None:
+                if bonus > 0:
+                    _smap = dict(getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {})
+                    _smap[int(set_idx)] = int(_smap.get(int(set_idx), 0) or 0) + int(bonus)
+                    gs.live_start_score_bonus_by_set_idx = _smap
+                if add_any > 0:
+                    _imap = dict(getattr(gs, 'live_start_required_any_increase_by_set_idx', {}) or {})
+                    _imap[int(set_idx)] = int(_imap.get(int(set_idx), 0) or 0) + int(add_any)
+                    gs.live_start_required_any_increase_by_set_idx = _imap
+            else:
+                if bonus > 0:
+                    _smap = dict(getattr(gs, 'live_start_score_bonus_by_cn', {}) or {})
+                    _smap[_k] = int(_smap.get(_k, 0) or 0) + int(bonus)
+                    gs.live_start_score_bonus_by_cn = _smap
+                if add_any > 0:
+                    _imap = dict(getattr(gs, 'live_start_required_any_increase_by_cn', {}) or {})
+                    _imap[_k] = int(_imap.get(_k, 0) or 0) + int(add_any)
+                    gs.live_start_required_any_increase_by_cn = _imap
+        gs.log.append(f"[AUTO] {src}[ライブ開始時]: success cardname({cardname}) count={cnt} -> required(any) +{add_any}, score {bonus:+d}")
+        _r = p.get('_resume') if isinstance(p, dict) else None
+        if _r:
+            gs.pending.append(_r)
+        return
     if kind == 'live_start_reduce_any_and_score_if_success_score_at_least':
         low = choice_str.lower()
         if low not in ('ok', 'apply', 'yes', 'y', '1', 'true', 'use', 'go', 'confirm', 'はい', '使う'):
@@ -5831,104 +5754,6 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         _r = p.get('_resume') if isinstance(p, dict) else None
         if _r:
             gs.pending.append(_r)
-        return
-    if kind == 'live_start_score_per_stage_group_member_heart_color_kind':
-        low = choice_str.lower()
-        if low not in ('ok', 'apply', 'yes', 'y', '1', 'true', 'use', 'go', 'confirm', 'はい', '使う'):
-            gs.log.append(f"[ERR] {kind}: invalid choice {choice_str}")
-            gs.pending.append(p)
-            return
-        src = str(p.get('source_cn', '') or '')
-        set_idx = p.get('set_idx', None)
-        _mark_live_start_set_idx_resolved(gs, set_idx)
-        group_name = str(p.get('condition_group_name', '') or '')
-        per = int(p.get('score_delta_per_kind', 0) or 0)
-        kinds = int(_stage_group_member_heart_color_kind_count(gs, cards_db, group_name))
-        bonus = int(kinds * per)
-        if bonus > 0:
-            if set_idx is not None:
-                _m = dict(getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {})
-                _m[int(set_idx)] = int(_m.get(int(set_idx), 0) or 0) + int(bonus)
-                gs.live_start_score_bonus_by_set_idx = _m
-            else:
-                _m = dict(getattr(gs, 'live_start_score_bonus_by_cn', {}) or {})
-                _k = _canon_cardno(src)
-                _m[_k] = int(_m.get(_k, 0) or 0) + int(bonus)
-                gs.live_start_score_bonus_by_cn = _m
-        gs.log.append(f"[AUTO] {src}[ライブ開始時]: stage group({group_name}) color kinds={kinds} -> score {bonus:+d}")
-        _r = p.get('_resume') if isinstance(p, dict) else None
-        if _r:
-            gs.pending.append(_r)
-        return
-    if kind == 'live_start_score_if_success_zone_has_scores':
-        low = choice_str.lower()
-        if low not in ('ok', 'apply', 'yes', 'y', '1', 'true', 'use', 'go', 'confirm', 'はい', '使う'):
-            gs.log.append(f"[ERR] {kind}: invalid choice {choice_str}")
-            gs.pending.append(p)
-            return
-        src = str(p.get('source_cn', '') or '')
-        set_idx = p.get('set_idx', None)
-        _mark_live_start_set_idx_resolved(gs, set_idx)
-        a = int(p.get('score_value_a', 0) or 0)
-        b = int(p.get('score_value_b', 0) or 0)
-        single = int(p.get('single_delta', 0) or 0)
-        both = int(p.get('both_delta', 0) or 0)
-        bonus = int(_success_zone_has_score_values_bonus(gs, cards_db, a, b, single, both))
-        if bonus > 0:
-            if set_idx is not None:
-                _m = dict(getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {})
-                _m[int(set_idx)] = int(_m.get(int(set_idx), 0) or 0) + int(bonus)
-                gs.live_start_score_bonus_by_set_idx = _m
-            else:
-                _m = dict(getattr(gs, 'live_start_score_bonus_by_cn', {}) or {})
-                _k = _canon_cardno(src)
-                _m[_k] = int(_m.get(_k, 0) or 0) + int(bonus)
-                gs.live_start_score_bonus_by_cn = _m
-        gs.log.append(f"[AUTO] {src}[ライブ開始時]: success scores({a}/{b}) -> score {bonus:+d}")
-        _r = p.get('_resume') if isinstance(p, dict) else None
-        if _r:
-            gs.pending.append(_r)
-        return
-    if kind == 'live_start_score_if_green_unique_live_names_group_count':
-        low = choice_str.lower()
-        if low not in ('ok', 'apply', 'yes', 'y', '1', 'true', 'use', 'go', 'confirm', 'はい', '使う'):
-            gs.log.append(f"[ERR] {kind}: invalid choice {choice_str}")
-            gs.pending.append(p)
-            return
-        src = str(p.get('source_cn', '') or '')
-        set_idx = p.get('set_idx', None)
-        _mark_live_start_set_idx_resolved(gs, set_idx)
-        group_name = str(p.get('condition_group_name', '') or '')
-        th1 = int(p.get('threshold_1', 0) or 0)
-        d1 = int(p.get('score_delta_1', 0) or 0)
-        th2 = int(p.get('threshold_2', 0) or 0)
-        d2 = int(p.get('score_delta_2', 0) or 0)
-        cnt = int(_green_unique_live_name_count(gs, cards_db, group_name))
-        bonus = int(d2 if cnt >= th2 else (d1 if cnt >= th1 else 0))
-        if bonus > 0:
-            if set_idx is not None:
-                _m = dict(getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {})
-                _m[int(set_idx)] = int(_m.get(int(set_idx), 0) or 0) + int(bonus)
-                gs.live_start_score_bonus_by_set_idx = _m
-            else:
-                _m = dict(getattr(gs, 'live_start_score_bonus_by_cn', {}) or {})
-                _k = _canon_cardno(src)
-                _m[_k] = int(_m.get(_k, 0) or 0) + int(bonus)
-                gs.live_start_score_bonus_by_cn = _m
-        gs.log.append(f"[AUTO] {src}[ライブ開始時]: green unique live names({group_name})={cnt} -> score {bonus:+d}")
-        _r = p.get('_resume') if isinstance(p, dict) else None
-        if _r:
-            gs.pending.append(_r)
-        return
-    if kind == 'add_live_success_score_bonus_per_wait_stage_member':
-        cn_live = str((trig or {}).get('source_cn', '') or '')
-        per = int((trig or {}).get('bonus_per_member', 0) or 0)
-        bonus = int(per * _monster_girls_wait_bonus(gs, cards_db))
-        if bonus:
-            _add_last_attempt_live_score_bonus(gs, cn_live, bonus)
-            gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時]: score +{bonus}")
-        else:
-            gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時]: score +0")
         return
     if kind == 'live_start_numeric_effect':
         low = choice_str.lower()
