@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: fix_emotion_nameerrors_20260416aa
+# BUILD_TAG: generalize_body_always_bonus_parsers_20260420g
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -1840,9 +1840,10 @@ def _stage_has_other_higher_cost_member(gs: 'GameState', cards_db: Dict[str, Car
     except Exception:
         pass
     return False
-def _stage_has_all_distinct_hasunosora_members(gs: 'GameState', cards_db: Dict[str, CardInfo]) -> bool:
-    """Return True if all three stage areas are occupied by Hasunosora members with distinct names."""
+def _stage_has_all_distinct_group_members(gs: 'GameState', cards_db: Dict[str, CardInfo], tag: str) -> bool:
+    """Return True if all three stage areas are occupied by members matching tag (group or unit) with distinct names."""
     names = []
+    want = str(tag or '')
     try:
         for pos in ('L', 'C', 'R'):
             slot = (gs.stage or {}).get(pos)
@@ -1851,7 +1852,9 @@ def _stage_has_all_distinct_hasunosora_members(gs: 'GameState', cards_db: Dict[s
             ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
             if not ci or _is_live_ci(ci):
                 return False
-            if '蓮ノ空' not in str(getattr(ci, 'group', '') or ''):
+            g = str(getattr(ci, 'group', '') or '')
+            u = str(getattr(ci, 'unit', '') or '')
+            if want and (want not in g) and (want not in u):
                 return False
             nm = str(getattr(ci, 'name', '') or getattr(ci, 'cardname', '') or '')
             if not nm:
@@ -1860,6 +1863,7 @@ def _stage_has_all_distinct_hasunosora_members(gs: 'GameState', cards_db: Dict[s
         return len(set(names)) == 3
     except Exception:
         return False
+
 def _live_has_trigger_ability(ci: Optional[CardInfo], trig_text: str) -> bool:
     if not ci or not getattr(ci, 'abilities', None):
         return False
@@ -1876,6 +1880,39 @@ def _live_has_start_or_success_ability(ci: Optional[CardInfo]) -> bool:
         return _live_has_trigger_ability(ci, 'ライブ開始時') or _live_has_trigger_ability(ci, 'ライブ成功時')
     except Exception:
         return False
+
+def _quoted_tag(blob: str) -> str:
+    try:
+        m = re.search(r'『([^』]+)』', str(blob or ''))
+        return str(m.group(1) if m else '')
+    except Exception:
+        return ''
+
+def _slot_matches_group_tag(ci: Optional[CardInfo], tag: str) -> bool:
+    if not ci:
+        return False
+    want = str(tag or '')
+    if not want:
+        return False
+    g = str(getattr(ci, 'group', '') or '')
+    u = str(getattr(ci, 'unit', '') or '')
+    return (want in g) or (want in u)
+
+def _iter_body_always_effects(ci: Optional[CardInfo]):
+    if not ci or not getattr(ci, 'abilities', None):
+        return
+    for ab in (getattr(ci, 'abilities', None) or []):
+        if not isinstance(ab, dict):
+            continue
+        at = str(ab.get('ability_type', '') or '')
+        if '常時' not in at:
+            continue
+        for cl in (ab.get('clauses', []) or []):
+            if not isinstance(cl, dict):
+                continue
+            eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '')
+            blob = _norm_digits_jp(eff).replace('＋', '+').replace(' ', '').replace('\n', '')
+            yield eff, blob
 def _slot_always_hearts_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, slot) -> Dict[str, int]:
     """Return always-on heart bonus currently attached to a stage slot."""
     try:
@@ -1885,21 +1922,35 @@ def _slot_always_hearts_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos:
         if not ci or _is_live_ci(ci):
             return {}
         bonus: Dict[str, int] = {}
-        # PL!-bp4-002 絢瀬絵里: if any LIVE in set_zone has neither live-start nor live-success ability, purple +2
-        try:
-            if _canon_cardno(getattr(slot, 'cardnumber', '') or '') == 'PL!-bp4-002':
-                found_plain_live = False
-                for _set_idx, cn_live in enumerate(list(getattr(gs, 'set_zone', []) or [])):
-                    ci_live = _get_card(cards_db, cn_live)
-                    if not ci_live or not _is_live_ci(ci_live):
-                        continue
-                    if not _live_has_start_or_success_ability(ci_live):
-                        found_plain_live = True
-                        break
-                if found_plain_live:
-                    bonus['purple'] = int(bonus.get('purple', 0) or 0) + 2
-        except Exception:
-            pass
+        for _eff, blob in _iter_body_always_effects(ci):
+            try:
+                if ('ライブ開始時能力も' in blob and 'ライブ成功時能力も' in blob and '持たないカードがあるかぎり' in blob and blob.count('<(紫)>') >= 2):
+                    found_plain_live = False
+                    for cn_live in list(getattr(gs, 'set_zone', []) or []):
+                        ci_live = _get_card(cards_db, cn_live)
+                        if not ci_live or not _is_live_ci(ci_live):
+                            continue
+                        if not _live_has_start_or_success_ability(ci_live):
+                            found_plain_live = True
+                            break
+                    if found_plain_live:
+                        bonus['purple'] = int(bonus.get('purple', 0) or 0) + int(blob.count('<(紫)>'))
+                elif ('自分のライブ中のカードが' in blob and 'その中に『' in blob and 'のライブカードを1枚以上含む場合' in blob and '<(ALL)>' in blob):
+                    m = re.search(r'自分のライブ中のカードが(\d+)枚以上', blob)
+                    need = int(m.group(1)) if m else 0
+                    tag = _quoted_tag(blob)
+                    live_cards = list(getattr(gs, 'set_zone', []) or [])
+                    if len(live_cards) >= need:
+                        has_group_live = False
+                        for cn_live in live_cards:
+                            ci_live = _get_card(cards_db, cn_live)
+                            if ci_live and _is_live_ci(ci_live) and _slot_matches_group_tag(ci_live, tag):
+                                has_group_live = True
+                                break
+                        if has_group_live:
+                            bonus['all'] = int(bonus.get('all', 0) or 0) + int(blob.count('<(ALL)>'))
+            except Exception:
+                pass
         return {str(k): int(v) for k, v in bonus.items() if int(v or 0) != 0}
     except Exception:
         return {}
@@ -1912,13 +1963,14 @@ def _slot_always_score_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos: 
         if not ci or _is_live_ci(ci):
             return 0
         bonus = 0
-        # PL!HS-bp1-003 乙宗梢: all three stage areas are Hasunosora members with distinct names -> total score +1
-        try:
-            if _canon_cardno(getattr(slot, 'cardnumber', '') or '') == 'PL!HS-bp1-003':
-                if _stage_has_all_distinct_hasunosora_members(gs, cards_db):
-                    bonus += 1
-        except Exception:
-            pass
+        for _eff, blob in _iter_body_always_effects(ci):
+            try:
+                if 'エリアすべてに『' in blob and 'のメンバーが登場しており、かつ名前が異なる場合' in blob and 'ライブの合計スコアを+1する' in blob:
+                    tag = _quoted_tag(blob)
+                    if _stage_has_all_distinct_group_members(gs, cards_db, tag):
+                        bonus += 1
+            except Exception:
+                pass
         return int(bonus)
     except Exception:
         return 0
@@ -1966,51 +2018,53 @@ def _slot_always_blade_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos: 
         if not c:
             return 0
         bonus = 0
-        # 常時 BODY: 自分か相手のステージにコスト13以上のメンバーがいる場合+2
         has_cost13 = _stage_has_cost13_plus_member(gs, cards_db)
         if has_cost13 and _has_body_always_cost13_blade_bonus(c):
             bonus += 2
-        # 常時 BODY: ステージのメンバーがちょうど2人のとき+1
         has_exactly2 = (_stage_member_count(gs, cards_db) == 2)
         if has_exactly2 and _has_body_always_2member_blade_heart(c):
             bonus += 1
-        # Love wing bell: success_zone にある間、センターの μ's メンバーに +1/copy
         try:
             if pos == 'C' and ("μ's" in str(getattr(c, 'group', '') or '')):
                 bonus += int(_love_wing_bell_success_bonus_count(gs) or 0)
         except Exception:
             pass
-        # PL!-sd1-001 高坂穂乃果: 成功ライブカード置き場1枚につき +1 blade
-        try:
-            if _canon_cardno(getattr(slot, 'cardnumber', '') or '') == 'PL!-sd1-001':
-                bonus += len(list(getattr(gs, 'success_zone', []) or []))
-        except Exception:
-            pass
-        # PL!HS-bp2-002 村野さやか: 自分より高コストのメンバーがいる場合 +3 blade
-        try:
-            if _canon_cardno(getattr(slot, 'cardnumber', '') or '') == 'PL!HS-bp2-002':
-                self_cost = int(getattr(c, 'cost', 0) or 0)
-                if _stage_has_other_higher_cost_member(gs, cards_db, pos, self_cost):
-                    bonus += 3
-        except Exception:
-            pass
-        # PL!HS-bp2-006 藤島慈: ほかの『みらくらぱーく！』メンバー1人につき +1 blade
-        try:
-            if _canon_cardno(getattr(slot, 'cardnumber', '') or '') == 'PL!HS-bp2-006':
-                miraku_others = 0
-                for pos2, slot2 in (gs.stage or {}).items():
-                    if pos2 == pos or not slot2:
-                        continue
-                    ci2 = _get_card(cards_db, getattr(slot2, 'cardnumber', '') or '')
-                    if not ci2 or _is_live_ci(ci2):
-                        continue
-                    g2 = str(getattr(ci2, 'group', '') or '')
-                    u2 = str(getattr(ci2, 'unit', '') or '')
-                    if ('みらくらぱーく！' in g2) or ('みらくらぱーく！' in u2):
-                        miraku_others += 1
-                bonus += int(miraku_others)
-        except Exception:
-            pass
+        for _eff, blob in _iter_body_always_effects(c):
+            try:
+                if '成功ライブカード置き場にあるカード1枚につき' in blob and 'ブレード' in blob:
+                    bonus += int(blob.count('<(ブレード)>')) * len(list(getattr(gs, 'success_zone', []) or []))
+                elif 'このメンバーよりコストの大きいメンバーがいる場合' in blob and 'ブレード' in blob:
+                    self_cost = int(getattr(c, 'cost', 0) or 0)
+                    if _stage_has_other_higher_cost_member(gs, cards_db, pos, self_cost):
+                        bonus += int(blob.count('<(ブレード)>'))
+                elif 'ほかの『' in blob and 'のメンバー1人につき' in blob and 'ブレード' in blob:
+                    tag = _quoted_tag(blob)
+                    others = 0
+                    for pos2, slot2 in (gs.stage or {}).items():
+                        if pos2 == pos or not slot2:
+                            continue
+                        ci2 = _get_card(cards_db, getattr(slot2, 'cardnumber', '') or '')
+                        if not ci2 or _is_live_ci(ci2):
+                            continue
+                        if _slot_matches_group_tag(ci2, tag):
+                            others += 1
+                    bonus += int(blob.count('<(ブレード)>')) * int(others)
+                elif ('自分のライブ中のカードが' in blob and 'その中に『' in blob and 'のライブカードを1枚以上含む場合' in blob and 'ブレード' in blob):
+                    m = re.search(r'自分のライブ中のカードが(\d+)枚以上', blob)
+                    need = int(m.group(1)) if m else 0
+                    tag = _quoted_tag(blob)
+                    live_cards = list(getattr(gs, 'set_zone', []) or [])
+                    if len(live_cards) >= need:
+                        has_group_live = False
+                        for cn_live in live_cards:
+                            ci_live = _get_card(cards_db, cn_live)
+                            if ci_live and _is_live_ci(ci_live) and _slot_matches_group_tag(ci_live, tag):
+                                has_group_live = True
+                                break
+                        if has_group_live:
+                            bonus += int(blob.count('<(ブレード)>'))
+            except Exception:
+                pass
         return int(bonus)
     except Exception:
         return 0
@@ -2025,13 +2079,6 @@ def stage_blade(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
         under_b = int(getattr(slot, "energy_under", 0) or 0) if _has_under_energy_blade_bonus(c) else 0
         always_b = _slot_always_blade_bonus(gs, cards_db, pos, slot)
         s += base_b + temp_b + under_b + always_b
-    # Lanzhu (PL!N-bp1-012) live-only bonus: +2 blade per copy when condition met
-    try:
-        n_lz = _lanzhu_bp1_012_live_bonus_count(gs, cards_db)
-    except Exception:
-        n_lz = 0
-    if n_lz > 0:
-        s += 2 * int(n_lz)
     return s
 def _lanzhu_bp1_012_live_bonus_count(gs: "GameState", cards_db: Dict[str, CardInfo]) -> int:
     """Return how many active Lanzhu (PL!N-bp1-012) provide the live-only bonus now.
@@ -2115,13 +2162,6 @@ def owned_base_hearts(gs: GameState, cards_db: Dict[str, CardInfo]) -> Dict[str,
             n = 0
         if n > 0:
             pool[col] = pool.get(col, 0) + int(n)
-    # Lanzhu (PL!N-bp1-012) live-only bonus: +2 <(ALL)> hearts per copy when condition met
-    try:
-        n_lz = _lanzhu_bp1_012_live_bonus_count(gs, cards_db)
-    except Exception:
-        n_lz = 0
-    if n_lz > 0:
-        pool['all'] = pool.get('all', 0) + 2 * int(n_lz)
     return pool
 def _stage_pos_label(gs: GameState, cards_db: Dict[str, CardInfo], pos: str) -> str:
     pos = str(pos or '').upper()
@@ -3828,22 +3868,6 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             'options': ['ok'],
         })
         return
-    if kind == 'live_start_score_and_increase_any_per_success_zone_cardname_count':
-        src_cn = str((trig or {}).get('source_cn', '') or '')
-        cardname = str((trig or {}).get('condition_cardname', '') or '')
-        per_score = int((trig or {}).get('score_delta_per', 0) or 0)
-        per_any = int((trig or {}).get('required_any_increase_per', 0) or 0)
-        gs.pending.append({
-            'kind': 'live_start_score_and_increase_any_per_success_zone_cardname_count',
-            'source_cn': src_cn,
-            'set_idx': (trig or {}).get('set_idx', None),
-            'condition_cardname': cardname,
-            'score_delta_per': per_score,
-            'required_any_increase_per': per_any,
-            'text': f'【{src_cn}】ライブ開始時：成功ライブカード置き場の「{cardname}」1枚につき、スコア+{per_score}、必要ハート<(任意)>を+{per_any}',
-            'options': ['ok'],
-        })
-        return
     if kind == 'add_live_success_score_bonus_per_weight_member':
         cn_live = str((trig or {}).get('source_cn', '') or '')
         per = int((trig or {}).get('bonus_per', 0) or 0)
@@ -4119,6 +4143,28 @@ def _parse_live_start_score_if_live_zone_group_count(ci: Optional[CardInfo]) -> 
         return None
     return None
 
+def _parse_live_start_score_if_live_count(ci: Optional[CardInfo]) -> Optional[Tuple[int, int]]:
+    try:
+        if not ci or not getattr(ci, 'abilities', None):
+            return None
+        for ab in _iter_triggered_abilities(ci, 'ライブ開始時'):
+            clauses = ab.get('clauses', []) if isinstance(ab, dict) else []
+            if not isinstance(clauses, list):
+                continue
+            for cl in clauses:
+                if not isinstance(cl, dict):
+                    continue
+                eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+                if not eff:
+                    continue
+                eff_norm = eff.replace('\n', '')
+                m = re.match(r'^自分のライブ中のカードが(?P<count>\d+)枚以上ある場合、このカードのスコアを\+(?P<delta>\d+)する。$', eff_norm)
+                if m:
+                    return (int(m.group('count') or 0), int(m.group('delta') or 0))
+    except Exception:
+        return None
+    return None
+
 def _parse_live_start_score_if_green_live_group_count(ci: Optional[CardInfo]) -> Optional[Tuple[str, int, int]]:
     try:
         if not ci or not getattr(ci, 'abilities', None):
@@ -4165,18 +4211,28 @@ def _parse_live_start_reduce_any_and_score_if_success_score(ci: Optional[CardInf
 
 
 def _parse_live_start_score_and_increase_any_per_success_zone_cardname_count(ci: Optional[CardInfo]) -> Optional[Tuple[str, int, int]]:
-    txt = _effect_text_norm(ci)
-    if not txt:
-        return None
-    m = re.search(r'自分の成功ライブカード置き場にあるカード名が「(?P<name>[^」]+)」のカード1枚につき、このカードのスコアを\+(?P<score>\d+)、成功させるための必要ハートを(?P<anys>(?:<\(任意\)>)+)増やす。', txt)
-    if not m:
-        return None
     try:
-        cardname = str(m.group('name') or '').strip()
-        per_score = int(m.group('score') or 0)
-        per_any = len(re.findall(r'<\(任意\)>', str(m.group('anys') or '')))
-        if cardname and (per_score > 0 or per_any > 0):
-            return (cardname, per_score, per_any)
+        if not ci or not getattr(ci, 'abilities', None):
+            return None
+        for ab in _iter_triggered_abilities(ci, 'ライブ開始時'):
+            clauses = ab.get('clauses', []) if isinstance(ab, dict) else []
+            if not isinstance(clauses, list):
+                continue
+            for cl in clauses:
+                if not isinstance(cl, dict):
+                    continue
+                eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+                if not eff:
+                    continue
+                eff_norm = eff.replace('\n', '')
+                m = re.search(r'自分の成功ライブカード置き場にあるカード名が「(?P<name>[^」]+)」のカード1枚につき、このカードのスコアを\+(?P<score>\d+)、成功させるための必要ハートを(?P<anys>(?:<\(任意\)>)+)増やす。', eff_norm)
+                if not m:
+                    continue
+                cardname = str(m.group('name') or '').strip()
+                per_score = int(m.group('score') or 0)
+                per_any = len(re.findall(r'<\(任意\)>', str(m.group('anys') or '')))
+                if cardname and (per_score > 0 or per_any > 0):
+                    return (cardname, per_score, per_any)
     except Exception:
         return None
     return None
@@ -4358,6 +4414,17 @@ def _build_live_success_trigger_from_effect(gs: GameState, cards_db: Dict[str, C
             'kind': 'add_live_success_score_bonus_if_revealed_group_members_have_all_six_colors',
             'bonus': 1,
             'condition_group_name': group_name,
+            'source_cn': str(source_cn or ''),
+            'pos': str(pos or ''),
+            'ctx': dict(ctx or {}),
+            'label': str(label or ''),
+        }
+    m = re.match(r'^自分のステージにいるウェイト状態のメンバー1人につき、このカードのスコアを\+(?P<per>\d+)する。?$', eff_norm)
+    if m:
+        per = int(m.group('per') or 0)
+        return {
+            'kind': 'add_live_success_score_bonus_per_weight_member',
+            'bonus_per': per,
             'source_cn': str(source_cn or ''),
             'pos': str(pos or ''),
             'ctx': dict(ctx or {}),
@@ -4615,13 +4682,8 @@ def _mark_live_start_set_idx_resolved(gs: GameState, set_idx: Optional[int]) -> 
     except Exception:
         pass
 def _live_score_delta_for_attempt(cn_live, lives_count, gs_turn):
-    # Eutopia: if 3+ LIVE cards are set in this attempt, score +2 for Eutopia
-    try:
-        canon = _canon_cardno(cn_live)
-    except Exception:
-        canon = str(cn_live or '')
-    if canon == _EUTOPIA_CN_CANON and int(lives_count) >= 3:
-        return 2
+    # Legacy base path retained for compatibility; generalized live-count wrappers
+    # are handled in _extra_live_score_delta_for_attempt where cards_db is available.
     return 0
 
 def _live_start_score_bonus_for_set_idx(gs: Optional[GameState], set_idx: Optional[int], source_cn: Optional[str] = None) -> int:
@@ -4764,7 +4826,7 @@ def _compute_attempt_score_breakdown(lives, cards_db, gs_turn, gs=None, live_set
         base = int(getattr(ci, 'score', 0) or 0) if ci else 0
         delta = int(_live_score_delta_for_attempt(cn, lives_count, gs_turn))
         if gs is not None:
-            delta += int(_extra_live_score_delta_for_attempt(cn, gs, cards_db, set_idx=set_idx))
+            delta += int(_extra_live_score_delta_for_attempt(cn, gs, cards_db, set_idx=set_idx, lives_count=lives_count))
         try:
             canon = _canon_cardno(cn)
         except Exception:
@@ -4960,18 +5022,29 @@ def _effective_live_required_hearts(cn_live, ci, gs: GameState, cards_db: Option
     if reduce_any > 0:
         req['any'] = max(0, int(req.get('any', 0) or 0) - reduce_any)
     return req
-def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[str, CardInfo], set_idx: Optional[int] = None) -> int:
+def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[str, CardInfo], set_idx: Optional[int] = None, lives_count: Optional[int] = None) -> int:
     try:
         canon = _canon_cardno(cn_live)
     except Exception:
         canon = str(cn_live or '')
+    ci_live = _get_card(cards_db, cn_live)
+    parsed_live_count = _parse_live_start_score_if_live_count(ci_live)
+    if parsed_live_count is not None:
+        need, delta = parsed_live_count
+        mapped = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
+        if mapped > 0:
+            return mapped
+        try:
+            lc = int(lives_count if lives_count is not None else 0)
+        except Exception:
+            lc = 0
+        return int(delta if lc >= int(need) else 0)
     if canon == _SOLITUDE_RAIN_CN_CANON:
         return int(_solitude_rain_stage_color_kinds(gs, cards_db))
     if canon == _PSYCHO_HEART_CN_CANON:
         return int(_psycho_heart_success_bonus(gs, cards_db))
     if canon == _STARS_WE_CHASE_CN_CANON:
         return int(_stars_we_chase_waiting_bonus(gs, cards_db))
-    ci_live = _get_card(cards_db, cn_live)
     parsed_emotion = _parse_live_start_score_and_increase_any_per_success_zone_cardname_count(ci_live)
     if parsed_emotion is not None:
         _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
