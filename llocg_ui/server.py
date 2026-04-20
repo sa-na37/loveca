@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: dual_popup_layers_multiselect_gray_20260413b
+# BUILD_TAG: remove_lanzhu_legacy_paths_20260420k
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1014,9 +1014,6 @@ class App:
                         # 常時BODYブレード加算（コスト13以上条件）
                         "always_blade_bonus": self._always_blade_bonus_for(k, v),
                         "always_score_bonus": self._always_score_bonus_for(k, v),
-                        # PL!N-bp1-012 ランジュのライブ中ボーナス（UIアイコン表示用）
-                        "lanzhu_blade_bonus": self._lanzhu_blade_bonus_for(k, v),
-                        "lanzhu_heart_bonus": self._lanzhu_heart_bonus_for(k, v),
                     }
                     if v
                     else None
@@ -1099,32 +1096,6 @@ class App:
         from .engine import _slot_always_score_bonus
         try:
             return int(_slot_always_score_bonus(self.gs, self.cards_db, pos, slot) or 0)
-        except Exception:
-            return 0
-
-    def _lanzhu_blade_bonus_for(self, pos: str, slot) -> int:
-        """PL!N-bp1-012 ランジュのライブ中ブレードボーナスをUI表示用に返す。"""
-        from .engine import _lanzhu_bp1_012_live_bonus_count, _canon_cardno
-        try:
-            if not slot or not getattr(slot, 'active', False):
-                return 0
-            if _canon_cardno(getattr(slot, 'cardnumber', '') or '') != 'PL!N-bp1-012':
-                return 0
-            n = _lanzhu_bp1_012_live_bonus_count(self.gs, self.cards_db)
-            return 2 if n > 0 else 0
-        except Exception:
-            return 0
-
-    def _lanzhu_heart_bonus_for(self, pos: str, slot) -> int:
-        """PL!N-bp1-012 ランジュのライブ中ALLハートボーナスをUI表示用に返す。"""
-        from .engine import _lanzhu_bp1_012_live_bonus_count, _canon_cardno
-        try:
-            if not slot or not getattr(slot, 'active', False):
-                return 0
-            if _canon_cardno(getattr(slot, 'cardnumber', '') or '') != 'PL!N-bp1-012':
-                return 0
-            n = _lanzhu_bp1_012_live_bonus_count(self.gs, self.cards_db)
-            return 2 if n > 0 else 0
         except Exception:
             return 0
 
@@ -2620,11 +2591,8 @@ inner.appendChild(card);
         const tmpBlade  = Number(det.temp_blade      || 0);
         const alwBlade0 = Number(det.always_blade_bonus || 0);
         const alwScore  = Number(det.always_score_bonus || 0);
-        const lzBlade   = Number(det.lanzhu_blade_bonus || 0);
-        const lzHeart   = Number(det.lanzhu_heart_bonus || 0);
         const tmpHearts = Object.assign({}, det.temp_hearts || {});
         const alwHearts = Object.assign({}, det.always_hearts_bonus || {});
-        if(lzHeart > 0) alwHearts['all'] = (Number(alwHearts['all'] || 0)) + lzHeart;
 
         // Love wing bell の常時ブレードは、state_detail に乗らない環境でも
         // success_zone から再計算して可視バッジへ反映する
@@ -2640,7 +2608,7 @@ inner.appendChild(card);
             }
           }
         }catch(e){}
-        const totalBlade = tmpBlade + alwBlade + lzBlade;
+        const totalBlade = tmpBlade + alwBlade;
 
         const hasBonus = totalBlade !== 0 || alwScore !== 0 || Object.keys(alwHearts).some(k=>Number(alwHearts[k])!==0) || Object.keys(tmpHearts).some(k=>Number(tmpHearts[k])!==0);
         if(hasBonus){

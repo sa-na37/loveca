@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: generalize_body_always_bonus_parsers_20260420g
+# BUILD_TAG: remove_lanzhu_legacy_paths_20260420k
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -2080,37 +2080,6 @@ def stage_blade(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
         always_b = _slot_always_blade_bonus(gs, cards_db, pos, slot)
         s += base_b + temp_b + under_b + always_b
     return s
-def _lanzhu_bp1_012_live_bonus_count(gs: "GameState", cards_db: Dict[str, CardInfo]) -> int:
-    """Return how many active Lanzhu (PL!N-bp1-012) provide the live-only bonus now.
-    Condition from card text:
-      - If you have 3+ cards in the live card storage (set_zone),
-        and among them there is at least one Nijigasaki LIVE card,
-        gain <(ALL)><(ALL)><(ブレード)><(ブレード)>.
-    """
-    try:
-        live_cards = list(getattr(gs, "set_zone", []) or [])
-    except Exception:
-        live_cards = []
-    if len(live_cards) < 3:
-        return 0
-    has_niji_live = False
-    for cn in live_cards:
-        ci = _get_card(cards_db, cn)
-        if not ci:
-            continue
-        if is_live_type(getattr(ci, "type", "")) and ("虹ヶ咲" in str(getattr(ci, "group", "") or "")):
-            has_niji_live = True
-            break
-    if not has_niji_live:
-        return 0
-    n = 0
-    for p in ("L", "C", "R"):
-        slot = (gs.stage or {}).get(p)
-        if not slot or not getattr(slot, "active", False):
-            continue
-        if _canon_cardno(getattr(slot, "cardnumber", "") or "") == "PL!N-bp1-012":
-            n += 1
-    return int(n)
 def _love_wing_bell_success_bonus_count(gs: "GameState") -> int:
     """Return how many copies of Love wing bell (PL!-bp4-020) are in success_zone."""
     n = 0
