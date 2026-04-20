@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: remove_lanzhu_legacy_paths_20260420k
+# BUILD_TAG: generalize_more_numeric_attempt_paths_20260420l
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -4156,6 +4156,75 @@ def _parse_live_start_score_if_green_live_group_count(ci: Optional[CardInfo]) ->
         return None
     return None
 
+
+def _parse_live_start_score_per_stage_group_member_heart_color_kind(ci: Optional[CardInfo]) -> Optional[Tuple[str, int]]:
+    try:
+        if not ci or not getattr(ci, 'abilities', None):
+            return None
+        for ab in _iter_triggered_abilities(ci, 'ライブ開始時'):
+            clauses = ab.get('clauses', []) if isinstance(ab, dict) else []
+            if not isinstance(clauses, list):
+                continue
+            for cl in clauses:
+                if not isinstance(cl, dict):
+                    continue
+                eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+                if not eff:
+                    continue
+                eff_norm = eff.replace('\n', '')
+                m = re.match(r'^自分のステージにいる『(?P<group>[^』]+)』のメンバーが持つハートの種類1種類につき、このカードのスコアを\+(?P<delta>\d+)する。$', eff_norm)
+                if m:
+                    return (str(m.group('group') or '').strip(), int(m.group('delta') or 0))
+    except Exception:
+        return None
+    return None
+
+
+def _parse_live_start_score_if_success_zone_has_scores(ci: Optional[CardInfo]) -> Optional[Tuple[int, int, int, int]]:
+    try:
+        if not ci or not getattr(ci, 'abilities', None):
+            return None
+        for ab in _iter_triggered_abilities(ci, 'ライブ開始時'):
+            clauses = ab.get('clauses', []) if isinstance(ab, dict) else []
+            if not isinstance(clauses, list):
+                continue
+            for cl in clauses:
+                if not isinstance(cl, dict):
+                    continue
+                eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+                if not eff:
+                    continue
+                eff_norm = eff.replace('\n', '')
+                m = re.match(r'^自分の成功ライブカード置き場にスコアが(?P<a>\d+)か(?P<b>\d+)のカードがある場合、このカードのスコアを\+(?P<one>\d+)する。それらが両方ある場合、代わりにスコアを\+(?P<both>\d+)する。$', eff_norm)
+                if m:
+                    return (int(m.group('a') or 0), int(m.group('b') or 0), int(m.group('one') or 0), int(m.group('both') or 0))
+    except Exception:
+        return None
+    return None
+
+
+def _parse_live_start_score_if_green_unique_live_names_group_count(ci: Optional[CardInfo]) -> Optional[Tuple[str, int, int, int, int]]:
+    try:
+        if not ci or not getattr(ci, 'abilities', None):
+            return None
+        for ab in _iter_triggered_abilities(ci, 'ライブ開始時'):
+            clauses = ab.get('clauses', []) if isinstance(ab, dict) else []
+            if not isinstance(clauses, list):
+                continue
+            for cl in clauses:
+                if not isinstance(cl, dict):
+                    continue
+                eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+                if not eff:
+                    continue
+                eff_norm = eff.replace('\n', '')
+                m = re.match(r'^自分の控え室にカード名の異なる『(?P<group>[^』]+)』のライブカードが(?P<c1>\d+)枚以上ある場合、このカードのスコアを\+(?P<d1>\d+)する。(?P<c2>\d+)枚以上ある場合、代わりにスコアを\+(?P<d2>\d+)する。$', eff_norm)
+                if m:
+                    return (str(m.group('group') or '').strip(), int(m.group('c1') or 0), int(m.group('d1') or 0), int(m.group('c2') or 0), int(m.group('d2') or 0))
+    except Exception:
+        return None
+    return None
+
 def _parse_live_start_reduce_any_and_score_if_success_score(ci: Optional[CardInfo]) -> Optional[Tuple[int, int, int, int]]:
     try:
         if not ci or not getattr(ci, 'abilities', None):
@@ -4550,9 +4619,6 @@ def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict
 _EUTOPIA_CN_CANON = 'PL!N-bp1-029'
 _RISE_UP_HIGH_CN_CANON = 'PL!N-bp4-029'
 _POPPIN_UP_CN_CANON = 'PL!N-bp1-026'
-_SOLITUDE_RAIN_CN_CANON = 'PL!N-bp1-027'
-_PSYCHO_HEART_CN_CANON = 'PL!N-bp3-026'
-_STARS_WE_CHASE_CN_CANON = 'PL!N-bp4-028'
 _LOVE_U_MY_FRIENDS_CN_CANON = 'PL!N-bp3-030'
 _MONSTER_GIRLS_CN_CANON = 'PL!N-bp3-031'
 _EMOTION_CN_CANON = 'PL!N-bp4-027'
@@ -5008,11 +5074,11 @@ def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[s
         except Exception:
             lc = 0
         return int(delta if lc >= int(need) else 0)
-    if canon == _SOLITUDE_RAIN_CN_CANON:
+    if _parse_live_start_score_per_stage_group_member_heart_color_kind(ci_live) is not None:
         return int(_solitude_rain_stage_color_kinds(gs, cards_db))
-    if canon == _PSYCHO_HEART_CN_CANON:
+    if _parse_live_start_score_if_success_zone_has_scores(ci_live) is not None:
         return int(_psycho_heart_success_bonus(gs, cards_db))
-    if canon == _STARS_WE_CHASE_CN_CANON:
+    if _parse_live_start_score_if_green_unique_live_names_group_count(ci_live) is not None:
         return int(_stars_we_chase_waiting_bonus(gs, cards_db))
     parsed_emotion = _parse_live_start_score_and_increase_any_per_success_zone_cardname_count(ci_live)
     if parsed_emotion is not None:
