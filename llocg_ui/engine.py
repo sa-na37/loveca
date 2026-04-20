@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: generalize_more_numeric_wrappers_20260416w
+# BUILD_TAG: fix_missing_numeric_live_start_dispatch_20260416wfix
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -3772,6 +3772,58 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             'condition_count': need,
             'score_delta': delta,
             'text': f'【{src_cn}】ライブ開始時：控え室に『{group_name}』のライブカードが{need}枚以上あるなら、このカードのスコアを+{delta}する。',
+            'options': ['ok'],
+        })
+        return
+    if kind == 'live_start_score_per_stage_group_member_heart_color_kind':
+        src_cn = str((trig or {}).get('source_cn', '') or '')
+        group_name = str((trig or {}).get('condition_group_name', '') or '')
+        per = int((trig or {}).get('score_delta_per_kind', 0) or 0)
+        gs.pending.append({
+            'kind': 'live_start_score_per_stage_group_member_heart_color_kind',
+            'source_cn': src_cn,
+            'set_idx': (trig or {}).get('set_idx', None),
+            'condition_group_name': group_name,
+            'score_delta_per_kind': per,
+            'text': f'【{src_cn}】ライブ開始時：自分のステージにいる『{group_name}』のメンバーが持つ6色のうち1色につき、このカードのスコアを+{per}する。',
+            'options': ['ok'],
+        })
+        return
+    if kind == 'live_start_score_if_success_zone_has_scores':
+        src_cn = str((trig or {}).get('source_cn', '') or '')
+        a = int((trig or {}).get('score_value_a', 0) or 0)
+        b = int((trig or {}).get('score_value_b', 0) or 0)
+        single = int((trig or {}).get('single_delta', 0) or 0)
+        both = int((trig or {}).get('both_delta', 0) or 0)
+        gs.pending.append({
+            'kind': 'live_start_score_if_success_zone_has_scores',
+            'source_cn': src_cn,
+            'set_idx': (trig or {}).get('set_idx', None),
+            'score_value_a': a,
+            'score_value_b': b,
+            'single_delta': single,
+            'both_delta': both,
+            'text': f'【{src_cn}】ライブ開始時：成功ライブカード置き場にスコア{a}か{b}のカードがある場合スコア+{single}、両方ある場合は代わりにスコア+{both}する。',
+            'options': ['ok'],
+        })
+        return
+    if kind == 'live_start_score_if_green_unique_live_names_group_count':
+        src_cn = str((trig or {}).get('source_cn', '') or '')
+        group_name = str((trig or {}).get('condition_group_name', '') or '')
+        th1 = int((trig or {}).get('threshold_1', 0) or 0)
+        d1 = int((trig or {}).get('score_delta_1', 0) or 0)
+        th2 = int((trig or {}).get('threshold_2', 0) or 0)
+        d2 = int((trig or {}).get('score_delta_2', 0) or 0)
+        gs.pending.append({
+            'kind': 'live_start_score_if_green_unique_live_names_group_count',
+            'source_cn': src_cn,
+            'set_idx': (trig or {}).get('set_idx', None),
+            'condition_group_name': group_name,
+            'threshold_1': th1,
+            'score_delta_1': d1,
+            'threshold_2': th2,
+            'score_delta_2': d2,
+            'text': f'【{src_cn}】ライブ開始時：控え室にカード名の異なる『{group_name}』のライブカードが{th1}枚以上ならスコア+{d1}、{th2}枚以上なら代わりにスコア+{d2}する。',
             'options': ['ok'],
         })
         return
