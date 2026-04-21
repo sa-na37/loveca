@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: fix_neo_sky_second_pending_and_aokuharuka_parse_unit_20260421e
+# BUILD_TAG: generalize_success_zone_wait_helpers_20260421f
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -2017,7 +2017,7 @@ def _slot_always_blade_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos: 
             bonus += 1
         try:
             if pos == 'C' and ("μ's" in str(getattr(c, 'group', '') or '')):
-                bonus += int(_love_wing_bell_success_bonus_count(gs) or 0)
+                bonus += int(_success_zone_cardno_count(gs, 'PL!-bp4-020') or 0)
         except Exception:
             pass
         for _eff, blob in _iter_body_always_effects(c):
@@ -2071,15 +2071,19 @@ def stage_blade(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
         always_b = _slot_always_blade_bonus(gs, cards_db, pos, slot)
         s += base_b + temp_b + under_b + always_b
     return s
-def _love_wing_bell_success_bonus_count(gs: "GameState") -> int:
-    """Return how many copies of Love wing bell (PL!-bp4-020) are in success_zone."""
+def _success_zone_cardno_count(gs: "GameState", target_cn: str) -> int:
+    if gs is None:
+        return 0
+    target = _canon_cardno(str(target_cn or ''))
+    if not target:
+        return 0
     n = 0
     for cn in list(getattr(gs, 'success_zone', []) or []):
         try:
             canon = _canon_cardno(cn)
         except Exception:
             canon = str(cn or '')
-        if canon == 'PL!-bp4-020':
+        if canon == target:
             n += 1
     return int(n)
 def owned_base_hearts(gs: GameState, cards_db: Dict[str, CardInfo]) -> Dict[str, int]:
@@ -3877,7 +3881,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
     if kind == 'add_live_success_score_bonus_per_weight_member':
         cn_live = str((trig or {}).get('source_cn', '') or '')
         per = int((trig or {}).get('bonus_per', 0) or 0)
-        n = int(_monster_girls_wait_bonus(gs, cards_db))
+        n = int(_stage_wait_member_count(gs, cards_db))
         bonus = int(per * n)
         if bonus > 0:
             _add_last_attempt_live_score_bonus(gs, cn_live, bonus)
@@ -4953,33 +4957,20 @@ def _success_zone_cardname_count(gs: GameState, cards_db: Dict[str, CardInfo], c
             n += 1
     return int(n)
 
-def _emotion_like_required_any_bonus(cn_live, gs: GameState, cards_db: Dict[str, CardInfo], set_idx: Optional[int] = None) -> int:
+def _live_start_score_and_required_any_bonus_per_success_zone_cardname_count(cn_live, gs: GameState, cards_db: Dict[str, CardInfo], set_idx: Optional[int] = None) -> Tuple[int, int]:
     if not _live_start_set_idx_resolved(gs, set_idx):
-        return 0
-    mapped = int(_live_start_required_any_increase_for_set_idx(gs, set_idx, source_cn=cn_live))
-    if mapped > 0:
-        return mapped
+        return 0, 0
+    mapped_score = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
+    mapped_any = int(_live_start_required_any_increase_for_set_idx(gs, set_idx, source_cn=cn_live))
+    if mapped_score > 0 or mapped_any > 0:
+        return int(mapped_score), int(mapped_any)
     ci = _get_card(cards_db, cn_live)
     parsed = _parse_live_start_score_and_increase_any_per_success_zone_cardname_count(ci)
     if not parsed:
-        return 0
+        return 0, 0
     cardname, per_score, per_any = parsed
     cnt = int(_success_zone_cardname_count(gs, cards_db, cardname))
-    return int(per_any * cnt)
-
-def _emotion_like_score_bonus(cn_live, gs: GameState, cards_db: Dict[str, CardInfo], set_idx: Optional[int] = None) -> int:
-    if not _live_start_set_idx_resolved(gs, set_idx):
-        return 0
-    mapped = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
-    if mapped > 0:
-        return mapped
-    ci = _get_card(cards_db, cn_live)
-    parsed = _parse_live_start_score_and_increase_any_per_success_zone_cardname_count(ci)
-    if not parsed:
-        return 0
-    cardname, per_score, per_any = parsed
-    cnt = int(_success_zone_cardname_count(gs, cards_db, cardname))
-    return int(per_score * cnt)
+    return int(per_score * cnt), int(per_any * cnt)
 def _heartbeat_required_any_reduction(cn_live, gs: GameState, cards_db: Dict[str, CardInfo], set_idx: Optional[int] = None) -> int:
     if not _live_start_set_idx_resolved(gs, set_idx):
         return 0
@@ -5168,7 +5159,7 @@ def _compute_final_compare_score_after_success(gs: GameState, cards_db: Dict[str
         stage_score_bonus = 0
     total += int(stage_score_bonus)
     return int(total), rows, int(stage_score_bonus)
-def _monster_girls_wait_bonus(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
+def _stage_wait_member_count(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
     n = 0
     for pos in ('L', 'C', 'R'):
         slot = (gs.stage or {}).get(pos)
@@ -5189,7 +5180,8 @@ def _monster_girls_wait_bonus(gs: GameState, cards_db: Dict[str, CardInfo]) -> i
 def _effective_live_required_hearts(cn_live, ci, gs: GameState, cards_db: Optional[Dict[str, CardInfo]] = None, set_idx: Optional[int] = None) -> Dict[str, int]:
     req = dict((getattr(ci, 'required_hearts', {}) if ci else {}) or {})
     try:
-        extra_any = int(_emotion_like_required_any_bonus(cn_live, gs, cards_db=(cards_db or {}), set_idx=set_idx))
+        _emo_score, _emo_any = _live_start_score_and_required_any_bonus_per_success_zone_cardname_count(cn_live, gs, cards_db=(cards_db or {}), set_idx=set_idx)
+        extra_any = int(_emo_any)
     except Exception:
         extra_any = 0
     if extra_any > 0:
@@ -5234,7 +5226,7 @@ def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[s
         _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
         if _m > 0:
             return _m
-        return int(_emotion_like_score_bonus(cn_live, gs, cards_db, set_idx=set_idx))
+        return int(_live_start_score_and_required_any_bonus_per_success_zone_cardname_count(cn_live, gs, cards_db, set_idx=set_idx)[0])
     if _parse_live_start_score_if_live_zone_group_count(_get_card(cards_db, cn_live)) is not None:
         _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
         return _m if _m > 0 else int(_bokulive_score_bonus(cn_live, gs, cards_db, set_idx=set_idx))
