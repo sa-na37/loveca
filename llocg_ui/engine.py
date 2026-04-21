@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: generalize_success_zone_wait_helpers_20260421f
+# BUILD_TAG: prune_unused_live_cn_constants_20260421g
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -4770,19 +4770,10 @@ def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict
 # ----------------------------
 # Step21: LIVE scoring helpers (UI)
 # ----------------------------
-_EUTOPIA_CN_CANON = 'PL!N-bp1-029'
 _RISE_UP_HIGH_CN_CANON = 'PL!N-bp4-029'
-_POPPIN_UP_CN_CANON = 'PL!N-bp1-026'
-_LOVE_U_MY_FRIENDS_CN_CANON = 'PL!N-bp3-030'
-_MONSTER_GIRLS_CN_CANON = 'PL!N-bp3-031'
-_EMOTION_CN_CANON = 'PL!N-bp4-027'
-_LA_BELLA_PATRIA_CN_CANON = 'PL!N-bp3-027'
 _BUTTERFLY_CN_CANON = 'PL!N-bp1-028'
 _TSUNAGARU_CONNECT_CN_CANON = 'PL!N-bp3-028'
-_VIVID_WORLD_CN_CANON = 'PL!N-bp4-025'
 _NEO_SKY_CN_CANON = 'PL!N-bp4-031'
-_BOKULIVE_BP3_019_CN_CANON = 'PL!-bp3-019'
-_HEARTBEAT_BP4_021_CN_CANON = 'PL!-bp4-021'
 def _effective_success_zone_live_score(cn_live, gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
     ci = _get_card(cards_db, cn_live)
     if not ci:
