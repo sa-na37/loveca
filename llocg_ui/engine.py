@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: prune_unused_live_cn_constants_20260421g
+# BUILD_TAG: inline_last_live_cn_fallbacks_20260421h
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -3672,9 +3672,9 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         })
         gs.log.append(f"[PENDING] {pos}: {src_cn} ライブ開始時 → activate member choice ({len(wait_opts)} candidates)")
         return
-    if kind in ('live_start_score_and_pick_group_member_temp_blade', 'live_start_rise_up_high_deferred'):
+    if kind == 'live_start_score_and_pick_group_member_temp_blade':
         group_name = str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')
-        src_cn = str((trig or {}).get('source_cn', '') or _RISE_UP_HIGH_CN_CANON)
+        src_cn = str((trig or {}).get('source_cn', '') or 'PL!N-bp4-029')
         if int(getattr(gs, 'turn', 0) or 0) != 1:
             gs.log.append(f'[SKIP] {src_cn} live-start unresolved (not 1st turn at resolution)')
             return
@@ -3705,27 +3705,27 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             opts.append(f"{_pp}: {_nm}" if _nm else str(_pp))
         gs.pending.append({
             'kind': 'pick_group_member_for_temp_blade',
-            'cn': str((trig or {}).get('source_cn', '') or _RISE_UP_HIGH_CN_CANON),
-            'text': f"【{str((trig or {}).get('source_cn', '') or _RISE_UP_HIGH_CN_CANON)}】ライブ開始時：『{str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')}』のメンバーを1人選ぶ（このライブ終了時まで、そのメンバーはブレード+1）",
+            'cn': str((trig or {}).get('source_cn', '') or 'PL!N-bp4-029'),
+            'text': f"【{str((trig or {}).get('source_cn', '') or 'PL!N-bp4-029')}】ライブ開始時：『{str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')}』のメンバーを1人選ぶ（このライブ終了時まで、そのメンバーはブレード+1）",
             'options': list(opts),
             'pos_options': list(cands),
         })
         gs.log.append(f"[PENDING] group-member temp blade choice ({len(cands)} candidates)")
         return
-    if kind in ('live_start_optional_pay_energy_for_self_score_if_group', 'live_start_butterfly_deferred'):
+    if kind == 'live_start_optional_pay_energy_for_self_score_if_group':
         gs.pending.append({
             'kind': 'optional_pay_energy_for_self_score_if_group',
-            'cn': str((trig or {}).get('source_cn', '') or _BUTTERFLY_CN_CANON),
+            'cn': str((trig or {}).get('source_cn', '') or 'PL!N-bp1-028'),
             'set_idx': (trig or {}).get('set_idx', None),
             'condition_group_name': str((trig or {}).get('condition_group_name', '') or '虹ヶ咲'),
-            'text': f"【{str((trig or {}).get('source_cn', '') or _BUTTERFLY_CN_CANON)}】ライブ開始時：エネルギー2枚を支払ってもよい。自分のステージに『{str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')}』のメンバーがいる場合、このカードのスコアを+1する。",
+            'text': f"【{str((trig or {}).get('source_cn', '') or 'PL!N-bp1-028')}】ライブ開始時：エネルギー2枚を支払ってもよい。自分のステージに『{str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')}』のメンバーがいる場合、このカードのスコアを+1する。",
             'options': ['pay', 'skip'],
         })
         return
-    if kind in ('live_start_if_stage_group_cost_then_draw_then_ordered_topdeck', 'live_start_neo_sky_deferred'):
+    if kind == 'live_start_if_stage_group_cost_then_draw_then_ordered_topdeck':
         group_name = str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')
         min_cost = int((trig or {}).get('condition_min_cost', 20) or 20)
-        src_cn = str((trig or {}).get('source_cn', '') or _NEO_SKY_CN_CANON)
+        src_cn = str((trig or {}).get('source_cn', '') or 'PL!N-bp4-031')
         if not _stage_all_group_cost_ready(gs, cards_db, group_name, min_cost):
             gs.log.append(f'[SKIP] {src_cn} live-start unresolved (condition not met at resolution)')
             return
@@ -3736,9 +3736,9 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             'options': ['ok'],
         })
         return
-    if kind in ('live_start_top_keep_one_then_reveal_top_score_if_live_by_group_count', 'live_start_tsunagaru_connect_deferred'):
+    if kind == 'live_start_top_keep_one_then_reveal_top_score_if_live_by_group_count':
         group_name = str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')
-        src_cn = str((trig or {}).get('source_cn', '') or _TSUNAGARU_CONNECT_CN_CANON)
+        src_cn = str((trig or {}).get('source_cn', '') or 'PL!N-bp3-028')
         _niji_n = _count_stage_group_members(gs, cards_db, group_name)
         if _niji_n <= 0:
             gs.log.append(f'[SKIP] {src_cn} live-start unresolved (no {group_name} member at resolution)')
@@ -3751,7 +3751,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             'k': int(_niji_n),
         })
         return
-    if kind in ('live_start_convert_revealed_colors_to_single_color_until_end_of_live', 'live_start_vivid_world_auto'):
+    if kind == 'live_start_convert_revealed_colors_to_single_color_until_end_of_live':
         target_color_jp = str((trig or {}).get('target_color_jp', '') or '青').strip()
         target_key = _HEART_ICON_COLOR_MAP.get(target_color_jp, 'blue')
         if target_key == 'blue':
@@ -4770,10 +4770,6 @@ def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict
 # ----------------------------
 # Step21: LIVE scoring helpers (UI)
 # ----------------------------
-_RISE_UP_HIGH_CN_CANON = 'PL!N-bp4-029'
-_BUTTERFLY_CN_CANON = 'PL!N-bp1-028'
-_TSUNAGARU_CONNECT_CN_CANON = 'PL!N-bp3-028'
-_NEO_SKY_CN_CANON = 'PL!N-bp4-031'
 def _effective_success_zone_live_score(cn_live, gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
     ci = _get_card(cards_db, cn_live)
     if not ci:
@@ -6082,32 +6078,6 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         if _r:
             gs.pending.append(_r)
         return
-    if kind == 'live_start_numeric_effect':
-        low = choice_str.lower()
-        if low not in ('ok', 'apply', 'yes', 'y', '1', 'true', 'use', 'go', 'confirm', 'はい', '使う'):
-            gs.log.append(f"[ERR] live_start_numeric_effect: invalid choice {choice_str}")
-            gs.pending.append(p)
-            return
-        set_idx = p.get('set_idx', None)
-        _mark_live_start_set_idx_resolved(gs, set_idx)
-        src = str(p.get('source_cn', '') or '')
-        eff_code = str(p.get('effect_code', '') or '')
-        if eff_code == 'bp3_019_score':
-            bonus = int(_bokulive_score_bonus(src, gs, cards_db, set_idx=set_idx))
-            gs.log.append(f"[AUTO] {src}[ライブ開始時]: score {bonus:+d}")
-        elif eff_code == 'bp2_022_score':
-            bonus = int(_aokuharuka_score_bonus(src, gs, cards_db, set_idx=set_idx))
-            gs.log.append(f"[AUTO] {src}[ライブ開始時]: score {bonus:+d}")
-        elif eff_code == 'bp4_021_req_score':
-            red = int(_heartbeat_required_any_reduction(src, gs, cards_db, set_idx=set_idx))
-            bonus = int(_heartbeat_score_bonus(src, gs, cards_db, set_idx=set_idx))
-            gs.log.append(f"[AUTO] {src}[ライブ開始時]: required(any) -{red}, score {bonus:+d}")
-        else:
-            gs.log.append(f"[AUTO] {src}[ライブ開始時]: resolved")
-        _r = p.get('_resume') if isinstance(p, dict) else None
-        if _r:
-            gs.pending.append(_r)
-        return
     if kind == 'pay_or_skip':
         # Generic optional-cost prompt (e.g., "...してもよい：<effect>")
         cost_kind = str(p.get('cost_kind', '') or '')
@@ -6862,7 +6832,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         gs.log.append(f"[PENDING] reorder_topk: picked {pick_cn}; remaining {len(pool)}")
         return
     if kind in ('optional_pay_energy_for_self_score_if_group', 'live_start_butterfly_pay'):
-        src_cn = str(p.get('cn', '') or _BUTTERFLY_CN_CANON)
+        src_cn = str(p.get('cn', '') or 'PL!N-bp1-028')
         group_name = str(p.get('condition_group_name', '') or '虹ヶ咲')
         low = str(choice_str or '').strip().lower()
         if low in ('skip', '__skip__', 'no', 'n', '0', 'false'):
