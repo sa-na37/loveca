@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: inline_last_live_cn_fallbacks_20260421h
+# BUILD_TAG: implement_under_energy_family_20260421l
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -43,6 +43,7 @@ _EFFECT_RULES = [
     {"id": "topdeck_green_member_n", "pattern": r"^自分の控え室にあるメンバーカード(?P<n>\d+)枚を好きな順番でデッキの一番上に置く。$", "op": "topdeck_from_green", "card_kind": "MEMBER", "allow_less": False},
     {"id": "topdeck_green_live_group_upto_n", "pattern": r"^自分の控え室にある『(?P<group>[^』]+)』のライブカードを(?P<n>\d+)枚まで好きな順番でデッキの上に置く。$", "op": "topdeck_from_green", "card_kind": "LIVE", "allow_less": True},
     {"id": "energy_put_wait_n", "pattern": r"^自分のエネルギーデッキから、エネルギーカードを(?P<n>\d+)枚ウェイト状態で置く。$", "op": "energy_put_wait"},
+    {"id": "energy_put_wait_under_plus_one_self", "pattern": r"^(?:自分の)?エネルギーデッキから、このメンバーの下にあるエネルギーカードの枚数に1を足した枚数のエネルギーカードをウェイト状態で置く。$", "op": "energy_put_wait_under_plus_one_self"},
     {"id": "energy_activate_n", "pattern": r"^エネルギーを(?P<n>\d+)枚アクティブにする。$", "op": "energy_activate"},
     {"id": "gain_blade_until_end_live", "pattern": r"^ライブ終了時まで、(?P<blades>(?:<\(ブレード\)>)+)を得る。$", "op": "gain_blade_until_end_live"},
     {"id": "activate_stage_member_upto1", "pattern": r"^自分のステージにいるメンバーを1人までアクティブにする。$", "op": "activate_stage_member"},
@@ -737,6 +738,14 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
             gs.energy_wait += add
             _clamp_energy_zone(gs)
         gs.log.append(f"[AUTO] energy_put_wait +{add}{' (clipped)' if add<n else ''} (wait={gs.energy_wait})")
+        return
+    if op == 'energy_put_wait_under_plus_one_self':
+        pos = str((ctx or {}).get('pos', '') or '').upper()
+        slot = gs.stage.get(pos) if pos in ('L', 'C', 'R') else None
+        under = int(getattr(slot, 'energy_under', 0) or 0) if slot else 0
+        n = max(0, under + 1)
+        add = _put_wait_energy_from_deck(gs, n, reason=f'under+1 self at {pos or "?"}')
+        gs.log.append(f"[AUTO] energy_put_wait_under_plus_one_self under={under} -> +{add} (wait={gs.energy_wait})")
         return
     if op == 'energy_activate':
         n = int(gd.get('n', 0) or 0)
@@ -1693,6 +1702,27 @@ def _clamp_energy_zone(gs: 'GameState') -> None:
     if over > 0:
         take_a = min(int(gs.energy_active or 0), over)
         gs.energy_active -= take_a
+
+def _return_under_energy_to_deck_from_slot(gs: 'GameState', slot: Optional['StageSlot'], pos: str = '', reason: str = '') -> int:
+    try:
+        n = int(getattr(slot, 'energy_under', 0) or 0) if slot else 0
+    except Exception:
+        n = 0
+    if n <= 0:
+        return 0
+    try:
+        slot.energy_under = 0
+    except Exception:
+        pass
+    msg = f"[INFO] {str(pos or '?').upper()}: return under-energy x{n} to energy deck"
+    if reason:
+        msg += f" ({reason})"
+    try:
+        gs.log.append(msg)
+    except Exception:
+        pass
+    # Energy deck is implicit by counts; clearing energy_under is enough.
+    return int(n)
 def refresh(gs: GameState) -> None:
     for k in ("L", "C", "R"):
         if gs.stage.get(k):
@@ -3097,16 +3127,7 @@ def cmd_play(gs: GameState, cards_db: Dict[str, CardInfo], hand_idx: int, pos: s
         old = _get_card(cards_db, baton_old_cn)
         baton_old_cost = int(old.cost) if old else 0
         # If the replaced member had energies under it, they return to the energy deck (not to energy zone).
-        old_under = int(getattr(existing, 'energy_under', 0) or 0)
-        if old_under > 0:
-            try:
-                gs.log.append(f"[INFO] {pos}: {baton_old_cn} leaves stage -> return under-energy x{old_under} to energy deck")
-            except Exception:
-                pass
-            try:
-                existing.energy_under = 0
-            except Exception:
-                pass
+        _return_under_energy_to_deck_from_slot(gs, existing, pos=pos, reason=f'{baton_old_cn} leaves stage')
     cn = gs.hand[hand_idx]
     c = _get_card(cards_db, cn)
     ctype = (c.type if c else "")
@@ -5556,6 +5577,7 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                 gs.log.append(f"[COST] moved 1 energy under {pos} from {src} (under={int(getattr(slot,'energy_under',0) or 0)}; E active={gs.energy_active} wait={gs.energy_wait})")
             if _cost_requires_self_to_green(cost):
                 leaving_cn = str(getattr(slot, 'cardnumber', '') or '')
+                _return_under_energy_to_deck_from_slot(gs, slot, pos=pos, reason=f'{leaving_cn} leaves stage by cost')
                 gs.green_room.append(leaving_cn)
                 gs.stage[pos] = None
                 gs.log.append(f"[COST] {pos}: {leaving_cn} -> waiting room")
@@ -5658,6 +5680,7 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
         gs.log.append(f"[ERR] activate: no supported activated ability on {ci.cardnumber}")
         return
     if _has_sacrifice_ability(ci):
+        _return_under_energy_to_deck_from_slot(gs, slot, pos=pos, reason=f'{ci.cardnumber} leaves stage by legacy cost')
         gs.green_room.append(slot.cardnumber)
         gs.stage[pos] = None
         gs.log.append(f"[ACT] {pos}: {ci.cardnumber} -> waiting room (cost)")
