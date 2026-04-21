@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: remove_ruh_butterfly_tsunagaru_legacy_flags_20260420s
+# BUILD_TAG: use_pay_energy_for_butterfly_resolution_20260420u2
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -4205,10 +4205,17 @@ def _parse_live_start_optional_pay_energy_for_self_score_if_group(ci: Optional[C
             for cl in clauses:
                 if not isinstance(cl, dict):
                     continue
-                eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
-                if not eff:
+                cost = str(cl.get('cost_template', '') or '').strip()
+                eff = str(cl.get('effect_template', '') or '').strip()
+                raw = str(cl.get('raw', '') or '').strip()
+                build = raw
+                if cost and eff:
+                    build = f'{cost}：{eff}'
+                elif eff:
+                    build = eff
+                if not build:
                     continue
-                eff_norm = eff.replace('\n', '')
+                eff_norm = build.replace('\n', '')
                 m = re.match(r'^<\(E\)><\(E\)>支払ってもよい：自分のステージに『(?P<group>[^』]+)』のメンバーがいる場合、このカードのスコアを\+1する。$', eff_norm)
                 if m:
                     return str(m.group('group') or '').strip()
@@ -6887,7 +6894,9 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         if not _has_group_member_on_stage(gs, cards_db, group_name):
             gs.log.append(f'[SKIP] {src_cn} live-start unresolved (no {group_name} member at resolution)')
             return
-        gs.energy_active = max(0, int(getattr(gs, 'energy_active', 0) or 0) - 2)
+        if not pay_energy(gs, 2):
+            gs.log.append(f'[SKIP] {src_cn} live-start unresolved (not enough active energy at resolution)')
+            return
         _add_live_start_score_bonus(gs, 1, set_idx=p.get('set_idx', None), source_cn=src_cn)
         gs.log.append(f'[AUTO] {src_cn} live-start: paid E2 -> score +1')
         return
