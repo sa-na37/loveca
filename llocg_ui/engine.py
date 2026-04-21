@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: fix_neo_sky_pending_and_cleanup_dead_alias_numeric_20260421b
+# BUILD_TAG: fix_neo_sky_second_pending_and_aokuharuka_parse_unit_20260421e
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -3668,7 +3668,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         })
         gs.log.append(f"[PENDING] {pos}: {src_cn} ライブ開始時 → activate member choice ({len(wait_opts)} candidates)")
         return
-    if kind == 'live_start_score_and_pick_group_member_temp_blade':
+    if kind in ('live_start_score_and_pick_group_member_temp_blade', 'live_start_rise_up_high_deferred'):
         group_name = str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')
         src_cn = str((trig or {}).get('source_cn', '') or _RISE_UP_HIGH_CN_CANON)
         if int(getattr(gs, 'turn', 0) or 0) != 1:
@@ -3708,7 +3708,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         })
         gs.log.append(f"[PENDING] group-member temp blade choice ({len(cands)} candidates)")
         return
-    if kind == 'live_start_optional_pay_energy_for_self_score_if_group':
+    if kind in ('live_start_optional_pay_energy_for_self_score_if_group', 'live_start_butterfly_deferred'):
         gs.pending.append({
             'kind': 'optional_pay_energy_for_self_score_if_group',
             'cn': str((trig or {}).get('source_cn', '') or _BUTTERFLY_CN_CANON),
@@ -3718,7 +3718,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             'options': ['pay', 'skip'],
         })
         return
-    if kind == 'live_start_if_stage_group_cost_then_draw_then_ordered_topdeck':
+    if kind in ('live_start_if_stage_group_cost_then_draw_then_ordered_topdeck', 'live_start_neo_sky_deferred'):
         group_name = str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')
         min_cost = int((trig or {}).get('condition_min_cost', 20) or 20)
         src_cn = str((trig or {}).get('source_cn', '') or _NEO_SKY_CN_CANON)
@@ -3732,7 +3732,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             'options': ['ok'],
         })
         return
-    if kind == 'live_start_top_keep_one_then_reveal_top_score_if_live_by_group_count':
+    if kind in ('live_start_top_keep_one_then_reveal_top_score_if_live_by_group_count', 'live_start_tsunagaru_connect_deferred'):
         group_name = str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')
         src_cn = str((trig or {}).get('source_cn', '') or _TSUNAGARU_CONNECT_CN_CANON)
         _niji_n = _count_stage_group_members(gs, cards_db, group_name)
@@ -3747,7 +3747,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             'k': int(_niji_n),
         })
         return
-    if kind == 'live_start_convert_revealed_colors_to_single_color_until_end_of_live':
+    if kind in ('live_start_convert_revealed_colors_to_single_color_until_end_of_live', 'live_start_vivid_world_auto'):
         target_color_jp = str((trig or {}).get('target_color_jp', '') or '青').strip()
         target_key = _HEART_ICON_COLOR_MAP.get(target_color_jp, 'blue')
         if target_key == 'blue':
@@ -4260,7 +4260,7 @@ def _parse_live_start_score_if_green_live_group_count(ci: Optional[CardInfo]) ->
                 if not eff:
                     continue
                 eff_norm = eff.replace('\n', '')
-                m = re.match(r'^控え室に『(?P<group>[^』]+)』のライブカードが(?P<count>\d+)枚以上あるなら、このカードのスコアを\+(?P<delta>\d+)する。$', eff_norm)
+                m = re.match(r'^(?:自分の)?控え室に『(?P<group>[^』]+)』のライブカードが(?P<count>\d+)枚以上ある(?:場合|なら)、このカードのスコアを\+(?P<delta>\d+)する。$', eff_norm)
                 if m:
                     return (str(m.group('group') or '').strip(), int(m.group('count') or 0), int(m.group('delta') or 0))
     except Exception:
@@ -4465,7 +4465,7 @@ def _build_live_start_trigger_from_effect(gs: GameState, cards_db: Dict[str, Car
             'score_delta': int(m.group('delta') or 0),
         }
     # Generalized from 青とシャボン.
-    m = re.match(r'^控え室に『(?P<group>[^』]+)』のライブカードが(?P<count>\d+)枚以上あるなら、このカードのスコアを\+(?P<delta>\d+)する。$', eff_norm)
+    m = re.match(r'^(?:自分の)?控え室に『(?P<group>[^』]+)』のライブカードが(?P<count>\d+)枚以上ある(?:場合|なら)、このカードのスコアを\+(?P<delta>\d+)する。$', eff_norm)
     if m:
         return {
             'kind': 'live_start_score_if_green_live_group_count_at_least',
@@ -4842,7 +4842,7 @@ def _aokuharuka_score_bonus(cn_live, gs: GameState, cards_db: Dict[str, CardInfo
     if not parsed:
         return 0
     group_name, need, delta = parsed
-    cnt = int(_green_live_group_count(gs, cards_db, group_name))
+    cnt = int(_green_live_count_by_group_or_unit(gs, cards_db, group_name))
     return int(delta if cnt >= int(need) else 0)
 def _live_start_set_idx_resolved(gs: Optional[GameState], set_idx: Optional[int]) -> bool:
     try:
@@ -5912,7 +5912,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         group_name = str(p.get('condition_group_name', '') or '')
         need = int(p.get('condition_count', 0) or 0)
         delta = int(p.get('score_delta', 0) or 0)
-        cnt = int(_green_live_group_count(gs, cards_db, group_name))
+        cnt = int(_green_live_count_by_group_or_unit(gs, cards_db, group_name))
         bonus = int(delta if cnt >= need else 0)
         if bonus > 0:
             if set_idx is not None:
@@ -6098,6 +6098,948 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         _r = p.get('_resume') if isinstance(p, dict) else None
         if _r:
             gs.pending.append(_r)
+        return
+    if kind == 'live_start_numeric_effect':
+        low = choice_str.lower()
+        if low not in ('ok', 'apply', 'yes', 'y', '1', 'true', 'use', 'go', 'confirm', 'はい', '使う'):
+            gs.log.append(f"[ERR] live_start_numeric_effect: invalid choice {choice_str}")
+            gs.pending.append(p)
+            return
+        set_idx = p.get('set_idx', None)
+        _mark_live_start_set_idx_resolved(gs, set_idx)
+        src = str(p.get('source_cn', '') or '')
+        eff_code = str(p.get('effect_code', '') or '')
+        if eff_code == 'bp3_019_score':
+            bonus = int(_bokulive_score_bonus(src, gs, cards_db, set_idx=set_idx))
+            gs.log.append(f"[AUTO] {src}[ライブ開始時]: score {bonus:+d}")
+        elif eff_code == 'bp2_022_score':
+            bonus = int(_aokuharuka_score_bonus(src, gs, cards_db, set_idx=set_idx))
+            gs.log.append(f"[AUTO] {src}[ライブ開始時]: score {bonus:+d}")
+        elif eff_code == 'bp4_021_req_score':
+            red = int(_heartbeat_required_any_reduction(src, gs, cards_db, set_idx=set_idx))
+            bonus = int(_heartbeat_score_bonus(src, gs, cards_db, set_idx=set_idx))
+            gs.log.append(f"[AUTO] {src}[ライブ開始時]: required(any) -{red}, score {bonus:+d}")
+        else:
+            gs.log.append(f"[AUTO] {src}[ライブ開始時]: resolved")
+        _r = p.get('_resume') if isinstance(p, dict) else None
+        if _r:
+            gs.pending.append(_r)
+        return
+    if kind == 'pay_or_skip':
+        # Generic optional-cost prompt (e.g., "...してもよい：<effect>")
+        cost_kind = str(p.get('cost_kind', '') or '')
+        cost_n = _safe_int(p.get('cost_n', 0), 0)
+        after_eff = str(p.get('after_effect_template', '') or '').strip()
+        ctx0 = dict(p.get('ctx', {}) or {})
+        src = str(p.get('source_cn', '') or '')
+        low = choice_str.lower()
+        if low in ('skip', '__skip__', 'no', 'n', '0', 'false', 'cancel', '使わない', 'いいえ', 'スキップ'):
+            gs.log.append(f"[SKIP] {src}: skipped optional cost")
+            _r = p.get('_resume') if isinstance(p, dict) else None
+            if _r:
+                gs.pending.append(_r)
+            return
+        if low not in ('pay', 'yes', 'y', '1', 'true', '使う', 'はい'):
+            gs.log.append(f"[ERR] pay_or_skip: invalid choice {choice_str}")
+            gs.pending.append(p)
+            return
+        if src and not ctx0.get('source_cn'):
+            ctx0['source_cn'] = src
+        if cost_kind == 'discard_from_hand':
+            if cost_n <= 0:
+                gs.log.append("[ERR] pay_or_skip: invalid cost_n")
+                return
+            if len(gs.hand) < cost_n:
+                gs.log.append(f"[ERR] pay_or_skip: not enough cards in hand (need {cost_n})")
+                return
+            gs.pending.append({
+                'kind': 'discard_from_hand',
+                'remaining': cost_n,
+                'text': f'手札を{cost_n}枚控え室に置く',
+                'options': list(gs.hand),
+                'after_effect_template': after_eff,
+                'after_ctx': ctx0,
+                'after_source_cn': src,
+            })
+            return
+        if cost_kind == 'self_wait':
+            pos = str(ctx0.get('pos', '') or '').upper()
+            slot = (gs.stage or {}).get(pos) if isinstance(getattr(gs, 'stage', None), dict) else None
+            if slot is None or not bool(getattr(slot, 'cardnumber', None)):
+                gs.log.append(f"[ERR] pay_or_skip: self_wait stage empty {pos}")
+                return
+            slot.active = False
+            gs.log.append(f"[COST] {pos}: {getattr(slot,'cardnumber','?')} -> WAIT (self-wait cost)")
+            applied = False
+            if after_eff:
+                try:
+                    rng = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
+                except Exception:
+                    rng = random.Random()
+                applied = bool(try_apply_effect_template(gs, rng, cards_db, after_eff, ctx0))
+            gs.log.append(f"[AUTO] {src}: self_wait -> {'applied' if applied else 'no_match'} {after_eff}")
+            _r = p.get('_resume') if isinstance(p, dict) else None
+            if _r:
+                gs.pending.append(_r)
+            return
+        if cost_kind == 'energy':
+            if cost_n <= 0:
+                gs.log.append("[ERR] pay_or_skip: invalid energy cost_n")
+                return
+            if int(getattr(gs, 'energy_active', 0) or 0) < cost_n:
+                gs.log.append(f"[ERR] pay_or_skip: not enough active energy (need {cost_n})")
+                return
+            gs.energy_active = int(getattr(gs, 'energy_active', 0) or 0) - cost_n
+            gs.energy_wait = int(getattr(gs, 'energy_wait', 0) or 0) + cost_n
+            try:
+                _clamp_energy_zone(gs)
+            except Exception:
+                pass
+            gs.log.append(f"[COST] {src}: paid [E]{cost_n} -> energy_active={gs.energy_active} energy_wait={gs.energy_wait}")
+            applied = False
+            if after_eff:
+                try:
+                    rng = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
+                except Exception:
+                    rng = random.Random()
+                applied = bool(try_apply_effect_template(gs, rng, cards_db, after_eff, ctx0))
+            gs.log.append(f"[AUTO] {src}: energy_cost -> {'applied' if applied else 'no_match'} {after_eff}")
+            _r = p.get('_resume') if isinstance(p, dict) else None
+            if _r:
+                gs.pending.append(_r)
+            return
+        if cost_kind in ('', 'none', 'no_cost', 'immediate'):
+            applied = False
+            if after_eff:
+                try:
+                    rng = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
+                except Exception:
+                    rng = random.Random()
+                applied = bool(try_apply_effect_template(gs, rng, cards_db, after_eff, ctx0))
+            gs.log.append(f"[AUTO] {src}: no-cost optional -> {'applied' if applied else 'no_match'} {after_eff}")
+            _r = p.get('_resume') if isinstance(p, dict) else None
+            if _r:
+                gs.pending.append(_r)
+            return
+        gs.log.append(f"[ERR] pay_or_skip: unsupported cost_kind={cost_kind}")
+        return
+    if kind == 'discard_from_hand':
+        rem = _safe_int(p.get('remaining', 0), 0)
+        after_eff = str(p.get('after_effect_template', '') or '').strip()
+        after_ctx = dict(p.get('after_ctx', {}) or {})
+        after_src = str(p.get('after_source_cn', '') or '')
+        cn = _canon_cardno(choice_str)
+        pick_i = None
+        for i, x in enumerate(list(gs.hand)):
+            if _canon_cardno(x) == cn:
+                pick_i = i
+                break
+        if pick_i is None:
+            gs.log.append(f"[ERR] discard: chosen not in hand {cn}")
+            return
+        moved = gs.hand.pop(pick_i)
+        gs.green_room.append(moved)
+        try:
+            after_ctx['discarded_cn'] = str(moved or '')
+        except Exception:
+            pass
+        rem -= 1
+        gs.log.append(f"[ACT] discard 1 -> {moved} (remaining={rem})")
+        if rem > 0:
+            gs.pending.append({
+                'kind': 'discard_from_hand',
+                'remaining': rem,
+                'text': f'手札を{rem}枚控え室に置く',
+                'options': list(gs.hand),
+                'after_effect_template': after_eff,
+                'after_ctx': after_ctx,
+                'after_source_cn': after_src,
+            })
+            return
+        # After-cost effect (if any)
+        if after_eff:
+            rng2 = random.Random(getattr(gs, 'seed', 1) or 1)
+            ok = try_apply_effect_template(gs, rng2, cards_db, after_eff, after_ctx)
+            if ok:
+                gs.log.append(f"[ACT] {after_src}: applied {after_eff}")
+            else:
+                gs.log.append(f"[WARN] {after_src}: after-cost effect not matchable {after_eff}")
+        # resume parent prompt if provided
+        _r = p.get('_resume') if isinstance(p, dict) else None
+        if _r:
+            gs.pending.append(_r)
+        return
+    if kind == 'pick_success_to_store':
+        lives = list(p.get('lives', []) or [])
+        if not lives:
+            gs.log.append('[INFO] success_store: no successful live cards')
+            return
+        c0 = str(choice_str or '').strip()
+        if c0.lower() == 'skip':
+            gs.log.append('[ACT] success_store: skipped')
+            return
+        cn = _canon_cardno(c0)
+        pick = None
+        for x in lives:
+            if _canon_cardno(x) == cn:
+                pick = x
+                break
+        if not pick:
+            gs.log.append(f"[ERR] success_store: invalid choice {cn}")
+            gs.pending.insert(idx, p)
+            return
+        # Move the chosen card from the live card storage to success storage.
+        pick_cn = None
+        if pick in gs.set_zone:
+            pick_cn = pick
+        else:
+            for v in _cardno_variants(pick):
+                if v in gs.set_zone:
+                    pick_cn = v
+                    break
+        if not pick_cn:
+            pick_cn = pick
+        try:
+            if pick_cn in gs.set_zone:
+                gs.set_zone.remove(pick_cn)
+        except Exception:
+            pass
+        try:
+            gs.success_zone.append(pick_cn)
+        except Exception:
+            gs.success_zone = list(getattr(gs, 'success_zone', []) or []) + [pick_cn]
+        gs.log.append(f"[ACT] success_store: moved {pick_cn} -> success storage")
+        return
+    if kind == 'live_start_success_heart_by_success':
+        ch = str(choice_str or '').strip()
+        m = {
+            '桃': 'pink',
+            '黄': 'yellow',
+            '紫': 'purple',
+            'pink': 'pink',
+            'yellow': 'yellow',
+            'purple': 'purple',
+        }
+        col = m.get(ch, '')
+        if not col:
+            gs.log.append(f"[ERR] live_start_success_heart: invalid choice '{ch}'")
+            gs.pending.append(p)
+            return
+        try:
+            gs.success_zone_heart_color = col
+        except Exception:
+            pass
+        gs.log.append(f"[ACT] live_start_success_heart: choose={col} (per success card, until end_of_live)")
+        return
+    if kind == 'live_start_heart_replace':
+        pos2 = str(p.get('pos', '') or '').upper()
+        cn2 = str(p.get('cn', '') or '')
+        ch = str(choice_str or '').strip()
+        color_map = dict(p.get('color_map', {}) or {})
+        # ch may be Japanese color name
+        col = _HEART_JP_MAP.get(ch, '') or color_map.get(ch, '') or ''
+        if not col:
+            gs.log.append(f"[ERR] live_start_heart_replace: invalid choice '{ch}' for {cn2}")
+            gs.pending.append(p)
+            return
+        slot2 = gs.stage.get(pos2)
+        if not slot2:
+            gs.log.append(f"[SKIP] live_start_heart_replace: {pos2} empty")
+            return
+        slot2.heart_replace_color = col
+        gs.log.append(f"[ACT] {pos2}: {cn2} 元々持つハートを'{col}'に変換 (ライブ終了時まで)")
+        return
+    if kind == 'choose_effects':
+        remaining = list(p.get('remaining', []) or [])
+        picked = list(p.get('picked', []) or [])
+        min_pick = int(p.get('min', 1) or 1)
+        max_pick = int(p.get('max', 1) or 1)
+        ctx0 = dict(p.get('ctx', {}) or {})
+        choice0 = str(choice_str or '').strip()
+        if choice0.lower() in ('done', '__done__', 'finish', 'end', '終了', '完了'):
+            if len(picked) < min_pick:
+                # still need at least one selection
+                gs.log.append(f"[ERR] choose_effects: select >= {min_pick} before Done")
+                gs.pending.append(p)
+                return
+            gs.log.append(f"[ACT] choose_effects: done (picked={len(picked)})")
+            return
+        if choice0 not in remaining:
+            gs.log.append(f"[ERR] choose_effects: invalid choice '{choice0}'")
+            gs.pending.append(p)
+            return
+        # remove one occurrence
+        rem2 = list(remaining)
+        try:
+            rem2.remove(choice0)
+        except Exception:
+            rem2 = [x for x in remaining if x != choice0]
+        picked2 = picked + [choice0]
+        # Apply the chosen effect (may enqueue another pending)
+        rng2 = random.Random(getattr(gs, 'seed', 1) or 1)
+        ok = try_apply_effect_template(gs, rng2, cards_db, choice0, ctx0)
+        if ok:
+            gs.log.append(f"[ACT] choose_effects: applied {choice0}")
+        else:
+            gs.log.append(f"[WARN] choose_effects: not matchable {choice0}")
+        # Need more selections?
+        need_more = (len(picked2) < max_pick) and bool(rem2)
+        if need_more:
+            opts = list(rem2)
+            if len(picked2) >= min_pick:
+                opts.append('Done')
+            resume = {
+                'kind': 'choose_effects',
+                'text': str(p.get('text', '') or '選択'),
+                'options': opts,
+                'remaining': list(rem2),
+                'picked': list(picked2),
+                'min': min_pick,
+                'max': max_pick,
+                'ctx': ctx0,
+            }
+            if gs.pending:
+                # Attach resume to the next pending (e.g., choose_member_from_green)
+                try:
+                    gs.pending[-1]['_resume'] = resume
+                except Exception:
+                    gs.pending.append(resume)
+            else:
+                gs.pending.append(resume)
+        return
+    if kind == 'choose_member_from_green_multi_up_to':
+        max_picks = int(p.get('max_picks', 0) or 0)
+        min_picks = int(p.get('min_picks', 0) or 0)
+        options = list(p.get('options', []) or [])
+        raw_picks = [s.strip() for s in choice_str.split(',') if s.strip() and s.strip().lower() not in ('__done__', 'done', 'skip')]
+        if len(raw_picks) < min_picks or len(raw_picks) > max_picks:
+            gs.log.append(f"[ERR] choose_member_from_green_multi_up_to: invalid pick count {len(raw_picks)} (min={min_picks}, max={max_picks})")
+            gs.pending.insert(0, p)
+            return
+        # Reuse the multi-select UI for hand discard as well.
+        if str(p.get('source_zone', '') or '').lower() == 'hand' and str(p.get('action', '') or '') == 'discard_from_hand':
+            opts_canon = [_canon_cardno(x) for x in options]
+            hand_copy = list(gs.hand)
+            picked = []
+            for raw in raw_picks:
+                cn = _canon_cardno(raw)
+                if cn not in opts_canon:
+                    gs.log.append(f"[ERR] choose_member_from_green_multi_up_to(hand): {cn} not in options")
+                    gs.pending.insert(0, p)
+                    return
+                found_idx = None
+                found_cn = None
+                for i, hcn in enumerate(hand_copy):
+                    if _canon_cardno(hcn) == cn:
+                        found_idx = i
+                        found_cn = hcn
+                        break
+                if found_idx is None:
+                    gs.log.append(f"[ERR] choose_member_from_green_multi_up_to(hand): {cn} not in hand")
+                    gs.pending.insert(0, p)
+                    return
+                picked.append(found_cn)
+                hand_copy.pop(found_idx)
+            gs.hand = hand_copy
+            gs.green_room.extend(picked)
+            gs.log.append(f"[ACT] discard multi -> {picked}")
+            after_eff = str(p.get('after_effect_template', '') or '').strip()
+            after_ctx = dict(p.get('after_ctx', {}) or {})
+            after_src = str(p.get('after_source_cn', '') or '')
+            if picked:
+                try:
+                    after_ctx['discarded_cn'] = str(picked[-1] or '')
+                except Exception:
+                    pass
+            if after_eff:
+                rng2 = random.Random(getattr(gs, 'seed', 1) or 1)
+                ok = try_apply_effect_template(gs, rng2, cards_db, after_eff, after_ctx)
+                if ok:
+                    gs.log.append(f"[ACT] {after_src}: applied {after_eff}")
+                else:
+                    gs.log.append(f"[WARN] {after_src}: after-cost effect not matchable {after_eff}")
+            _r = p.get('_resume') if isinstance(p, dict) else None
+            if _r:
+                gs.pending.append(_r)
+            return
+        opts_canon = [_canon_cardno(x) for x in options]
+        green_copy = list(gs.green_room)
+        picked = []
+        for raw in raw_picks:
+            cn = _canon_cardno(raw)
+            if cn not in opts_canon:
+                gs.log.append(f"[ERR] choose_member_from_green_multi_up_to: {cn} not in options")
+                gs.pending.insert(0, p)
+                return
+            found_idx = None
+            found_cn = None
+            for i, gcn in enumerate(green_copy):
+                if _canon_cardno(gcn) == cn:
+                    ci2 = _get_card(cards_db, gcn)
+                    if not _is_member_ci(ci2):
+                        gs.log.append(f"[ERR] choose_member_from_green_multi_up_to: not MEMBER {gcn}")
+                        gs.pending.insert(0, p)
+                        return
+                    found_idx = i
+                    found_cn = gcn
+                    break
+            if found_idx is None:
+                gs.log.append(f"[ERR] choose_member_from_green_multi_up_to: {cn} not in waiting room")
+                gs.pending.insert(0, p)
+                return
+            picked.append(found_cn)
+            green_copy.pop(found_idx)
+        gs.green_room = green_copy
+        gs.hand.extend(picked)
+        gs.log.append(f"[ACT] choose_member_from_green_multi_up_to: picked={picked} -> hand")
+        return
+    if kind in ('choose_live_from_green','choose_member_from_green'):
+        want_kind = 'LIVE' if kind=='choose_live_from_green' else 'MEMBER'
+        cn = _canon_cardno(choice_str)
+        pick_cn = None
+        if cn in gs.green_room:
+            pick_cn = cn
+        else:
+            for x in _cardno_variants(cn):
+                if x in gs.green_room:
+                    pick_cn = x
+                    break
+        if not pick_cn:
+            gs.log.append(f"[ERR] retrieve: not in waiting room {cn}")
+            return
+        ci2 = _get_card(cards_db, pick_cn)
+        if want_kind=='LIVE' and not _is_live_ci(ci2):
+            gs.log.append(f"[ERR] retrieve: not LIVE {pick_cn}")
+            return
+        if want_kind=='MEMBER' and not _is_member_ci(ci2):
+            gs.log.append(f"[ERR] retrieve: not MEMBER {pick_cn}")
+            return
+        after_ext_key = str(p.get('after_ext_key', '') or '').strip()
+        if after_ext_key:
+            src = str(p.get('source_cn', '') or '')
+            ctx2 = dict(p.get('ctx', {}) or {})
+            if src and not ctx2.get('source_cn'):
+                ctx2['source_cn'] = src
+            ctx2['choice'] = pick_cn
+            ctx2['chosen_cn'] = pick_cn
+            ctx2['chosen_kind'] = want_kind
+            try:
+                rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
+            except Exception:
+                rng2 = random.Random()
+            try:
+                _apply_effect_by_rule(gs, rng2, cards_db, {'op':'__ext__','ext_key':after_ext_key}, {}, ctx2)
+                applied = True
+            except Exception:
+                applied = False
+                raise
+            finally:
+                try:
+                    gs.log.append(f"[AUTO] choose_from_green -> {'applied' if applied else 'error'} {after_ext_key} ({pick_cn})")
+                except Exception:
+                    pass
+            _r = p.get('_resume') if isinstance(p, dict) else None
+            if _r:
+                gs.pending.append(_r)
+            return
+        gs.green_room.remove(pick_cn)
+        gs.hand.append(pick_cn)
+        gs.log.append(f"[ACT] retrieved {want_kind} {pick_cn} -> hand")
+        # n>1 連続回収
+        remaining_picks = int(p.get('remaining_picks', 1) or 1) - 1
+        if remaining_picks > 0:
+            _enqueue_choose_from_green(gs, cards_db, kind=want_kind, n=remaining_picks,
+                                       group=str(p.get('want_group', '') or ''))
+            return
+        # resume parent prompt if provided (e.g., choose_effects)
+        _r = p.get('_resume') if isinstance(p, dict) else None
+        if _r:
+            gs.pending.append(_r)
+        return
+    if kind == 'choose_card_from_green':
+        allow_skip = bool(p.get('allow_skip', False) or p.get('optional', False))
+        low = choice_str.lower()
+        if allow_skip and low in ('skip', '__skip__', 'no', 'n', '0', 'false', '使わない', 'いいえ', 'スキップ'):
+            gs.log.append(f"[SKIP] choose_card_from_green: skipped")
+            after_ext_key = str(p.get('after_ext_key', '') or '').strip()
+            if after_ext_key:
+                src = str(p.get('source_cn', '') or '')
+                ctx2 = dict(p.get('ctx', {}) or {})
+                if src and not ctx2.get('source_cn'):
+                    ctx2['source_cn'] = src
+                ctx2['choice'] = 'SKIP'
+                ctx2['chosen_cn'] = 'SKIP'
+                try:
+                    rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
+                except Exception:
+                    rng2 = random.Random()
+                _apply_effect_by_rule(gs, rng2, cards_db, {'op':'__ext__','ext_key':after_ext_key}, {}, ctx2)
+            return
+        cn = _canon_cardno(choice_str)
+        candidates = list(p.get('candidates', []) or p.get('options', []) or [])
+        pick_cn = None
+        for x in list(gs.green_room):
+            if _canon_cardno(x) == cn:
+                if candidates and (not any(_canon_cardno(c) == cn for c in candidates)):
+                    continue
+                pick_cn = x
+                break
+        if not pick_cn:
+            gs.log.append(f"[ERR] choose_card_from_green: not in waiting room {cn}")
+            return
+        after_ext_key = str(p.get('after_ext_key', '') or '').strip()
+        if after_ext_key:
+            src = str(p.get('source_cn', '') or '')
+            ctx2 = dict(p.get('ctx', {}) or {})
+            if src and not ctx2.get('source_cn'):
+                ctx2['source_cn'] = src
+            ctx2['choice'] = pick_cn
+            ctx2['chosen_cn'] = pick_cn
+            try:
+                rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
+            except Exception:
+                rng2 = random.Random()
+            try:
+                _apply_effect_by_rule(gs, rng2, cards_db, {'op':'__ext__','ext_key':after_ext_key}, {}, ctx2)
+                applied = True
+            except Exception:
+                applied = False
+                raise
+            finally:
+                try:
+                    gs.log.append(f"[AUTO] choose_card_from_green -> {'applied' if applied else 'error'} {after_ext_key} ({pick_cn})")
+                except Exception:
+                    pass
+            _r = p.get('_resume') if isinstance(p, dict) else None
+            if _r:
+                gs.pending.append(_r)
+            return
+        gs.green_room.remove(pick_cn)
+        gs.hand.append(pick_cn)
+        gs.log.append(f"[ACT] retrieved CARD {pick_cn} -> hand")
+        _r = p.get('_resume') if isinstance(p, dict) else None
+        if _r:
+            gs.pending.append(_r)
+        return
+    if kind == 'view_topk_no_match':
+        # User confirmed viewing the pool; send all to green room
+        pool = list(p.get('pool', []) or [])
+        gs.green_room.extend(pool)
+        gs.log.append(f'[ACT] view_topk_no_match: confirmed -> {len(pool)} cards to waiting room')
+        return
+    if kind == 'choose_from_topk':
+        pool = list(p.get('pool', []) or [])
+        if not pool:
+            gs.log.append('[ERR] topk: pool missing')
+            return
+        optional = bool(p.get('optional', False))
+        # skip: put all pool cards to waiting room
+        if choice_str.strip().lower() in ('skip', 'スキップ', '__skip__'):
+            if optional:
+                gs.green_room.extend(pool)
+                gs.log.append(f'[ACT] topk: skip chosen -> {len(pool)} cards to waiting room')
+            else:
+                gs.log.append('[ERR] topk: skip not allowed (not optional)')
+                gs.deck = pool + gs.deck
+            return
+        cn = _canon_cardno(choice_str)
+        pick_idx = None
+        candidates = list(p.get('candidates', pool) or pool)
+        for i, x in enumerate(pool):
+            if _canon_cardno(x) == cn:
+                # validate against candidates if filtered
+                if candidates and cn not in [_canon_cardno(c) for c in candidates]:
+                    gs.log.append(f'[ERR] topk: {cn} not in filtered candidates')
+                    gs.deck = pool + gs.deck
+                    return
+                pick_idx = i
+                break
+        if pick_idx is None:
+            gs.log.append(f"[ERR] topk: invalid choice {cn}")
+            gs.deck = pool + gs.deck
+            return
+        pick_cn = pool.pop(pick_idx)
+        gs.hand.append(pick_cn)
+        gs.green_room.extend(pool)
+        gs.log.append(f"[ACT] topk chose {pick_cn} -> hand; rest {len(pool)} -> waiting room")
+        return
+    if kind == 'look_top_3way_step':
+        pool = list(p.get('pool', []) or [])
+        step = str(p.get('step', 'hand') or 'hand')
+        if not pool:
+            gs.log.append('[ERR] look_top_3way: pool missing')
+            return
+        cn = _canon_cardno(choice_str)
+        match_idx = None
+        for i, x in enumerate(pool):
+            if _canon_cardno(x) == cn:
+                match_idx = i
+                break
+        if match_idx is None:
+            gs.log.append(f'[ERR] look_top_3way: {cn} not in pool {pool}')
+            gs.deck = pool + gs.deck
+            return
+        picked = pool.pop(match_idx)
+        if step == 'hand':
+            gs.hand.append(picked)
+            gs.log.append(f'[ACT] look_top_3way: {picked} -> hand')
+            if len(pool) >= 2:
+                remaining = list(pool)
+                gs.pending.append({
+                    'kind': 'look_top_3way_step',
+                    'text': f'残り{len(remaining)}枚からデッキ上に置く1枚を選ぶ（残りは控え室）',
+                    'options': remaining,
+                    'pool': remaining,
+                    'step': 'topdeck',
+                    'picked_hand': picked,
+                    'picked_top': '',
+                })
+            else:
+                # only 1 left -> goes to deck top, none to green
+                if pool:
+                    gs.deck.insert(0, pool[0])
+                    gs.log.append(f'[AUTO] look_top_3way: {pool[0]} -> deck top (only card left)')
+        elif step == 'topdeck':
+            gs.deck.insert(0, picked)
+            gs.log.append(f'[ACT] look_top_3way: {picked} -> deck top')
+            gs.green_room.extend(pool)
+            gs.log.append(f'[AUTO] look_top_3way: {pool} -> waiting room')
+        return
+    if kind == 'named_cards_cost_multi':
+        total = int(p.get('total', 0) or 0)
+        options = list(p.get('options', []) or [])
+        resume_eff = str(p.get('resume_effect', '') or '')
+        resume_pos = str(p.get('resume_pos', '') or '')
+        resume_src = str(p.get('resume_source_cn', '') or '')
+        # choice_str はカンマ区切りの cardnumber リスト（server.py から送信）
+        raw_picks = [s.strip() for s in choice_str.split(',')
+                     if s.strip() and s.strip().lower() not in ('__done__', 'done', 'skip')]
+        if len(raw_picks) != total:
+            gs.log.append(f"[ERR] named_cards_cost_multi: 枚数不一致（必要{total}枚、選択{len(raw_picks)}枚）")
+            gs.pending.insert(0, p)  # 再度選択させる
+            return
+        picks_canon = [_canon_cardno(x) for x in raw_picks]
+        green_copy = list(gs.green_room)
+        picked = []
+        ok = True
+        for cn in picks_canon:
+            found = False
+            for i, gcn in enumerate(green_copy):
+                if _canon_cardno(gcn) == cn and gcn in options:
+                    picked.append(green_copy.pop(i))
+                    found = True
+                    break
+            if not found:
+                gs.log.append(f"[ERR] named_cards_cost_multi: {cn} が控え室/選択肢に見つからない")
+                ok = False
+                break
+        if not ok:
+            return
+        gs.green_room = green_copy
+        rng_local = random.Random(gs.seed)
+        rng_local.shuffle(picked)
+        gs.deck = gs.deck + picked
+        gs.log.append(f"[COST] named_cards_cost_multi: {picked} → デッキ下（シャッフル済）")
+        if resume_eff:
+            ctx = {'pos': resume_pos, 'source_cn': resume_src}
+            matched = try_apply_effect_template(gs, rng, cards_db, resume_eff, ctx)
+            if not matched:
+                gs.log.append(f"[WARN] named_cards_cost_multi: 効果テンプレート非対応: {resume_eff}")
+        return
+    if kind == 'topdeck_from_green':
+        rem = _safe_int(p.get('remaining', 0), 0)
+        picked = list(p.get('picked', []) or [])
+        want_kind = str(p.get('want_kind', '') or '').upper()
+        want_group = str(p.get('want_group', '') or '')
+        allow_less = bool(p.get('allow_less', False))
+        low = choice_str.lower()
+        if allow_less and low in ('skip', '__skip__', 'no', 'n', '0', 'false'):
+            if picked:
+                # picked list is already in desired top order
+                gs.deck = picked + gs.deck
+                gs.log.append(f"[ACT] topdeck_from_green: placed {len(picked)} on top (early finish)")
+            else:
+                gs.log.append("[SKIP] topdeck_from_green: picked 0")
+            return
+        # pick card in waiting room (allow variants)
+        cn = _canon_cardno(choice_str)
+        pick_i = None
+        for i, x in enumerate(list(gs.green_room)):
+            if _canon_cardno(x) == cn:
+                pick_i = i
+                break
+        if pick_i is None:
+            gs.log.append(f"[ERR] topdeck_from_green: chosen not in waiting room {cn}")
+            # restore picked back to waiting room (best effort)
+            if picked:
+                gs.green_room.extend(picked)
+            return
+        pick_cn = gs.green_room.pop(pick_i)
+        ci2 = _get_card(cards_db, pick_cn)
+        if want_kind == 'LIVE' and not _is_live_ci(ci2):
+            gs.log.append(f"[ERR] topdeck_from_green: not LIVE {pick_cn}")
+            gs.green_room.append(pick_cn)
+            if picked:
+                gs.green_room.extend(picked)
+            return
+        if want_kind == 'MEMBER' and not _is_member_ci(ci2):
+            gs.log.append(f"[ERR] topdeck_from_green: not MEMBER {pick_cn}")
+            gs.green_room.append(pick_cn)
+            if picked:
+                gs.green_room.extend(picked)
+            return
+        # want_kind == 'ANY': no type check
+        if want_group and (want_group not in str(getattr(ci2, 'group', '') or '')):
+            gs.log.append(f"[ERR] topdeck_from_green: group mismatch {pick_cn}")
+            gs.green_room.append(pick_cn)
+            if picked:
+                gs.green_room.extend(picked)
+            return
+        picked.append(pick_cn)
+        rem -= 1
+        if rem <= 0:
+            gs.deck = picked + gs.deck
+            gs.log.append(f"[ACT] topdeck_from_green: placed {len(picked)} on top")
+            return
+        # rebuild candidates
+        cands: List[str] = []
+        for x in list(gs.green_room):
+            ci = _get_card(cards_db, x)
+            if not ci:
+                continue
+            if want_kind == 'LIVE' and not _is_live_ci(ci):
+                continue
+            if want_kind == 'MEMBER' and not _is_member_ci(ci):
+                continue
+            # want_kind == 'ANY': no type filter
+            if want_group and (want_group not in str(getattr(ci, 'group', '') or '')):
+                continue
+            cands.append(x)
+        if not cands:
+            # no more candidates; finalize with what we have
+            gs.deck = picked + gs.deck
+            gs.log.append(f"[ACT] topdeck_from_green: candidates exhausted; placed {len(picked)} on top")
+            return
+        opts = list(cands) + (['skip'] if allow_less else [])
+        gs.pending.append({
+            'kind': 'topdeck_from_green',
+            'text': f'控え室の{want_kind}をデッキ上に置く（残り{rem}枚）/ skipで終了' if allow_less else f'控え室の{want_kind}をデッキ上に置く（残り{rem}枚）',
+            'options': opts,
+            'remaining': rem,
+            'picked': picked,
+            'want_kind': want_kind,
+            'want_group': want_group,
+            'allow_less': allow_less,
+        })
+        gs.log.append(f"[PENDING] topdeck_from_green: picked {pick_cn}; remaining {rem}")
+        return
+    if kind == 'reorder_topk_keep_any':
+        pool = list(p.get('pool', []) or [])
+        kept = list(p.get('kept', []) or [])
+        if not pool and not kept:
+            gs.log.append('[ERR] reorder_topk: state missing')
+            return
+        low = choice_str.lower()
+        if low in ('skip', '__skip__', 'no', 'n', '0', 'false'):
+            # finalize early
+            if pool:
+                gs.green_room.extend(pool)
+            if kept:
+                gs.deck = kept + gs.deck
+            gs.log.append(f"[ACT] reorder_topk: kept {len(kept)} on top; rest {len(pool)} -> waiting room")
+            return
+        cn = _canon_cardno(choice_str)
+        pick_idx = None
+        for i, x in enumerate(pool):
+            if _canon_cardno(x) == cn:
+                pick_idx = i
+                break
+        if pick_idx is None:
+            gs.log.append(f"[ERR] reorder_topk: invalid choice {cn}")
+            # best-effort restore
+            gs.deck = kept + pool + gs.deck
+            return
+        pick_cn = pool.pop(pick_idx)
+        kept.append(pick_cn)
+        if not pool:
+            # done
+            gs.deck = kept + gs.deck
+            gs.log.append(f"[ACT] reorder_topk: kept {len(kept)} on top; rest 0 -> waiting room")
+            return
+        # queue next pick
+        opts = list(pool) + ['skip']
+        gs.pending.append({
+            'kind': 'reorder_topk_keep_any',
+            'text': f'次にデッキ上に置くカードを選択（残り{len(pool)}枚）/ skipで終了',
+            'options': opts,
+            'pool': list(pool),
+            'kept': list(kept),
+            'allow_less': True,
+        })
+        gs.log.append(f"[PENDING] reorder_topk: picked {pick_cn}; remaining {len(pool)}")
+        return
+    if kind in ('optional_pay_energy_for_self_score_if_group', 'live_start_butterfly_pay'):
+        src_cn = str(p.get('cn', '') or _BUTTERFLY_CN_CANON)
+        group_name = str(p.get('condition_group_name', '') or '虹ヶ咲')
+        low = str(choice_str or '').strip().lower()
+        if low in ('skip', '__skip__', 'no', 'n', '0', 'false'):
+            gs.log.append(f'[SKIP] {src_cn} live-start skipped')
+            return
+        if low not in ('pay', 'yes', 'y', '1', 'true'):
+            gs.log.append(f'[ERR] {src_cn} live-start: invalid choice {choice_str}')
+            return
+        if int(getattr(gs, 'energy_active', 0) or 0) < 2:
+            gs.log.append(f'[SKIP] {src_cn} live-start unresolved (not enough active energy at resolution)')
+            return
+        if not _has_group_member_on_stage(gs, cards_db, group_name):
+            gs.log.append(f'[SKIP] {src_cn} live-start unresolved (no {group_name} member at resolution)')
+            return
+        if not pay_energy(gs, 2):
+            gs.log.append(f'[SKIP] {src_cn} live-start unresolved (not enough active energy at resolution)')
+            return
+        _add_live_start_score_bonus(gs, 1, set_idx=p.get('set_idx', None), source_cn=src_cn)
+        gs.log.append(f'[AUTO] {src_cn} live-start: paid E2 -> score +1')
+        return
+    if kind in ('execute_draw_then_choose_hand_cards_ordered_topdeck', 'neo_sky_execute'):
+        drew = draw(gs, 3, None)
+        gs.log.append(f'[AUTO] NEO SKY, NEO MAP!: drew {drew}')
+        opts = list(gs.hand)
+        if not opts:
+            gs.log.append('[INFO] NEO SKY, NEO MAP!: hand empty after draw')
+            return
+        if len(opts) <= 3:
+            picked = list(opts)
+            gs.hand = []
+            gs.deck = picked + gs.deck
+            gs.log.append(f'[ACT] NEO SKY, NEO MAP!: placed {len(picked)} on top (auto)')
+            return
+        gs.pending.append({
+            'kind': 'choose_hand_cards_ordered_topdeck',
+            'text': 'NEO SKY, NEO MAP!：手札から3枚を選び、クリックした順にデッキの上へ置く（1枚目が一番上）',
+            'options': opts,
+            'min_picks': 3,
+            'max_picks': 3,
+            'label': 'NEO SKY, NEO MAP!',
+        })
+        gs.log.append('[PENDING] choose_hand_cards_ordered_topdeck hand=3 (NEO SKY, NEO MAP!)')
+        return
+    if kind == 'opponent_wait_notify':
+        # 相手への効果通知：OKで閉じるだけ（相手盤面は手動処理）
+        gs.log.append('[ACK] opponent_wait_notify: confirmed by user')
+        return
+    if kind == 'message_ack':
+        gs.log.append(f"[ACK] {str(p.get('label', p.get('text', 'message'))) }")
+        return
+    if kind == 'body_reveal_pick_live':
+        pool = list(p.get('pool', []) or [])
+        live_cands = list(p.get('live_cands', []) or [])
+        cn_src = str(p.get('cn', '') or '')
+        chosen = _canon_cardno(str(choice_str or ''))
+        # pool をデッキから除去
+        deck_copy = list(gs.deck)
+        for c2 in pool:
+            try:
+                deck_copy.remove(c2)
+            except ValueError:
+                pass
+        gs.deck = deck_copy
+        if choice_str.lower() in ('skip', '__skip__', 'no', '0', 'false'):
+            # スキップ: 全て控え室
+            for c2 in pool:
+                gs.green_room.append(c2)
+            gs.log.append(f'[SKIP] {cn_src}[BODY]: 全て控え室 {pool}')
+            return
+        # 選択されたカードが候補にあるか確認
+        matched = None
+        for c2 in live_cands:
+            if _canon_cardno(c2) == chosen:
+                matched = c2
+                break
+        if not matched:
+            gs.log.append(f'[ERR] {cn_src}[BODY]: {chosen} not in live_cands {live_cands}')
+            # エラー時は全て控え室
+            for c2 in pool:
+                gs.green_room.append(c2)
+            return
+        # 選択カードを手札へ、残りを控え室へ
+        gs.hand.append(matched)
+        rest = [c2 for c2 in pool if _canon_cardno(c2) != _canon_cardno(matched)]
+        for c2 in rest:
+            gs.green_room.append(c2)
+        gs.log.append(f'[ACT] {cn_src}[BODY]: {matched} -> hand, rest -> green {rest}')
+        return
+    if kind == 'choose_hand_cards_ordered_topdeck':
+        picks = [str(x).strip() for x in str(choice_str or '').split(',') if str(x).strip()]
+        min_picks = int(p.get('min_picks', 0) or 0)
+        max_picks = int(p.get('max_picks', 0) or 0)
+        label = str(p.get('label', 'ordered_topdeck') or 'ordered_topdeck')
+        if max_picks <= 0:
+            gs.log.append(f'[ERR] choose_hand_cards_ordered_topdeck: invalid max_picks {max_picks}')
+            return
+        if len(picks) < min_picks or len(picks) > max_picks:
+            gs.log.append(f'[ERR] choose_hand_cards_ordered_topdeck: invalid pick count {len(picks)} expected {min_picks}..{max_picks}')
+            gs.pending.insert(0, p)
+            return
+        hand_copy = list(getattr(gs, 'hand', []) or [])
+        picked = []
+        for cn in picks:
+            if cn not in hand_copy:
+                gs.log.append(f'[ERR] choose_hand_cards_ordered_topdeck: chosen not in hand {cn}')
+                gs.pending.insert(0, p)
+                return
+            hand_copy.remove(cn)
+            picked.append(cn)
+        gs.hand = hand_copy
+        gs.deck = list(picked) + list(getattr(gs, 'deck', []) or [])
+        gs.log.append(f'[ACT] choose_hand_cards_ordered_topdeck: placed {len(picked)} on top ({label})')
+        return
+    if kind == 'topdeck_from_hand':
+        rem = int(p.get('remaining', 0) or 0)
+        picked = list(p.get('picked', []) or [])
+        label = str(p.get('label', '') or '')
+        cn = _canon_cardno(choice_str)
+        pick_i = None
+        for i, x in enumerate(list(gs.hand)):
+            if _canon_cardno(x) == cn:
+                pick_i = i
+                break
+        if pick_i is None:
+            gs.log.append(f'[ERR] topdeck_from_hand: chosen not in hand {cn}')
+            return
+        pick_cn = gs.hand.pop(pick_i)
+        picked.append(pick_cn)
+        rem -= 1
+        if rem <= 0:
+            gs.deck = picked + gs.deck
+            gs.log.append(f'[ACT] topdeck_from_hand: placed {len(picked)} on top ({label})')
+            return
+        opts = list(gs.hand)
+        if not opts:
+            gs.deck = picked + gs.deck
+            gs.log.append(f'[ACT] topdeck_from_hand: hand exhausted; placed {len(picked)} on top ({label})')
+            return
+        prompt = {
+            'kind': 'topdeck_from_hand',
+            'text': f'{label} 次にデッキ上に置くカードを選択（残り{rem}枚）',
+            'options': opts,
+            'remaining': rem,
+            'picked': picked,
+            'label': label,
+        }
+        try:
+            gs.pending.insert(0, prompt)
+        except Exception:
+            gs.pending.append(prompt)
+        gs.log.append(f'[PENDING] topdeck_from_hand picked {pick_cn}; remaining {rem} ({label})')
+        return
+    if kind in ('execute_top_keep_one_then_reveal_top_score_if_live', 'tsunagaru_connect_execute'):
+        k = int(p.get('k', 0) or 0)
+        _enqueue_choose_top_keep_one(gs, k, 'ツナガルコネクト', source_cn=str(p.get('cn', '') or ''), set_idx=p.get('set_idx', None))
+        return
+    if kind == 'choose_top_keep_one':
+        ok = _resolve_choose_top_keep_one(gs, p, choice_str, cards_db)
+        if not ok:
+            return
         return
     if kind == 'choose_stage_member_to_wait':
         raw = str(choice_str or '').strip()
