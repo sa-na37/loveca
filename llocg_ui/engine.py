@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: use_pay_energy_for_butterfly_resolution_20260420u2
+# BUILD_TAG: remove_dead_alias_numeric_routes_20260421a
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -3668,7 +3668,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         })
         gs.log.append(f"[PENDING] {pos}: {src_cn} ライブ開始時 → activate member choice ({len(wait_opts)} candidates)")
         return
-    if kind in ('live_start_score_and_pick_group_member_temp_blade', 'live_start_rise_up_high_deferred'):
+    if kind == 'live_start_score_and_pick_group_member_temp_blade':
         group_name = str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')
         src_cn = str((trig or {}).get('source_cn', '') or _RISE_UP_HIGH_CN_CANON)
         if int(getattr(gs, 'turn', 0) or 0) != 1:
@@ -3708,7 +3708,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         })
         gs.log.append(f"[PENDING] group-member temp blade choice ({len(cands)} candidates)")
         return
-    if kind in ('live_start_optional_pay_energy_for_self_score_if_group', 'live_start_butterfly_deferred'):
+    if kind == 'live_start_optional_pay_energy_for_self_score_if_group':
         gs.pending.append({
             'kind': 'optional_pay_energy_for_self_score_if_group',
             'cn': str((trig or {}).get('source_cn', '') or _BUTTERFLY_CN_CANON),
@@ -3718,7 +3718,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             'options': ['pay', 'skip'],
         })
         return
-    if kind in ('live_start_if_stage_group_cost_then_draw_then_ordered_topdeck', 'live_start_neo_sky_deferred'):
+    if kind == 'live_start_if_stage_group_cost_then_draw_then_ordered_topdeck':
         group_name = str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')
         min_cost = int((trig or {}).get('condition_min_cost', 20) or 20)
         src_cn = str((trig or {}).get('source_cn', '') or _NEO_SKY_CN_CANON)
@@ -3732,7 +3732,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             'options': ['ok'],
         })
         return
-    if kind in ('live_start_top_keep_one_then_reveal_top_score_if_live_by_group_count', 'live_start_tsunagaru_connect_deferred'):
+    if kind == 'live_start_top_keep_one_then_reveal_top_score_if_live_by_group_count':
         group_name = str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')
         src_cn = str((trig or {}).get('source_cn', '') or _TSUNAGARU_CONNECT_CN_CANON)
         _niji_n = _count_stage_group_members(gs, cards_db, group_name)
@@ -3747,7 +3747,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             'k': int(_niji_n),
         })
         return
-    if kind in ('live_start_convert_revealed_colors_to_single_color_until_end_of_live', 'live_start_vivid_world_auto'):
+    if kind == 'live_start_convert_revealed_colors_to_single_color_until_end_of_live':
         target_color_jp = str((trig or {}).get('target_color_jp', '') or '青').strip()
         target_key = _HEART_ICON_COLOR_MAP.get(target_color_jp, 'blue')
         if target_key == 'blue':
@@ -6095,32 +6095,6 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                     _smap[_k] = int(_smap.get(_k, 0) or 0) + int(bonus)
                     gs.live_start_score_bonus_by_cn = _smap
         gs.log.append(f"[AUTO] {src}[ライブ開始時]: success score total={total} -> required(any) -{red}, score {bonus:+d}")
-        _r = p.get('_resume') if isinstance(p, dict) else None
-        if _r:
-            gs.pending.append(_r)
-        return
-    if kind == 'live_start_numeric_effect':
-        low = choice_str.lower()
-        if low not in ('ok', 'apply', 'yes', 'y', '1', 'true', 'use', 'go', 'confirm', 'はい', '使う'):
-            gs.log.append(f"[ERR] live_start_numeric_effect: invalid choice {choice_str}")
-            gs.pending.append(p)
-            return
-        set_idx = p.get('set_idx', None)
-        _mark_live_start_set_idx_resolved(gs, set_idx)
-        src = str(p.get('source_cn', '') or '')
-        eff_code = str(p.get('effect_code', '') or '')
-        if eff_code == 'bp3_019_score':
-            bonus = int(_bokulive_score_bonus(src, gs, cards_db, set_idx=set_idx))
-            gs.log.append(f"[AUTO] {src}[ライブ開始時]: score {bonus:+d}")
-        elif eff_code == 'bp2_022_score':
-            bonus = int(_aokuharuka_score_bonus(src, gs, cards_db, set_idx=set_idx))
-            gs.log.append(f"[AUTO] {src}[ライブ開始時]: score {bonus:+d}")
-        elif eff_code == 'bp4_021_req_score':
-            red = int(_heartbeat_required_any_reduction(src, gs, cards_db, set_idx=set_idx))
-            bonus = int(_heartbeat_score_bonus(src, gs, cards_db, set_idx=set_idx))
-            gs.log.append(f"[AUTO] {src}[ライブ開始時]: required(any) -{red}, score {bonus:+d}")
-        else:
-            gs.log.append(f"[AUTO] {src}[ライブ開始時]: resolved")
         _r = p.get('_resume') if isinstance(p, dict) else None
         if _r:
             gs.pending.append(_r)
