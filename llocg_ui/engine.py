@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: fix_ruh_butterfly_score_bonus_mapping_20260420q
+# BUILD_TAG: remove_ruh_butterfly_tsunagaru_legacy_flags_20260420s
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -1272,9 +1272,6 @@ class GameState:
     # live-start buff (until end of live): for each card in success storage, gain chosen heart
     success_zone_heart_color: str = ""  # e.g., 'pink'/'yellow'/'purple'
     deck_refreshed_this_turn: bool = False
-    butterfly_paid_this_live: int = 0
-    rise_up_high_bonus_this_live: int = 0
-    tsunagaru_connect_bonus_this_live: int = 0
     live_start_score_bonus_by_set_idx: Dict[int, int] = field(default_factory=dict)
     live_start_required_any_reduction_by_set_idx: Dict[int, int] = field(default_factory=dict)
     live_start_score_bonus_by_cn: Dict[str, int] = field(default_factory=dict)
@@ -1371,9 +1368,6 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
         # end-of-live buffs
         "success_zone_heart_color": str(getattr(gs, 'success_zone_heart_color', '') or ''),
         "deck_refreshed_this_turn": bool(getattr(gs, 'deck_refreshed_this_turn', False)),
-        "butterfly_paid_this_live": int(getattr(gs, "butterfly_paid_this_live", 0) or 0),
-        "rise_up_high_bonus_this_live": int(getattr(gs, "rise_up_high_bonus_this_live", 0) or 0),
-        "tsunagaru_connect_bonus_this_live": int(getattr(gs, "tsunagaru_connect_bonus_this_live", 0) or 0),
         "live_start_score_bonus_by_set_idx": {int(k): int(v) for k, v in dict(getattr(gs, "live_start_score_bonus_by_set_idx", {}) or {}).items()},
         "live_start_required_any_reduction_by_set_idx": {int(k): int(v) for k, v in dict(getattr(gs, "live_start_required_any_reduction_by_set_idx", {}) or {}).items()},
         "live_start_score_bonus_by_cn": {str(k): int(v) for k, v in dict(getattr(gs, "live_start_score_bonus_by_cn", {}) or {}).items()},
@@ -1435,9 +1429,6 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
     gs.need_success_store_choice = bool(snap.get('need_success_store_choice', getattr(gs, 'need_success_store_choice', False)))
     gs.success_zone_heart_color = str(snap.get('success_zone_heart_color', getattr(gs, 'success_zone_heart_color', '') or '') or '')
     gs.deck_refreshed_this_turn = bool(snap.get('deck_refreshed_this_turn', getattr(gs, 'deck_refreshed_this_turn', False)))
-    gs.butterfly_paid_this_live = int(snap.get('butterfly_paid_this_live', getattr(gs, 'butterfly_paid_this_live', 0) or 0) or 0)
-    gs.rise_up_high_bonus_this_live = int(snap.get('rise_up_high_bonus_this_live', getattr(gs, 'rise_up_high_bonus_this_live', 0) or 0) or 0)
-    gs.tsunagaru_connect_bonus_this_live = int(snap.get('tsunagaru_connect_bonus_this_live', getattr(gs, 'tsunagaru_connect_bonus_this_live', 0) or 0) or 0)
     try:
         gs.live_start_score_bonus_by_set_idx = {int(k): int(v) for k, v in dict(snap.get('live_start_score_bonus_by_set_idx', getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {}) or {}).items()}
     except Exception:
@@ -2627,7 +2618,7 @@ def _count_nijigasaki_members_on_stage(gs: GameState, cards_db: Dict[str, CardIn
         if '虹ヶ咲' in str(getattr(ci, 'group', '') or ''):
             n += 1
     return int(n)
-def _enqueue_choose_top_keep_one(gs: 'GameState', k: int, label: str = '') -> None:
+def _enqueue_choose_top_keep_one(gs: 'GameState', k: int, label: str = '', source_cn: str = '', set_idx: Optional[int] = None) -> None:
     k = int(k or 0)
     if k <= 0:
         return
@@ -2647,6 +2638,8 @@ def _enqueue_choose_top_keep_one(gs: 'GameState', k: int, label: str = '') -> No
         'options': list(top),
         'top_cards': list(top),
         'label': str(label or ''),
+        'source_cn': str(source_cn or ''),
+        'set_idx': set_idx,
     })
     gs.log.append(f'[PENDING] choose_top_keep_one top={len(top)} ({label})')
 def _resolve_choose_top_keep_one(gs: 'GameState', p: Dict[str, Any], choice_str: str, cards_db: Dict[str, CardInfo]) -> bool:
@@ -2693,17 +2686,7 @@ def _resolve_choose_top_keep_one(gs: 'GameState', p: Dict[str, Any], choice_str:
     except Exception:
         reveal_name = ''
     if ci and _is_live_ci(ci):
-        set_idx = p.get('set_idx', None) if isinstance(p, dict) else None
-        src_cn = str(p.get('cn', '') or _TSUNAGARU_CONNECT_CN_CANON) if isinstance(p, dict) else _TSUNAGARU_CONNECT_CN_CANON
-        if set_idx is not None:
-            _m = dict(getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {})
-            _m[int(set_idx)] = int(_m.get(int(set_idx), 0) or 0) + 1
-            gs.live_start_score_bonus_by_set_idx = _m
-        else:
-            _m = dict(getattr(gs, 'live_start_score_bonus_by_cn', {}) or {})
-            _k = _canon_cardno(src_cn)
-            _m[_k] = int(_m.get(_k, 0) or 0) + 1
-            gs.live_start_score_bonus_by_cn = _m
+        _add_live_start_score_bonus(gs, 1, set_idx=(p or {}).get('set_idx', None), source_cn=str((p or {}).get('source_cn', '') or 'PL!N-bp3-028'))
         gs.log.append(f'[AUTO] Tsunagaru Connect: revealed LIVE on top -> score +1 ({reveal})')
     else:
         gs.log.append(f'[AUTO] Tsunagaru Connect: revealed non-LIVE on top ({reveal})')
@@ -3101,14 +3084,6 @@ def _clear_end_of_live_buffs(gs: GameState) -> None:
     # clear global end-of-live buffs
     try:
         gs.success_zone_heart_color = ""
-    except Exception:
-        pass
-    try:
-        gs.butterfly_paid_this_live = 0
-    except Exception:
-        pass
-    try:
-        gs.rise_up_high_bonus_this_live = 0
     except Exception:
         pass
     try:
@@ -3696,19 +3671,10 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
     if kind in ('live_start_score_and_pick_group_member_temp_blade', 'live_start_rise_up_high_deferred'):
         group_name = str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')
         src_cn = str((trig or {}).get('source_cn', '') or _RISE_UP_HIGH_CN_CANON)
-        set_idx = (trig or {}).get('set_idx', None)
         if int(getattr(gs, 'turn', 0) or 0) != 1:
             gs.log.append(f'[SKIP] {src_cn} live-start unresolved (not 1st turn at resolution)')
             return
-        if set_idx is not None:
-            _m = dict(getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {})
-            _m[int(set_idx)] = int(_m.get(int(set_idx), 0) or 0) + 1
-            gs.live_start_score_bonus_by_set_idx = _m
-        else:
-            _m = dict(getattr(gs, 'live_start_score_bonus_by_cn', {}) or {})
-            _k = _canon_cardno(src_cn)
-            _m[_k] = int(_m.get(_k, 0) or 0) + 1
-            gs.live_start_score_bonus_by_cn = _m
+        _add_live_start_score_bonus(gs, 1, set_idx=(trig or {}).get('set_idx', None), source_cn=src_cn)
         gs.log.append(f'[AUTO] {src_cn} live-start: score +1')
         cands = []
         for ppos in ('L','C','R'):
@@ -3776,7 +3742,6 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         gs.pending.append({
             'kind': 'execute_top_keep_one_then_reveal_top_score_if_live',
             'cn': src_cn,
-            'set_idx': (trig or {}).get('set_idx', None),
             'text': f'【{src_cn}】ライブ開始時：ステージの『{group_name}』メンバー数ぶんデッキ上を見る → 1枚をデッキ上、残りを控え室。さらにデッキトップを公開し、ライブカードならスコア+1',
             'options': ['ok'],
             'k': int(_niji_n),
@@ -4206,6 +4171,73 @@ def _parse_live_start_score_if_live_count(ci: Optional[CardInfo]) -> Optional[Tu
         return None
     return None
 
+
+def _parse_live_start_score_and_pick_group_member_temp_blade(ci: Optional[CardInfo]) -> Optional[str]:
+    try:
+        if not ci or not getattr(ci, 'abilities', None):
+            return None
+        for ab in _iter_triggered_abilities(ci, 'ライブ開始時'):
+            clauses = ab.get('clauses', []) if isinstance(ab, dict) else []
+            if not isinstance(clauses, list):
+                continue
+            for cl in clauses:
+                if not isinstance(cl, dict):
+                    continue
+                eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+                if not eff:
+                    continue
+                eff_norm = eff.replace('\n', '')
+                m = re.match(r'^このゲームの1ターン目のライブフェイズの場合、このカードのスコアを\+1し、ライブ終了時まで、自分のステージにいる『(?P<group>[^』]+)』のメンバー1人は、<\(ブレード\)>を得る。$', eff_norm)
+                if m:
+                    return str(m.group('group') or '').strip()
+    except Exception:
+        return None
+    return None
+
+def _parse_live_start_optional_pay_energy_for_self_score_if_group(ci: Optional[CardInfo]) -> Optional[str]:
+    try:
+        if not ci or not getattr(ci, 'abilities', None):
+            return None
+        for ab in _iter_triggered_abilities(ci, 'ライブ開始時'):
+            clauses = ab.get('clauses', []) if isinstance(ab, dict) else []
+            if not isinstance(clauses, list):
+                continue
+            for cl in clauses:
+                if not isinstance(cl, dict):
+                    continue
+                eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+                if not eff:
+                    continue
+                eff_norm = eff.replace('\n', '')
+                m = re.match(r'^<\(E\)><\(E\)>支払ってもよい：自分のステージに『(?P<group>[^』]+)』のメンバーがいる場合、このカードのスコアを\+1する。$', eff_norm)
+                if m:
+                    return str(m.group('group') or '').strip()
+    except Exception:
+        return None
+    return None
+
+def _parse_live_start_top_keep_one_then_reveal_top_score_if_live_by_group_count(ci: Optional[CardInfo]) -> Optional[str]:
+    try:
+        if not ci or not getattr(ci, 'abilities', None):
+            return None
+        for ab in _iter_triggered_abilities(ci, 'ライブ開始時'):
+            clauses = ab.get('clauses', []) if isinstance(ab, dict) else []
+            if not isinstance(clauses, list):
+                continue
+            for cl in clauses:
+                if not isinstance(cl, dict):
+                    continue
+                eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+                if not eff:
+                    continue
+                eff_norm = eff.replace('\n', '')
+                m = re.match(r'^自分のステージにいる『(?P<group>[^』]+)』のメンバー1人につき、自分のデッキの上からカードを1枚見る。その中から1枚をデッキの上に置き、残りを控え室に置く。自分のデッキの一番上のカードを1枚公開する。これによりライブカードを公開したとき、このカードのスコアを\+1する。$', eff_norm)
+                if m:
+                    return str(m.group('group') or '').strip()
+    except Exception:
+        return None
+    return None
+
 def _parse_live_start_score_if_green_live_group_count(ci: Optional[CardInfo]) -> Optional[Tuple[str, int, int]]:
     try:
         if not ci or not getattr(ci, 'abilities', None):
@@ -4343,93 +4375,6 @@ def _parse_live_start_score_and_increase_any_per_success_zone_cardname_count(ci:
                 per_any = len(re.findall(r'<\(任意\)>', str(m.group('anys') or '')))
                 if cardname and (per_score > 0 or per_any > 0):
                     return (cardname, per_score, per_any)
-    except Exception:
-        return None
-    return None
-
-
-def _parse_live_start_score_and_pick_group_member_temp_blade(ci: Optional[CardInfo]) -> Optional[str]:
-    try:
-        if not ci or not getattr(ci, 'abilities', None):
-            return None
-        for ab in _iter_triggered_abilities(ci, 'ライブ開始時'):
-            clauses = ab.get('clauses', []) if isinstance(ab, dict) else []
-            if not isinstance(clauses, list):
-                continue
-            for cl in clauses:
-                if not isinstance(cl, dict):
-                    continue
-                raw = str(cl.get('raw', '') or '').strip()
-                cost_t = str(cl.get('cost_template', '') or '').strip()
-                eff_t = str(cl.get('effect_template', '') or '').strip()
-                eff = eff_t if eff_t else raw
-                build_text = eff
-                try:
-                    cost_cmp = re.sub(r'\s+', '', str(cost_t or ''))
-                    eff_cmp = re.sub(r'\s+', '', str(eff or ''))
-                    if str(cost_t or '').strip() and cost_cmp != eff_cmp:
-                        build_text = f"{str(cost_t).strip()}：{str(eff).strip()}"
-                except Exception:
-                    build_text = eff
-                eff_norm = str(build_text or '').replace('\n', '')
-                m = re.match(r'^このゲームの1ターン目のライブフェイズの場合、このカードのスコアを\+1し、ライブ終了時まで、自分のステージにいる『(?P<group>[^』]+)』のメンバー1人は、<\(ブレード\)>を得る。$', eff_norm)
-                if m:
-                    return str(m.group('group') or '').strip()
-    except Exception:
-        return None
-    return None
-
-
-def _parse_live_start_optional_pay_energy_for_self_score_if_group(ci: Optional[CardInfo]) -> Optional[str]:
-    try:
-        if not ci or not getattr(ci, 'abilities', None):
-            return None
-        for ab in _iter_triggered_abilities(ci, 'ライブ開始時'):
-            clauses = ab.get('clauses', []) if isinstance(ab, dict) else []
-            if not isinstance(clauses, list):
-                continue
-            for cl in clauses:
-                if not isinstance(cl, dict):
-                    continue
-                raw = str(cl.get('raw', '') or '').strip()
-                cost_t = str(cl.get('cost_template', '') or '').strip()
-                eff_t = str(cl.get('effect_template', '') or '').strip()
-                eff = eff_t if eff_t else raw
-                build_text = eff
-                try:
-                    cost_cmp = re.sub(r'\s+', '', str(cost_t or ''))
-                    eff_cmp = re.sub(r'\s+', '', str(eff or ''))
-                    if str(cost_t or '').strip() and cost_cmp != eff_cmp:
-                        build_text = f"{str(cost_t).strip()}：{str(eff).strip()}"
-                except Exception:
-                    build_text = eff
-                eff_norm = str(build_text or '').replace('\n', '')
-                m = re.match(r'^<\(E\)><\(E\)>支払ってもよい：自分のステージに『(?P<group>[^』]+)』のメンバーがいる場合、このカードのスコアを\+1する。$', eff_norm)
-                if m:
-                    return str(m.group('group') or '').strip()
-    except Exception:
-        return None
-    return None
-
-
-def _parse_live_start_top_keep_one_then_reveal_top_score_if_live_by_group_count(ci: Optional[CardInfo]) -> Optional[str]:
-    try:
-        if not ci or not getattr(ci, 'abilities', None):
-            return None
-        for ab in _iter_triggered_abilities(ci, 'ライブ開始時'):
-            clauses = ab.get('clauses', []) if isinstance(ab, dict) else []
-            if not isinstance(clauses, list):
-                continue
-            for cl in clauses:
-                if not isinstance(cl, dict):
-                    continue
-                eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
-                if not eff:
-                    continue
-                eff_norm = eff.replace('\n', '')
-                m = re.match(r'^自分のステージにいる『(?P<group>[^』]+)』のメンバー1人につき、自分のデッキの上からカードを1枚見る。その中から1枚をデッキの上に置き、残りを控え室に置く。自分のデッキの一番上のカードを1枚公開する。これによりライブカードを公開したとき、このカードのスコアを\+1する。$', eff_norm)
-                if m:
-                    return str(m.group('group') or '').strip() or 'GROUP'
     except Exception:
         return None
     return None
@@ -4914,6 +4859,27 @@ def _mark_live_start_set_idx_resolved(gs: GameState, set_idx: Optional[int]) -> 
         gs.live_start_resolved_set_idxs = xs
     except Exception:
         pass
+
+def _add_live_start_score_bonus(gs: GameState, bonus: int, set_idx: Optional[int] = None, source_cn: Optional[str] = None) -> None:
+    try:
+        bonus = int(bonus or 0)
+        if bonus == 0:
+            return
+        if set_idx is not None:
+            smap = dict(getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {})
+            k = int(set_idx)
+            smap[k] = int(smap.get(k, 0) or 0) + bonus
+            gs.live_start_score_bonus_by_set_idx = smap
+            return
+        canon = _canon_cardno(str(source_cn or ''))
+        if not canon:
+            return
+        smap = dict(getattr(gs, 'live_start_score_bonus_by_cn', {}) or {})
+        smap[canon] = int(smap.get(canon, 0) or 0) + bonus
+        gs.live_start_score_bonus_by_cn = smap
+    except Exception:
+        pass
+
 def _live_score_delta_for_attempt(cn_live, lives_count, gs_turn):
     # Legacy base path retained for compatibility; generalized live-count wrappers
     # are handled in _extra_live_score_delta_for_attempt where cards_db is available.
@@ -5250,10 +5216,6 @@ def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[s
         except Exception:
             lc = 0
         return int(delta if lc >= int(need) else 0)
-    if _parse_live_start_score_and_pick_group_member_temp_blade(ci_live) is not None:
-        return int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
-    if _parse_live_start_optional_pay_energy_for_self_score_if_group(ci_live) is not None:
-        return int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
     if _parse_live_start_score_per_stage_group_member_heart_color_kind(ci_live) is not None:
         return int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
     if _parse_live_start_score_if_success_zone_has_scores(ci_live) is not None:
@@ -5275,6 +5237,10 @@ def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[s
     if _parse_live_start_reduce_any_and_score_if_success_score(_get_card(cards_db, cn_live)) is not None:
         _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
         return _m if _m > 0 else int(_heartbeat_score_bonus(cn_live, gs, cards_db, set_idx=set_idx))
+    if _parse_live_start_score_and_pick_group_member_temp_blade(ci_live) is not None:
+        return int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
+    if _parse_live_start_optional_pay_energy_for_self_score_if_group(ci_live) is not None:
+        return int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
     if _parse_live_start_top_keep_one_then_reveal_top_score_if_live_by_group_count(ci_live) is not None:
         return int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
     return 0
@@ -5282,9 +5248,6 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
     if bool(getattr(gs, "cannot_live_until_end_of_live", False)):
         gs.log.append("[ATTEMPT] blocked: you cannot live until end of live")
         gs.last_attempt_excess_hearts = {}
-        gs.butterfly_paid_this_live = 0
-        gs.rise_up_high_bonus_this_live = 0
-        gs.tsunagaru_connect_bonus_this_live = 0
         gs.live_start_score_bonus_by_set_idx = {}
         gs.live_start_required_any_reduction_by_set_idx = {}
         gs.live_start_required_any_increase_by_set_idx = {}
@@ -5303,9 +5266,6 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
         return
     if not gs.set_zone:
         gs.last_attempt_excess_hearts = {}
-        gs.butterfly_paid_this_live = 0
-        gs.rise_up_high_bonus_this_live = 0
-        gs.tsunagaru_connect_bonus_this_live = 0
         gs.live_start_score_bonus_by_set_idx = {}
         gs.live_start_required_any_reduction_by_set_idx = {}
         gs.live_start_required_any_increase_by_set_idx = {}
@@ -6928,16 +6888,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             gs.log.append(f'[SKIP] {src_cn} live-start unresolved (no {group_name} member at resolution)')
             return
         gs.energy_active = max(0, int(getattr(gs, 'energy_active', 0) or 0) - 2)
-        set_idx = p.get('set_idx', None)
-        if set_idx is not None:
-            _m = dict(getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {})
-            _m[int(set_idx)] = int(_m.get(int(set_idx), 0) or 0) + 1
-            gs.live_start_score_bonus_by_set_idx = _m
-        else:
-            _m = dict(getattr(gs, 'live_start_score_bonus_by_cn', {}) or {})
-            _k = _canon_cardno(src_cn)
-            _m[_k] = int(_m.get(_k, 0) or 0) + 1
-            gs.live_start_score_bonus_by_cn = _m
+        _add_live_start_score_bonus(gs, 1, set_idx=p.get('set_idx', None), source_cn=src_cn)
         gs.log.append(f'[AUTO] {src_cn} live-start: paid E2 -> score +1')
         return
     if kind in ('execute_draw_then_choose_hand_cards_ordered_topdeck', 'neo_sky_execute'):
@@ -7049,7 +7000,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         return
     if kind in ('execute_top_keep_one_then_reveal_top_score_if_live', 'tsunagaru_connect_execute'):
         k = int(p.get('k', 0) or 0)
-        _enqueue_choose_top_keep_one(gs, k, 'ツナガルコネクト')
+        _enqueue_choose_top_keep_one(gs, k, 'ツナガルコネクト', source_cn=str(p.get('cn', '') or ''), set_idx=p.get('set_idx', None))
         return
     if kind == 'choose_top_keep_one':
         ok = _resolve_choose_top_keep_one(gs, p, choice_str, cards_db)
