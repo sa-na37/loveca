@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: generalize_revealed_tag_score_bonus_20260421s
+# BUILD_TAG: remove_remaining_pending_aliases_20260421u
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -5151,8 +5151,14 @@ def _green_unique_live_names_count(gs: GameState, cards_db: Dict[str, CardInfo],
         if nm:
             names.add(nm)
     return int(len(names))
-def _count_yell_revealed_cards_with_tag(gs: GameState, cards_db: Dict[str, CardInfo], tag_text: str) -> int:
+def _normalize_tag_marker(tag_text: str) -> str:
     tag = str(tag_text or '').strip()
+    if tag.startswith('<') and tag.endswith('>'):
+        tag = tag[1:-1].strip()
+    return str(tag or '')
+
+def _count_yell_revealed_cards_with_tag(gs: GameState, cards_db: Dict[str, CardInfo], tag_text: str) -> int:
+    tag = _normalize_tag_marker(tag_text)
     if not tag:
         return 0
     n = 0
@@ -7060,7 +7066,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             gs.pending.append(prompt)
         gs.log.append(f'[PENDING] topdeck_from_hand picked {pick_cn}; remaining {rem} ({label})')
         return
-    if kind in ('execute_top_keep_one_then_reveal_top_score_if_live', 'tsunagaru_connect_execute'):
+    if kind == 'execute_top_keep_one_then_reveal_top_score_if_live':
         k = int(p.get('k', 0) or 0)
         _enqueue_choose_top_keep_one(gs, k, 'ツナガルコネクト', source_cn=str(p.get('cn', '') or ''), set_idx=p.get('set_idx', None))
         return
@@ -7315,7 +7321,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             gs.log.append(f"[SKIP] {pos}: live-start ability skipped")
         return
     # 1c) Live-start Rise Up High: choose 1 Nijigasaki member -> temp blade +1
-    if kind in ('pick_group_member_for_temp_blade', 'live_start_rise_up_high_pick'):
+    if kind == 'pick_group_member_for_temp_blade':
         raw = str(choice_str or '').strip()
         pos = (raw[:1].upper() if raw else '')
         pos_opts = p.get('pos_options', None)
