@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: generalize_success_zone_live_body_blade_bonus_20260421n
+# BUILD_TAG: fix_missing_source_cn_helper_20260421p
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -4100,6 +4100,15 @@ def cmd_yell(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo]) -
             draw_n += _count_draw_icons(c.blade_heart_tags_json)
     got = draw(gs, draw_n, rng) if draw_n > 0 else 0
     gs.log.append(f"[YELL] revealed {len(revealed)} (blade={n}), draw+{draw_n} -> drew {got}")
+
+def _source_cn_or_default(source_cn: str, fallback: str = '') -> str:
+    s = str(source_cn or '').strip()
+    if s:
+        return s
+    f = str(fallback or '').strip()
+    return f or 'この能力'
+
+
 def _has_group_member_on_stage(gs: GameState, cards_db: Dict[str, CardInfo], group_name: str) -> bool:
     group_name = str(group_name or '').strip()
     if not group_name:
