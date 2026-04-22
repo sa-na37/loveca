@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: fix_under_energy_display_retrieval_confirm_and_lanzhu_draw_icons_20260421m
+# BUILD_TAG: generalize_success_zone_live_body_blade_bonus_20260421n
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -2001,6 +2001,39 @@ def _slot_always_hearts_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos:
         return {str(k): int(v) for k, v in bonus.items() if int(v or 0) != 0}
     except Exception:
         return {}
+
+def _success_zone_live_body_always_blade_bonus_for_slot(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, slot, c_slot: Optional[CardInfo]) -> int:
+    """Return blade bonus granted by BODY-always effects of LIVE cards currently in success_zone.
+
+    Generalizes former Love wing bell handling:
+      このカードが自分の成功ライブカード置き場にあるかぎり、自分のセンターエリアにいる『X』のメンバーは<(ブレード)>を得る。
+    The function scans success-zone LIVE cards and applies any matching generic pattern to the queried stage slot.
+    """
+    try:
+        if not slot or not getattr(slot, 'cardnumber', '') or not c_slot:
+            return 0
+        if pos != 'C':
+            return 0
+        total = 0
+        for cn_live in list(getattr(gs, 'success_zone', []) or []):
+            ci_live = _get_card(cards_db, cn_live)
+            if not ci_live or not _is_live_ci(ci_live):
+                continue
+            for _eff, blob in _iter_body_always_effects(ci_live):
+                try:
+                    if 'このカードが自分の成功ライブカード置き場にあるかぎり' not in blob:
+                        continue
+                    if '自分のセンターエリアにいる『' not in blob or 'のメンバーは' not in blob or 'ブレード' not in blob:
+                        continue
+                    tag = _quoted_tag(blob)
+                    if tag and _slot_matches_group_tag(c_slot, tag):
+                        total += int(blob.count('<(ブレード)>'))
+                except Exception:
+                    pass
+        return int(total)
+    except Exception:
+        return 0
+
 def _slot_always_score_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, slot) -> int:
     """Return always-on total score bonus granted by a stage member slot."""
     try:
@@ -2072,8 +2105,7 @@ def _slot_always_blade_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos: 
         if has_exactly2 and _has_body_always_2member_blade_heart(c):
             bonus += 1
         try:
-            if pos == 'C' and ("μ's" in str(getattr(c, 'group', '') or '')):
-                bonus += int(_success_zone_cardno_count(gs, 'PL!-bp4-020') or 0)
+            bonus += int(_success_zone_live_body_always_blade_bonus_for_slot(gs, cards_db, pos, slot, c) or 0)
         except Exception:
             pass
         for _eff, blob in _iter_body_always_effects(c):
