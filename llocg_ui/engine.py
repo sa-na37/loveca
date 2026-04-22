@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: generalize_success_zone_score_set_helper_20260421r
+# BUILD_TAG: generalize_revealed_tag_score_bonus_20260421s
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -4020,6 +4020,19 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             else:
                 gs.log.append(f"[AUTO] LIVE: {src_cn or '?'}[ライブ成功時] applied {eff}")
         return
+    if kind in ('add_live_success_score_bonus_if_revealed_card_tag_count_at_least',):
+        cn_live = str((trig or {}).get('source_cn', '') or '')
+        tag = str((trig or {}).get('condition_tag', '') or '')
+        need = int((trig or {}).get('condition_count', 0) or 0)
+        bonus = int((trig or {}).get('bonus', 0) or 0)
+        got = int(_count_yell_revealed_cards_with_tag(gs, cards_db, tag))
+        if got >= need:
+            if bonus:
+                _add_last_attempt_live_score_bonus(gs, cn_live, bonus)
+                gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時]: score +{bonus}")
+        else:
+            gs.log.append(f"[SKIP] LIVE: {cn_live}[ライブ成功時] unresolved (revealed cards with {tag}: {got} < {need})")
+        return
     if kind in ('add_live_success_score_bonus_if_revealed_group_members_have_all_six_colors',):
         cn_live = str((trig or {}).get('source_cn', '') or '')
         group_name = str((trig or {}).get('condition_group_name', '') or '')
@@ -4688,6 +4701,22 @@ def _build_live_success_trigger_from_effect(gs: GameState, cards_db: Dict[str, C
             'ctx': dict(ctx or {}),
             'label': str(label or ''),
         }
+
+    m = re.match(r'^エールにより公開された自分のカードの中に(?P<tag><\([^)]+\)>)を持つカードが(?P<n>\d+)枚以上ある場合このカードのスコアを\+(?P<delta>\d+)する。?$', eff_compact)
+    if m:
+        tag = str(m.group('tag') or '').strip()
+        n = int(m.group('n') or 0)
+        delta = int(m.group('delta') or 0)
+        return {
+            'kind': 'add_live_success_score_bonus_if_revealed_card_tag_count_at_least',
+            'bonus': int(delta),
+            'condition_tag': tag,
+            'condition_count': int(n),
+            'source_cn': str(source_cn or ''),
+            'pos': str(pos or ''),
+            'ctx': dict(ctx or {}),
+            'label': str(label or ''),
+        }
     m = re.match(r'^自分のステージにいるウェイト状態のメンバー1人につき、このカードのスコアを\+(?P<per>\d+)する。?$', eff_norm)
     if m:
         per = int(m.group('per') or 0)
@@ -4793,20 +4822,6 @@ def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict
     # Live-card success triggers
     for cn_live in list(lives or []):
         ci_live = _get_card(cards_db, cn_live)
-        skip_generic_live_success = False
-        # Love U my friends style temporary score bonus
-        if ci_live and _has_revealed_all_score_bonus_ability(ci_live):
-            skip_generic_live_success = True
-            bonus = int(_revealed_all_card_score_bonus(gs, cards_db))
-            if bonus != 0:
-                success_triggers.append({
-                    'kind': 'add_live_success_score_bonus',
-                    'source_cn': str(cn_live or ''),
-                    'bonus': int(bonus),
-                    'label': f"{cn_live}[ライブ成功時]",
-                })
-        if skip_generic_live_success:
-            continue
         if not ci_live or not getattr(ci_live, 'abilities', None):
             continue
         for ab in _iter_triggered_abilities(ci_live, 'ライブ成功時'):
@@ -5136,43 +5151,19 @@ def _green_unique_live_names_count(gs: GameState, cards_db: Dict[str, CardInfo],
         if nm:
             names.add(nm)
     return int(len(names))
-def _has_revealed_all_score_bonus_ability(ci: Optional[CardInfo]) -> bool:
-    """Detect LIVE text like:
-    エールにより公開された自分のカードの中に<(ALL)>を持つカードが1枚以上ある場合、このカードのスコアを+1する。
-    Generalized from PL!N-bp3-030 (Love U my friends).
-    """
-    if not ci:
-        return False
-    try:
-        abilities = list(getattr(ci, 'abilities', []) or [])
-    except Exception:
-        abilities = []
-    target = 'エールにより公開された自分のカードの中に<(ALL)>を持つカードが1枚以上ある場合、このカードのスコアを+1する。'
-    for ab in abilities:
-        if not isinstance(ab, dict):
-            continue
-        trig = str(ab.get('trigger', '') or '')
-        if 'ライブ成功時' not in trig:
-            continue
-        clauses = ab.get('clauses', [])
-        if not isinstance(clauses, list):
-            continue
-        for cl in clauses:
-            if not isinstance(cl, dict):
-                continue
-            eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip().replace('\n', '')
-            if eff == target:
-                return True
-    return False
-def _revealed_all_card_score_bonus(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
+def _count_yell_revealed_cards_with_tag(gs: GameState, cards_db: Dict[str, CardInfo], tag_text: str) -> int:
+    tag = str(tag_text or '').strip()
+    if not tag:
+        return 0
+    n = 0
     for cn in list(getattr(gs, '_yell_revealed_this_live', []) or []):
         ci = _get_card(cards_db, cn)
         if not ci:
             continue
         txt = str(getattr(ci, 'blade_heart_tags_json', '') or '')
-        if '(ALL)' in txt:
-            return 1
-    return 0
+        if tag in txt:
+            n += 1
+    return int(n)
 def _add_last_attempt_live_score_bonus(gs: GameState, cn_live, bonus: int) -> None:
     canon = _canon_cardno(cn_live)
     lives = list(getattr(gs, 'last_attempt_lives', []) or [])
