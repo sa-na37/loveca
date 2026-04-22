@@ -2759,7 +2759,7 @@ def _resolve_choose_top_keep_one(gs: 'GameState', p: Dict[str, Any], choice_str:
     except Exception:
         reveal_name = ''
     if ci and _is_live_ci(ci):
-        _add_live_start_score_bonus(gs, 1, set_idx=(p or {}).get('set_idx', None), source_cn=str((p or {}).get('source_cn', '') or 'PL!N-bp3-028'))
+        _add_live_start_score_bonus(gs, 1, set_idx=(p or {}).get('set_idx', None), source_cn=_source_cn_or_default((p or {}).get('source_cn', ''), 'この能力'))
         gs.log.append(f'[AUTO] Tsunagaru Connect: revealed LIVE on top -> score +1 ({reveal})')
     else:
         gs.log.append(f'[AUTO] Tsunagaru Connect: revealed non-LIVE on top ({reveal})')
@@ -3742,7 +3742,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         return
     if kind == 'live_start_score_and_pick_group_member_temp_blade':
         group_name = str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')
-        src_cn = str((trig or {}).get('source_cn', '') or 'PL!N-bp4-029')
+        src_cn = _source_cn_or_default((trig or {}).get('source_cn', ''), 'この能力')
         if int(getattr(gs, 'turn', 0) or 0) != 1:
             gs.log.append(f'[SKIP] {src_cn} live-start unresolved (not 1st turn at resolution)')
             return
@@ -3773,8 +3773,8 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             opts.append(f"{_pp}: {_nm}" if _nm else str(_pp))
         gs.pending.append({
             'kind': 'pick_group_member_for_temp_blade',
-            'cn': str((trig or {}).get('source_cn', '') or 'PL!N-bp4-029'),
-            'text': f"【{str((trig or {}).get('source_cn', '') or 'PL!N-bp4-029')}】ライブ開始時：『{str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')}』のメンバーを1人選ぶ（このライブ終了時まで、そのメンバーはブレード+1）",
+            'cn': _source_cn_or_default((trig or {}).get('source_cn', ''), 'この能力'),
+            'text': f"【{_source_cn_or_default((trig or {}).get('source_cn', ''), 'この能力')}】ライブ開始時：『{str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')}』のメンバーを1人選ぶ（このライブ終了時まで、そのメンバーはブレード+1）",
             'options': list(opts),
             'pos_options': list(cands),
         })
@@ -3783,17 +3783,17 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
     if kind == 'live_start_optional_pay_energy_for_self_score_if_group':
         gs.pending.append({
             'kind': 'optional_pay_energy_for_self_score_if_group',
-            'cn': str((trig or {}).get('source_cn', '') or 'PL!N-bp1-028'),
+            'cn': _source_cn_or_default((trig or {}).get('source_cn', ''), 'この能力'),
             'set_idx': (trig or {}).get('set_idx', None),
             'condition_group_name': str((trig or {}).get('condition_group_name', '') or '虹ヶ咲'),
-            'text': f"【{str((trig or {}).get('source_cn', '') or 'PL!N-bp1-028')}】ライブ開始時：エネルギー2枚を支払ってもよい。自分のステージに『{str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')}』のメンバーがいる場合、このカードのスコアを+1する。",
+            'text': f"【{_source_cn_or_default((trig or {}).get('source_cn', ''), 'この能力')}】ライブ開始時：エネルギー2枚を支払ってもよい。自分のステージに『{str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')}』のメンバーがいる場合、このカードのスコアを+1する。",
             'options': ['pay', 'skip'],
         })
         return
     if kind == 'live_start_if_stage_group_cost_then_draw_then_ordered_topdeck':
         group_name = str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')
         min_cost = int((trig or {}).get('condition_min_cost', 20) or 20)
-        src_cn = str((trig or {}).get('source_cn', '') or 'PL!N-bp4-031')
+        src_cn = _source_cn_or_default((trig or {}).get('source_cn', ''), 'この能力')
         if not _stage_all_group_cost_ready(gs, cards_db, group_name, min_cost):
             gs.log.append(f'[SKIP] {src_cn} live-start unresolved (condition not met at resolution)')
             return
@@ -3806,7 +3806,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         return
     if kind == 'live_start_top_keep_one_then_reveal_top_score_if_live_by_group_count':
         group_name = str((trig or {}).get('condition_group_name', '') or '虹ヶ咲')
-        src_cn = str((trig or {}).get('source_cn', '') or 'PL!N-bp3-028')
+        src_cn = _source_cn_or_default((trig or {}).get('source_cn', ''), 'この能力')
         _niji_n = _count_stage_group_members(gs, cards_db, group_name)
         if _niji_n <= 0:
             gs.log.append(f'[SKIP] {src_cn} live-start unresolved (no {group_name} member at resolution)')
@@ -4890,7 +4890,7 @@ def _green_live_count_by_group_or_unit(gs: GameState, cards_db: Dict[str, CardIn
         if _ci_matches_group_or_unit(ci, label):
             n += 1
     return int(n)
-def _aokuharuka_score_bonus(cn_live, gs: GameState, cards_db: Dict[str, CardInfo], set_idx: Optional[int] = None) -> int:
+def _live_start_score_bonus_if_green_live_group_or_unit_count(cn_live, gs: GameState, cards_db: Dict[str, CardInfo], set_idx: Optional[int] = None) -> int:
     if not _live_start_set_idx_resolved(gs, set_idx):
         return 0
     mapped = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
@@ -5287,7 +5287,7 @@ def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[s
         return _m if _m > 0 else int(_live_start_score_bonus_if_live_zone_group_count(cn_live, gs, cards_db, set_idx=set_idx))
     if _parse_live_start_score_if_green_live_group_count(_get_card(cards_db, cn_live)) is not None:
         _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
-        return _m if _m > 0 else int(_aokuharuka_score_bonus(cn_live, gs, cards_db, set_idx=set_idx))
+        return _m if _m > 0 else int(_live_start_score_bonus_if_green_live_group_or_unit_count(cn_live, gs, cards_db, set_idx=set_idx))
     if _parse_live_start_reduce_any_and_score_if_success_score(_get_card(cards_db, cn_live)) is not None:
         _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
         return _m if _m > 0 else int(_live_start_score_bonus_if_success_score(cn_live, gs, cards_db, set_idx=set_idx))
@@ -6906,8 +6906,8 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         })
         gs.log.append(f"[PENDING] reorder_topk: picked {pick_cn}; remaining {len(pool)}")
         return
-    if kind in ('optional_pay_energy_for_self_score_if_group', 'live_start_butterfly_pay'):
-        src_cn = str(p.get('cn', '') or 'PL!N-bp1-028')
+    if kind == 'optional_pay_energy_for_self_score_if_group':
+        src_cn = _source_cn_or_default(p.get('cn', ''), 'この能力')
         group_name = str(p.get('condition_group_name', '') or '虹ヶ咲')
         low = str(choice_str or '').strip().lower()
         if low in ('skip', '__skip__', 'no', 'n', '0', 'false'):
@@ -6928,7 +6928,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         _add_live_start_score_bonus(gs, 1, set_idx=p.get('set_idx', None), source_cn=src_cn)
         gs.log.append(f'[AUTO] {src_cn} live-start: paid E2 -> score +1')
         return
-    if kind in ('execute_draw_then_choose_hand_cards_ordered_topdeck', 'neo_sky_execute'):
+    if kind == 'execute_draw_then_choose_hand_cards_ordered_topdeck':
         drew = draw(gs, 3, None)
         gs.log.append(f'[AUTO] NEO SKY, NEO MAP!: drew {drew}')
         opts = list(gs.hand)
