@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: fix_missing_source_cn_helper_20260421p
+# BUILD_TAG: generalize_remaining_score_set_special_helper_20260421q
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -5106,7 +5106,7 @@ def _stage_group_member_heart_color_kinds(gs: GameState, cards_db: Dict[str, Car
             if k in ('pink', 'red', 'yellow', 'green', 'blue', 'purple') and int(v or 0) > 0:
                 cols.add(k)
     return int(len(cols))
-def _psycho_heart_success_bonus(gs: GameState, cards_db: Dict[str, CardInfo], score_a: int = 1, score_b: int = 5, delta_one: int = 1, delta_both: int = 2) -> int:
+def _success_zone_score_set_bonus(gs: GameState, cards_db: Dict[str, CardInfo], score_a: int = 1, score_b: int = 5, delta_one: int = 1, delta_both: int = 2) -> int:
     has_a = False
     has_b = False
     for cn in list(getattr(gs, 'success_zone', []) or []):
@@ -6034,7 +6034,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         b = int(p.get('score_b', 0) or 0)
         one = int(p.get('score_delta_one', 0) or 0)
         both = int(p.get('score_delta_both', 0) or 0)
-        bonus = int(_psycho_heart_success_bonus(gs, cards_db, score_a=a, score_b=b, delta_one=one, delta_both=both))
+        bonus = int(_success_zone_score_set_bonus(gs, cards_db, score_a=a, score_b=b, delta_one=one, delta_both=both))
         if bonus > 0:
             if set_idx is not None:
                 _m = dict(getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {})
