@@ -2691,7 +2691,7 @@ def _count_nijigasaki_members_on_stage(gs: GameState, cards_db: Dict[str, CardIn
         if '虹ヶ咲' in str(getattr(ci, 'group', '') or ''):
             n += 1
     return int(n)
-def _enqueue_choose_top_keep_one(gs: 'GameState', k: int, label: str = '', source_cn: str = '', set_idx: Optional[int] = None) -> None:
+def _enqueue_choose_top_keep_one(gs: 'GameState', k: int, label: str = '', source_cn: str = '', set_idx: Optional[int] = None, followup_ops: Optional[List[Dict[str, Any]]] = None) -> None:
     k = int(k or 0)
     if k <= 0:
         return
@@ -2704,6 +2704,16 @@ def _enqueue_choose_top_keep_one(gs: 'GameState', k: int, label: str = '', sourc
         keep = top[0]
         gs.deck = [keep] + list((getattr(gs, 'deck', []) or [])[1:])
         gs.log.append(f'[AUTO] choose_top_keep_one: only 1 card kept ({label})')
+        gs.pending.insert(0, {
+            'kind': 'choose_top_keep_one',
+            'text': f'{label} デッキ上から見たカードのうち1枚をデッキ上に置き、残りを控え室に置く',
+            'options': [keep],
+            'top_cards': [keep],
+            'label': str(label or ''),
+            'source_cn': str(source_cn or ''),
+            'set_idx': set_idx,
+            'followup_ops': list(followup_ops or []),
+        })
         return
     gs.pending.insert(0, {
         'kind': 'choose_top_keep_one',
@@ -2713,8 +2723,77 @@ def _enqueue_choose_top_keep_one(gs: 'GameState', k: int, label: str = '', sourc
         'label': str(label or ''),
         'source_cn': str(source_cn or ''),
         'set_idx': set_idx,
+        'followup_ops': list(followup_ops or []),
     })
     gs.log.append(f'[PENDING] choose_top_keep_one top={len(top)} ({label})')
+
+def _apply_live_effect_op(gs: 'GameState', cards_db: Dict[str, CardInfo], op: Dict[str, Any], ctx: Optional[Dict[str, Any]] = None) -> bool:
+    ctx = dict(ctx or {})
+    kind = str((op or {}).get('op', '') or '')
+    if kind == 'add_live_score':
+        delta = int((op or {}).get('delta', 0) or 0)
+        if delta <= 0:
+            return True
+        _add_live_start_score_bonus(
+            gs,
+            delta,
+            set_idx=(op or {}).get('set_idx', ctx.get('set_idx', None)),
+            source_cn=_source_cn_or_default(str((op or {}).get('source_cn', '') or ctx.get('source_cn', '') or ''), 'この能力'),
+        )
+        gs.log.append(f"[AUTO] live-op add_live_score: +{delta}")
+        return True
+    if kind == 'show_cards_ack':
+        key = str((op or {}).get('cards_from', '') or '').strip()
+        cards = list(ctx.get(key, []) or []) if key else []
+        if not cards:
+            return True
+        gs.pending.append({
+            'kind': 'show_revealed_cards_ack',
+            'label': str((op or {}).get('label', '') or '公開カード確認'),
+            'text': str((op or {}).get('text', '') or '公開されたカードを確認'),
+            'display_cards': list(cards),
+            'options': ['ok'],
+        })
+        return True
+    gs.log.append(f"[WARN] live-op effect unsupported: {kind}")
+    return False
+
+def _run_live_start_ops(gs: 'GameState', cards_db: Dict[str, CardInfo], ops: List[Dict[str, Any]], ctx: Optional[Dict[str, Any]] = None) -> bool:
+    ctx = dict(ctx or {})
+    for op in list(ops or []):
+        kind = str((op or {}).get('op', '') or '')
+        if kind == 'reveal_deck_top':
+            n = int((op or {}).get('count', 1) or 1)
+            cards = list((getattr(gs, 'deck', []) or [])[:max(0, n)])
+            save_as = str((op or {}).get('save_as', '') or '').strip()
+            if save_as:
+                ctx[save_as] = list(cards)
+            if n == 1:
+                ctx['revealed_top_card'] = str(cards[0] if cards else '')
+            continue
+        if kind == 'if_revealed_is_live':
+            key = str((op or {}).get('cards_from', '') or 'revealed_top').strip()
+            cards = list(ctx.get(key, []) or [])
+            ok = False
+            for cn in cards:
+                ci = _get_card(cards_db, cn)
+                if ci and _is_live_ci(ci):
+                    ok = True
+                    break
+            if ok:
+                if not _run_live_start_ops(gs, cards_db, list((op or {}).get('then', []) or []), ctx=ctx):
+                    return False
+            else:
+                gs.log.append(f"[AUTO] live-op if_revealed_is_live: false ({len(cards)} cards)")
+            continue
+        if kind in ('add_live_score', 'show_cards_ack'):
+            if not _apply_live_effect_op(gs, cards_db, op, ctx=ctx):
+                return False
+            continue
+        gs.log.append(f"[WARN] live-op unsupported: {kind}")
+        return False
+    return True
+
 def _resolve_choose_top_keep_one(gs: 'GameState', p: Dict[str, Any], choice_str: str, cards_db: Dict[str, CardInfo]) -> bool:
     top_cards = list((p or {}).get('top_cards', []) or [])
     if not top_cards:
@@ -2752,12 +2831,16 @@ def _resolve_choose_top_keep_one(gs: 'GameState', p: Dict[str, Any], choice_str:
     gs.green_room.extend(rest)
     gs.deck = [keep] + deck
     reveal = gs.deck[0] if list(getattr(gs, 'deck', []) or []) else ''
+    followup_ops = list((p or {}).get('followup_ops', []) or [])
+    if followup_ops:
+        ctx = {
+            'source_cn': str((p or {}).get('source_cn', '') or ''),
+            'set_idx': (p or {}).get('set_idx', None),
+            'revealed_top': [reveal] if reveal else [],
+            'revealed_top_card': str(reveal or ''),
+        }
+        return bool(_run_live_start_ops(gs, cards_db, followup_ops, ctx=ctx))
     ci = _get_card(cards_db, reveal) if reveal else None
-    reveal_name = ''
-    try:
-        reveal_name = str(getattr(ci, 'name', '') or '') if ci else ''
-    except Exception:
-        reveal_name = ''
     if ci and _is_live_ci(ci):
         _add_live_start_score_bonus(gs, 1, set_idx=(p or {}).get('set_idx', None), source_cn=_source_cn_or_default((p or {}).get('source_cn', ''), 'この能力'))
         gs.log.append(f'[AUTO] Tsunagaru Connect: revealed LIVE on top -> score +1 ({reveal})')
@@ -7068,7 +7151,34 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         return
     if kind == 'execute_top_keep_one_then_reveal_top_score_if_live':
         k = int(p.get('k', 0) or 0)
-        _enqueue_choose_top_keep_one(gs, k, 'ツナガルコネクト', source_cn=str(p.get('cn', '') or ''), set_idx=p.get('set_idx', None))
+        followup_ops = [
+            {
+                'op': 'if_revealed_is_live',
+                'cards_from': 'revealed_top',
+                'then': [
+                    {
+                        'op': 'add_live_score',
+                        'delta': 1,
+                        'source_cn': str(p.get('cn', '') or ''),
+                        'set_idx': p.get('set_idx', None),
+                    }
+                ],
+            },
+            {
+                'op': 'show_cards_ack',
+                'label': 'ツナガルコネクト 公開カード確認',
+                'text': 'ツナガルコネクトで公開されたカードを確認',
+                'cards_from': 'revealed_top',
+            },
+        ]
+        _enqueue_choose_top_keep_one(
+            gs,
+            k,
+            'ツナガルコネクト',
+            source_cn=str(p.get('cn', '') or ''),
+            set_idx=p.get('set_idx', None),
+            followup_ops=followup_ops,
+        )
         return
     if kind == 'choose_top_keep_one':
         ok = _resolve_choose_top_keep_one(gs, p, choice_str, cards_db)
