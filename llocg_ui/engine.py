@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: generalize_remaining_score_set_special_helper_20260421q
+# BUILD_TAG: generalize_success_zone_score_set_helper_20260421r
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
