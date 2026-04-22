@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: implement_under_energy_family_20260421l
+# BUILD_TAG: fix_under_energy_display_retrieval_confirm_and_lanzhu_draw_icons_20260421m
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -32,6 +32,7 @@ import re
 # - Matching is strict (regex anchored with ^...$).
 _EFFECT_RULES = [
     {"id": "draw_n", "pattern": r"^カードを(?P<n>\d+)枚引く。$", "op": "draw"},
+    {"id": "draw_n_then_gain_icons_until_end_live", "pattern": r"^カードを(?P<n>\d+)枚引き、ライブ終了時まで、(?P<icons>(?:<\([^)]+\)>)+)を得る。$", "op": "draw_then_gain_icons_until_end_live"},
     {"id": "draw_n_discard_m", "pattern": r"^カードを(?P<n>\d+)枚引き、手札を(?P<m>\d+)枚控え室に置く。$", "op": "draw_then_discard"},
     {"id": "discard_hand_n", "pattern": r"^手札を(?P<n>\d+)枚控え室に置く。$", "op": "discard_from_hand"},
     {"id": "retrieve_waiting_live_n", "pattern": r"^自分の控え室からライブカードを(?P<n>\d+)枚手札に加える。$", "op": "retrieve_from_waiting_room", "card_kind": "LIVE"},
@@ -448,14 +449,6 @@ def _enqueue_choose_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo], k
     if not cands:
         gs.log.append(f'[INFO] retrieve: no {kind} in waiting room')
         return
-    if len(cands) == 1:
-        pick = cands[0]
-        gs.green_room.remove(pick)
-        gs.hand.append(pick)
-        gs.log.append(f'[AUTO] retrieved {kind} {pick} (only choice)')
-        if n > 1:
-            _enqueue_choose_from_green(gs, cards_db, kind=kind, n=n-1, group=group)
-        return
     gs.pending.append({
         'kind': f'choose_{kind.lower()}_from_green',
         'text': f'控え室の{("ライブ" if kind=="LIVE" else "メンバー")}カードを1枚手札に加える',
@@ -464,7 +457,10 @@ def _enqueue_choose_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo], k
         'want_group': group,
         'remaining_picks': n,
     })
-    gs.log.append(f'[PENDING] choose {kind} from waiting room ({len(cands)} candidates, picks={n})')
+    if len(cands) == 1:
+        gs.log.append(f'[PENDING] choose {kind} from waiting room (single candidate, confirm required)')
+    else:
+        gs.log.append(f'[PENDING] choose {kind} from waiting room ({len(cands)} candidates, picks={n})')
 def _enqueue_topdeck_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo], kind: str, n: int, group: str = '', allow_less: bool = False) -> None:
     kind = str(kind or '').upper()
     n = int(n or 0)
@@ -673,6 +669,24 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         n = int(gd.get('n', 0) or 0)
         got = draw(gs, n, rng)
         gs.log.append(f'[AUTO] draw {n} -> drew {got}')
+        return
+    if op == 'draw_then_gain_icons_until_end_live':
+        n = int(gd.get('n', 0) or 0)
+        icons_blob = str(gd.get('icons', '') or '')
+        got = draw(gs, n, rng)
+        pos = str(ctx.get('pos', '') or '').upper()
+        slot = gs.stage.get(pos) if pos in ('L', 'C', 'R') else None
+        if not slot:
+            gs.log.append('[WARN] draw_then_gain_icons: no source slot')
+            return
+        b = _count_blade_icons_from_tagblob(icons_blob)
+        if b > 0:
+            slot.temp_blade += b
+            slot.temp_until = 'end_of_live'
+        heart_counts = _parse_heart_icons(icons_blob)
+        for col, cnt in heart_counts.items():
+            _grant_temp_heart(slot, col, cnt)
+        gs.log.append(f'[AUTO] draw {n} -> drew {got}; {pos}: gain icons {icons_blob} (until end_of_live; blades={b} hearts={heart_counts})')
         return
     if op == 'draw_then_discard':
         n = int(gd.get('n', 0) or 0)
@@ -1703,7 +1717,7 @@ def _clamp_energy_zone(gs: 'GameState') -> None:
         take_a = min(int(gs.energy_active or 0), over)
         gs.energy_active -= take_a
 
-def _return_under_energy_to_deck_from_slot(gs: 'GameState', slot: Optional['StageSlot'], pos: str = '', reason: str = '') -> int:
+def _return_under_energy_to_deck_from_slot(gs: 'GameState', slot: Optional['StageSlot'], pos: str = '', reason: str = '', cards_db: Optional[Dict[str, CardInfo]] = None) -> int:
     try:
         n = int(getattr(slot, 'energy_under', 0) or 0) if slot else 0
     except Exception:
@@ -1711,7 +1725,18 @@ def _return_under_energy_to_deck_from_slot(gs: 'GameState', slot: Optional['Stag
     if n <= 0:
         return 0
     try:
-        slot.energy_under = 0
+        if slot is not None and cards_db:
+            try:
+                ci_slot = _get_card(cards_db, str(getattr(slot, 'cardnumber', '') or ''))
+            except Exception:
+                ci_slot = None
+            if _has_under_energy_blade_bonus(ci_slot):
+                try:
+                    slot.temp_blade = max(0, int(getattr(slot, 'temp_blade', 0) or 0) - n)
+                except Exception:
+                    pass
+        if slot is not None:
+            slot.energy_under = 0
     except Exception:
         pass
     msg = f"[INFO] {str(pos or '?').upper()}: return under-energy x{n} to energy deck"
@@ -1722,6 +1747,7 @@ def _return_under_energy_to_deck_from_slot(gs: 'GameState', slot: Optional['Stag
     except Exception:
         pass
     # Energy deck is implicit by counts; clearing energy_under is enough.
+    return n
     return int(n)
 def refresh(gs: GameState) -> None:
     for k in ("L", "C", "R"):
@@ -2097,9 +2123,8 @@ def stage_blade(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
         c = _get_card(cards_db, slot.cardnumber)
         base_b = (int(c.blade) if c else 0)
         temp_b = int(getattr(slot, "temp_blade", 0) or 0)
-        under_b = int(getattr(slot, "energy_under", 0) or 0) if _has_under_energy_blade_bonus(c) else 0
         always_b = _slot_always_blade_bonus(gs, cards_db, pos, slot)
-        s += base_b + temp_b + under_b + always_b
+        s += base_b + temp_b + always_b
     return s
 def _success_zone_cardno_count(gs: "GameState", target_cn: str) -> int:
     if gs is None:
@@ -3081,7 +3106,7 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
     gs.log.append(f'[PENDING] auto_order triggers={len(triggers)}')
     gs.log.append(f'[PROMPT] live-start abilities queued: {n}')
     return n
-def _clear_end_of_live_buffs(gs: GameState) -> None:
+def _clear_end_of_live_buffs(gs: GameState, cards_db: Optional[Dict[str, CardInfo]] = None) -> None:
     for pos in ("L", "C", "R"):
         slot = gs.stage.get(pos)
         if not slot:
@@ -3095,6 +3120,16 @@ def _clear_end_of_live_buffs(gs: GameState) -> None:
             slot.heart_replace_color = ""
         except Exception:
             pass
+        if cards_db:
+            try:
+                ci_slot = _get_card(cards_db, str(getattr(slot, 'cardnumber', '') or ''))
+            except Exception:
+                ci_slot = None
+            if _has_under_energy_blade_bonus(ci_slot):
+                try:
+                    slot.temp_blade = int(getattr(slot, 'energy_under', 0) or 0)
+                except Exception:
+                    pass
     # clear global end-of-live buffs
     try:
         gs.success_zone_heart_color = ""
@@ -3127,7 +3162,7 @@ def cmd_play(gs: GameState, cards_db: Dict[str, CardInfo], hand_idx: int, pos: s
         old = _get_card(cards_db, baton_old_cn)
         baton_old_cost = int(old.cost) if old else 0
         # If the replaced member had energies under it, they return to the energy deck (not to energy zone).
-        _return_under_energy_to_deck_from_slot(gs, existing, pos=pos, reason=f'{baton_old_cn} leaves stage')
+        _return_under_energy_to_deck_from_slot(gs, existing, pos=pos, reason=f'{baton_old_cn} leaves stage', cards_db=cards_db)
     cn = gs.hand[hand_idx]
     c = _get_card(cards_db, cn)
     ctype = (c.type if c else "")
@@ -5270,7 +5305,7 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
         gs.last_attempt_ok = False
         gs.need_live_success_triggers = False
         gs.need_success_store_choice = False
-        _clear_end_of_live_buffs(gs)
+        _clear_end_of_live_buffs(gs, cards_db)
         gs.live_start_prompted = False
         return
     if gs.pending:
@@ -5409,7 +5444,7 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
         gs.last_attempt_ok = False
         gs.need_live_success_triggers = False
         gs.need_success_store_choice = False
-        _clear_end_of_live_buffs(gs)
+        _clear_end_of_live_buffs(gs, cards_db)
         gs.live_start_prompted = False
 def cmd_ack(gs: GameState, rng: Optional[random.Random] = None) -> None:
     if not gs.resolve_zone:
@@ -5574,10 +5609,15 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                     slot.energy_under = int(getattr(slot, 'energy_under', 0) or 0) + 1
                 except Exception:
                     pass
+                try:
+                    if _has_under_energy_blade_bonus(ci):
+                        slot.temp_blade = int(getattr(slot, 'temp_blade', 0) or 0) + 1
+                except Exception:
+                    pass
                 gs.log.append(f"[COST] moved 1 energy under {pos} from {src} (under={int(getattr(slot,'energy_under',0) or 0)}; E active={gs.energy_active} wait={gs.energy_wait})")
             if _cost_requires_self_to_green(cost):
                 leaving_cn = str(getattr(slot, 'cardnumber', '') or '')
-                _return_under_energy_to_deck_from_slot(gs, slot, pos=pos, reason=f'{leaving_cn} leaves stage by cost')
+                _return_under_energy_to_deck_from_slot(gs, slot, pos=pos, reason=f'{leaving_cn} leaves stage by cost', cards_db=cards_db)
                 gs.green_room.append(leaving_cn)
                 gs.stage[pos] = None
                 gs.log.append(f"[COST] {pos}: {leaving_cn} -> waiting room")
@@ -5680,7 +5720,7 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
         gs.log.append(f"[ERR] activate: no supported activated ability on {ci.cardnumber}")
         return
     if _has_sacrifice_ability(ci):
-        _return_under_energy_to_deck_from_slot(gs, slot, pos=pos, reason=f'{ci.cardnumber} leaves stage by legacy cost')
+        _return_under_energy_to_deck_from_slot(gs, slot, pos=pos, reason=f'{ci.cardnumber} leaves stage by legacy cost', cards_db=cards_db)
         gs.green_room.append(slot.cardnumber)
         gs.stage[pos] = None
         gs.log.append(f"[ACT] {pos}: {ci.cardnumber} -> waiting room (cost)")
@@ -7740,7 +7780,7 @@ def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], i
             gs.log.append("[WARN] next: resolve_zone still not empty after ACK; abort.")
             return
         # End-of-live cleanup (always), including no-live / cannot-live cases.
-        _clear_end_of_live_buffs(gs)
+        _clear_end_of_live_buffs(gs, cards_db)
         gs.live_start_prompted = False
         # Clear per-live cheer reveal tracker
         try:
