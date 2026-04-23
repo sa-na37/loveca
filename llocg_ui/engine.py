@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: remove_remaining_pending_aliases_20260421u
+# BUILD_TAG: commonize_live_start_score_effects_20260421w
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -6029,15 +6029,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         cnt = int(_live_zone_group_card_count(gs, cards_db, group_name))
         bonus = int(delta if cnt >= need else 0)
         if bonus > 0:
-            if set_idx is not None:
-                _m = dict(getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {})
-                _m[int(set_idx)] = int(_m.get(int(set_idx), 0) or 0) + int(bonus)
-                gs.live_start_score_bonus_by_set_idx = _m
-            else:
-                _m = dict(getattr(gs, 'live_start_score_bonus_by_cn', {}) or {})
-                _k = _canon_cardno(src)
-                _m[_k] = int(_m.get(_k, 0) or 0) + int(bonus)
-                gs.live_start_score_bonus_by_cn = _m
+            _add_live_start_score_bonus(gs, bonus, set_idx=set_idx, source_cn=src)
         gs.log.append(f"[AUTO] {src}[ライブ開始時]: live-zone group({group_name})={cnt}/{need} -> score {bonus:+d}")
         _r = p.get('_resume') if isinstance(p, dict) else None
         if _r:
@@ -6058,15 +6050,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         cnt = int(_green_live_count_by_group_or_unit(gs, cards_db, group_name))
         bonus = int(delta if cnt >= need else 0)
         if bonus > 0:
-            if set_idx is not None:
-                _m = dict(getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {})
-                _m[int(set_idx)] = int(_m.get(int(set_idx), 0) or 0) + int(bonus)
-                gs.live_start_score_bonus_by_set_idx = _m
-            else:
-                _m = dict(getattr(gs, 'live_start_score_bonus_by_cn', {}) or {})
-                _k = _canon_cardno(src)
-                _m[_k] = int(_m.get(_k, 0) or 0) + int(bonus)
-                gs.live_start_score_bonus_by_cn = _m
+            _add_live_start_score_bonus(gs, bonus, set_idx=set_idx, source_cn=src)
         gs.log.append(f"[AUTO] {src}[ライブ開始時]: green live group({group_name})={cnt}/{need} -> score {bonus:+d}")
         _r = p.get('_resume') if isinstance(p, dict) else None
         if _r:
@@ -6087,15 +6071,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         cnt = int(_stage_group_member_heart_color_kinds(gs, cards_db, group_name))
         bonus = int(per * cnt)
         if bonus > 0:
-            if set_idx is not None:
-                _m = dict(getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {})
-                _m[int(set_idx)] = int(_m.get(int(set_idx), 0) or 0) + int(bonus)
-                gs.live_start_score_bonus_by_set_idx = _m
-            else:
-                _m = dict(getattr(gs, 'live_start_score_bonus_by_cn', {}) or {})
-                _k = _canon_cardno(src)
-                _m[_k] = int(_m.get(_k, 0) or 0) + int(bonus)
-                gs.live_start_score_bonus_by_cn = _m
+            _add_live_start_score_bonus(gs, bonus, set_idx=set_idx, source_cn=src)
         gs.log.append(f"[AUTO] {src}[ライブ開始時]: stage group({group_name}) color kinds={cnt} -> score {bonus:+d}")
         _r = p.get('_resume') if isinstance(p, dict) else None
         if _r:
@@ -6116,15 +6092,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         both = int(p.get('score_delta_both', 0) or 0)
         bonus = int(_success_zone_score_set_bonus(gs, cards_db, score_a=a, score_b=b, delta_one=one, delta_both=both))
         if bonus > 0:
-            if set_idx is not None:
-                _m = dict(getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {})
-                _m[int(set_idx)] = int(_m.get(int(set_idx), 0) or 0) + int(bonus)
-                gs.live_start_score_bonus_by_set_idx = _m
-            else:
-                _m = dict(getattr(gs, 'live_start_score_bonus_by_cn', {}) or {})
-                _k = _canon_cardno(src)
-                _m[_k] = int(_m.get(_k, 0) or 0) + int(bonus)
-                gs.live_start_score_bonus_by_cn = _m
+            _add_live_start_score_bonus(gs, bonus, set_idx=set_idx, source_cn=src)
         gs.log.append(f"[AUTO] {src}[ライブ開始時]: success scores({a}/{b}) -> score {bonus:+d}")
         _r = p.get('_resume') if isinstance(p, dict) else None
         if _r:
@@ -6147,15 +6115,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         n_unique = int(_green_unique_live_names_count(gs, cards_db, group_name))
         bonus = int(d2 if n_unique >= int(c2) else (d1 if n_unique >= int(c1) else 0))
         if bonus > 0:
-            if set_idx is not None:
-                _m = dict(getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {})
-                _m[int(set_idx)] = int(_m.get(int(set_idx), 0) or 0) + int(bonus)
-                gs.live_start_score_bonus_by_set_idx = _m
-            else:
-                _m = dict(getattr(gs, 'live_start_score_bonus_by_cn', {}) or {})
-                _k = _canon_cardno(src)
-                _m[_k] = int(_m.get(_k, 0) or 0) + int(bonus)
-                gs.live_start_score_bonus_by_cn = _m
+            _add_live_start_score_bonus(gs, bonus, set_idx=set_idx, source_cn=src)
         gs.log.append(f"[AUTO] {src}[ライブ開始時]: green unique live names({group_name}) count={n_unique} thresholds=({c1}/{c2}) -> score {bonus:+d}")
         _r = p.get('_resume') if isinstance(p, dict) else None
         if _r:
@@ -6180,18 +6140,14 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             _k = _canon_cardno(src)
             if set_idx is not None:
                 if bonus > 0:
-                    _smap = dict(getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {})
-                    _smap[int(set_idx)] = int(_smap.get(int(set_idx), 0) or 0) + int(bonus)
-                    gs.live_start_score_bonus_by_set_idx = _smap
+                    _add_live_start_score_bonus(gs, bonus, set_idx=set_idx, source_cn=src)
                 if add_any > 0:
                     _imap = dict(getattr(gs, 'live_start_required_any_increase_by_set_idx', {}) or {})
                     _imap[int(set_idx)] = int(_imap.get(int(set_idx), 0) or 0) + int(add_any)
                     gs.live_start_required_any_increase_by_set_idx = _imap
             else:
                 if bonus > 0:
-                    _smap = dict(getattr(gs, 'live_start_score_bonus_by_cn', {}) or {})
-                    _smap[_k] = int(_smap.get(_k, 0) or 0) + int(bonus)
-                    gs.live_start_score_bonus_by_cn = _smap
+                    _add_live_start_score_bonus(gs, bonus, set_idx=None, source_cn=src)
                 if add_any > 0:
                     _imap = dict(getattr(gs, 'live_start_required_any_increase_by_cn', {}) or {})
                     _imap[_k] = int(_imap.get(_k, 0) or 0) + int(add_any)
@@ -6225,18 +6181,14 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                     _rmap[int(set_idx)] = max(int(_rmap.get(int(set_idx), 0) or 0), int(red))
                     gs.live_start_required_any_reduction_by_set_idx = _rmap
                 if bonus > 0:
-                    _smap = dict(getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {})
-                    _smap[int(set_idx)] = int(_smap.get(int(set_idx), 0) or 0) + int(bonus)
-                    gs.live_start_score_bonus_by_set_idx = _smap
+                    _add_live_start_score_bonus(gs, bonus, set_idx=set_idx, source_cn=src)
             else:
                 if red > 0:
                     _rmap = dict(getattr(gs, 'live_start_required_any_reduction_by_cn', {}) or {})
                     _rmap[_k] = max(int(_rmap.get(_k, 0) or 0), int(red))
                     gs.live_start_required_any_reduction_by_cn = _rmap
                 if bonus > 0:
-                    _smap = dict(getattr(gs, 'live_start_score_bonus_by_cn', {}) or {})
-                    _smap[_k] = int(_smap.get(_k, 0) or 0) + int(bonus)
-                    gs.live_start_score_bonus_by_cn = _smap
+                    _add_live_start_score_bonus(gs, bonus, set_idx=None, source_cn=src)
         gs.log.append(f"[AUTO] {src}[ライブ開始時]: success score total={total} -> required(any) -{red}, score {bonus:+d}")
         _r = p.get('_resume') if isinstance(p, dict) else None
         if _r:
