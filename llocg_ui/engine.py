@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: commonize_live_success_score_effects_20260421x
+# BUILD_TAG: require_confirm_for_legacy_green_take_20260421y
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -5856,18 +5856,13 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
         cands = _green_live_candidates(gs, cards_db)
         if not cands:
             gs.log.append("[ACT] no LIVE in waiting room to take")
-        elif len(cands) == 1:
-            take_cn = cands[0]
-            gs.green_room.remove(take_cn)
-            gs.hand.append(take_cn)
-            gs.log.append(f"[ACT] took LIVE {take_cn} from waiting room -> hand")
         else:
             gs.pending.append({
                 "kind": "pick_live_from_green",
                 "text": "控え室のライブカードを1枚手札に加える",
                 "options": cands,
             })
-            gs.log.append(f"[PENDING] pick 1 LIVE from waiting room ({len(cands)} candidates)")
+            gs.log.append(f"[PENDING] pick 1 LIVE from waiting room ({len(cands)} candidates; confirm required)")
     if _has_green_member_take_ability(ci):
         def _card_type_upper(x: Any) -> str:
             if x is None:
@@ -5879,18 +5874,13 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
         cands = [cn for cn in gs.green_room if (_get_card(cards_db, cn) and _card_type_upper(_get_card(cards_db, cn)) == "MEMBER")]
         if not cands:
             gs.log.append("[ACT] no MEMBER in waiting room to take")
-        elif len(cands) == 1:
-            take_cn = cands[0]
-            gs.green_room.remove(take_cn)
-            gs.hand.append(take_cn)
-            gs.log.append(f"[ACT] took MEMBER {take_cn} from waiting room -> hand")
         else:
             gs.pending.append({
                 "kind": "pick_member_from_green",
                 "text": "控え室のメンバーカードを1枚手札に加える",
                 "options": cands,
             })
-            gs.log.append(f"[PENDING] pick 1 MEMBER from waiting room ({len(cands)} candidates)")
+            gs.log.append(f"[PENDING] pick 1 MEMBER from waiting room ({len(cands)} candidates; confirm required)")
 def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, choice: str, rng: Optional[random.Random] = None) -> None:
     if idx < 0 or idx >= len(gs.pending):
         gs.log.append("[ERR] resolve_pending: invalid idx")
