@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: remove_love_wing_bell_server_fallback_20260423a
+# BUILD_TAG: pending_modal_fixed_text_panel_height_20260423a
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1610,10 +1610,10 @@ HTML = r'''<!doctype html>
   #modalCond.condMet{display:block;background:rgba(30,120,60,.18);color:#b8f3c7;border-color:rgba(90,220,130,.45);}
   #modalCond.condUnmet{display:block;background:rgba(140,40,40,.18);color:#ffbcbc;border-color:rgba(255,110,110,.45);}
   #modalCond.condNeutral{display:block;background:rgba(255,255,255,.06);color:#ddd;border-color:rgba(255,255,255,.18);}
-  #modalCardTextWrap{display:none;margin:2px 0 10px 0;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);}
-  #modalCardTextWrap.visible{display:block;}
-  #modalCardTextTitle{font-size:11px;font-weight:bold;letter-spacing:.04em;color:#bbb;margin-bottom:6px;}
-  #modalCardText{font-size:12px;color:#ddd;line-height:1.55;white-space:pre-wrap;max-height:220px;overflow:auto;}
+  #modalCardTextWrap{display:none;margin:2px 0 10px 0;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);overflow:hidden;flex:0 0 168px;min-height:168px;max-height:168px;}
+  #modalCardTextWrap.visible{display:flex;flex-direction:column;}
+  #modalCardTextTitle{font-size:11px;font-weight:bold;letter-spacing:.04em;color:#bbb;margin-bottom:6px;flex:0 0 auto;}
+  #modalCardText{font-size:12px;color:#ddd;line-height:1.55;white-space:pre-wrap;overflow:auto;flex:1 1 auto;min-height:0;}
   #modalSourceCard{width:150px;min-width:150px;}
   #modalSourceCard img{display:block;width:150px;height:auto;max-height:220px;object-fit:cover;border-radius:12px;border:1px solid rgba(255,255,255,.14);box-shadow:0 8px 24px rgba(0,0,0,.35);}
   #modalSourceName{width:150px;font-weight:700;color:#fff;font-size:13px;line-height:1.35;white-space:normal;word-break:break-word;}
