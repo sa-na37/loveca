@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: fix_pending_context_js_newline_escape_20260423a
+# BUILD_TAG: fix_success_store_modal_render_20260423e
 from __future__ import annotations
 
 """llocg_ui.server
@@ -4132,7 +4132,62 @@ inner.appendChild(card);
     // Special: 成功ライブカード置き場へ置くカード選択（Skip可）
     if(kind === 'pick_success_to_store'){
       const cards = opts.filter(o=>looksLikeCardNo(o));
-      openCardPickPopup('成功ライブ', cards, {helperText: pendText || '成功ライブカード置き場に置くカードを選択（Skip可）', forceLandscape:true, allowSkip:true});
+      popup = {type:'pending', closable:false};
+      elModalTitle.textContent = '成功ライブ';
+      setRichText(elModalText, pendText || '成功ライブカード置き場に置くカードを選択（Skip可）');
+      elModalActions.innerHTML = '';
+      elModalCards.innerHTML = '';
+
+      const row = document.createElement('div');
+      row.className = 'choiceRow';
+      const dimsL = standardSize('landscape');
+
+      cards.forEach((cn)=>{
+        const b = document.createElement('button');
+        b.className = 'choiceBtn';
+        b.style.width = dimsL.w + 'px';
+        b.style.height = dimsL.h + 'px';
+
+        const img = document.createElement('img');
+        img.src = imgUrl(cn);
+        img.alt = cn;
+        b.appendChild(img);
+
+        const applyChoice = async (ev)=>{
+          if(ev) ev.stopPropagation();
+          st = await apiCmd('resolve_pending', {idx:0, choice: cn});
+          selHand = [];
+          updateTop();
+          render();
+        };
+        b.addEventListener('click', applyChoice);
+        row.appendChild(b);
+      });
+
+      if(cards.length){
+        elModalCards.appendChild(row);
+      }else{
+        const note = document.createElement('div');
+        note.style.opacity = '0.85';
+        note.style.fontSize = '13px';
+        note.style.padding = '6px 0';
+        note.textContent = '候補カードが表示できませんでした。Skip するか、ログを確認してください。';
+        elModalCards.appendChild(note);
+      }
+
+      const bSkip = document.createElement('button');
+      bSkip.className = 'miniBtn';
+      bSkip.textContent = 'Skip';
+      bSkip.addEventListener('click', async (ev)=>{
+        ev.stopPropagation();
+        st = await apiCmd('resolve_pending', {idx:0, choice:'skip'});
+        selHand = [];
+        updateTop();
+        render();
+      });
+      elModalActions.appendChild(bSkip);
+
+      elMask.style.display = 'block';
       return;
     }
 
