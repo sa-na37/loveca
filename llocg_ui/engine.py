@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: fix_live_success_revealed_wait_energy_wrappers_20260421t2
 from __future__ import annotations
+BUILD_TAG = 'fix_wait_energy_wrapper_helper_name_20260421u2'
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
 注意：このファイルは「現状よく動く」単体版 llocg_ui_web.py のロジックをそのまま移植し、
@@ -4122,8 +4122,8 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         count = int((trig or {}).get('count', 0) or 0)
         got = int(_count_yell_revealed_live_cards(gs, cards_db))
         if got >= need and count > 0:
-            _put_energy_from_deck(gs, count, to_wait=True)
-            gs.log.append(f"[AUTO] LIVE: {src_cn}[ライブ成功時]: revealed live cards: {got} -> wait energy +{count}")
+            add = _put_wait_energy_from_deck(gs, count, reason=f"revealed live cards for {src_cn}")
+            gs.log.append(f"[AUTO] LIVE: {src_cn}[ライブ成功時]: revealed live cards: {got} -> wait energy +{add}")
         else:
             gs.log.append(f"[SKIP] LIVE: {src_cn}[ライブ成功時] unresolved (revealed live cards: {got} < {need})")
         return
@@ -4145,8 +4145,8 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         count = int((trig or {}).get('count', 0) or 0)
         got = int(_count_yell_revealed_group_cards(gs, cards_db, group_name))
         if got >= need and count > 0:
-            _put_energy_from_deck(gs, count, to_wait=True)
-            gs.log.append(f"[AUTO] LIVE: {src_cn}[ライブ成功時]: revealed 『{group_name}』 cards: {got} -> wait energy +{count}")
+            add = _put_wait_energy_from_deck(gs, count, reason=f"revealed 『{group_name}』 cards for {src_cn}")
+            gs.log.append(f"[AUTO] LIVE: {src_cn}[ライブ成功時]: revealed 『{group_name}』 cards: {got} -> wait energy +{add}")
         else:
             gs.log.append(f"[SKIP] LIVE: {src_cn}[ライブ成功時] unresolved (revealed 『{group_name}』 cards: {got} < {need})")
         return
