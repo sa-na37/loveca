@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: commonize_live_start_score_effects_20260421w
+# BUILD_TAG: commonize_live_success_score_effects_20260421x
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -4034,11 +4034,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         per = int((trig or {}).get('bonus_per', 0) or 0)
         n = int(_stage_wait_member_count(gs, cards_db))
         bonus = int(per * n)
-        if bonus > 0:
-            _add_last_attempt_live_score_bonus(gs, cn_live, bonus)
-            gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時]: wait members={n} -> score +{bonus}")
-        else:
-            gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時]: wait members=0 -> score +0")
+        _add_live_success_score_bonus(gs, cn_live, bonus, detail=(f"wait members={n}" if n > 0 else "wait members=0"))
         return
     if kind in ('enqueue_choose_effects_from_ability_on_live_success', 'success_enqueue_choose_effects'):
         ab = dict((trig or {}).get('ability', {}) or {})
@@ -4110,9 +4106,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         bonus = int((trig or {}).get('bonus', 0) or 0)
         got = int(_count_yell_revealed_cards_with_tag(gs, cards_db, tag))
         if got >= need:
-            if bonus:
-                _add_last_attempt_live_score_bonus(gs, cn_live, bonus)
-                gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時]: score +{bonus}")
+            _add_live_success_score_bonus(gs, cn_live, bonus, detail=f"revealed cards with {tag}: {got}")
         else:
             gs.log.append(f"[SKIP] LIVE: {cn_live}[ライブ成功時] unresolved (revealed cards with {tag}: {got} < {need})")
         return
@@ -4121,18 +4115,14 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         group_name = str((trig or {}).get('condition_group_name', '') or '')
         bonus = int((trig or {}).get('bonus', 0) or 0)
         if _revealed_group_members_have_all_six_colors(gs, cards_db, group_name):
-            if bonus:
-                _add_last_attempt_live_score_bonus(gs, cn_live, bonus)
-                gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時]: score +{bonus}")
+            _add_live_success_score_bonus(gs, cn_live, bonus, detail=f"revealed 『{group_name}』 members contain all six colors")
         else:
             gs.log.append(f"[SKIP] LIVE: {cn_live}[ライブ成功時] unresolved (revealed 『{group_name}』 members do not contain all six colors)")
         return
     if kind in ('add_live_success_score_bonus', 'success_score_bonus_all'):
         cn_live = str((trig or {}).get('source_cn', '') or '')
         bonus = int((trig or {}).get('bonus', 0) or 0)
-        if bonus:
-            _add_last_attempt_live_score_bonus(gs, cn_live, bonus)
-            gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時]: score +{bonus}")
+        _add_live_success_score_bonus(gs, cn_live, bonus)
         return
     # legacy success_auto_* kinds are no longer emitted; keep the generic wrappers above as the single live-success path.
     # Unknown trigger
@@ -5264,6 +5254,23 @@ def _add_last_attempt_live_score_bonus(gs: GameState, cn_live, bonus: int) -> No
             bonuses[i] = int(bonuses[i] or 0) + int(bonus or 0)
             gs.last_attempt_score_bonus = bonuses
             return
+
+def _add_live_success_score_bonus(gs: GameState, cn_live: str, bonus: int, detail: str = '') -> None:
+    try:
+        bonus_i = int(bonus or 0)
+    except Exception:
+        bonus_i = 0
+    if bonus_i > 0:
+        _add_last_attempt_live_score_bonus(gs, cn_live, bonus_i)
+        if detail:
+            gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時]: {detail} -> score +{bonus_i}")
+        else:
+            gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時]: score +{bonus_i}")
+    else:
+        if detail:
+            gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時]: {detail} -> score +0")
+        else:
+            gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時]: score +0")
 def _get_last_attempt_live_score_bonus(gs: GameState, cn_live) -> int:
     canon = _canon_cardno(cn_live)
     lives = list(getattr(gs, 'last_attempt_lives', []) or [])
