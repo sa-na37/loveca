@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: fix_success_store_modal_render_20260423e
+# BUILD_TAG: pending_modal_show_current_step_only_20260423a
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1694,7 +1694,7 @@ HTML = r'''<!doctype html>
             <div id="modalText"></div>
             <div id="modalCond"></div>
             <div id="modalCardTextWrap">
-              <div id="modalCardTextTitle">カードテキスト</div>
+              <div id="modalCardTextTitle">現在の解決内容</div>
               <div id="modalCardText"></div>
             </div>
             <div id="modalCards"></div>
@@ -1770,6 +1770,7 @@ HTML = r'''<!doctype html>
   const elModalText = document.getElementById('modalText');
   const elModalCond = document.getElementById('modalCond');
   const elModalCardTextWrap = document.getElementById('modalCardTextWrap');
+  const elModalCardTextTitle = document.getElementById('modalCardTextTitle');
   const elModalCardText = document.getElementById('modalCardText');
   const elModalCards = document.getElementById('modalCards');
   const elModalActions = document.getElementById('modalActions');
@@ -1983,6 +1984,23 @@ HTML = r'''<!doctype html>
     if(kind === 'position_change') return '移動先のエリアを選んでください。';
     return pendingSourceCn(p) ? '効果を解決するため、対象または選択肢を選んでください。' : '';
   }
+  function pendingDetailTextFor(p){
+    const candidates = [
+      p && p.detail_text,
+      p && p.current_text,
+      p && p.text,
+      p && p.prompt && p.prompt.text,
+      p && p.message,
+      p && p.description,
+      p && p.after_effect_template,
+      p && p.effect_template,
+    ];
+    for(const raw of candidates){
+      const s = String(raw || '').trim();
+      if(s) return s;
+    }
+    return '';
+  }
   function setRichText(el, raw){
     const s = String(raw || '');
     el.innerHTML = '';
@@ -2038,6 +2056,7 @@ HTML = r'''<!doctype html>
     elModalCond.style.display = 'none';
     elModalCond.textContent = '';
     elModalCardTextWrap.classList.remove('visible');
+    if(elModalCardTextTitle) elModalCardTextTitle.textContent = '現在の解決内容';
     elModalCardText.textContent = '';
   }
   function pendingSourceCn(p){
@@ -2235,6 +2254,7 @@ HTML = r'''<!doctype html>
     elModalCond.style.display = 'none';
     elModalCond.textContent = '';
     elModalCardTextWrap.classList.remove('visible');
+    if(elModalCardTextTitle) elModalCardTextTitle.textContent = '現在の解決内容';
     elModalCardText.textContent = '';
     const status = pendingConditionStatus(p);
     if(status && status.text){
@@ -2242,14 +2262,11 @@ HTML = r'''<!doctype html>
       elModalCond.className = status.state === 'met' ? 'condMet' : (status.state === 'unmet' ? 'condUnmet' : 'condNeutral');
       elModalCond.style.display = 'block';
     }
-    const cn = pendingSourceCn(p);
-    if(!cn) return;
-    const info = await getCardInfoCached(cn);
     if(token != null && token !== modalContextToken) return;
-    if(!info) return;
-    const txt = Array.isArray(info.abilities) && info.abilities.length ? info.abilities.join('\n\n') : '（効果なし）';
+    const detail = pendingDetailTextFor(p);
+    if(!detail) return;
     if(token != null && token !== modalContextToken) return;
-    elModalCardText.textContent = txt;
+    setRichText(elModalCardText, detail);
     elModalCardTextWrap.classList.add('visible');
   }
   function setModalChoiceHoverHint(msg){
