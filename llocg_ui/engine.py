@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: conditional_live_success_revealed_conditional_wrappers_20260421z
+# BUILD_TAG: fix_live_success_revealed_wait_energy_wrappers_20260421t2
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -4116,6 +4116,17 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         else:
             gs.log.append(f"[SKIP] LIVE: {src_cn}[ライブ成功時] unresolved (revealed live cards: {got} < {need})")
         return
+    if kind in ('put_wait_energy_if_revealed_live_count_at_least',):
+        src_cn = str((trig or {}).get('source_cn', '') or '').strip()
+        need = int((trig or {}).get('condition_count', 0) or 0)
+        count = int((trig or {}).get('count', 0) or 0)
+        got = int(_count_yell_revealed_live_cards(gs, cards_db))
+        if got >= need and count > 0:
+            _put_energy_from_deck(gs, count, to_wait=True)
+            gs.log.append(f"[AUTO] LIVE: {src_cn}[ライブ成功時]: revealed live cards: {got} -> wait energy +{count}")
+        else:
+            gs.log.append(f"[SKIP] LIVE: {src_cn}[ライブ成功時] unresolved (revealed live cards: {got} < {need})")
+        return
     if kind in ('add_live_success_score_bonus_if_revealed_group_member_count_at_least',):
         cn_live = str((trig or {}).get('source_cn', '') or '')
         group_name = str((trig or {}).get('condition_group_name', '') or '')
@@ -4843,6 +4854,34 @@ def _build_live_success_trigger_from_effect(gs: GameState, cards_db: Dict[str, C
             'bonus': int(delta),
             'condition_tag': tag,
             'condition_count': int(n),
+            'source_cn': str(source_cn or ''),
+            'pos': str(pos or ''),
+            'ctx': dict(ctx or {}),
+            'label': str(label or ''),
+        }
+    m = re.match(r'^エールにより公開された自分のカードの中にライブカードが(?P<count>\d+)枚以上あるとき、自分のエネルギーデッキから、エネルギーカードを(?P<n>\d+)枚ウェイト状態で置く。?$', eff_norm)
+    if m:
+        need = int(m.group('count') or 0)
+        n = int(m.group('n') or 0)
+        return {
+            'kind': 'put_wait_energy_if_revealed_live_count_at_least',
+            'condition_count': int(need),
+            'count': int(n),
+            'source_cn': str(source_cn or ''),
+            'pos': str(pos or ''),
+            'ctx': dict(ctx or {}),
+            'label': str(label or ''),
+        }
+    m = re.match(r'^エールにより公開された自分のカードの中に『(?P<group>[^』]+)』のカードが(?P<count>\d+)枚以上ある場合、自分のエネルギーデッキから、エネルギーカードを(?P<n>\d+)枚ウェイト状態で置く。?$', eff_norm)
+    if m:
+        group_name = str(m.group('group') or '').strip()
+        need = int(m.group('count') or 0)
+        n = int(m.group('n') or 0)
+        return {
+            'kind': 'put_wait_energy_if_revealed_group_card_count_at_least',
+            'condition_group_name': group_name,
+            'condition_count': int(need),
+            'count': int(n),
             'source_cn': str(source_cn or ''),
             'pos': str(pos or ''),
             'ctx': dict(ctx or {}),
