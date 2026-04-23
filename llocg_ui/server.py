@@ -967,6 +967,46 @@ class App:
                 out[cn] = f"{exp}/{cost_s}/{ci.name}" if exp else f"{cost_s}/{ci.name}"
         return out
 
+    def _cn2group(self) -> Dict[str, str]:
+        out: Dict[str, str] = {}
+        for cn in self._all_cardnumbers_in_state():
+            ci = _get_card(self.cards_db, cn)
+            if ci and getattr(ci, "group", None):
+                out[cn] = str(ci.group)
+        return out
+
+    def _cn2unit(self) -> Dict[str, str]:
+        out: Dict[str, str] = {}
+        for cn in self._all_cardnumbers_in_state():
+            ci = _get_card(self.cards_db, cn)
+            if ci and getattr(ci, "unit", None):
+                out[cn] = str(ci.unit)
+        return out
+
+    def _cn2cost(self) -> Dict[str, int]:
+        out: Dict[str, int] = {}
+        for cn in self._all_cardnumbers_in_state():
+            ci = _get_card(self.cards_db, cn)
+            if ci is None:
+                continue
+            try:
+                out[cn] = int(getattr(ci, "cost", 0) or 0)
+            except Exception:
+                pass
+        return out
+
+    def _cn2score(self) -> Dict[str, int]:
+        out: Dict[str, int] = {}
+        for cn in self._all_cardnumbers_in_state():
+            ci = _get_card(self.cards_db, cn)
+            if ci is None:
+                continue
+            try:
+                out[cn] = int(getattr(ci, "score", 0) or 0)
+            except Exception:
+                pass
+        return out
+
     def state_json(self) -> Dict[str, Any]:
         now = time.time()
         banner = None
@@ -998,6 +1038,10 @@ class App:
             "cn2name": self._cn2name(),
             "cn2label": self._cn2label(),
             "cn2type": self._cn2type(),
+            "cn2group": self._cn2group(),
+            "cn2unit": self._cn2unit(),
+            "cn2cost": self._cn2cost(),
+            "cn2score": self._cn2score(),
             "stage_detail": {
                 k: (
                     {
@@ -1562,6 +1606,14 @@ HTML = r'''<!doctype html>
   #modalMain{display:flex;gap:16px;flex:1 1 auto;min-height:0;overflow:hidden;margin-top:10px;}
   #modalLead{display:none;flex:0 0 160px;max-width:160px;min-width:160px;flex-direction:column;gap:8px;align-items:flex-start;}
   #modalLead.visible{display:flex;}
+  #modalCond{display:none;margin:6px 0 8px 0;padding:8px 10px;border-radius:10px;font-size:12px;line-height:1.45;border:1px solid rgba(255,255,255,.14);}
+  #modalCond.condMet{display:block;background:rgba(30,120,60,.18);color:#b8f3c7;border-color:rgba(90,220,130,.45);}
+  #modalCond.condUnmet{display:block;background:rgba(140,40,40,.18);color:#ffbcbc;border-color:rgba(255,110,110,.45);}
+  #modalCond.condNeutral{display:block;background:rgba(255,255,255,.06);color:#ddd;border-color:rgba(255,255,255,.18);}
+  #modalCardTextWrap{display:none;margin:2px 0 10px 0;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);}
+  #modalCardTextWrap.visible{display:block;}
+  #modalCardTextTitle{font-size:11px;font-weight:bold;letter-spacing:.04em;color:#bbb;margin-bottom:6px;}
+  #modalCardText{font-size:12px;color:#ddd;line-height:1.55;white-space:pre-wrap;max-height:220px;overflow:auto;}
   #modalSourceCard{width:150px;min-width:150px;}
   #modalSourceCard img{display:block;width:150px;height:auto;max-height:220px;object-fit:cover;border-radius:12px;border:1px solid rgba(255,255,255,.14);box-shadow:0 8px 24px rgba(0,0,0,.35);}
   #modalSourceName{width:150px;font-weight:700;color:#fff;font-size:13px;line-height:1.35;white-space:normal;word-break:break-word;}
@@ -1640,6 +1692,11 @@ HTML = r'''<!doctype html>
           </div>
           <div id="modalContent">
             <div id="modalText"></div>
+            <div id="modalCond"></div>
+            <div id="modalCardTextWrap">
+              <div id="modalCardTextTitle">カードテキスト</div>
+              <div id="modalCardText"></div>
+            </div>
             <div id="modalCards"></div>
             <div id="modalActions"></div>
           </div>
@@ -1711,6 +1768,9 @@ HTML = r'''<!doctype html>
   const elModalSourceName = document.getElementById('modalSourceName');
   const elModalSourceMeta = document.getElementById('modalSourceMeta');
   const elModalText = document.getElementById('modalText');
+  const elModalCond = document.getElementById('modalCond');
+  const elModalCardTextWrap = document.getElementById('modalCardTextWrap');
+  const elModalCardText = document.getElementById('modalCardText');
   const elModalCards = document.getElementById('modalCards');
   const elModalActions = document.getElementById('modalActions');
 
@@ -1739,6 +1799,7 @@ HTML = r'''<!doctype html>
   const elCdName      = document.getElementById('cdName');
   const elCdMeta      = document.getElementById('cdMeta');
   const elCdAbilities = document.getElementById('cdAbilities');
+  const cardInfoCache = new Map();
   const elCdClose     = document.getElementById('cdClose');
 
   elCdClose.addEventListener('click', ()=>{ elCardDetail.classList.remove('visible'); });
@@ -1972,6 +2033,11 @@ HTML = r'''<!doctype html>
     elModalSourceCard.innerHTML = '';
     elModalSourceName.textContent = '';
     elModalSourceMeta.textContent = '';
+    elModalCond.className = '';
+    elModalCond.style.display = 'none';
+    elModalCond.textContent = '';
+    elModalCardTextWrap.classList.remove('visible');
+    elModalCardText.textContent = '';
   }
   function pendingSourceCn(p){
     const tries = [
@@ -2003,6 +2069,189 @@ HTML = r'''<!doctype html>
     if(kind.includes('enter') || kind.includes('on_enter')) return '登場時';
     if(kind.includes('activate') || kind.includes('body')) return '起動/能力';
     return '';
+  }
+
+  function cardGroupFor(cn){ try{ return String((st && st.cn2group && st.cn2group[cn]) || ''); }catch(e){ return ''; } }
+  function cardUnitFor(cn){ try{ return String((st && st.cn2unit && st.cn2unit[cn]) || ''); }catch(e){ return ''; } }
+  function cardCostFor(cn){ try{ return Number((st && st.cn2cost && st.cn2cost[cn]) || 0); }catch(e){ return 0; } }
+  function cardScoreFor(cn){ try{ return Number((st && st.cn2score && st.cn2score[cn]) || 0); }catch(e){ return 0; } }
+  function groupOrUnitMatch(cn, name){
+    const target = String(name||'').trim();
+    if(!target) return false;
+    return cardGroupFor(cn) === target || cardUnitFor(cn) === target;
+  }
+  function countStageGroupMembers(name){
+    let n = 0;
+    const stage = (st && st.stage) ? st.stage : {};
+    for(const pos of ['L','C','R']){
+      const slot = stage[pos];
+      const cn = slot && slot.cardnumber ? String(slot.cardnumber) : '';
+      if(!cn) continue;
+      if(cardTypeFor(cn) !== 'MEMBER') continue;
+      if(groupOrUnitMatch(cn, name)) n += 1;
+    }
+    return n;
+  }
+  function stageAllGroupMembersMinCost(name, minCost){
+    const stage = (st && st.stage) ? st.stage : {};
+    let found = 0;
+    for(const pos of ['L','C','R']){
+      const slot = stage[pos];
+      const cn = slot && slot.cardnumber ? String(slot.cardnumber) : '';
+      if(!cn) continue;
+      if(cardTypeFor(cn) !== 'MEMBER') continue;
+      if(!groupOrUnitMatch(cn, name)) return false;
+      if(cardCostFor(cn) < Number(minCost||0)) return false;
+      found += 1;
+    }
+    return found > 0;
+  }
+  function countGreenLiveGroupOrUnit(name){
+    const arr = (st && Array.isArray(st.green_room)) ? st.green_room : [];
+    let n = 0;
+    for(const cn of arr){
+      const s = String(cn||'').trim();
+      if(!s || cardTypeFor(s) !== 'LIVE') continue;
+      if(groupOrUnitMatch(s, name)) n += 1;
+    }
+    return n;
+  }
+  function countGreenUniqueLiveNamesGroupOrUnit(name){
+    const arr = (st && Array.isArray(st.green_room)) ? st.green_room : [];
+    const seen = new Set();
+    for(const cn of arr){
+      const s = String(cn||'').trim();
+      if(!s || cardTypeFor(s) !== 'LIVE') continue;
+      if(!groupOrUnitMatch(s, name)) continue;
+      const nm = cardNameFor(s);
+      if(nm) seen.add(nm);
+    }
+    return seen.size;
+  }
+  function successZoneScoreSum(){
+    const arr = (st && Array.isArray(st.success_zone)) ? st.success_zone : [];
+    return arr.reduce((a,cn)=>a + cardScoreFor(String(cn||'')), 0);
+  }
+  function successZoneHasScore(v){
+    const arr = (st && Array.isArray(st.success_zone)) ? st.success_zone : [];
+    return arr.some(cn => cardScoreFor(String(cn||'')) === Number(v||0));
+  }
+  function successZoneCardnameCount(name){
+    const arr = (st && Array.isArray(st.success_zone)) ? st.success_zone : [];
+    return arr.filter(cn => cardNameFor(String(cn||'')) === String(name||'')).length;
+  }
+  function liveZoneGroupCardCount(name){
+    let n = 0;
+    const arrs = [ (st && Array.isArray(st.set_zone)) ? st.set_zone : [], (st && Array.isArray(st.resolve_zone)) ? st.resolve_zone : [] ];
+    for(const arr of arrs){
+      for(const cn of arr){
+        const s = String(cn||'').trim();
+        if(!s) continue;
+        if(groupOrUnitMatch(s, name)) n += 1;
+      }
+    }
+    return n;
+  }
+  function pendingConditionStatus(p){
+    if(!p || typeof p !== 'object') return null;
+    const kind = String(p.kind || '').trim();
+    const neutral = (text)=>({state:'neutral', text});
+    const met = (text)=>({state:'met', text:`条件達成: ${text}`});
+    const unmet = (text)=>({state:'unmet', text:`条件未達成: ${text}`});
+    if(kind === 'optional_pay_energy_for_self_score_if_group'){
+      const g = String(p.condition_group_name || '');
+      const got = countStageGroupMembers(g);
+      return got >= 1 ? met(`ステージの『${g}』メンバー ${got}/1`) : unmet(`ステージの『${g}』メンバー ${got}/1`);
+    }
+    if(kind === 'execute_draw_then_choose_hand_cards_ordered_topdeck'){
+      const g = String(p.condition_group_name || '');
+      const min = Number(p.condition_min_cost || 0);
+      if(g && min) return stageAllGroupMembersMinCost(g, min) ? met(`ステージ全員が『${g}』かつコスト${min}以上`) : unmet(`ステージ全員が『${g}』かつコスト${min}以上`);
+      return neutral('条件判定後の解決です');
+    }
+    if(kind === 'execute_top_keep_one_then_reveal_top_score_if_live'){
+      const g = String(p.condition_group_name || '');
+      const got = countStageGroupMembers(g);
+      return met(`ステージの『${g}』メンバー ${got}人`);
+    }
+    if(kind === 'live_start_score_if_live_zone_group_count_at_least'){
+      const g = String(p.condition_group_name || '');
+      const need = Number(p.condition_count || 0);
+      const got = liveZoneGroupCardCount(g);
+      return got >= need ? met(`ライブ中の『${g}』カード ${got}/${need}`) : unmet(`ライブ中の『${g}』カード ${got}/${need}`);
+    }
+    if(kind === 'live_start_score_if_green_live_group_count_at_least'){
+      const g = String(p.condition_group_name || '');
+      const need = Number(p.condition_count || 0);
+      const got = countGreenLiveGroupOrUnit(g);
+      return got >= need ? met(`控え室の『${g}』ライブ ${got}/${need}`) : unmet(`控え室の『${g}』ライブ ${got}/${need}`);
+    }
+    if(kind === 'live_start_score_if_success_zone_has_scores'){
+      const a = Number(p.score_a || 0), b = Number(p.score_b || 0);
+      const ha = successZoneHasScore(a), hb = successZoneHasScore(b);
+      if(ha && hb) return met(`成功置き場にスコア${a}と${b}の両方があります`);
+      if(ha || hb) return met(`成功置き場にスコア${ha ? a : b}があります`);
+      return unmet(`成功置き場にスコア${a}/${b}がありません`);
+    }
+    if(kind === 'live_start_score_if_green_unique_live_names_group_count'){
+      const g = String(p.condition_group_name || '');
+      const c1 = Number(p.condition_count_one || 0);
+      const c2 = Number(p.condition_count_two || 0);
+      const got = countGreenUniqueLiveNamesGroupOrUnit(g);
+      if(c2 && got >= c2) return met(`控え室の異名『${g}』ライブ ${got}/${c2}`);
+      if(c1 && got >= c1) return met(`控え室の異名『${g}』ライブ ${got}/${c1}`);
+      return unmet(`控え室の異名『${g}』ライブ ${got}/${Math.max(c1,c2)}`);
+    }
+    if(kind === 'live_start_score_and_increase_any_per_success_zone_cardname_count'){
+      const nm = String(p.condition_cardname || '');
+      const got = successZoneCardnameCount(nm);
+      return got > 0 ? met(`成功置き場の「${nm}」 ${got}枚`) : unmet(`成功置き場の「${nm}」 0枚`);
+    }
+    if(kind === 'live_start_reduce_any_and_score_if_success_score_at_least'){
+      const sum = successZoneScoreSum();
+      const t1 = Number(p.reduce_threshold || 0), t2 = Number(p.score_threshold || 0);
+      if(sum >= t2) return met(`成功置き場のスコア合計 ${sum} ≥ ${t2}`);
+      if(sum >= t1) return met(`成功置き場のスコア合計 ${sum} ≥ ${t1}`);
+      return unmet(`成功置き場のスコア合計 ${sum} < ${Math.min(t1||sum, t2||sum)}`);
+    }
+    if(kind === 'confirm_effect' || kind === 'pay_or_skip') return neutral('解決前の確認です');
+    return null;
+  }
+  async function getCardInfoCached(cn){
+    const key = String(cn||'').trim();
+    if(!key || !looksLikeCardNo(key)) return null;
+    if(cardInfoCache.has(key)) return cardInfoCache.get(key);
+    try{
+      const r = await fetch(`/cardinfo?cn=${encodeURIComponent(key)}`, {cache:'no-store'});
+      if(!r.ok){ cardInfoCache.set(key, null); return null; }
+      const info = await r.json();
+      cardInfoCache.set(key, info);
+      return info;
+    }catch(e){ cardInfoCache.set(key, null); return null; }
+  }
+  async function updateModalContextFromPending(p){
+    elModalCond.className = '';
+    elModalCond.style.display = 'none';
+    elModalCond.textContent = '';
+    elModalCardTextWrap.classList.remove('visible');
+    elModalCardText.textContent = '';
+    const status = pendingConditionStatus(p);
+    if(status && status.text){
+      elModalCond.textContent = status.text;
+      elModalCond.className = status.state === 'met' ? 'condMet' : (status.state === 'unmet' ? 'condUnmet' : 'condNeutral');
+      elModalCond.style.display = 'block';
+    }
+    const cn = pendingSourceCn(p);
+    if(!cn) return;
+    const info = await getCardInfoCached(cn);
+    if(!info) return;
+    const txt = Array.isArray(info.abilities) && info.abilities.length ? info.abilities.join('
+
+') : '（効果なし）';
+    // guard against modal changing while fetch is in-flight
+    if(cn !== pendingSourceCn((st && Array.isArray(st.pending) && st.pending.length) ? st.pending[0] : p)) return;
+    elModalCardText.textContent = txt;
+    elModalCardTextWrap.classList.add('visible');
   }
   function setModalLeadFromPending(p){
     const cn = pendingSourceCn(p);
@@ -3209,6 +3458,7 @@ inner.appendChild(card);
   function showPending(p){
     const kind = (p && p.kind) ? String(p.kind) : '';
     setModalLeadFromPending(p);
+    updateModalContextFromPending(p);
 
     // Drag-and-drop reorder UI
     if(kind === 'reorder_topk_keep_any'){
