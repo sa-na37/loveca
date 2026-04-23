@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: remove_lanzhu_legacy_paths_20260420k
+# BUILD_TAG: fix_pending_context_js_newline_escape_20260423a
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1800,6 +1800,7 @@ HTML = r'''<!doctype html>
   const elCdMeta      = document.getElementById('cdMeta');
   const elCdAbilities = document.getElementById('cdAbilities');
   const cardInfoCache = new Map();
+  let modalContextToken = 0;
   const elCdClose     = document.getElementById('cdClose');
 
   elCdClose.addEventListener('click', ()=>{ elCardDetail.classList.remove('visible'); });
@@ -2229,7 +2230,7 @@ HTML = r'''<!doctype html>
       return info;
     }catch(e){ cardInfoCache.set(key, null); return null; }
   }
-  async function updateModalContextFromPending(p){
+  async function updateModalContextFromPending(p, token){
     elModalCond.className = '';
     elModalCond.style.display = 'none';
     elModalCond.textContent = '';
@@ -2244,14 +2245,29 @@ HTML = r'''<!doctype html>
     const cn = pendingSourceCn(p);
     if(!cn) return;
     const info = await getCardInfoCached(cn);
+    if(token != null && token !== modalContextToken) return;
     if(!info) return;
-    const txt = Array.isArray(info.abilities) && info.abilities.length ? info.abilities.join('
-
-') : '（効果なし）';
-    // guard against modal changing while fetch is in-flight
-    if(cn !== pendingSourceCn((st && Array.isArray(st.pending) && st.pending.length) ? st.pending[0] : p)) return;
+    const txt = Array.isArray(info.abilities) && info.abilities.length ? info.abilities.join('\n\n') : '（効果なし）';
+    if(token != null && token !== modalContextToken) return;
     elModalCardText.textContent = txt;
     elModalCardTextWrap.classList.add('visible');
+  }
+  function setModalChoiceHoverHint(msg){
+    const s = String(msg || '').trim();
+    if(!s) return;
+    elModalCond.textContent = s;
+    elModalCond.className = 'condNeutral';
+    elModalCond.style.display = 'block';
+  }
+  function setModalContextFromPending(p){
+    modalContextToken += 1;
+    const token = modalContextToken;
+    if(!p || typeof p !== 'object'){
+      clearModalLead();
+      return;
+    }
+    setModalLeadFromPending(p);
+    updateModalContextFromPending(p, token).catch(err=>console.error(err));
   }
   function setModalLeadFromPending(p){
     const cn = pendingSourceCn(p);
@@ -3457,8 +3473,7 @@ inner.appendChild(card);
 
   function showPending(p){
     const kind = (p && p.kind) ? String(p.kind) : '';
-    setModalLeadFromPending(p);
-    updateModalContextFromPending(p);
+    setModalContextFromPending(p);
 
     // Drag-and-drop reorder UI
     if(kind === 'reorder_topk_keep_any'){
@@ -4121,20 +4136,22 @@ inner.appendChild(card);
       return;
     }
 
-    if(kind === 'auto_order' && Array.isArray(p.queue) && p.queue.length){
+    if((kind === 'auto_order' && Array.isArray(p.queue) && p.queue.length) || (kind === 'choose_effects' && ((Array.isArray(p.queue) && p.queue.length) || (Array.isArray(p.remaining) && p.remaining.length)))){
       const row = document.createElement('div');
       row.className = 'choiceRow';
 
       const dimsP = standardSize('portrait');
       const dimsL = standardSize('landscape');
-      const queue = Array.isArray(p.queue) ? p.queue : [];
+      const queue = Array.isArray(p.queue) && p.queue.length ? p.queue : (Array.isArray(p.remaining) ? p.remaining : []);
 
       const items = opts.map((opt, i)=>{
         const trig = queue[i] || {};
         const cn = String((trig && trig.source_cn) ? trig.source_cn : '').trim();
         const label = String(opt || '').trim();
-        return {label, cn};
+        return {label, cn, trig};
       }).filter(it=>it.label);
+
+      setModalChoiceHoverHint('カードにカーソルを合わせると、カードテキストと条件達成状況を表示します。');
 
       items.forEach(it=>{
         const b = document.createElement('button');
@@ -4160,6 +4177,10 @@ inner.appendChild(card);
         cap.className = 'choiceCap';
         cap.textContent = it.label;
         b.appendChild(cap);
+
+        const showCtx = ()=>{ setModalContextFromPending(it.trig && Object.keys(it.trig).length ? it.trig : {source_cn: it.cn}); };
+        b.addEventListener('mouseenter', showCtx);
+        b.addEventListener('focus', showCtx);
 
         b.addEventListener('click', async (ev)=>{
           ev.stopPropagation();
@@ -4482,6 +4503,7 @@ inner.appendChild(card);
   function maybeShowPending(){
     const p = (st && Array.isArray(st.pending) && st.pending.length) ? st.pending[0] : null;
     if(p){
+      if(popup && popup.type === 'cardlist' && !popup.closable) closePopup();
       showPending(p);
       return true;
     }
