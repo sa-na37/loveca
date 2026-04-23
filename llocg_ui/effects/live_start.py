@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_live_start_generalize_emmafix_20260414e
+# BUILD_TAG: live_start_wait_and_same_name_helper_cleanup_20260423b
 from __future__ import annotations
 
 """llocg_ui.effects.live_start
@@ -12,6 +12,198 @@ blade / heart / draw / discard / choose 系のうち、
 from typing import Any, Dict
 from .helpers import *  # noqa: F403
 
+
+def _ctx_src_pos(ctx: Dict[str, Any]) -> str:
+    return str((ctx or {}).get("src_pos") or (ctx or {}).get("pos") or "").upper()
+
+
+def _ctx_source_cn(ctx: Dict[str, Any]) -> str:
+    return str((ctx or {}).get("source_cn") or "")
+
+
+def _stage_slot_at(gs: Any, pos: str) -> Any:
+    st = getattr(gs, "stage", None)
+    if not isinstance(st, dict):
+        return None
+    return st.get(str(pos or "").upper())
+
+
+def _append_pending(gs: Any, payload: Dict[str, Any], log_line: str = "") -> None:
+    try:
+        getattr(gs, "pending").append(payload)
+        if log_line:
+            gs.log.append(log_line)
+    except Exception:
+        pass
+
+
+def _apply_temp_bonus(
+    eng: Dict[str, Any],
+    slot: Any,
+    *,
+    blade: int = 0,
+    hearts: Dict[str, int] | None = None,
+) -> None:
+    if slot is None:
+        return
+    if blade:
+        _add_temp_blade(eng, slot, int(blade))
+    if hearts:
+        _add_temp_hearts(eng, slot, dict(hearts))
+
+
+def _queue_choose_stage_member(
+    gs: Any,
+    *,
+    candidates: list[str],
+    after_ext_key: str,
+    source_cn: str,
+    label: str,
+    optional: bool = False,
+    text: str = "",
+    extra_payload: Dict[str, Any] | None = None,
+    log_line: str = "",
+) -> None:
+    payload = {
+        "kind": "choose_stage_member_to_activate",
+        "candidates": list(candidates),
+        "optional": bool(optional),
+        "after_ext_key": after_ext_key,
+        "source_cn": source_cn,
+        "label": label,
+    }
+    if text:
+        payload["text"] = text
+    if extra_payload:
+        payload.update(dict(extra_payload))
+    _append_pending(gs, payload, log_line)
+
+
+def _queue_choose_heart_color(
+    gs: Any,
+    *,
+    pos: str,
+    source_cn: str,
+    options: list[str],
+    text: str,
+    log_line: str,
+) -> None:
+    payload = {
+        "kind": "choose_heart_color",
+        "pos": str(pos or "").upper(),
+        "n": 1,
+        "text": text,
+        "options": list(options),
+        "source_cn": source_cn,
+        "src_pos": str(pos or "").upper(),
+    }
+    _append_pending(gs, payload, log_line)
+
+
+
+def _ctx_choice_pos(ctx: Dict[str, Any]) -> str:
+    return str((ctx or {}).get("choice") or (ctx or {}).get("chosen_pos") or "").upper()
+
+
+def _activate_slot(slot: Any) -> None:
+    if slot is not None:
+        try:
+            slot.active = True
+        except Exception:
+            pass
+
+
+def _queue_other_wait_member_choice(
+    gs: Any,
+    *,
+    candidates: list[str],
+    source_cn: str,
+    src_pos: str,
+    log_line: str,
+) -> None:
+    _queue_choose_stage_member(
+        gs,
+        candidates=candidates,
+        after_ext_key="live_start_activate_other_wait_member_both_green1__resolve",
+        source_cn=source_cn,
+        label="【エマ・ヴェルデ】アクティブにするメンバーを選んでください",
+        text="【エマ・ヴェルデ】アクティブにするメンバーをクリックしてください",
+        extra_payload={"ctx": {"src_pos": src_pos, "source_cn": source_cn}},
+        log_line=log_line,
+    )
+
+
+def _apply_activate_other_wait_member_both_green1(eng: Dict[str, Any], gs: Any, *, src_pos: str, chosen_pos: str) -> bool:
+    st = getattr(gs, "stage", None)
+    if not isinstance(st, dict):
+        return True
+    src_slot = st.get(str(src_pos or "").upper())
+    dst_slot = st.get(str(chosen_pos or "").upper())
+    if dst_slot is None:
+        try:
+            gs.log.append(f"[ERR] Emma bp3-008 resolve: empty target {chosen_pos}")
+        except Exception:
+            pass
+        return True
+    _activate_slot(dst_slot)
+    _apply_temp_bonus(eng, src_slot, hearts={"green": 1})
+    _apply_temp_bonus(eng, dst_slot, hearts={"green": 1})
+    return True
+
+
+def _card_display_name_with_fallback(eng: Dict[str, Any], cards_db: Dict[str, Any], cn: str) -> str:
+    name = _card_name(cn, cards_db)
+    if name:
+        return name
+    try:
+        canon_fn = eng.get("_canon_cardno")
+        get_card_fn = eng.get("_get_card")
+        canon_cn = canon_fn(cn) if callable(canon_fn) else str(cn or "")
+        ci = get_card_fn(cards_db, canon_cn) if callable(get_card_fn) else None
+        return str(
+            getattr(ci, "cardname", "") or
+            getattr(ci, "name", "") or
+            ((ci if isinstance(ci, dict) else {}).get("cardname")) or
+            ((ci if isinstance(ci, dict) else {}).get("name")) or
+            ""
+        )
+    except Exception:
+        return ""
+
+
+def _same_name_or_card_match(eng: Dict[str, Any], cards_db: Dict[str, Any], slot_obj: Any, discarded_cn: str, discarded_name: str) -> bool:
+    slot_cn = str(getattr(slot_obj, "cardnumber", "") or "")
+    try:
+        canon_fn = eng.get("_canon_cardno")
+        if callable(canon_fn):
+            if canon_fn(slot_cn) == canon_fn(discarded_cn):
+                return True
+        elif slot_cn == discarded_cn:
+            return True
+    except Exception:
+        if slot_cn == discarded_cn:
+            return True
+    slot_name = _card_name(slot_obj, cards_db)
+    if discarded_name and slot_name and slot_name == discarded_name:
+        return True
+    slot_name2 = _card_display_name_with_fallback(eng, cards_db, slot_cn)
+    return bool(discarded_name and slot_name2 and slot_name2 == discarded_name)
+
+
+def _matching_stage_members_for_discarded(eng: Dict[str, Any], gs: Any, cards_db: Dict[str, Any], discarded_cn: str, discarded_name: str) -> list[tuple[str, Any]]:
+    matched: list[tuple[str, Any]] = []
+    try:
+        st = getattr(gs, "stage", None)
+        if isinstance(st, dict):
+            for pos in ("L", "C", "R"):
+                slot = st.get(pos)
+                if slot is None or not bool(getattr(slot, "cardnumber", None)):
+                    continue
+                if _same_name_or_card_match(eng, cards_db, slot, discarded_cn, discarded_name):
+                    matched.append((pos, slot))
+    except Exception:
+        pass
+    return matched
 
 def try_apply_live_start_ext(
     eng: Dict[str, Any],
@@ -99,7 +291,7 @@ def try_apply_live_start_ext(
 
     if ext_key == "live_start_pick_stage_member_blade3":
         occupied = _stage_positions_all_occupied(gs)
-        src = str((ctx or {}).get("source_cn") or "")
+        src = _ctx_source_cn(ctx)
         if not occupied:
             try:
                 gs.log.append("[AUTO_EXT] no stage members, no blade (Oh,Love&Peace!)")
@@ -107,37 +299,28 @@ def try_apply_live_start_ext(
                 pass
             return True
         if len(occupied) == 1:
-            # 対象が1人のみなら選択不要で即付与
-            _, slot = occupied[0]
-            _add_temp_blade(eng, slot, 3)
+            pos, slot = occupied[0]
+            _apply_temp_bonus(eng, slot, blade=3)
             try:
-                gs.log.append(f"[AUTO_EXT] only 1 member -> +3blade to {occupied[0][0]} (Oh,Love&Peace!)")
+                gs.log.append(f"[AUTO_EXT] only 1 member -> +3blade to {pos} (Oh,Love&Peace!)")
             except Exception:
                 pass
             return True
-        # 複数いる場合は choose_stage_member_to_activate pending で選択
-        candidates = [pos for pos, _ in occupied]
-        payload = {
-            "kind": "choose_stage_member_to_activate",
-            "candidates": candidates,
-            "optional": False,
-            "after_ext_key": "live_start_pick_stage_member_blade3__resolve",
-            "source_cn": src,
-            "label": "【Oh,Love&Peace!】ブレード+3を与えるメンバーを選んでください",
-        }
-        try:
-            getattr(gs, "pending").append(payload)
-            gs.log.append(f"[PENDING] Oh,Love&Peace!: choose member for +3blade from {candidates}")
-        except Exception:
-            pass
+        _queue_choose_stage_member(
+            gs,
+            candidates=[pos for pos, _ in occupied],
+            after_ext_key="live_start_pick_stage_member_blade3__resolve",
+            source_cn=src,
+            label="【Oh,Love&Peace!】ブレード+3を与えるメンバーを選んでください",
+            log_line=f"[PENDING] Oh,Love&Peace!: choose member for +3blade from {[pos for pos, _ in occupied]}",
+        )
         return True
 
     if ext_key == "live_start_pick_stage_member_blade3__resolve":
         chosen_pos = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_pos") or "").upper()
-        st = getattr(gs, "stage", None)
-        slot = (st or {}).get(chosen_pos) if isinstance(st, dict) else None
+        slot = _stage_slot_at(gs, chosen_pos)
         if slot is not None:
-            _add_temp_blade(eng, slot, 3)
+            _apply_temp_bonus(eng, slot, blade=3)
             try:
                 gs.log.append(f"[AUTO_EXT] +3blade -> {chosen_pos} (Oh,Love&Peace! resolve)")
             except Exception:
@@ -152,46 +335,39 @@ def try_apply_live_start_ext(
 
     # ------------------------------------------------------------------
     if ext_key == "live_start_pick_other_stage_member_pink1":
-        src_pos = str((ctx or {}).get("src_pos") or (ctx or {}).get("pos") or "").upper()
-        src = str((ctx or {}).get("source_cn") or "")
+        src_pos = _ctx_src_pos(ctx)
+        src = _ctx_source_cn(ctx)
         occupied = _stage_positions_all_occupied(gs)
         others = [(pos, slot) for pos, slot in occupied if pos != src_pos]
         if not others:
             try:
-                gs.log.append(f"[AUTO_EXT] no other members on stage (園田海未 bp4-013)")
+                gs.log.append("[AUTO_EXT] no other members on stage (園田海未 bp4-013)")
             except Exception:
                 pass
             return True
         if len(others) == 1:
-            _, slot = others[0]
-            _add_temp_hearts(eng, slot, {"pink": 1})
+            pos, slot = others[0]
+            _apply_temp_bonus(eng, slot, hearts={"pink": 1})
             try:
-                gs.log.append(f"[AUTO_EXT] +pink to {others[0][0]} (園田海未 bp4-013)")
+                gs.log.append(f"[AUTO_EXT] +pink to {pos} (園田海未 bp4-013)")
             except Exception:
                 pass
             return True
-        candidates = [pos for pos, _ in others]
-        payload = {
-            "kind": "choose_stage_member_to_activate",
-            "candidates": candidates,
-            "optional": False,
-            "after_ext_key": "live_start_pick_other_stage_member_pink1__resolve",
-            "source_cn": src,
-            "label": "【園田海未】桃ハート+1を与えるメンバーを選んでください（このメンバー以外）",
-        }
-        try:
-            getattr(gs, "pending").append(payload)
-            gs.log.append(f"[PENDING] 園田海未 bp4-013: choose other member for +pink from {candidates}")
-        except Exception:
-            pass
+        _queue_choose_stage_member(
+            gs,
+            candidates=[pos for pos, _ in others],
+            after_ext_key="live_start_pick_other_stage_member_pink1__resolve",
+            source_cn=src,
+            label="【園田海未】桃ハート+1を与えるメンバーを選んでください（このメンバー以外）",
+            log_line=f"[PENDING] 園田海未 bp4-013: choose other member for +pink from {[pos for pos, _ in others]}",
+        )
         return True
 
     if ext_key == "live_start_pick_other_stage_member_pink1__resolve":
         chosen_pos = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_pos") or "").upper()
-        st = getattr(gs, "stage", None)
-        slot = (st or {}).get(chosen_pos) if isinstance(st, dict) else None
+        slot = _stage_slot_at(gs, chosen_pos)
         if slot is not None:
-            _add_temp_hearts(eng, slot, {"pink": 1})
+            _apply_temp_bonus(eng, slot, hearts={"pink": 1})
             try:
                 gs.log.append(f"[AUTO_EXT] +pink -> {chosen_pos} (園田海未 bp4-013 resolve)")
             except Exception:
@@ -204,11 +380,10 @@ def try_apply_live_start_ext(
 
     # ------------------------------------------------------------------
     if ext_key == "live_start_center_mus_blade1":
-        st = getattr(gs, "stage", None)
-        center_slot = (st or {}).get("C") if isinstance(st, dict) else None
+        center_slot = _stage_slot_at(gs, "C")
         if center_slot is not None and bool(getattr(center_slot, "cardnumber", None)):
             if _card_group(center_slot, cards_db) == "μ's":
-                _add_temp_blade(eng, center_slot, 1)
+                _apply_temp_bonus(eng, center_slot, blade=1)
                 try:
                     gs.log.append("[AUTO_EXT] center μ's -> +1blade (小泉花陽 bp4-017)")
                 except Exception:
@@ -225,22 +400,6 @@ def try_apply_live_start_ext(
                 pass
         return True
 
-        options = [p for p in ("L", "C", "R") if p != chosen_pos] + ["skip"]
-        src = str((ctx or {}).get("source_cn") or "")
-        payload = {
-            "kind": "position_change",
-            "src_pos": chosen_pos,
-            "optional": True,
-            "options": options,
-            "source_cn": src,
-        }
-        try:
-            getattr(gs, "pending").append(payload)
-            gs.log.append(f"[PENDING] position_change src={chosen_pos} (Love wing bell)")
-        except Exception:
-            pass
-        return True
-
     # ------------------------------------------------------------------
     # Prompt 37: PL!-bp4-024 小夜啼鳥恋詩 (ライブ開始時)
     # ステージの μ's メンバー1人（選択）に +1ブレード
@@ -249,35 +408,28 @@ def try_apply_live_start_ext(
     # ------------------------------------------------------------------
     if ext_key == "live_start_pick_mus_stage_member_blade1":
         mus_members = _stage_positions_with_group(gs, cards_db, "μ's")
-        src = str((ctx or {}).get("source_cn") or "")
+        src = _ctx_source_cn(ctx)
         if not mus_members:
             try:
                 gs.log.append("[AUTO_EXT] no μ's on stage (小夜啼鳥恋詩)")
             except Exception:
                 pass
             return True
-        candidates = [pos for pos, _ in mus_members]
-        payload = {
-            "kind": "choose_stage_member_to_activate",
-            "candidates": candidates,
-            "optional": False,
-            "after_ext_key": "live_start_pick_mus_stage_member_blade1__resolve",
-            "source_cn": src,
-            "label": "【小夜啼鳥恋詩】ブレード+1を与えるμ'sメンバーを選んでください",
-        }
-        try:
-            getattr(gs, "pending").append(payload)
-            gs.log.append(f"[PENDING] 小夜啼鳥恋詩: choose μ's member for +blade from {candidates}")
-        except Exception:
-            pass
+        _queue_choose_stage_member(
+            gs,
+            candidates=[pos for pos, _ in mus_members],
+            after_ext_key="live_start_pick_mus_stage_member_blade1__resolve",
+            source_cn=src,
+            label="【小夜啼鳥恋詩】ブレード+1を与えるμ'sメンバーを選んでください",
+            log_line=f"[PENDING] 小夜啼鳥恋詩: choose μ's member for +blade from {[pos for pos, _ in mus_members]}",
+        )
         return True
 
     if ext_key == "live_start_pick_mus_stage_member_blade1__resolve":
         chosen_pos = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_pos") or "").upper()
-        st = getattr(gs, "stage", None)
-        slot = (st or {}).get(chosen_pos) if isinstance(st, dict) else None
+        slot = _stage_slot_at(gs, chosen_pos)
         if slot is not None:
-            _add_temp_blade(eng, slot, 1)
+            _apply_temp_bonus(eng, slot, blade=1)
             try:
                 gs.log.append(f"[AUTO_EXT] +1blade -> {chosen_pos} (小夜啼鳥恋詩 resolve)")
             except Exception:
@@ -292,26 +444,25 @@ def try_apply_live_start_ext(
 
     # ------------------------------------------------------------------
     if ext_key == "live_start_other_stage_members_blade1":
-        src_pos = str((ctx or {}).get("src_pos") or (ctx or {}).get("pos") or "").upper()
+        src_pos = _ctx_src_pos(ctx)
         occupied = _stage_positions_all_occupied(gs)
         others = [(pos, slot) for pos, slot in occupied if pos != src_pos]
         if not others:
             try:
-                gs.log.append(f"[AUTO_EXT] no other members on stage (高坂穂乃果 pb1-010)")
+                gs.log.append("[AUTO_EXT] no other members on stage (高坂穂乃果 pb1-010)")
             except Exception:
                 pass
             return True
-        for pos, slot in others:
-            _add_temp_blade(eng, slot, 1)
+        for _, slot in others:
+            _apply_temp_bonus(eng, slot, blade=1)
         try:
-            gs.log.append(f"[AUTO_EXT] +1blade to {[p for p,_ in others]} (高坂穂乃果 pb1-010)")
+            gs.log.append(f"[AUTO_EXT] +1blade to {[p for p, _ in others]} (高坂穂乃果 pb1-010)")
         except Exception:
             pass
         return True
 
     if ext_key == "live_start_discard_member_same_name_green1_blade1":
-        src = str((ctx or {}).get("source_cn") or "")
-        # 捨てたカードを特定
+        src = _ctx_source_cn(ctx)
         discarded_cn = str((ctx or {}).get("discarded_cn") or "").strip()
         if not discarded_cn:
             top = _green_room_top(gs)
@@ -325,7 +476,6 @@ def try_apply_live_start_ext(
                 pass
             return True
 
-        # カードタイプ確認（MEMBER でなければ効果なし）
         discarded_type = _card_type_norm(discarded_cn, cards_db)
         if discarded_type != "MEMBER":
             try:
@@ -334,83 +484,14 @@ def try_apply_live_start_ext(
                 pass
             return True
 
-        # 同名のステージメンバーを探す
-        discarded_name = _card_name(discarded_cn, cards_db)
+        discarded_name = _card_display_name_with_fallback(eng, cards_db, discarded_cn)
         if not discarded_name:
-            try:
-                canon_fn = eng.get("_canon_cardno")
-                get_card_fn = eng.get("_get_card")
-                canon_cn = canon_fn(discarded_cn) if callable(canon_fn) else str(discarded_cn or "")
-                ci_dis = get_card_fn(cards_db, canon_cn) if callable(get_card_fn) else None
-                if ci_dis is not None:
-                    discarded_name = str(
-                        getattr(ci_dis, "cardname", "") or
-                        getattr(ci_dis, "name", "") or
-                        ((ci_dis if isinstance(ci_dis, dict) else {}).get("cardname")) or
-                        ((ci_dis if isinstance(ci_dis, dict) else {}).get("name")) or
-                        ""
-                    )
-            except Exception:
-                pass
-
-        def _same_name_or_card(slot_obj: Any, discarded_cn_val: str, discarded_name_val: str) -> bool:
-            slot_cn = str(getattr(slot_obj, "cardnumber", "") or "")
-            # まず cardnumber 一致を強く見る
-            try:
-                canon_fn = eng.get("_canon_cardno")
-                if callable(canon_fn):
-                    if canon_fn(slot_cn) == canon_fn(discarded_cn_val):
-                        return True
-                elif slot_cn == discarded_cn_val:
-                    return True
-            except Exception:
-                if slot_cn == discarded_cn_val:
-                    return True
-
-            # 次に cardname 一致
-            slot_name = _card_name(slot_obj, cards_db)
-            if discarded_name_val and slot_name and slot_name == discarded_name_val:
-                return True
-
-            # 最後に engine の _get_card でもう一度引き直す
-            try:
-                canon_fn = eng.get("_canon_cardno")
-                get_card_fn = eng.get("_get_card")
-                canon_slot = canon_fn(slot_cn) if callable(canon_fn) else slot_cn
-                ci_slot = get_card_fn(cards_db, canon_slot) if callable(get_card_fn) else None
-                slot_name2 = str(
-                    getattr(ci_slot, "cardname", "") or
-                    getattr(ci_slot, "name", "") or
-                    ((ci_slot if isinstance(ci_slot, dict) else {}).get("cardname")) or
-                    ((ci_slot if isinstance(ci_slot, dict) else {}).get("name")) or
-                    ""
-                )
-                if discarded_name_val and slot_name2 and slot_name2 == discarded_name_val:
-                    return True
-            except Exception:
-                pass
-            return False
-
-        if not discarded_name:
-            # 名前が取れなくても cardnumber 一致だけで通せるようにする
             try:
                 gs.log.append(f"[AUTO_EXT] name fallback by cardnumber for {discarded_cn} (百生吟子)")
             except Exception:
                 pass
 
-        matched = []
-        try:
-            st = getattr(gs, "stage", None)
-            if isinstance(st, dict):
-                for pos in ("L", "C", "R"):
-                    slot = st.get(pos)
-                    if slot is None or not bool(getattr(slot, "cardnumber", None)):
-                        continue
-                    if _same_name_or_card(slot, discarded_cn, discarded_name):
-                        matched.append((pos, slot))
-        except Exception:
-            pass
-
+        matched = _matching_stage_members_for_discarded(eng, gs, cards_db, discarded_cn, discarded_name)
         if not matched:
             try:
                 gs.log.append(f"[AUTO_EXT] no stage member named '{discarded_name}', no effect (百生吟子)")
@@ -419,40 +500,30 @@ def try_apply_live_start_ext(
             return True
 
         if len(matched) == 1:
-            _, slot = matched[0]
-            _add_temp_hearts(eng, slot, {"green": 1})
-            _add_temp_blade(eng, slot, 1)
+            pos, slot = matched[0]
+            _apply_temp_bonus(eng, slot, blade=1, hearts={"green": 1})
             try:
-                gs.log.append(f"[AUTO_EXT] discarded MEMBER '{discarded_name}' -> +green+blade to {matched[0][0]} (百生吟子)")
+                gs.log.append(f"[AUTO_EXT] discarded MEMBER '{discarded_name}' -> +green+blade to {pos} (百生吟子)")
             except Exception:
                 pass
             return True
 
-        # 同名が複数いる場合は選択（通常は起きないが安全のため）
-        candidates = [pos for pos, _ in matched]
-        payload = {
-            "kind": "choose_stage_member_to_activate",
-            "candidates": candidates,
-            "optional": False,
-            "after_ext_key": "live_start_discard_member_same_name_green1_blade1__resolve",
-            "source_cn": src,
-            "discarded_name": discarded_name,
-            "label": f"【百生吟子】{discarded_name}と同名のメンバーを選んでください",
-        }
-        try:
-            getattr(gs, "pending").append(payload)
-            gs.log.append(f"[PENDING] 百生吟子: choose same-name member from {candidates}")
-        except Exception:
-            pass
+        _queue_choose_stage_member(
+            gs,
+            candidates=[pos for pos, _ in matched],
+            after_ext_key="live_start_discard_member_same_name_green1_blade1__resolve",
+            source_cn=src,
+            label=f"【百生吟子】{discarded_name}と同名のメンバーを選んでください",
+            extra_payload={"discarded_name": discarded_name},
+            log_line=f"[PENDING] 百生吟子: choose same-name member from {[pos for pos, _ in matched]}",
+        )
         return True
 
     if ext_key == "live_start_discard_member_same_name_green1_blade1__resolve":
-        chosen_pos = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_pos") or "").upper()
-        st = getattr(gs, "stage", None)
-        slot = (st or {}).get(chosen_pos) if isinstance(st, dict) else None
+        chosen_pos = _ctx_choice_pos(ctx)
+        slot = _stage_slot_at(gs, chosen_pos)
         if slot is not None:
-            _add_temp_hearts(eng, slot, {"green": 1})
-            _add_temp_blade(eng, slot, 1)
+            _apply_temp_bonus(eng, slot, blade=1, hearts={"green": 1})
             try:
                 gs.log.append(f"[AUTO_EXT] +green+blade -> {chosen_pos} (百生吟子 resolve)")
             except Exception:
@@ -470,27 +541,22 @@ def try_apply_live_start_ext(
 
     # ------------------------------------------------------------------
     if ext_key == "live_start_other_member_exists_choose_heart":
-        src_pos = str((ctx or {}).get("src_pos") or (ctx or {}).get("pos") or "").upper()
-        src = str((ctx or {}).get("source_cn") or "")
+        src_pos = _ctx_src_pos(ctx)
+        src = _ctx_source_cn(ctx)
         if not _stage_has_any_other_member(gs, exclude_pos=src_pos):
             try:
                 gs.log.append("[AUTO_EXT] no other member on stage, no effect (藤島慈)")
             except Exception:
                 pass
             return True
-        payload = {
-            "kind": "choose_heart_color",
-            "pos": src_pos,
-            "n": 1,
-            "text": f"{src}: 好きなハートの色を1つ指定する → ライブ終了時まで+1",
-            "options": ["桃", "赤", "黄", "緑", "青", "紫"],
-            "source_cn": src,
-        }
-        try:
-            getattr(gs, "pending").append(payload)
-            gs.log.append("[PENDING] 藤島慈: choose heart color (self)")
-        except Exception:
-            pass
+        _queue_choose_heart_color(
+            gs,
+            pos=src_pos,
+            source_cn=src,
+            options=["桃", "赤", "黄", "緑", "青", "紫"],
+            text=f"{src}: 好きなハートの色を1つ指定する → ライブ終了時まで+1",
+            log_line="[PENDING] 藤島慈: choose heart color (self)",
+        )
         return True
 
     # ------------------------------------------------------------------
@@ -506,8 +572,8 @@ def try_apply_live_start_ext(
     # そうした場合、そのメンバーとこのメンバーはそれぞれ緑+1（ライブ終了時まで）
     # ------------------------------------------------------------------
     if ext_key == "live_start_activate_other_wait_member_both_green1":
-        src_pos = str((ctx or {}).get("src_pos") or (ctx or {}).get("pos") or "").upper()
-        src = str((ctx or {}).get("source_cn") or "")
+        src_pos = _ctx_src_pos(ctx)
+        src = _ctx_source_cn(ctx)
         st = getattr(gs, "stage", None)
         if not isinstance(st, dict):
             return True
@@ -535,77 +601,30 @@ def try_apply_live_start_ext(
             return True
         if len(cands) == 1:
             chosen = cands[0]
-            src_slot = st.get(src_pos)
-            dst_slot = st.get(chosen)
-            if dst_slot is not None:
-                dst_slot.active = True
-            if src_slot is not None:
-                _add_temp_hearts(eng, src_slot, {"green": 1})
-            if dst_slot is not None:
-                _add_temp_hearts(eng, dst_slot, {"green": 1})
+            _apply_activate_other_wait_member_both_green1(eng, gs, src_pos=src_pos, chosen_pos=chosen)
             try:
                 gs.log.append(f"[AUTO_EXT] Emma bp3-008: {chosen} ACTIVE; {src_pos} and {chosen} gain green +1")
             except Exception:
                 pass
             return True
-        payload = {
-            "kind": "choose_stage_member_to_activate",
-            "candidates": list(cands),
-            "optional": False,
-            "after_ext_key": "live_start_activate_other_wait_member_both_green1__resolve",
-            "source_cn": src,
-            "ctx": {"src_pos": src_pos, "source_cn": src},
-            "label": "【エマ・ヴェルデ】アクティブにするメンバーを選んでください",
-            "text": "【エマ・ヴェルデ】アクティブにするメンバーをクリックしてください",
-        }
-        try:
-            getattr(gs, "pending").append(payload)
-            gs.log.append(f"[PENDING] Emma bp3-008: choose WAIT member to activate from {cands}")
-        except Exception:
-            pass
+        _queue_other_wait_member_choice(
+            gs,
+            candidates=list(cands),
+            source_cn=src,
+            src_pos=src_pos,
+            log_line=f"[PENDING] Emma bp3-008: choose WAIT member to activate from {cands}",
+        )
         return True
 
     if ext_key == "live_start_activate_other_wait_member_both_green1__resolve":
         src_pos = str((ctx or {}).get("src_pos") or "").upper()
-        chosen = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_pos") or "").upper()
-        st = getattr(gs, "stage", None)
-        if not isinstance(st, dict):
-            return True
-        src_slot = st.get(src_pos)
-        dst_slot = st.get(chosen)
-        if dst_slot is None:
-            try:
-                gs.log.append(f"[ERR] Emma bp3-008 resolve: empty target {chosen}")
-            except Exception:
-                pass
-            return True
-        dst_slot.active = True
-        if src_slot is not None:
-            _add_temp_hearts(eng, src_slot, {"green": 1})
-        _add_temp_hearts(eng, dst_slot, {"green": 1})
+        chosen = _ctx_choice_pos(ctx)
+        _apply_activate_other_wait_member_both_green1(eng, gs, src_pos=src_pos, chosen_pos=chosen)
         try:
             gs.log.append(f"[AUTO_EXT] Emma bp3-008 resolve: {chosen} ACTIVE; {src_pos} and {chosen} gain green +1")
         except Exception:
             pass
         return True
-        src_slot = st.get(src_pos)
-        dst_slot = st.get(chosen)
-        if dst_slot is None:
-            try:
-                gs.log.append(f"[ERR] Emma bp3-008 resolve: empty target {chosen}")
-            except Exception:
-                pass
-            return True
-        dst_slot.active = True
-        if src_slot is not None:
-            _add_temp_hearts(eng, src_slot, {"green": 1})
-        _add_temp_hearts(eng, dst_slot, {"green": 1})
-        try:
-            gs.log.append(f"[AUTO_EXT] Emma bp3-008 resolve: {chosen} ACTIVE; {src_pos} and {chosen} gain green +1")
-        except Exception:
-            pass
-        return True
-
 
     # ------------------------------------------------------------------
     # Generalized from engine special-case: PL!N-bp1-003 桜坂しずく (ライブ開始時)
@@ -613,22 +632,16 @@ def try_apply_live_start_ext(
     # 好きなハート色を1つ指定する。ライブ終了時まで、そのハートを1つ得る。
     # ------------------------------------------------------------------
     if ext_key == "live_start_choose_any_heart":
-        src_pos = str((ctx or {}).get("src_pos") or (ctx or {}).get("pos") or "").upper()
-        src = str((ctx or {}).get("source_cn") or "")
-        payload = {
-            "kind": "choose_heart_color",
-            "pos": src_pos,
-            "n": 1,
-            "text": f"{src}: 好きなハートの色を1つ指定する → ライブ終了時まで+1",
-            "options": ["桃", "赤", "黄", "緑", "青", "紫"],
-            "source_cn": src,
-            "src_pos": src_pos,
-        }
-        try:
-            getattr(gs, "pending").append(payload)
-            gs.log.append("[PENDING] 桜坂しずく bp1-003: choose any heart color")
-        except Exception:
-            pass
+        src_pos = _ctx_src_pos(ctx)
+        src = _ctx_source_cn(ctx)
+        _queue_choose_heart_color(
+            gs,
+            pos=src_pos,
+            source_cn=src,
+            options=["桃", "赤", "黄", "緑", "青", "紫"],
+            text=f"{src}: 好きなハートの色を1つ指定する → ライブ終了時まで+1",
+            log_line="[PENDING] 桜坂しずく bp1-003: choose any heart color",
+        )
         return True
 
     # ------------------------------------------------------------------
@@ -638,22 +651,16 @@ def try_apply_live_start_ext(
 
     # ------------------------------------------------------------------
     if ext_key == "live_start_choose_pinkYellowPurple_heart":
-        src_pos = str((ctx or {}).get("src_pos") or (ctx or {}).get("pos") or "").upper()
-        src = str((ctx or {}).get("source_cn") or "")
-        payload = {
-            "kind": "choose_heart_color",
-            "pos": src_pos,
-            "n": 1,
-            "text": f"{src}: 桃/黄/紫から1つ選ぶ → ライブ終了時まで+1",
-            "options": ["桃", "黄", "紫"],
-            "source_cn": src,
-            "src_pos": src_pos,
-        }
-        try:
-            getattr(gs, "pending").append(payload)
-            gs.log.append("[PENDING] 南ことり sd1-003: choose pink/yellow/purple heart")
-        except Exception:
-            pass
+        src_pos = _ctx_src_pos(ctx)
+        src = _ctx_source_cn(ctx)
+        _queue_choose_heart_color(
+            gs,
+            pos=src_pos,
+            source_cn=src,
+            options=["桃", "黄", "紫"],
+            text=f"{src}: 桃/黄/紫から1つ選ぶ → ライブ終了時まで+1",
+            log_line="[PENDING] 南ことり sd1-003: choose pink/yellow/purple heart",
+        )
         return True
 
     # ------------------------------------------------------------------
@@ -663,45 +670,14 @@ def try_apply_live_start_ext(
     # ------------------------------------------------------------------
     # ------------------------------------------------------------------
     # Prompt 76: PL!HS-bp2-005 大沢瑠璃乃 (登場)
-
-    # ------------------------------------------------------------------
-    # Prompt 76: PL!HS-bp2-005 大沢瑠璃乃 (登場)
     # cost=手札1枚控え室へ → engine 側 pay_or_skip
     # 他メンバーがいる場合、控え室から みらくらぱーく！ のカードを1枚手札へ
     # 注意: Prompt 77（ライブ開始時+2ブレード）は既存実装。壊さない。
     # ------------------------------------------------------------------
-
-        # センター以外: src_pos が C なら L/R どちらかへ、L/R なら反対側へ
-        if src_pos == "C":
-            options = ["L", "R"]
-        elif src_pos == "L":
-            options = ["R"]
-        elif src_pos == "R":
-            options = ["L"]
-        else:
-            options = ["L", "R"]
-
-        payload = {
-            "kind": "position_change",
-            "src_pos": src_pos,
-            "optional": False,
-            "options": options,
-            "source_cn": src,
-            "text": f"{src}: 自分のステージにブレード5以上の『μ's』メンバーがいないため、センターエリア以外にポジションチェンジする",
-        }
-        try:
-            getattr(gs, "pending").append(payload)
-            gs.log.append(f"[PENDING] 星空凛: force position_change to {options} from {src_pos}")
-        except Exception:
-            pass
-        return True
 
     # ------------------------------------------------------------------
     # Prompt 80: PL!HS-bp2-018 安養寺姫芽 (登場)
     # MAIN 中に [E][E] を任意支払い → green の LIVE を表向きで set_zone に置き、
     # 次の LIVE_SET で手札から置ける上限を 1 減らす。
     # effect_template only; optional energy cost prompt は engine.py 側。
-
-    return False
-
     return False
