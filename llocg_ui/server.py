@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: pending_modal_fixed_text_panel_height_20260423a
+# BUILD_TAG: pending_modal_compact_text_and_reserve_choices_20260423a
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1610,7 +1610,7 @@ HTML = r'''<!doctype html>
   #modalCond.condMet{display:block;background:rgba(30,120,60,.18);color:#b8f3c7;border-color:rgba(90,220,130,.45);}
   #modalCond.condUnmet{display:block;background:rgba(140,40,40,.18);color:#ffbcbc;border-color:rgba(255,110,110,.45);}
   #modalCond.condNeutral{display:block;background:rgba(255,255,255,.06);color:#ddd;border-color:rgba(255,255,255,.18);}
-  #modalCardTextWrap{display:none;margin:2px 0 10px 0;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);overflow:hidden;flex:0 0 168px;min-height:168px;max-height:168px;}
+  #modalCardTextWrap{display:none;margin:2px 0 8px 0;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);overflow:hidden;flex:0 0 88px;min-height:88px;max-height:88px;}
   #modalCardTextWrap.visible{display:flex;flex-direction:column;}
   #modalCardTextTitle{font-size:11px;font-weight:bold;letter-spacing:.04em;color:#bbb;margin-bottom:6px;flex:0 0 auto;}
   #modalCardText{font-size:12px;color:#ddd;line-height:1.55;white-space:pre-wrap;overflow:auto;flex:1 1 auto;min-height:0;}
@@ -1793,6 +1793,34 @@ HTML = r'''<!doctype html>
   let bannerTimer = null;
   let stdPortrait = null;
   let stdLandscape = null;
+
+  function resetModalCardsBox(){
+    elModalCards.style.flex = '';
+    elModalCards.style.minHeight = '';
+    elModalCards.style.maxHeight = '';
+    elModalCards.style.overflowY = '';
+  }
+
+  function reserveModalCardsBox(pxHeight){
+    const h = Math.max(0, Math.ceil(Number(pxHeight || 0)));
+    if(!h){
+      resetModalCardsBox();
+      return;
+    }
+    elModalCards.style.flex = `0 0 ${h}px`;
+    elModalCards.style.minHeight = h + 'px';
+    elModalCards.style.maxHeight = h + 'px';
+    elModalCards.style.overflowY = 'hidden';
+  }
+
+  function reserveModalCardsForElements(...els){
+    let total = 0;
+    els.forEach(el=>{
+      if(!el) return;
+      total += Math.ceil(el.scrollHeight || el.offsetHeight || 0);
+    });
+    if(total > 0) reserveModalCardsBox(total + 6);
+  }
 
   // ── Card detail panel ──
   const elCardDetail  = document.getElementById('cardDetail');
@@ -3141,6 +3169,7 @@ inner.appendChild(card);
       setRichText(elModalText, helperText || '');
       elModalActions.innerHTML = '';
       elModalCards.innerHTML = '';
+      resetModalCardsBox();
     }
 
     const targetCards = useViewer ? elViewerCards : elModalCards;
@@ -3871,6 +3900,7 @@ inner.appendChild(card);
       updateCounter();
       elModalCards.appendChild(counter);
       elModalCards.appendChild(row);
+      reserveModalCardsForElements(counter, row);
       elModalActions.appendChild(doneBtn);
       elMask.style.display = 'block';
       return;
@@ -4130,6 +4160,7 @@ inner.appendChild(card);
     const allowSkip = !!((p && (p.allow_less || p.allow_skip)) || /Skip可/i.test(pendText) || /\bskip\b/i.test(pendText) || (kind && /pick/i.test(kind)));
     elModalActions.innerHTML = '';
     elModalCards.innerHTML = '';
+    resetModalCardsBox();
 
     const opts = (p && (Array.isArray(p.options)?p.options: (Array.isArray(p.candidates)?p.candidates:(Array.isArray(p.cards)?p.cards:(Array.isArray(p.shown)?p.shown:[]))))) || [];
 
@@ -4170,6 +4201,7 @@ inner.appendChild(card);
 
       if(cards.length){
         elModalCards.appendChild(row);
+        reserveModalCardsForElements(row);
       }else{
         const note = document.createElement('div');
         note.style.opacity = '0.85';
@@ -4253,6 +4285,7 @@ inner.appendChild(card);
       });
 
       elModalCards.appendChild(row);
+      reserveModalCardsForElements(row);
       elMask.style.display = 'block';
       return;
     }
@@ -4332,6 +4365,7 @@ inner.appendChild(card);
           row.appendChild(b);
         });
         elModalCards.appendChild(row);
+        reserveModalCardsForElements(row);
         if(stagePosHasSkipPC){
           const bSkip = document.createElement('button');
           bSkip.className = 'miniBtn'; bSkip.textContent = 'スキップ';
@@ -4409,6 +4443,7 @@ inner.appendChild(card);
         row.appendChild(b);
       });
       elModalCards.appendChild(row);
+      reserveModalCardsForElements(row);
       if(allowSkip || stagePosHasSkip){
         const bSkip = document.createElement('button');
         bSkip.className = 'miniBtn'; bSkip.textContent = 'スキップ';
@@ -4458,6 +4493,7 @@ inner.appendChild(card);
         row.appendChild(b);
       });
       elModalCards.appendChild(row);
+      reserveModalCardsForElements(row);
       if(hasSkip){
         const bSkip = document.createElement('button');
         bSkip.className = 'miniBtn'; bSkip.textContent = 'スキップ';
@@ -4524,6 +4560,7 @@ inner.appendChild(card);
       });
 
       elModalCards.appendChild(row);
+      reserveModalCardsForElements(row);
 
       if(allowSkip){
         const bSkip = document.createElement('button');
