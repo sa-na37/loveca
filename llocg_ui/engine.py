@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: require_confirm_for_legacy_green_take_20260421y
+# BUILD_TAG: conditional_live_success_revealed_conditional_wrappers_20260421z
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -4099,6 +4099,64 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             else:
                 gs.log.append(f"[AUTO] LIVE: {src_cn or '?'}[ライブ成功時] applied {eff}")
         return
+    if kind in ('apply_effect_template_if_revealed_live_count_at_least_on_live_success',):
+        eff = str((trig or {}).get('effect', '') or '').strip()
+        src_cn = str((trig or {}).get('source_cn', '') or '').strip()
+        pos = str((trig or {}).get('pos', '') or '').upper()
+        ctx = dict((trig or {}).get('ctx', {}) or {})
+        need = int((trig or {}).get('condition_count', 0) or 0)
+        got = int(_count_yell_revealed_live_cards(gs, cards_db))
+        if got >= need and eff:
+            rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0) + 31)
+            if try_apply_effect_template(gs, rng2, cards_db, eff, ctx):
+                if pos:
+                    gs.log.append(f"[AUTO] {pos}: {src_cn or '?'}[ライブ成功時] applied {eff}")
+                else:
+                    gs.log.append(f"[AUTO] LIVE: {src_cn or '?'}[ライブ成功時] applied {eff}")
+        else:
+            gs.log.append(f"[SKIP] LIVE: {src_cn}[ライブ成功時] unresolved (revealed live cards: {got} < {need})")
+        return
+    if kind in ('add_live_success_score_bonus_if_revealed_group_member_count_at_least',):
+        cn_live = str((trig or {}).get('source_cn', '') or '')
+        group_name = str((trig or {}).get('condition_group_name', '') or '')
+        need = int((trig or {}).get('condition_count', 0) or 0)
+        bonus = int((trig or {}).get('bonus', 0) or 0)
+        got = int(_count_yell_revealed_group_members(gs, cards_db, group_name))
+        if got >= need:
+            _add_live_success_score_bonus(gs, cn_live, bonus, detail=f"revealed 『{group_name}』 members: {got}")
+        else:
+            gs.log.append(f"[SKIP] LIVE: {cn_live}[ライブ成功時] unresolved (revealed 『{group_name}』 members: {got} < {need})")
+        return
+    if kind in ('put_wait_energy_if_revealed_group_card_count_at_least',):
+        src_cn = str((trig or {}).get('source_cn', '') or '').strip()
+        group_name = str((trig or {}).get('condition_group_name', '') or '')
+        need = int((trig or {}).get('condition_count', 0) or 0)
+        count = int((trig or {}).get('count', 0) or 0)
+        got = int(_count_yell_revealed_group_cards(gs, cards_db, group_name))
+        if got >= need and count > 0:
+            _put_energy_from_deck(gs, count, to_wait=True)
+            gs.log.append(f"[AUTO] LIVE: {src_cn}[ライブ成功時]: revealed 『{group_name}』 cards: {got} -> wait energy +{count}")
+        else:
+            gs.log.append(f"[SKIP] LIVE: {src_cn}[ライブ成功時] unresolved (revealed 『{group_name}』 cards: {got} < {need})")
+        return
+    if kind in ('apply_effect_template_if_revealed_distinct_named_group_member_count_at_least_on_live_success',):
+        eff = str((trig or {}).get('effect', '') or '').strip()
+        src_cn = str((trig or {}).get('source_cn', '') or '').strip()
+        pos = str((trig or {}).get('pos', '') or '').upper()
+        ctx = dict((trig or {}).get('ctx', {}) or {})
+        group_name = str((trig or {}).get('condition_group_name', '') or '')
+        need = int((trig or {}).get('condition_count', 0) or 0)
+        got = int(_count_yell_revealed_distinct_named_group_members(gs, cards_db, group_name))
+        if got >= need and eff:
+            rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0) + 37)
+            if try_apply_effect_template(gs, rng2, cards_db, eff, ctx):
+                if pos:
+                    gs.log.append(f"[AUTO] {pos}: {src_cn or '?'}[ライブ成功時] applied {eff}")
+                else:
+                    gs.log.append(f"[AUTO] LIVE: {src_cn or '?'}[ライブ成功時] applied {eff}")
+        else:
+            gs.log.append(f"[SKIP] LIVE: {src_cn}[ライブ成功時] unresolved (revealed distinct 『{group_name}』 members: {got} < {need})")
+        return
     if kind in ('add_live_success_score_bonus_if_revealed_card_tag_count_at_least',):
         cn_live = str((trig or {}).get('source_cn', '') or '')
         tag = str((trig or {}).get('condition_tag', '') or '')
@@ -5243,6 +5301,43 @@ def _count_yell_revealed_cards_with_tag(gs: GameState, cards_db: Dict[str, CardI
         if tag in txt:
             n += 1
     return int(n)
+def _count_yell_revealed_live_cards(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
+    n = 0
+    for cn in list(getattr(gs, '_yell_revealed_this_live', []) or []):
+        ci = _get_card(cards_db, cn)
+        if ci and _is_live_ci(ci):
+            n += 1
+    return int(n)
+
+def _count_yell_revealed_group_cards(gs: GameState, cards_db: Dict[str, CardInfo], group_name: str) -> int:
+    group_name = str(group_name or '').strip()
+    n = 0
+    for cn in list(getattr(gs, '_yell_revealed_this_live', []) or []):
+        ci = _get_card(cards_db, cn)
+        if ci and _ci_matches_group_or_unit(ci, group_name):
+            n += 1
+    return int(n)
+
+def _count_yell_revealed_group_members(gs: GameState, cards_db: Dict[str, CardInfo], group_name: str) -> int:
+    group_name = str(group_name or '').strip()
+    n = 0
+    for cn in list(getattr(gs, '_yell_revealed_this_live', []) or []):
+        ci = _get_card(cards_db, cn)
+        if ci and _is_member_ci(ci) and _ci_matches_group_or_unit(ci, group_name):
+            n += 1
+    return int(n)
+
+def _count_yell_revealed_distinct_named_group_members(gs: GameState, cards_db: Dict[str, CardInfo], group_name: str) -> int:
+    group_name = str(group_name or '').strip()
+    names = set()
+    for cn in list(getattr(gs, '_yell_revealed_this_live', []) or []):
+        ci = _get_card(cards_db, cn)
+        if not ci or not _is_member_ci(ci) or not _ci_matches_group_or_unit(ci, group_name):
+            continue
+        nm = str(getattr(ci, 'cardname', '') or '').strip()
+        if nm:
+            names.add(nm)
+    return int(len(names))
 def _add_last_attempt_live_score_bonus(gs: GameState, cn_live, bonus: int) -> None:
     canon = _canon_cardno(cn_live)
     lives = list(getattr(gs, 'last_attempt_lives', []) or [])
