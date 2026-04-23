@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_registry_sync_20260413a
+# BUILD_TAG: remove_unreachable_registry_matcher_tail_20260423a
 from __future__ import annotations
 
 """llocg_ui.effects.registry
@@ -126,6 +126,21 @@ EXTRA_EFFECT_RULES = [
         "id": "live_start_discard1_choose_pink_yellow_purple_heart_v7h",
         "effect_template": "<(桃)>か<(黄)>か<(紫)>のうち、1つを選ぶ。ライブ終了時まで、選んだハートを1つ得る。",
         "ext_key": "live_start_choose_pinkYellowPurple_heart",
+    },
+    # Prompt: PL!N-bp1-003 桜坂しずく (ライブ開始時)
+    # cost=<(E)> 支払いは engine 側 pay_or_skip
+    # 好きなハート色1つを選ぶ（6色）
+    {
+        "id": "live_start_pay1_choose_any_heart",
+        "effect_template": "好きなハートの色を1つ指定する。ライブ終了時まで、そのハートを1つ得る。",
+        "ext_key": "live_start_choose_any_heart",
+    },
+
+    # Generalized from engine special-case: PL!N-bp3-008 エマ・ヴェルデ (ライブ開始時)
+    {
+        "id": "live_start_discard2_activate_other_wait_member_both_green1",
+        "effect_template": "自分のステージにいるこのメンバー以外のウェイト状態のメンバー1人をアクティブにする。そうした場合、ライブ終了時まで、これによりアクティブにしたメンバーと、このメンバーは、それぞれ<(緑)>を得る。",
+        "ext_key": "live_start_activate_other_wait_member_both_green1",
     },
     {
         "id": "body_pick_live_req_yellow_ge3_from_green",
@@ -376,50 +391,6 @@ def try_match_effect_template_ext(
                 return ({"id": ext_key, "op": "__ext__", "ext_key": ext_key}, {})
         except Exception:
             pass
-    return None
-
-    s_norm = _norm_ws(s)
-
-    for r in EXTRA_EFFECT_RULES:
-        tpl = str(r.get("effect_template", "") or "").strip()
-        if not tpl:
-            continue
-        if s == tpl:
-            return ({"id": r.get("id"), "op": "__ext__", "ext_key": r.get("ext_key")}, {})
-        if s_norm == _norm_ws(tpl):
-            return ({"id": r.get("id"), "op": "__ext__", "ext_key": r.get("ext_key")}, {})
-
-    fuzzy_rules = [
-        ("enter_pick_mus_member_from_green",
-         ["控え室から『μ's』のメンバーカードを1枚手札に加える。"]),
-        ("live_start_pick_mus_live_from_green",
-         ["控え室から『μ's』のライブカードを1枚手札に加える。"]),
-        ("live_start_choose_pinkYellowPurple_heart",
-         ["<(桃)>", "<(黄)>", "<(紫)>", "選んだハートを1つ得る。"]),
-        ("live_start_no_mus_blade5_force_not_center",
-         ["<(ブレード)>", "5つ以上持つ『μ's』のメンバーがいない場合", "センターエリア以外にポジションチェンジする。"]),
-        ("body_pick_live_req_yellow_ge3_from_green",
-         ["必要ハートに<(黄)>", "3以上含むライブカード", "1枚手札に加える。"]),
-        ("body_pick_live_req_pink_ge3_from_green",
-         ["必要ハートに<(桃)>", "3以上含むライブカード", "1枚手札に加える。"]),
-    ]
-    for ext_key, needles in fuzzy_rules:
-        if all(_norm_ws(nd) in s_norm for nd in needles):
-            return ({"id": ext_key, "op": "__ext__", "ext_key": ext_key}, {})
-    return None
-
-    s_norm = _norm_ws(s)
-
-    for r in EXTRA_EFFECT_RULES:
-        tpl = str(r.get("effect_template", "") or "").strip()
-        if not tpl:
-            continue
-        # 1. exact match (highest priority, no change to existing behaviour)
-        if s == tpl:
-            return ({"id": r.get("id"), "op": "__ext__", "ext_key": r.get("ext_key")}, {})
-        # 2. whitespace-normalised fallback
-        if s_norm == _norm_ws(tpl):
-            return ({"id": r.get("id"), "op": "__ext__", "ext_key": r.get("ext_key")}, {})
     return None
 
 
