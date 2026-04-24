@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_apply_finalize_live_start_special_20260413l
+# BUILD_TAG: engine_effect_apply_pass_gd_to_green_search_20260424c
 from __future__ import annotations
 
 """llocg_ui.effects.apply
@@ -42,7 +42,7 @@ def try_apply_effect_by_rule_ext(
 
     ext_key = str(rule.get("ext_key") or "").strip()
 
-    if try_apply_green_search_ext(eng, gs, rng, cards_db, rule, ctx):
+    if try_apply_green_search_ext(eng, gs, rng, cards_db, rule, gd, ctx):
         return True
 
     if try_apply_topdeck_ext(eng, gs, rng, cards_db, rule, gd, ctx, ext_key):

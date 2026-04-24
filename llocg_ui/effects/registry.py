@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: registry_green_pick_filtered_genericize_20260424a
+# BUILD_TAG: registry_green_pick_filtered_genericize_fix_fragment_20260424b
 from __future__ import annotations
 
 """llocg_ui.effects.registry
@@ -449,8 +449,49 @@ def try_match_effect_template_ext(
         ("live_start_no_mus_blade5_force_not_center",
          lambda t: ("を5つ以上持つ『μ's』のメンバーがいない場合" in t and "センターエリア以外にポジションチェンジする。" in t)),
         # Prompt 16: DB keeps the whole conditional sentence in one clause
-        ("live_start_pick_mus_live_from_green",
+        (("green_pick_filtered_to_hand", {
+            "source_name": "園田海未 bp3-004",
+            "want_kind": "LIVE",
+            "want_group": "μ's",
+            "require_success_zone": "1",
+            "pending_label": "【園田海未】控え室からμ'sのライブカードを1枚選んでください",
+            "no_effect_log": "[AUTO_EXT] success_zone empty, no effect (園田海未 bp3-004)",
+            "no_candidates_log": "[AUTO_EXT] no μ's LIVE in green_room (園田海未 bp3-004)"
+        }),
          lambda t: ("成功カード置き場にカードがある場合" in t and "『μ's』のライブカードを1枚手札に加える。" in t)),
+
+        # Prompt 73: score<=3 / 蓮ノ空 live pick may arrive as full clause text
+        (("green_pick_filtered_to_hand", {
+            "source_name": "日野下花帆",
+            "want_kind": "LIVE",
+            "want_group": "蓮ノ空",
+            "score_max": "3",
+            "pending_label": "【日野下花帆】控え室からスコア3以下の蓮ノ空ライブカードを1枚選んでください",
+            "no_candidates_log": "[AUTO_EXT] no 蓮ノ空 LIVE score<=3 in green_room (日野下花帆)"
+        }),
+         lambda t: ("スコア3以下" in t and "『蓮ノ空』のライブカードを1枚手札に加える。" in t)),
+        # Prompt 76: other-member-gated Mirakura pick may arrive as full clause text
+        (("green_pick_filtered_to_hand", {
+            "source_name": "大沢瑠璃乃 bp2-005",
+            "want_group": "みらくらぱーく！",
+            "require_other_member": "1",
+            "pending_label": "【大沢瑠璃乃】控え室からみらくらぱーく！のカードを1枚選んでください",
+            "no_effect_log": "[AUTO_EXT] no other member on stage (大沢瑠璃乃 bp2-005 enter)",
+            "no_candidates_log": "[AUTO_EXT] no みらくらぱーく！ card in green_room (大沢瑠璃乃 bp2-005 enter)"
+        }),
+         lambda t: ("ステージにほかのメンバーがいる場合" in t and "『みらくらぱーく！』のカードを1枚手札に加える。" in t)),
+        # Prompt 56: BiBi diff-name gated member pick may arrive as full clause text
+        (("green_pick_filtered_to_hand", {
+            "source_name": "Cutie Panther",
+            "want_kind": "MEMBER",
+            "want_group": "BiBi",
+            "require_unit_diff_names_label": "BiBi",
+            "require_unit_diff_names_ge": "2",
+            "pending_label": "【Cutie Panther】控え室からBiBiのメンバーカードを1枚選んでください",
+            "no_effect_log": "[AUTO_EXT] BiBi diff_names<2, no effect (Cutie Panther)",
+            "no_candidates_log": "[AUTO_EXT] no BiBi MEMBER in green_room (Cutie Panther)"
+        }),
+         lambda t: ("名前の異なる『BiBi』のメンバーが2人以上いる場合" in t and "『BiBi』のメンバーカードを1枚手札に加える。" in t)),
         # Prompt 14: exact should normally hit, but keep a safe fallback
         ("enter_pick_mus_member_from_green",
          lambda t: ("『μ's』のメンバーカードを1枚手札に加える。" in t and "控え室から" in t)),

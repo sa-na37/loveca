@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: green_search_filtered_pick_genericize_20260424a
+# BUILD_TAG: green_search_filtered_pick_genericize_fix_gd_conditions_20260424c
 from __future__ import annotations
 
 """llocg_ui.effects.green_search
@@ -37,19 +37,24 @@ def _resolve_green_choice_to_hand(gs: Any, chosen_cn: str, src_label: str) -> bo
 
 
 
-def _rule_gd(rule: Dict[str, Any]) -> Dict[str, Any]:
-    gd = (rule or {}).get('gd')
-    return dict(gd) if isinstance(gd, dict) else {}
+def _rule_gd(rule: Dict[str, Any], gd: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    merged: Dict[str, Any] = {}
+    base_gd = (rule or {}).get('gd')
+    if isinstance(base_gd, dict):
+        merged.update(base_gd)
+    if isinstance(gd, dict):
+        merged.update(gd)
+    return merged
 
 
-def _gd_bool(rule: Dict[str, Any], key: str, default: bool = False) -> bool:
-    raw = str(_rule_gd(rule).get(key) or ('1' if default else '0')).strip().lower()
+def _gd_bool(rule: Dict[str, Any], key: str, default: bool = False, gd: Dict[str, Any] | None = None) -> bool:
+    raw = str(_rule_gd(rule, gd).get(key) or ('1' if default else '0')).strip().lower()
     return raw in ('1', 'true', 'yes', 'on')
 
 
-def _gd_int(rule: Dict[str, Any], key: str, default: int = 0) -> int:
+def _gd_int(rule: Dict[str, Any], key: str, default: int = 0, gd: Dict[str, Any] | None = None) -> int:
     try:
-        return int(str(_rule_gd(rule).get(key) or default).strip())
+        return int(str(_rule_gd(rule, gd).get(key) or default).strip())
     except Exception:
         return int(default)
 
@@ -79,13 +84,37 @@ def _green_room_filtered_cards(
     return out
 
 
+def _stage_has_any_other_member_ctx(gs: Any, source_cn: str = '', exclude_pos: str = '') -> bool:
+    try:
+        st = getattr(gs, 'stage', None)
+        if not isinstance(st, dict):
+            return False
+        skipped_self = False
+        source_cn = str(source_cn or '').strip()
+        for pos in ('L', 'C', 'R'):
+            slot = st.get(pos)
+            if slot is None or not bool(getattr(slot, 'cardnumber', None)):
+                continue
+            if exclude_pos and pos == exclude_pos:
+                continue
+            cn = str(getattr(slot, 'cardnumber', None) or '').strip()
+            if source_cn and not exclude_pos and not skipped_self and cn == source_cn:
+                skipped_self = True
+                continue
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def _enqueue_green_pick_filtered_to_hand(
     gs: Any,
     cards_db: Dict[str, Any],
     rule: Dict[str, Any],
+    gd: Dict[str, Any],
     ctx: Dict[str, Any],
 ) -> bool:
-    gd = _rule_gd(rule)
+    gd = _rule_gd(rule, gd)
     src = str((ctx or {}).get('source_cn') or '')
     src_pos = str((ctx or {}).get('src_pos') or (ctx or {}).get('pos') or '').upper()
     source_name = str(gd.get('source_name') or src or 'カード')
@@ -97,14 +126,14 @@ def _enqueue_green_pick_filtered_to_hand(
     except Exception:
         score_max = None
 
-    if _gd_bool(rule, 'require_success_zone', False) and not _success_zone_cards(gs):
+    if _gd_bool(rule, 'require_success_zone', False, gd) and not _success_zone_cards(gs):
         try:
             gs.log.append(str(gd.get('no_effect_log') or f'[AUTO_EXT] success_zone empty, no effect ({source_name})'))
         except Exception:
             pass
         return True
 
-    if _gd_bool(rule, 'require_other_member', False) and not _stage_has_any_other_member(gs, exclude_pos=src_pos):
+    if _gd_bool(rule, 'require_other_member', False, gd) and not _stage_has_any_other_member_ctx(gs, source_cn=src, exclude_pos=src_pos):
         try:
             gs.log.append(str(gd.get('no_effect_log') or f'[AUTO_EXT] no other member on stage ({source_name})'))
         except Exception:
@@ -112,7 +141,7 @@ def _enqueue_green_pick_filtered_to_hand(
         return True
 
     diff_unit = str(gd.get('require_unit_diff_names_label') or '').strip()
-    diff_n = _gd_int(rule, 'require_unit_diff_names_ge', 0)
+    diff_n = _gd_int(rule, 'require_unit_diff_names_ge', 0, gd)
     if diff_unit and diff_n > 0:
         diff_count = _stage_unit_count_diff_names(gs, cards_db, diff_unit)
         if diff_count < diff_n:
@@ -169,6 +198,7 @@ def try_apply_green_search_ext(
     rng: Any,
     cards_db: Dict[str, Any],
     rule: Dict[str, Any],
+    gd: Dict[str, Any] | None = None,
     ctx: Dict[str, Any] | None = None,
 ) -> bool:
     ctx = ctx or {}
@@ -204,7 +234,7 @@ def try_apply_green_search_ext(
         return True
 
     if ext_key == "green_pick_filtered_to_hand":
-        return _enqueue_green_pick_filtered_to_hand(gs, cards_db, rule, ctx)
+        return _enqueue_green_pick_filtered_to_hand(gs, cards_db, rule, gd or {}, ctx)
 
 
     if ext_key == "green_pick_filtered_to_hand__resolve":
