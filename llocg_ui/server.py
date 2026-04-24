@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: pending_modal_compact_text_and_reserve_choices_20260423a
+# BUILD_TAG: pending_modal_show_trigger_effect_text_20260424a
 from __future__ import annotations
 
 """llocg_ui.server
@@ -2016,8 +2016,10 @@ HTML = r'''<!doctype html>
     const candidates = [
       p && p.detail_text,
       p && p.current_text,
+      p && p.effect,
       p && p.text,
       p && p.prompt && p.prompt.text,
+      p && p.prompt && p.prompt.effect,
       p && p.message,
       p && p.description,
       p && p.after_effect_template,

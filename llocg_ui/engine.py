@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: choose_heart_prompt_genericize_20260423a
+# BUILD_TAG: attach_detail_text_to_live_start_triggers_20260424a
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -3061,6 +3061,7 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                                     'source_cn': ci.cardnumber,
                                     'label': f'{pos}: {ci.cardnumber} ライブ開始時',
                                     'pos': pos.upper(),
+                                    'detail_text': eff,
                                 })
                             else:
                                 triggers.append({
@@ -3069,6 +3070,7 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                                     'label': f'{pos}: {ci.cardnumber} ライブ開始時',
                                     'pos': pos.upper(),
                                     'effect': eff,
+                                    'detail_text': eff,
                                 })
                         continue
                 # self-wait コスト（Eコストあり扱いで来た場合のフォールバック・通常は上のブロックで処理済み）
@@ -3172,6 +3174,10 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                         gs, cards_db, build_text, src_live, f'{src_live} ライブ開始時', {'source_cn': src_live, 'set_idx': _set_idx}
                     )
                     if trig:
+                        try:
+                            trig.setdefault('detail_text', build_text)
+                        except Exception:
+                            pass
                         triggers.append(trig)
                         continue
                     # Only generic no-cost LIVE-card hooks here.
@@ -3207,6 +3213,7 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                             'source_cn': src_live,
                             'label': f'{src_live} ライブ開始時',
                             'effect': eff,
+                            'detail_text': eff,
                         })
     except Exception:
         pass
