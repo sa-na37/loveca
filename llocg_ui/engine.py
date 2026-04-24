@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: confirm_effect_ack_only_20260424a
+# BUILD_TAG: auto_order_attach_enter_detail_and_ack_20260424b
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -3458,7 +3458,8 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
                 if n <= 0 and ("手札を1枚控え室に置いてもよい" in cost):
                     n = 1
                 if n > 0:
-                    ctx = {'pos': pos.upper(), 'source_cn': canon}
+                    detail_text = _build_clause_prompt_text(cost, eff)
+                    ctx = {'pos': pos.upper(), 'source_cn': canon, 'detail_text': detail_text, 'effect_text': eff}
                     gs.pending.append({
                         'kind': 'pay_or_skip',
                         'text': _pretty_optional_effect_prompt_text('登場', canon, cost, eff),
@@ -3473,7 +3474,8 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
                     return
                 e_cost = _parse_energy_cost(cost)
                 if e_cost > 0 and _match_effect_template(eff):
-                    ctx = {'pos': pos.upper(), 'source_cn': canon}
+                    detail_text = _build_clause_prompt_text(cost, eff)
+                    ctx = {'pos': pos.upper(), 'source_cn': canon, 'detail_text': detail_text, 'effect_text': eff}
                     gs.pending.append({
                         'kind': 'pay_or_skip',
                         'text': _pretty_optional_effect_prompt_text('登場', canon, cost, eff),
@@ -3487,7 +3489,8 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
                     gs.log.append(f"[PENDING] {canon}[登場]: pay/skip -> energy {e_cost} then {eff}")
                     return
                 if _cost_requires_self_wait(cost) and not _cost_requires_self_to_green(cost):
-                    ctx = {'pos': pos.upper(), 'source_cn': canon}
+                    detail_text = _build_clause_prompt_text(cost, eff)
+                    ctx = {'pos': pos.upper(), 'source_cn': canon, 'detail_text': detail_text, 'effect_text': eff}
                     gs.pending.append({
                         'kind': 'pay_or_skip',
                         'text': _pretty_optional_effect_prompt_text('登場', canon, cost, eff),
@@ -3506,7 +3509,8 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
             # costless-only for now
             if _parse_energy_cost(cost) > 0 or _cost_requires_self_to_green(cost):
                 continue
-            ctx = {'pos': pos.upper(), 'source_cn': canon}
+            detail_text = _build_clause_prompt_text(cost, eff)
+            ctx = {'pos': pos.upper(), 'source_cn': canon, 'detail_text': detail_text, 'effect_text': eff}
             if try_apply_effect_template(gs, rng, cards_db, eff, ctx):
                 gs.log.append(f"[AUTO] {canon}[登場]: applied {eff}")
                 if gs.pending:
@@ -3683,6 +3687,61 @@ def _list_active_cost10_member_enter_draw_positions(gs: GameState, cards_db: Dic
     return out
 def _has_active_cost10_member_enter_draw_trigger(gs: GameState, cards_db: Dict[str, CardInfo], entered_cn: str) -> bool:
     return bool(_list_active_cost10_member_enter_draw_positions(gs, cards_db, entered_cn))
+def _build_clause_prompt_text(cost: str, eff: str) -> str:
+    try:
+        cost_s = str(cost or '').strip()
+        eff_s = str(eff or '').strip()
+        if cost_s and cost_s != eff_s:
+            return f"{cost_s}：{eff_s}"
+        return eff_s
+    except Exception:
+        return str(eff or '').strip()
+
+
+def _first_supported_trigger_detail_text(ci: Optional[CardInfo], trigger_keyword: str) -> str:
+    if not ci or not getattr(ci, 'abilities', None):
+        return ''
+    try:
+        abilities = list(getattr(ci, 'abilities', []) or [])
+    except Exception:
+        abilities = []
+    for ab in abilities:
+        if not isinstance(ab, dict):
+            continue
+        trig = str(ab.get('trigger', '') or '')
+        if trigger_keyword == '登場':
+            if '登場' not in trig:
+                continue
+        elif trigger_keyword == 'stage_to_green':
+            if trig not in ('BODY', '自動', '') and ('控え室に置かれたとき' not in trig):
+                continue
+        clauses = ab.get('clauses', [])
+        if not isinstance(clauses, list):
+            continue
+        first = clauses[0] if clauses and isinstance(clauses[0], dict) else {}
+        first_eff = str(first.get('effect_template', '') or first.get('raw', '') or '').strip()
+        if trigger_keyword == '登場' and ('以下から' in first_eff) and ('選ぶ' in first_eff):
+            mode_lines = []
+            for cl in clauses[1:]:
+                if not isinstance(cl, dict):
+                    continue
+                eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+                if eff:
+                    mode_lines.append(f"・{eff}")
+            return '\n'.join([first_eff] + mode_lines) if mode_lines else first_eff
+        for cl in clauses:
+            if not isinstance(cl, dict):
+                continue
+            cost = str(cl.get('cost_template', '') or '')
+            eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+            if not eff:
+                continue
+            if trigger_keyword == 'stage_to_green' and 'このメンバーがステージから控え室に置かれたとき' not in eff:
+                continue
+            return _build_clause_prompt_text(cost, eff)
+    return ''
+
+
 def _collect_auto_triggers_on_member_leave_stage(gs: GameState, cards_db: Dict[str, CardInfo], left_pos: str, left_cn: str) -> List[Dict[str, Any]]:
     """Collect auto triggers that happen when a MEMBER leaves your stage and goes to green room.
     Narrow support for cards whose compiled clause keeps the full trigger text inside
@@ -3724,6 +3783,7 @@ def _collect_auto_triggers_on_member_leave_stage(gs: GameState, cards_db: Dict[s
                 'pos': str(left_pos or 'C').upper(),
                 'cn': left_cn,
                 'effect': eff,
+                'detail_text': _build_clause_prompt_text(cost, eff),
                 'label': f'{canon_left}[stage->green]',
             })
     return out
@@ -3742,6 +3802,7 @@ def _collect_auto_triggers_on_member_enter(gs: GameState, cards_db: Dict[str, Ca
             'source_cn': canon_enter,
             'pos': str(entered_pos or 'C').upper(),
             'cn': entered_cn,
+            'detail_text': _first_supported_trigger_detail_text(ci_enter, '登場'),
         })
     # Generic: one trigger per unused member whose BODY says "when a cost-10 member enters, draw 1"
     for src_pos in _list_active_cost10_member_enter_draw_positions(gs, cards_db, entered_cn):
@@ -3753,6 +3814,7 @@ def _collect_auto_triggers_on_member_enter(gs: GameState, cards_db: Dict[str, Ca
             'source_pos': str(src_pos).upper(),
             'entered_pos': str(entered_pos or 'C').upper(),
             'entered_cn': entered_cn,
+            'detail_text': '自分のステージにコスト10のメンバーが登場したとき、カードを1枚引く。',
         })
     return out
 def _auto_trigger_option_text(t: Dict[str, Any]) -> str:
@@ -3791,7 +3853,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
                 rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0) + 17)
             except Exception:
                 rng2 = random.Random(17)
-            ctx = {'source_cn': src_cn}
+            ctx = {'source_cn': src_cn, 'detail_text': str((trig or {}).get('detail_text', '') or eff), 'effect_text': eff}
             if pos:
                 ctx.update({'pos': pos, 'src_pos': pos})
             try_apply_effect_template(gs, rng2, cards_db, eff, ctx)
@@ -3806,7 +3868,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
                 rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
             except Exception:
                 rng2 = random.Random(0)
-            ctx = {'source_cn': src_cn}
+            ctx = {'source_cn': src_cn, 'detail_text': str((trig or {}).get('detail_text', '') or eff), 'effect_text': eff}
             if pos:
                 ctx.update({'pos': pos, 'src_pos': pos})
             try_apply_effect_template(gs, rng2, cards_db, eff, ctx)

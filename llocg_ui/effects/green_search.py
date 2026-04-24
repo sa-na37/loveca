@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: green_search_filtered_pick_genericize_fix_gd_conditions_20260424c
+# BUILD_TAG: green_search_filtered_pick_pending_and_noeffect_common_20260424d
 from __future__ import annotations
 
 """llocg_ui.effects.green_search
@@ -126,18 +126,24 @@ def _enqueue_green_pick_filtered_to_hand(
     except Exception:
         score_max = None
 
+    detail_text = str((ctx or {}).get('detail_text') or (ctx or {}).get('effect_text') or gd.get('detail_text') or '')
+
     if _gd_bool(rule, 'require_success_zone', False, gd) and not _success_zone_cards(gs):
+        msg = str(gd.get('no_effect_popup_text') or '成功ライブカード置き場にカードがないため、この効果は解決されませんでした。')
         try:
             gs.log.append(str(gd.get('no_effect_log') or f'[AUTO_EXT] success_zone empty, no effect ({source_name})'))
         except Exception:
             pass
+        _append_ack_confirm(gs, src, msg, detail_text or msg)
         return True
 
     if _gd_bool(rule, 'require_other_member', False, gd) and not _stage_has_any_other_member_ctx(gs, source_cn=src, exclude_pos=src_pos):
+        msg = str(gd.get('no_effect_popup_text') or 'ほかのメンバーがいないため、この効果は解決されませんでした。')
         try:
             gs.log.append(str(gd.get('no_effect_log') or f'[AUTO_EXT] no other member on stage ({source_name})'))
         except Exception:
             pass
+        _append_ack_confirm(gs, src, msg, detail_text or msg)
         return True
 
     diff_unit = str(gd.get('require_unit_diff_names_label') or '').strip()
@@ -145,50 +151,42 @@ def _enqueue_green_pick_filtered_to_hand(
     if diff_unit and diff_n > 0:
         diff_count = _stage_unit_count_diff_names(gs, cards_db, diff_unit)
         if diff_count < diff_n:
+            msg = str(gd.get('no_effect_popup_text') or f'{diff_unit}の名前の異なるメンバーが{diff_n}人以上いないため、この効果は解決されませんでした。')
             try:
-                msg = str(gd.get('no_effect_log') or f'[AUTO_EXT] {diff_unit} diff_names={diff_count}<{diff_n}, no effect ({source_name})')
-                gs.log.append(msg)
+                gs.log.append(str(gd.get('no_effect_log') or f'[AUTO_EXT] {diff_unit} diff_names={diff_count}<{diff_n}, no effect ({source_name})'))
             except Exception:
                 pass
+            _append_ack_confirm(gs, src, msg, detail_text or msg)
             return True
 
     candidates = _green_room_filtered_cards(
         gs, cards_db, want_kind=want_kind, want_group=want_group, score_max=score_max
     )
     if not candidates:
+        kind_txt = want_kind or 'CARD'
+        group_txt = want_group or 'any'
+        extra = f' score<={score_max}' if score_max is not None else ''
+        msg = str(gd.get('no_candidates_popup_text') or '条件を満たすカードが控え室にないため、この効果は解決されませんでした。')
         try:
-            kind_txt = want_kind or 'CARD'
-            group_txt = want_group or 'any'
-            extra = f' score<={score_max}' if score_max is not None else ''
             gs.log.append(str(gd.get('no_candidates_log') or f'[AUTO_EXT] no {group_txt} {kind_txt}{extra} in green_room ({source_name})'))
         except Exception:
             pass
+        _append_ack_confirm(gs, src, msg, detail_text or msg)
         return True
 
-    if len(candidates) == 1:
-        cn_str = str(getattr(candidates[0], 'cardnumber', None) or candidates[0] or '')
-        ok = _move_card_from_green_to_hand(gs, candidates[0])
-        try:
-            gs.log.append(f"[AUTO_EXT] green->hand {cn_str} ({source_name}) ok={ok}")
-        except Exception:
-            pass
-        return True
-
-    cns = [str(getattr(c, 'cardnumber', None) or c or '') for c in candidates]
     label = str(gd.get('pending_label') or f'【{source_name}】控え室からカードを1枚選んでください')
-    try:
-        getattr(gs, 'pending').append({
-            'kind': 'choose_card_from_green',
-            'candidates': cns,
-            'optional': False,
-            'after_ext_key': 'green_pick_filtered_to_hand__resolve',
-            'source_cn': src,
-            'label': label,
-            'ctx': {'source_name': source_name},
-        })
-        gs.log.append(f"[PENDING] {source_name}: choose from green {cns}")
-    except Exception:
-        pass
+    _enqueue_choose_card_from_green_pending(
+        gs,
+        candidates=candidates,
+        source_cn=src,
+        source_name=source_name,
+        after_ext_key='green_pick_filtered_to_hand__resolve',
+        label=label,
+        detail_text=detail_text,
+        optional=False,
+        allow_skip=False,
+        ctx={'source_name': source_name, 'detail_text': detail_text},
+    )
     return True
 
 

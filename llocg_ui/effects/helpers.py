@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_helpers_sync_20260413b
+# BUILD_TAG: helpers_ack_and_green_pick_pending_common_20260424d
 from __future__ import annotations
 
 """llocg_ui.effects.helpers
@@ -865,6 +865,59 @@ def _stage_unit_count_diff_names(gs: Any, cards_db: Dict[str, Any], unit_name: s
 # ---------------------------------------------------------------------------
 # Main dispatch
 # ---------------------------------------------------------------------------
+
+
+
+
+def _append_ack_confirm(gs: Any, source_cn: str, text: str, detail_text: str = "") -> None:
+    try:
+        getattr(gs, "pending").append({
+            "kind": "confirm_effect",
+            "text": str(text or detail_text or "効果を確認してください。"),
+            "detail_text": str(detail_text or text or ""),
+            "options": ["ok"],
+            "ctx": {"source_cn": str(source_cn or ""), "_ack_only": True},
+            "source_cn": str(source_cn or ""),
+        })
+    except Exception:
+        pass
+
+
+def _enqueue_choose_card_from_green_pending(
+    gs: Any,
+    *,
+    candidates: list,
+    source_cn: str,
+    source_name: str,
+    after_ext_key: str,
+    label: str,
+    detail_text: str = "",
+    optional: bool = False,
+    allow_skip: bool = False,
+    ctx: Dict[str, Any] | None = None,
+) -> bool:
+    try:
+        cns = [str(getattr(c, 'cardnumber', None) or c or '') for c in list(candidates or [])]
+        payload = {
+            'kind': 'choose_card_from_green',
+            'candidates': cns,
+            'optional': bool(optional),
+            'allow_skip': bool(allow_skip),
+            'after_ext_key': str(after_ext_key or '').strip(),
+            'source_cn': str(source_cn or ''),
+            'label': str(label or f'【{source_name}】控え室からカードを1枚選んでください'),
+            'detail_text': str(detail_text or ''),
+            'ctx': dict(ctx or {}),
+        }
+        payload['ctx'].setdefault('source_name', str(source_name or 'カード'))
+        getattr(gs, 'pending').append(payload)
+        try:
+            gs.log.append(f"[PENDING] {source_name}: choose from green {cns}")
+        except Exception:
+            pass
+        return True
+    except Exception:
+        return False
 
 
 # export underscore helpers explicitly so apply.py can use `from .helpers import *`

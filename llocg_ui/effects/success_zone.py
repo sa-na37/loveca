@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: success_zone_count_and_threshold_genericize_20260424a
+# BUILD_TAG: success_zone_count_and_threshold_genericize_20260424b
 from __future__ import annotations
 
 """llocg_ui.effects.success_zone
@@ -9,20 +9,6 @@ from __future__ import annotations
 
 from typing import Any, Dict
 from .helpers import *  # noqa: F403
-
-
-def _append_ack_confirm(gs: Any, source_cn: str, text: str, detail_text: str) -> None:
-    try:
-        getattr(gs, "pending").append({
-            "kind": "confirm_effect",
-            "text": text,
-            "detail_text": detail_text,
-            "options": ["ok"],
-            "ctx": {"source_cn": source_cn, "_ack_only": True},
-            "source_cn": source_cn,
-        })
-    except Exception:
-        pass
 
 
 def try_apply_success_zone_ext(
