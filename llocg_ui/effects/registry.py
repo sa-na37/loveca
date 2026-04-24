@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: registry_success_zone_genericize_20260424a
+# BUILD_TAG: registry_green_pick_filtered_genericize_20260424a
 from __future__ import annotations
 
 """llocg_ui.effects.registry
@@ -108,7 +108,14 @@ EXTRA_EFFECT_RULES = [
     {
         "id": "enter_self_wait_pick_mus_member_from_green",
         "effect_template": "自分の控え室から『μ's』のメンバーカードを1枚手札に加える。",
-        "ext_key": "enter_pick_mus_member_from_green",
+        "ext_key": "green_pick_filtered_to_hand",
+        "gd": {
+            "source_name": "南ことり bp3-003",
+            "want_kind": "MEMBER",
+            "want_group": "μ's",
+            "pending_label": "【南ことり】控え室からμ'sのメンバーカードを1枚選んでください",
+            "no_candidates_log": "[AUTO_EXT] no μ's MEMBER in green_room (南ことり bp3-003)"
+        },
     },
     # Prompt 16: PL!-bp3-004 園田海未 (ライブ開始時)
     # 成功置き場にカードがある場合のみ発動可
@@ -117,7 +124,16 @@ EXTRA_EFFECT_RULES = [
     {
         "id": "live_start_success_zone_exists_discard1_pick_mus_live_from_green",
         "effect_template": "自分の控え室から『μ's』のライブカードを1枚手札に加える。",
-        "ext_key": "live_start_pick_mus_live_from_green",
+        "ext_key": "green_pick_filtered_to_hand",
+        "gd": {
+            "source_name": "園田海未 bp3-004",
+            "want_kind": "LIVE",
+            "want_group": "μ's",
+            "require_success_zone": "1",
+            "pending_label": "【園田海未】控え室からμ'sのライブカードを1枚選んでください",
+            "no_effect_log": "[AUTO_EXT] success_zone empty, no effect (園田海未 bp3-004)",
+            "no_candidates_log": "[AUTO_EXT] no μ's LIVE in green_room (園田海未 bp3-004)"
+        },
     },
     # Prompt 60: PL!-sd1-003 南ことり (ライブ開始時)
     # cost=手札を1枚控え室に置いてもよい → engine 側 pay_or_skip
@@ -175,7 +191,15 @@ EXTRA_EFFECT_RULES = [
     {
         "id": "body_pick_hasunosora_live_score_le3_from_green",
         "effect_template": "自分の控え室からスコア3以下の『蓮ノ空』のライブカードを1枚手札に加える。",
-        "ext_key": "body_pick_hasunosora_live_score_le3_from_green",
+        "ext_key": "green_pick_filtered_to_hand",
+        "gd": {
+            "source_name": "日野下花帆",
+            "want_kind": "LIVE",
+            "want_group": "蓮ノ空",
+            "score_max": "3",
+            "pending_label": "【日野下花帆】控え室からスコア3以下の蓮ノ空ライブカードを1枚選んでください",
+            "no_candidates_log": "[AUTO_EXT] no 蓮ノ空 LIVE score<=3 in green_room (日野下花帆)"
+        },
     },
     # Prompt 76: PL!HS-bp2-005 大沢瑠璃乃 (登場)
     # cost=手札を1枚控え室に置いてもよい → engine 側 pay_or_skip
@@ -183,7 +207,15 @@ EXTRA_EFFECT_RULES = [
     {
         "id": "enter_discard1_other_member_exists_pick_mirakupark_from_green",
         "effect_template": "自分のステージにほかのメンバーがいる場合、自分の控え室から『みらくらぱーく！』のカードを1枚手札に加える。",
-        "ext_key": "enter_other_member_exists_pick_mirakupark_from_green",
+        "ext_key": "green_pick_filtered_to_hand",
+        "gd": {
+            "source_name": "大沢瑠璃乃 bp2-005",
+            "want_group": "みらくらぱーく！",
+            "require_other_member": "1",
+            "pending_label": "【大沢瑠璃乃】控え室からみらくらぱーく！のカードを1枚選んでください",
+            "no_effect_log": "[AUTO_EXT] no other member on stage (大沢瑠璃乃 bp2-005 enter)",
+            "no_candidates_log": "[AUTO_EXT] no みらくらぱーく！ card in green_room (大沢瑠璃乃 bp2-005 enter)"
+        },
     },
     {
         "id": "enter_main_pay2_faceup_live_to_set_reduce_next_live_set",
@@ -202,7 +234,17 @@ EXTRA_EFFECT_RULES = [
     {
         "id": "live_success_bibi_2diff_pick_bibi_member_from_green",
         "effect_template": "自分のステージに名前の異なる『BiBi』のメンバーが2人以上いる場合、自分の控え室から『BiBi』のメンバーカードを1枚手札に加える。",
-        "ext_key": "live_success_bibi_2diff_pick_bibi_member_from_green",
+        "ext_key": "green_pick_filtered_to_hand",
+        "gd": {
+            "source_name": "Cutie Panther",
+            "want_kind": "MEMBER",
+            "want_group": "BiBi",
+            "require_unit_diff_names_label": "BiBi",
+            "require_unit_diff_names_ge": "2",
+            "pending_label": "【Cutie Panther】控え室からBiBiのメンバーカードを1枚選んでください",
+            "no_effect_log": "[AUTO_EXT] BiBi diff_names<2, no effect (Cutie Panther)",
+            "no_candidates_log": "[AUTO_EXT] no BiBi MEMBER in green_room (Cutie Panther)"
+        },
     },
 
     # -----------------------------------------------------------------------
