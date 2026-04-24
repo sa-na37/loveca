@@ -2289,6 +2289,25 @@ HTML = r'''<!doctype html>
       return info;
     }catch(e){ cardInfoCache.set(key, null); return null; }
   }
+
+  async function fallbackPendingDetailTextFor(p){
+    const cn = pendingSourceCn(p);
+    if(!cn) return '';
+    try{
+      const info = await getCardInfoCached(cn);
+      if(!info) return '';
+      const abilities = Array.isArray(info.abilities) ? info.abilities.map(v=>String(v||'').trim()).filter(Boolean) : [];
+      if(!abilities.length) return '';
+      const trig = String(pendingTriggerLabel(p) || '').trim();
+      if(trig){
+        const matched = abilities.find(a => a.includes(`<${trig}>`) || a.includes(trig));
+        if(matched) return matched;
+      }
+      return abilities[0] || '';
+    }catch(e){
+      return '';
+    }
+  }
   async function updateModalContextFromPending(p, token){
     elModalCond.className = '';
     elModalCond.style.display = 'none';
@@ -2303,7 +2322,10 @@ HTML = r'''<!doctype html>
       elModalCond.style.display = 'block';
     }
     if(token != null && token !== modalContextToken) return;
-    const detail = pendingDetailTextFor(p);
+    let detail = pendingDetailTextFor(p);
+    if(!detail){
+      detail = await fallbackPendingDetailTextFor(p);
+    }
     if(!detail) return;
     if(token != null && token !== modalContextToken) return;
     setRichText(elModalCardText, detail);

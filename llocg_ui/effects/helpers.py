@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: helpers_ack_and_green_pick_pending_common_20260424d
+# BUILD_TAG: helpers_green_pick_detail_fallback_20260424e
 from __future__ import annotations
 
 """llocg_ui.effects.helpers
@@ -898,6 +898,8 @@ def _enqueue_choose_card_from_green_pending(
 ) -> bool:
     try:
         cns = [str(getattr(c, 'cardnumber', None) or c or '') for c in list(candidates or [])]
+        ctx0 = dict(ctx or {})
+        detail = str(detail_text or ctx0.get('detail_text') or ctx0.get('effect_text') or '')
         payload = {
             'kind': 'choose_card_from_green',
             'candidates': cns,
@@ -906,10 +908,12 @@ def _enqueue_choose_card_from_green_pending(
             'after_ext_key': str(after_ext_key or '').strip(),
             'source_cn': str(source_cn or ''),
             'label': str(label or f'【{source_name}】控え室からカードを1枚選んでください'),
-            'detail_text': str(detail_text or ''),
-            'ctx': dict(ctx or {}),
+            'detail_text': detail,
+            'ctx': ctx0,
         }
         payload['ctx'].setdefault('source_name', str(source_name or 'カード'))
+        if detail:
+            payload['ctx'].setdefault('detail_text', detail)
         getattr(gs, 'pending').append(payload)
         try:
             gs.log.append(f"[PENDING] {source_name}: choose from green {cns}")
