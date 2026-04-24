@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: registry_pick_target_temp_bonus_genericize_20260423b
+# BUILD_TAG: registry_stage_apply_temp_bonus_genericize_20260424a
 from __future__ import annotations
 
 """llocg_ui.effects.registry
@@ -270,7 +270,8 @@ EXTRA_EFFECT_RULES = [
     {
         "id": "live_start_center_mus_blade1",
         "effect_template": "ライブ終了時まで、自分のセンターエリアにいる『μ's』のメンバーは、<(ブレード)>を得る。",
-        "ext_key": "live_start_center_mus_blade1",
+        "ext_key": "live_start_apply_stage_temp_bonus",
+        "gd": {"source_name": "小泉花陽", "positions": "C", "group_eq": "μ's", "blade": "1", "no_target_log": "center is not μ's or empty (小泉花陽 bp4-017)"},
     },
     # Prompt 35: PL!-bp4-020 Love wing bell (ライブ開始時)
     # ステージが μ's のみ → メンバー1人をポジションチェンジさせてもよい
@@ -293,7 +294,8 @@ EXTRA_EFFECT_RULES = [
     {
         "id": "live_start_other_stage_members_blade1",
         "effect_template": "ライブ終了時まで、自分のステージにいるほかのメンバーは<(ブレード)>を得る。",
-        "ext_key": "live_start_other_stage_members_blade1",
+        "ext_key": "live_start_apply_stage_temp_bonus",
+        "gd": {"source_name": "高坂穂乃果", "exclude_self": "1", "blade": "1", "no_target_log": "no other members on stage (高坂穂乃果 pb1-010)"},
     },
     # Prompt 48: PL!-pb1-012 南ことり (登場)
     # cost なし → Printemps のメンバー1人までアクティブ化（ウェイト状態が対象）

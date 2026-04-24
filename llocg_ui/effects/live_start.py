@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_start_pick_target_temp_bonus_generic_20260423d
+# BUILD_TAG: live_start_stage_apply_temp_bonus_generic_20260424a
 from __future__ import annotations
 
 """llocg_ui.effects.live_start
@@ -301,6 +301,60 @@ def _queue_generic_pick_stage_member_temp_bonus(
     )
 
 
+
+
+def _parse_positions_csv(raw: Any) -> list[str]:
+    out: list[str] = []
+    for x in [str(v).strip().upper() for v in str(raw or "").split(",") if str(v).strip()]:
+        if x in ("L", "C", "R") and x not in out:
+            out.append(x)
+    return out
+
+
+def _apply_stage_temp_bonus_candidates(
+    eng: Dict[str, Any],
+    gs: Any,
+    cards_db: Dict[str, Any],
+    *,
+    src_pos: str = "",
+    exclude_self: bool = False,
+    group_eq: str = "",
+    positions: list[str] | None = None,
+    blade: int = 0,
+    hearts: Dict[str, int] | None = None,
+    source_name: str = "カード",
+    no_target_log: str = "",
+) -> bool:
+    posset = set([str(x).strip().upper() for x in (positions or []) if str(x).strip()])
+    candidates = _stage_target_candidates(
+        gs, cards_db, src_pos=src_pos, exclude_self=exclude_self, group_eq=group_eq
+    )
+    if posset:
+        candidates = [(pos, slot) for pos, slot in candidates if pos in posset]
+    if not candidates:
+        try:
+            gs.log.append(f"[AUTO_EXT] {no_target_log or ('no valid targets (' + str(source_name or 'カード') + ')')}")
+        except Exception:
+            pass
+        return True
+    for pos, slot in candidates:
+        _apply_temp_bonus(eng, slot, blade=blade, hearts=dict(hearts or {}))
+    desc_parts: list[str] = []
+    if int(blade or 0) > 0:
+        desc_parts.append(f"+{int(blade)}blade")
+    for hk, hv in dict(hearts or {}).items():
+        try:
+            n = int(hv or 0)
+        except Exception:
+            n = 0
+        if n > 0:
+            desc_parts.append(f"+{hk}x{n}")
+    desc = " ".join(desc_parts) if desc_parts else "+bonus"
+    try:
+        gs.log.append(f"[AUTO_EXT] {desc} -> {[pos for pos, _ in candidates]} ({source_name})")
+    except Exception:
+        pass
+    return True
 def _apply_target_temp_bonus_with_log(
     eng: Dict[str, Any],
     gs: Any,
@@ -466,26 +520,26 @@ def try_apply_live_start_ext(
     # センター(C)の μ's メンバーに +1ブレード（対象固定、選択不要）
 
     # ------------------------------------------------------------------
-    if ext_key == "live_start_center_mus_blade1":
-        center_slot = _stage_slot_at(gs, "C")
-        if center_slot is not None and bool(getattr(center_slot, "cardnumber", None)):
-            if _card_group(center_slot, cards_db) == "μ's":
-                _apply_temp_bonus(eng, center_slot, blade=1)
-                try:
-                    gs.log.append("[AUTO_EXT] center μ's -> +1blade (小泉花陽 bp4-017)")
-                except Exception:
-                    pass
-            else:
-                try:
-                    gs.log.append("[AUTO_EXT] center member is not μ's, no blade (小泉花陽 bp4-017)")
-                except Exception:
-                    pass
-        else:
-            try:
-                gs.log.append("[AUTO_EXT] center empty, no blade (小泉花陽 bp4-017)")
-            except Exception:
-                pass
-        return True
+    if ext_key == "live_start_apply_stage_temp_bonus":
+        src_pos = _ctx_src_pos(ctx)
+        source_name = str((gd or {}).get("source_name") or _ctx_source_cn(ctx) or "カード")
+        no_target_log = str((gd or {}).get("no_target_log") or f"no valid targets ({source_name})")
+        exclude_self = str((gd or {}).get("exclude_self") or "0") == "1"
+        group_eq = str((gd or {}).get("group_eq") or "")
+        positions = _parse_positions_csv((gd or {}).get("positions"))
+        blade = int(str((gd or {}).get("blade") or "0") or "0")
+        hearts = _parse_hearts_csv((gd or {}).get("hearts"))
+        return _apply_stage_temp_bonus_candidates(
+            eng, gs, cards_db,
+            src_pos=src_pos,
+            exclude_self=exclude_self,
+            group_eq=group_eq,
+            positions=positions,
+            blade=blade,
+            hearts=hearts,
+            source_name=source_name,
+            no_target_log=no_target_log,
+        )
 
     # ------------------------------------------------------------------
     # Prompt 37: PL!-bp4-024 小夜啼鳥恋詩 (ライブ開始時)
@@ -501,23 +555,6 @@ def try_apply_live_start_ext(
 
 
     # ------------------------------------------------------------------
-    if ext_key == "live_start_other_stage_members_blade1":
-        src_pos = _ctx_src_pos(ctx)
-        occupied = _stage_positions_all_occupied(gs)
-        others = [(pos, slot) for pos, slot in occupied if pos != src_pos]
-        if not others:
-            try:
-                gs.log.append("[AUTO_EXT] no other members on stage (高坂穂乃果 pb1-010)")
-            except Exception:
-                pass
-            return True
-        for _, slot in others:
-            _apply_temp_bonus(eng, slot, blade=1)
-        try:
-            gs.log.append(f"[AUTO_EXT] +1blade to {[p for p, _ in others]} (高坂穂乃果 pb1-010)")
-        except Exception:
-            pass
-        return True
 
     if ext_key == "live_start_discard_member_same_name_green1_blade1":
         src = _ctx_source_cn(ctx)
