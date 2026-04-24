@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_start_choose_heart_generic_20260423c
+# BUILD_TAG: live_start_pick_target_temp_bonus_generic_20260423d
 from __future__ import annotations
 
 """llocg_ui.effects.live_start
@@ -235,6 +235,97 @@ def _matching_stage_members_for_discarded(eng: Dict[str, Any], gs: Any, cards_db
         pass
     return matched
 
+
+def _parse_hearts_csv(raw: Any) -> Dict[str, int]:
+    out: Dict[str, int] = {}
+    for part in [str(x).strip() for x in str(raw or "").split(",") if str(x).strip()]:
+        if ":" in part:
+            k, v = part.split(":", 1)
+            try:
+                n = int(str(v).strip() or "0")
+            except Exception:
+                n = 0
+        else:
+            k, n = part, 1
+        kk = str(k).strip()
+        if kk and n > 0:
+            out[kk] = out.get(kk, 0) + int(n)
+    return out
+
+
+def _stage_target_candidates(
+    gs: Any,
+    cards_db: Dict[str, Any],
+    *,
+    src_pos: str = "",
+    exclude_self: bool = False,
+    group_eq: str = "",
+) -> list[tuple[str, Any]]:
+    out: list[tuple[str, Any]] = []
+    for pos, slot in _stage_positions_all_occupied(gs):
+        if exclude_self and pos == str(src_pos or "").upper():
+            continue
+        if group_eq and _card_group(slot, cards_db) != group_eq:
+            continue
+        out.append((pos, slot))
+    return out
+
+
+def _queue_generic_pick_stage_member_temp_bonus(
+    gs: Any,
+    *,
+    candidates: list[str],
+    source_cn: str,
+    source_name: str,
+    select_text: str,
+    blade: int,
+    hearts: Dict[str, int],
+    log_line: str,
+) -> None:
+    label_head = source_name or source_cn or "カード"
+    _queue_choose_stage_member(
+        gs,
+        candidates=candidates,
+        after_ext_key="live_start_pick_stage_member_temp_bonus__resolve",
+        source_cn=source_cn,
+        label=f"【{label_head}】{select_text}",
+        text=f"【{label_head}】{select_text}",
+        extra_payload={
+            "ctx": {
+                "blade": int(blade or 0),
+                "hearts": dict(hearts or {}),
+                "source_name": label_head,
+            }
+        },
+        log_line=log_line,
+    )
+
+
+def _apply_target_temp_bonus_with_log(
+    eng: Dict[str, Any],
+    gs: Any,
+    *,
+    pos: str,
+    slot: Any,
+    blade: int,
+    hearts: Dict[str, int],
+    source_name: str,
+    resolve: bool = False,
+) -> None:
+    _apply_temp_bonus(eng, slot, blade=blade, hearts=hearts)
+    desc_parts: list[str] = []
+    if blade:
+        desc_parts.append(f"+{int(blade)}blade")
+    for hk, hv in dict(hearts or {}).items():
+        if int(hv or 0) > 0:
+            desc_parts.append(f"+{hk}x{int(hv)}")
+    desc = " ".join(desc_parts) if desc_parts else "+bonus"
+    tail = " resolve" if resolve else ""
+    try:
+        gs.log.append(f"[AUTO_EXT] {desc} -> {pos} ({source_name}{tail})")
+    except Exception:
+        pass
+
 def try_apply_live_start_ext(
     eng: Dict[str, Any],
     gs: Any,
@@ -319,90 +410,56 @@ def try_apply_live_start_ext(
                 pass
         return True
 
-    if ext_key == "live_start_pick_stage_member_blade3":
-        occupied = _stage_positions_all_occupied(gs)
-        src = _ctx_source_cn(ctx)
-        if not occupied:
-            try:
-                gs.log.append("[AUTO_EXT] no stage members, no blade (Oh,Love&Peace!)")
-            except Exception:
-                pass
-            return True
-        if len(occupied) == 1:
-            pos, slot = occupied[0]
-            _apply_temp_bonus(eng, slot, blade=3)
-            try:
-                gs.log.append(f"[AUTO_EXT] only 1 member -> +3blade to {pos} (Oh,Love&Peace!)")
-            except Exception:
-                pass
-            return True
-        _queue_choose_stage_member(
-            gs,
-            candidates=[pos for pos, _ in occupied],
-            after_ext_key="live_start_pick_stage_member_blade3__resolve",
-            source_cn=src,
-            label="【Oh,Love&Peace!】ブレード+3を与えるメンバーを選んでください",
-            log_line=f"[PENDING] Oh,Love&Peace!: choose member for +3blade from {[pos for pos, _ in occupied]}",
-        )
-        return True
-
-    if ext_key == "live_start_pick_stage_member_blade3__resolve":
-        chosen_pos = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_pos") or "").upper()
-        slot = _stage_slot_at(gs, chosen_pos)
-        if slot is not None:
-            _apply_temp_bonus(eng, slot, blade=3)
-            try:
-                gs.log.append(f"[AUTO_EXT] +3blade -> {chosen_pos} (Oh,Love&Peace! resolve)")
-            except Exception:
-                pass
-        return True
-
-    # ------------------------------------------------------------------
-    # Prompt 30: PL!-bp4-013 園田海未 (ライブ開始時)
-    # このメンバー以外のステージメンバー1人（選択）に pink+1
-    # src_pos から「このメンバー」を特定して除外候補を絞る
-
-
-    # ------------------------------------------------------------------
-    if ext_key == "live_start_pick_other_stage_member_pink1":
+    if ext_key == "live_start_pick_stage_member_temp_bonus":
         src_pos = _ctx_src_pos(ctx)
         src = _ctx_source_cn(ctx)
-        occupied = _stage_positions_all_occupied(gs)
-        others = [(pos, slot) for pos, slot in occupied if pos != src_pos]
-        if not others:
+        source_name = str((gd or {}).get("source_name") or src or "カード")
+        select_text = str((gd or {}).get("select_text") or "対象メンバーを選んでください")
+        no_target_log = str((gd or {}).get("no_target_log") or f"no valid targets ({source_name})")
+        exclude_self = str((gd or {}).get("exclude_self") or "0") == "1"
+        group_eq = str((gd or {}).get("group_eq") or "")
+        auto_if_single = str((gd or {}).get("auto_if_single") or "0") == "1"
+        blade = int(str((gd or {}).get("blade") or "0") or "0")
+        hearts = _parse_hearts_csv((gd or {}).get("hearts"))
+        candidates = _stage_target_candidates(
+            gs, cards_db, src_pos=src_pos, exclude_self=exclude_self, group_eq=group_eq
+        )
+        if not candidates:
             try:
-                gs.log.append("[AUTO_EXT] no other members on stage (園田海未 bp4-013)")
+                gs.log.append(f"[AUTO_EXT] {no_target_log}")
             except Exception:
                 pass
             return True
-        if len(others) == 1:
-            pos, slot = others[0]
-            _apply_temp_bonus(eng, slot, hearts={"pink": 1})
-            try:
-                gs.log.append(f"[AUTO_EXT] +pink to {pos} (園田海未 bp4-013)")
-            except Exception:
-                pass
+        if len(candidates) == 1 and auto_if_single:
+            pos, slot = candidates[0]
+            _apply_target_temp_bonus_with_log(
+                eng, gs, pos=pos, slot=slot, blade=blade, hearts=hearts, source_name=source_name, resolve=False
+            )
             return True
-        _queue_choose_stage_member(
+        _queue_generic_pick_stage_member_temp_bonus(
             gs,
-            candidates=[pos for pos, _ in others],
-            after_ext_key="live_start_pick_other_stage_member_pink1__resolve",
+            candidates=[pos for pos, _ in candidates],
             source_cn=src,
-            label="【園田海未】桃ハート+1を与えるメンバーを選んでください（このメンバー以外）",
-            log_line=f"[PENDING] 園田海未 bp4-013: choose other member for +pink from {[pos for pos, _ in others]}",
+            source_name=source_name,
+            select_text=select_text,
+            blade=blade,
+            hearts=hearts,
+            log_line=f"[PENDING] {source_name}: choose member from {[pos for pos, _ in candidates]}",
         )
         return True
 
-    if ext_key == "live_start_pick_other_stage_member_pink1__resolve":
-        chosen_pos = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_pos") or "").upper()
+    if ext_key == "live_start_pick_stage_member_temp_bonus__resolve":
+        chosen_pos = _ctx_choice_pos(ctx)
         slot = _stage_slot_at(gs, chosen_pos)
         if slot is not None:
-            _apply_temp_bonus(eng, slot, hearts={"pink": 1})
-            try:
-                gs.log.append(f"[AUTO_EXT] +pink -> {chosen_pos} (園田海未 bp4-013 resolve)")
-            except Exception:
-                pass
+            blade = int((ctx or {}).get("blade") or 0)
+            hearts = dict((ctx or {}).get("hearts") or {})
+            source_name = str((ctx or {}).get("source_name") or _ctx_source_cn(ctx) or "カード")
+            _apply_target_temp_bonus_with_log(
+                eng, gs, pos=chosen_pos, slot=slot, blade=blade, hearts=hearts, source_name=source_name, resolve=True
+            )
         return True
+
 
     # ------------------------------------------------------------------
     # Prompt 32: PL!-bp4-017 小泉花陽 (ライブ開始時)
@@ -436,35 +493,6 @@ def try_apply_live_start_ext(
 
 
     # ------------------------------------------------------------------
-    if ext_key == "live_start_pick_mus_stage_member_blade1":
-        mus_members = _stage_positions_with_group(gs, cards_db, "μ's")
-        src = _ctx_source_cn(ctx)
-        if not mus_members:
-            try:
-                gs.log.append("[AUTO_EXT] no μ's on stage (小夜啼鳥恋詩)")
-            except Exception:
-                pass
-            return True
-        _queue_choose_stage_member(
-            gs,
-            candidates=[pos for pos, _ in mus_members],
-            after_ext_key="live_start_pick_mus_stage_member_blade1__resolve",
-            source_cn=src,
-            label="【小夜啼鳥恋詩】ブレード+1を与えるμ'sメンバーを選んでください",
-            log_line=f"[PENDING] 小夜啼鳥恋詩: choose μ's member for +blade from {[pos for pos, _ in mus_members]}",
-        )
-        return True
-
-    if ext_key == "live_start_pick_mus_stage_member_blade1__resolve":
-        chosen_pos = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_pos") or "").upper()
-        slot = _stage_slot_at(gs, chosen_pos)
-        if slot is not None:
-            _apply_temp_bonus(eng, slot, blade=1)
-            try:
-                gs.log.append(f"[AUTO_EXT] +1blade -> {chosen_pos} (小夜啼鳥恋詩 resolve)")
-            except Exception:
-                pass
-        return True
 
     # ------------------------------------------------------------------
     # Prompt 46: PL!-pb1-010 高坂穂乃果 (ライブ開始時)

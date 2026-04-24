@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: registry_choose_heart_genericize_20260423a
+# BUILD_TAG: registry_pick_target_temp_bonus_genericize_20260423b
 from __future__ import annotations
 
 """llocg_ui.effects.registry
@@ -253,14 +253,16 @@ EXTRA_EFFECT_RULES = [
     {
         "id": "live_start_pick_stage_member_blade3",
         "effect_template": "ライブ終了時まで、自分のステージにいるメンバー1人は<(ブレード)><(ブレード)><(ブレード)>を得る。",
-        "ext_key": "live_start_pick_stage_member_blade3",
+        "ext_key": "live_start_pick_stage_member_temp_bonus",
+        "gd": {"source_name": "Oh,Love&Peace!", "select_text": "ブレード+3を与えるメンバーを選んでください", "blade": "3", "auto_if_single": "1", "no_target_log": "no stage members, no blade (Oh,Love&Peace!)"},
     },
     # Prompt 30: PL!-bp4-013 園田海未 (ライブ開始時)
     # cost=手札を1枚控え室に置いてもよい → engine 側 pay_or_skip
     {
         "id": "live_start_pick_other_stage_member_pink1",
         "effect_template": "ライブ終了時まで、自分のステージにいるこのメンバー以外のメンバー1人は、<(桃)>を得る。",
-        "ext_key": "live_start_pick_other_stage_member_pink1",
+        "ext_key": "live_start_pick_stage_member_temp_bonus",
+        "gd": {"source_name": "園田海未", "select_text": "桃ハート+1を与えるメンバーを選んでください（このメンバー以外）", "hearts": "pink:1", "exclude_self": "1", "auto_if_single": "1", "no_target_log": "no other members on stage (園田海未 bp4-013)"},
     },
     # Prompt 32: PL!-bp4-017 小泉花陽 (ライブ開始時)
     # cost=このメンバーをウェイトにしてもよい → engine 側 pay_or_skip
@@ -282,7 +284,8 @@ EXTRA_EFFECT_RULES = [
     {
         "id": "live_start_pick_mus_stage_member_blade1",
         "effect_template": "ライブ終了時まで、自分のステージにいる『μ's』のメンバー1人は、<(ブレード)>を得る。",
-        "ext_key": "live_start_pick_mus_stage_member_blade1",
+        "ext_key": "live_start_pick_stage_member_temp_bonus",
+        "gd": {"source_name": "小夜啼鳥恋詩", "select_text": "ブレード+1を与えるμ'sメンバーを選んでください", "blade": "1", "group_eq": "μ's", "auto_if_single": "0", "no_target_log": "no μ's on stage (小夜啼鳥恋詩)"},
     },
     # Prompt 46: PL!-pb1-010 高坂穂乃果 (ライブ開始時)
     # cost=手札を1枚控え室に置いてもよい → engine 側 pay_or_skip
