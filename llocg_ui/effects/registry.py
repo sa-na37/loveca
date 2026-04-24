@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: registry_green_pick_filtered_genericize_fix_fragment_20260424b
+# BUILD_TAG: registry_green_pick_required_heart_genericize_20260424d
 from __future__ import annotations
 
 """llocg_ui.effects.registry
@@ -178,12 +178,28 @@ EXTRA_EFFECT_RULES = [
     {
         "id": "body_pick_live_req_yellow_ge3_from_green",
         "effect_template": "控え室から必要ハートに<(黄)>を3以上含むライブカードを1枚手札に加える。",
-        "ext_key": "body_pick_live_req_yellow_ge3_from_green",
+        "ext_key": "green_pick_filtered_to_hand",
+        "gd": {
+            "source_name": "南ことり PR-003",
+            "want_kind": "LIVE",
+            "req_heart_color": "yellow",
+            "req_heart_min": "3",
+            "pending_label": "【南ことり】控え室から必要ハートに黄を3以上含むライブカードを1枚選んでください",
+            "no_candidates_log": "[AUTO_EXT] no LIVE req[yellow]>=3 in green_room (南ことり PR-003)"
+        },
     },
     {
         "id": "body_pick_live_req_pink_ge3_from_green",
         "effect_template": "自分の控え室から必要ハートに<(桃)>を3以上含むライブカードを1枚手札に加える。",
-        "ext_key": "body_pick_live_req_pink_ge3_from_green",
+        "ext_key": "green_pick_filtered_to_hand",
+        "gd": {
+            "source_name": "園田海未 PR-004",
+            "want_kind": "LIVE",
+            "req_heart_color": "pink",
+            "req_heart_min": "3",
+            "pending_label": "【園田海未】控え室から必要ハートに桃を3以上含むライブカードを1枚選んでください",
+            "no_candidates_log": "[AUTO_EXT] no LIVE req[pink]>=3 in green_room (園田海未 PR-004)"
+        },
     },
     # Prompt 73: PL!HS-bp2-001 日野下花帆 (起動)
     # コスト: <(E)><(E)> → engine 側起動コスト処理

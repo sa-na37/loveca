@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: green_search_filtered_pick_pending_and_noeffect_common_20260424d
+# BUILD_TAG: green_search_required_heart_filter_genericize_20260424d
 from __future__ import annotations
 
 """llocg_ui.effects.green_search
@@ -66,9 +66,12 @@ def _green_room_filtered_cards(
     want_kind: str = '',
     want_group: str = '',
     score_max: int | None = None,
+    req_heart_color: str = '',
+    req_heart_min: int | None = None,
 ) -> list:
     kind = str(want_kind or '').strip().upper()
     group = str(want_group or '').strip()
+    req_color = str(req_heart_color or '').strip().lower()
     out = []
     for card in _green_room_list(gs):
         try:
@@ -78,6 +81,10 @@ def _green_room_filtered_cards(
                 continue
             if score_max is not None and _card_score(card, cards_db) > int(score_max):
                 continue
+            if req_color and req_heart_min is not None:
+                req = _card_required_hearts(card, cards_db)
+                if int(req.get(req_color, 0) or 0) < int(req_heart_min):
+                    continue
             out.append(card)
         except Exception:
             pass
@@ -125,6 +132,12 @@ def _enqueue_green_pick_filtered_to_hand(
         score_max = int(str(score_max).strip()) if str(score_max).strip() else None
     except Exception:
         score_max = None
+    req_heart_color = str(gd.get('req_heart_color') or '').strip().lower()
+    req_heart_min = gd.get('req_heart_min')
+    try:
+        req_heart_min = int(str(req_heart_min).strip()) if str(req_heart_min).strip() else None
+    except Exception:
+        req_heart_min = None
 
     detail_text = str((ctx or {}).get('detail_text') or (ctx or {}).get('effect_text') or gd.get('detail_text') or '')
 
@@ -160,12 +173,20 @@ def _enqueue_green_pick_filtered_to_hand(
             return True
 
     candidates = _green_room_filtered_cards(
-        gs, cards_db, want_kind=want_kind, want_group=want_group, score_max=score_max
+        gs,
+        cards_db,
+        want_kind=want_kind,
+        want_group=want_group,
+        score_max=score_max,
+        req_heart_color=req_heart_color,
+        req_heart_min=req_heart_min,
     )
     if not candidates:
         kind_txt = want_kind or 'CARD'
         group_txt = want_group or 'any'
         extra = f' score<={score_max}' if score_max is not None else ''
+        if req_heart_color and req_heart_min is not None:
+            extra += f' req[{req_heart_color}]>={req_heart_min}'
         msg = str(gd.get('no_candidates_popup_text') or '条件を満たすカードが控え室にないため、この効果は解決されませんでした。')
         try:
             gs.log.append(str(gd.get('no_candidates_log') or f'[AUTO_EXT] no {group_txt} {kind_txt}{extra} in green_room ({source_name})'))
