@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: registry_dual_target_bonus_and_same_name_genericize_20260424b
+# BUILD_TAG: registry_success_zone_genericize_20260424a
 from __future__ import annotations
 
 """llocg_ui.effects.registry
@@ -25,7 +25,8 @@ EXTRA_EFFECT_RULES = [
     {
         "id": "live_start_success_zone_count_x2_blade",
         "effect_template": "ライブ終了時まで、自分の成功ライブカード置き場にあるカード1枚につき、<(ブレード)><(ブレード)>を得る。",
-        "ext_key": "live_start_success_zone_count_x2_blade",
+        "ext_key": "zone_count_temp_bonus",
+        "gd": {"count_source": "success_zone", "blade_per_count": "2", "source_name": "西木野真姫", "zero_log": "success_zone=0, no blade added (西木野真姫)"},
     },
     # Prompt 24: PL!-bp4-001 高坂穂乃果 (ライブ開始時)
     {
@@ -37,13 +38,15 @@ EXTRA_EFFECT_RULES = [
     {
         "id": "enter_success_score_ge6_activate2",
         "effect_template": "自分の成功ライブカード置き場にあるカードのスコアの合計が6以上の場合、エネルギーを2枚アクティブにする。",
-        "ext_key": "enter_success_score_ge6_activate2",
+        "ext_key": "success_zone_score_threshold_action",
+        "gd": {"threshold": "6", "action": "activate_energy", "amount": "2", "source_name": "園田海未"},
     },
     # Prompt 31: PL!-bp4-016 東條希 (登場)
     {
         "id": "enter_success_score_ge3_draw1",
         "effect_template": "自分の成功ライブカード置き場にあるカードのスコアの合計が3以上の場合、カードを1枚引く。",
-        "ext_key": "enter_success_score_ge3_draw1",
+        "ext_key": "success_zone_score_threshold_action",
+        "gd": {"threshold": "3", "action": "draw", "amount": "1", "source_name": "東條希"},
     },
     # Prompt 41: PL!-pb1-003 南ことり (登場) ※コストはエンジン側が pay_or_skip を積む想定
     {
@@ -67,7 +70,8 @@ EXTRA_EFFECT_RULES = [
     {
         "id": "live_start_live_cards_count_x1_blade",
         "effect_template": "ライブ終了時まで、自分のライブ中のカード1枚につき、<(ブレード)>を得る。",
-        "ext_key": "live_start_live_cards_count_x1_blade",
+        "ext_key": "zone_count_temp_bonus",
+        "gd": {"count_source": "live_in_progress", "blade_per_count": "1", "source_name": "夕霧綴理", "zero_log": "live_cards=0, no blade (夕霧綴理)"},
     },
     # Prompt 72: PL!HS-bp1-023 ド！ド！ド！ (ライブ成功時)
     {

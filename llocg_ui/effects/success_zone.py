@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_effect_success_zone_20260413f
+# BUILD_TAG: success_zone_count_and_threshold_genericize_20260424a
 from __future__ import annotations
 
 """llocg_ui.effects.success_zone
@@ -22,63 +22,75 @@ def try_apply_success_zone_ext(
     ext_key: str,
 ) -> bool:
     # ------------------------------------------------------------------
-    if ext_key == "live_start_success_zone_count_x2_blade":
+    if ext_key == "zone_count_temp_bonus":
         slot = _src_slot(gs, ctx)
-        success_cards = _success_zone_cards(gs)
-        n = len(success_cards) * 2
-        if slot is not None and n > 0:
-            _add_temp_blade(eng, slot, n)
+        count_source = str((gd or {}).get("count_source") or "")
+        blade_per_count = int(str((gd or {}).get("blade_per_count") or "0") or "0")
+        source_name = str((gd or {}).get("source_name") or _ctx_source_cn(ctx) or "カード")
+        zero_log = str((gd or {}).get("zero_log") or f"count=0, no bonus ({source_name})")
+
+        if count_source == "success_zone":
+            count = len(_success_zone_cards(gs))
+            count_label = f"success_zone={count}"
+        elif count_source == "live_in_progress":
+            count = len(_live_in_progress_cards(gs))
+            count_label = f"live_cards={count}"
+        else:
             try:
-                gs.log.append(
-                    f"[AUTO_EXT] success_zone={len(success_cards)} -> +{n}blade (西木野真姫)"
-                )
+                gs.log.append(f"[WARN] zone_count_temp_bonus: unknown count_source='{count_source}'")
+            except Exception:
+                pass
+            return True
+
+        blade = count * blade_per_count
+        if slot is not None and blade > 0:
+            _add_temp_blade(eng, slot, blade)
+            try:
+                gs.log.append(f"[AUTO_EXT] {count_label} -> +{blade}blade ({source_name})")
             except Exception:
                 pass
         elif slot is not None:
             try:
-                gs.log.append("[AUTO_EXT] success_zone=0, no blade added (西木野真姫)")
+                gs.log.append(f"[AUTO_EXT] {zero_log}")
             except Exception:
                 pass
         return True
     # ------------------------------------------------------------------
-    if ext_key == "enter_success_score_ge6_activate2":
+    if ext_key == "success_zone_score_threshold_action":
         success_cards = _success_zone_cards(gs)
         total_score = sum(_card_score(c, cards_db) for c in success_cards)
-        if total_score >= 6:
-            moved = _activate_energy(gs, 2)
+        threshold = int(str((gd or {}).get("threshold") or "0") or "0")
+        action = str((gd or {}).get("action") or "")
+        amount = int(str((gd or {}).get("amount") or "0") or "0")
+        source_name = str((gd or {}).get("source_name") or _ctx_source_cn(ctx) or "カード")
+
+        if total_score < threshold:
             try:
-                gs.log.append(
-                    f"[AUTO_EXT] success_score={total_score}>=6 -> activate {moved} energy (園田海未)"
-                )
+                gs.log.append(f"[AUTO_EXT] success_score={total_score}<{threshold}, no action ({source_name})")
             except Exception:
                 pass
-        else:
+            return True
+
+        if action == "activate_energy":
+            moved = _activate_energy(gs, amount)
             try:
-                gs.log.append(
-                    f"[AUTO_EXT] success_score={total_score}<6, no energy (園田海未)"
-                )
+                gs.log.append(f"[AUTO_EXT] success_score={total_score}>={threshold} -> activate {moved} energy ({source_name})")
             except Exception:
                 pass
-        return True
-    # ------------------------------------------------------------------
-    if ext_key == "enter_success_score_ge3_draw1":
-        success_cards = _success_zone_cards(gs)
-        total_score = sum(_card_score(c, cards_db) for c in success_cards)
-        if total_score >= 3:
-            drawn = _draw_cards(eng, gs, 1)
+            return True
+
+        if action == "draw":
+            drawn = _draw_cards(eng, gs, amount)
             try:
-                gs.log.append(
-                    f"[AUTO_EXT] success_score={total_score}>=3 -> draw {drawn} (東條希)"
-                )
+                gs.log.append(f"[AUTO_EXT] success_score={total_score}>={threshold} -> draw {drawn} ({source_name})")
             except Exception:
                 pass
-        else:
-            try:
-                gs.log.append(
-                    f"[AUTO_EXT] success_score={total_score}<3, no draw (東條希)"
-                )
-            except Exception:
-                pass
+            return True
+
+        try:
+            gs.log.append(f"[WARN] success_zone_score_threshold_action: unknown action='{action}' ({source_name})")
+        except Exception:
+            pass
         return True
     # ------------------------------------------------------------------
     if ext_key == "live_success_success_zone_has_mus_draw1":
@@ -95,25 +107,6 @@ def try_apply_success_zone_ext(
         else:
             try:
                 gs.log.append("[AUTO_EXT] no μ's in success_zone, no draw (SENTIMENTAL StepS)")
-            except Exception:
-                pass
-        return True
-    # ------------------------------------------------------------------
-    if ext_key == "live_start_live_cards_count_x1_blade":
-        slot = _src_slot(gs, ctx)
-        live_cards = _live_in_progress_cards(gs)
-        n = len(live_cards)
-        if slot is not None and n > 0:
-            _add_temp_blade(eng, slot, n)
-            try:
-                gs.log.append(
-                    f"[AUTO_EXT] live_cards={n} -> +{n}blade (夕霧綴理)"
-                )
-            except Exception:
-                pass
-        elif slot is not None:
-            try:
-                gs.log.append("[AUTO_EXT] live_cards=0, no blade (夕霧綴理)")
             except Exception:
                 pass
         return True
