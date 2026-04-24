@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: registry_stage_apply_temp_bonus_genericize_20260424a
+# BUILD_TAG: registry_dual_target_bonus_and_same_name_genericize_20260424b
 from __future__ import annotations
 
 """llocg_ui.effects.registry
@@ -140,11 +140,20 @@ EXTRA_EFFECT_RULES = [
         "gd": {"option_labels": "桃,赤,黄,緑,青,紫", "require_other_member": "0"},
     },
 
-    # Generalized from engine special-case: PL!N-bp3-008 エマ・ヴェルデ (ライブ開始時)
+    # Prompt: PL!N-bp3-008 エマ・ヴェルデ (ライブ開始時)
+    # 共通部（実テキスト基準）:
+    # - 「自分のステージにいるこのメンバー以外のウェイト状態のメンバー1人をアクティブにする。そうした場合、」
+    # - 「これによりアクティブにしたメンバーと、このメンバーは、それぞれ〜を得る。」
     {
         "id": "live_start_discard2_activate_other_wait_member_both_green1",
         "effect_template": "自分のステージにいるこのメンバー以外のウェイト状態のメンバー1人をアクティブにする。そうした場合、ライブ終了時まで、これによりアクティブにしたメンバーと、このメンバーは、それぞれ<(緑)>を得る。",
-        "ext_key": "live_start_activate_other_wait_member_both_green1",
+        "ext_key": "live_start_activate_wait_member_and_both_temp_bonus",
+        "gd": {
+            "source_name": "エマ・ヴェルデ",
+            "select_text": "アクティブにするメンバーを選んでください",
+            "hearts": "green:1",
+            "no_target_log": "no other wait member on stage (エマ・ヴェルデ)"
+        },
     },
     {
         "id": "body_pick_live_req_yellow_ge3_from_green",
@@ -317,12 +326,21 @@ EXTRA_EFFECT_RULES = [
     },
 
     # Prompt 80: PL!HS-bp2-007 百生吟子 (ライブ開始時)
-    # cost=手札を1枚控え室に置いてもよい → engine 側 pay_or_skip
-    # 控え室に置いたカードがメンバーカードなら、同名ステージメンバーに green+1 blade+1
+    # 共通部（実テキスト基準）:
+    # - 「これにより控え室に置いたカードがメンバーカードの場合、」
+    # - 「控え室に置いたカードと同じ名前を持つメンバー1人は、」
+    # - 「ライブ終了時まで、〜を得る。」
     {
         "id": "live_start_discard_member_same_name_green1_blade1",
         "effect_template": "これにより控え室に置いたカードがメンバーカードの場合、控え室に置いたカードと同じ名前を持つメンバー1人は、ライブ終了時まで、<(緑)><(ブレード)>を得る。",
-        "ext_key": "live_start_discard_member_same_name_green1_blade1",
+        "ext_key": "live_start_discarded_member_same_name_stage_member_temp_bonus",
+        "gd": {
+            "source_name": "百生吟子",
+            "discarded_type": "MEMBER",
+            "select_text": "と同名のメンバーを選んでください",
+            "hearts": "green:1",
+            "blade": "1"
+        },
     },
 ]
 

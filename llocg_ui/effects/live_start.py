@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_start_stage_apply_temp_bonus_generic_20260424a
+# BUILD_TAG: live_start_dual_target_bonus_and_same_name_generic_20260424b
 from __future__ import annotations
 
 """llocg_ui.effects.live_start
@@ -143,27 +143,49 @@ def _activate_slot(slot: Any) -> None:
             pass
 
 
-def _queue_other_wait_member_choice(
+def _queue_activate_wait_member_and_both_temp_bonus(
     gs: Any,
     *,
     candidates: list[str],
     source_cn: str,
     src_pos: str,
-    log_line: str,
+    source_name: str,
+    select_text: str,
+    hearts: Dict[str, int] | None = None,
+    blade: int = 0,
+    log_line: str = "",
 ) -> None:
+    label_head = source_name or source_cn or "カード"
     _queue_choose_stage_member(
         gs,
         candidates=candidates,
-        after_ext_key="live_start_activate_other_wait_member_both_green1__resolve",
+        after_ext_key="live_start_activate_wait_member_and_both_temp_bonus__resolve",
         source_cn=source_cn,
-        label="【エマ・ヴェルデ】アクティブにするメンバーを選んでください",
-        text="【エマ・ヴェルデ】アクティブにするメンバーをクリックしてください",
-        extra_payload={"ctx": {"src_pos": src_pos, "source_cn": source_cn}},
+        label=f"【{label_head}】{select_text}",
+        text=f"【{label_head}】{select_text}",
+        extra_payload={
+            "ctx": {
+                "src_pos": src_pos,
+                "source_cn": source_cn,
+                "source_name": label_head,
+                "hearts": dict(hearts or {}),
+                "blade": int(blade or 0),
+            }
+        },
         log_line=log_line,
     )
 
 
-def _apply_activate_other_wait_member_both_green1(eng: Dict[str, Any], gs: Any, *, src_pos: str, chosen_pos: str) -> bool:
+def _apply_activate_wait_member_and_both_temp_bonus(
+    eng: Dict[str, Any],
+    gs: Any,
+    *,
+    src_pos: str,
+    chosen_pos: str,
+    hearts: Dict[str, int] | None = None,
+    blade: int = 0,
+    source_name: str = "カード",
+) -> bool:
     st = getattr(gs, "stage", None)
     if not isinstance(st, dict):
         return True
@@ -171,13 +193,13 @@ def _apply_activate_other_wait_member_both_green1(eng: Dict[str, Any], gs: Any, 
     dst_slot = st.get(str(chosen_pos or "").upper())
     if dst_slot is None:
         try:
-            gs.log.append(f"[ERR] Emma bp3-008 resolve: empty target {chosen_pos}")
+            gs.log.append(f"[ERR] {source_name} resolve: empty target {chosen_pos}")
         except Exception:
             pass
         return True
     _activate_slot(dst_slot)
-    _apply_temp_bonus(eng, src_slot, hearts={"green": 1})
-    _apply_temp_bonus(eng, dst_slot, hearts={"green": 1})
+    _apply_temp_bonus(eng, src_slot, blade=blade, hearts=dict(hearts or {}))
+    _apply_temp_bonus(eng, dst_slot, blade=blade, hearts=dict(hearts or {}))
     return True
 
 
@@ -556,8 +578,12 @@ def try_apply_live_start_ext(
 
     # ------------------------------------------------------------------
 
-    if ext_key == "live_start_discard_member_same_name_green1_blade1":
+    if ext_key == "live_start_discarded_member_same_name_stage_member_temp_bonus":
         src = _ctx_source_cn(ctx)
+        source_name = str((gd or {}).get("source_name") or src or "カード")
+        select_text = str((gd or {}).get("select_text") or "と同名のメンバーを選んでください")
+        blade = int(str((gd or {}).get("blade") or "0") or "0")
+        hearts = _parse_hearts_csv((gd or {}).get("hearts"))
         discarded_cn = str((ctx or {}).get("discarded_cn") or "").strip()
         if not discarded_cn:
             top = _green_room_top(gs)
@@ -566,15 +592,16 @@ def try_apply_live_start_ext(
 
         if not discarded_cn:
             try:
-                gs.log.append("[AUTO_EXT] could not identify discarded card (百生吟子)")
+                gs.log.append(f"[AUTO_EXT] could not identify discarded card ({source_name})")
             except Exception:
                 pass
             return True
 
         discarded_type = _card_type_norm(discarded_cn, cards_db)
-        if discarded_type != "MEMBER":
+        required_type = str((gd or {}).get("discarded_type") or "MEMBER").upper()
+        if required_type and discarded_type != required_type:
             try:
-                gs.log.append(f"[AUTO_EXT] discarded {discarded_cn} is not MEMBER (type={discarded_type}), no effect (百生吟子)")
+                gs.log.append(f"[AUTO_EXT] discarded {discarded_cn} is not {required_type} (type={discarded_type}), no effect ({source_name})")
             except Exception:
                 pass
             return True
@@ -582,47 +609,54 @@ def try_apply_live_start_ext(
         discarded_name = _card_display_name_with_fallback(eng, cards_db, discarded_cn)
         if not discarded_name:
             try:
-                gs.log.append(f"[AUTO_EXT] name fallback by cardnumber for {discarded_cn} (百生吟子)")
+                gs.log.append(f"[AUTO_EXT] name fallback by cardnumber for {discarded_cn} ({source_name})")
             except Exception:
                 pass
 
         matched = _matching_stage_members_for_discarded(eng, gs, cards_db, discarded_cn, discarded_name)
         if not matched:
             try:
-                gs.log.append(f"[AUTO_EXT] no stage member named '{discarded_name}', no effect (百生吟子)")
+                gs.log.append(f"[AUTO_EXT] no stage member named '{discarded_name}', no effect ({source_name})")
             except Exception:
                 pass
             return True
 
         if len(matched) == 1:
             pos, slot = matched[0]
-            _apply_temp_bonus(eng, slot, blade=1, hearts={"green": 1})
-            try:
-                gs.log.append(f"[AUTO_EXT] discarded MEMBER '{discarded_name}' -> +green+blade to {pos} (百生吟子)")
-            except Exception:
-                pass
+            _apply_target_temp_bonus_with_log(
+                eng, gs, pos=pos, slot=slot, blade=blade, hearts=hearts, source_name=source_name, resolve=False
+            )
             return True
 
         _queue_choose_stage_member(
             gs,
             candidates=[pos for pos, _ in matched],
-            after_ext_key="live_start_discard_member_same_name_green1_blade1__resolve",
+            after_ext_key="live_start_discarded_member_same_name_stage_member_temp_bonus__resolve",
             source_cn=src,
-            label=f"【百生吟子】{discarded_name}と同名のメンバーを選んでください",
-            extra_payload={"discarded_name": discarded_name},
-            log_line=f"[PENDING] 百生吟子: choose same-name member from {[pos for pos, _ in matched]}",
+            label=f"【{source_name}】{discarded_name}{select_text}",
+            text=f"【{source_name}】{discarded_name}{select_text}",
+            extra_payload={
+                "ctx": {
+                    "discarded_name": discarded_name,
+                    "blade": blade,
+                    "hearts": dict(hearts or {}),
+                    "source_name": source_name,
+                }
+            },
+            log_line=f"[PENDING] {source_name}: choose same-name member from {[pos for pos, _ in matched]}",
         )
         return True
 
-    if ext_key == "live_start_discard_member_same_name_green1_blade1__resolve":
+    if ext_key == "live_start_discarded_member_same_name_stage_member_temp_bonus__resolve":
         chosen_pos = _ctx_choice_pos(ctx)
         slot = _stage_slot_at(gs, chosen_pos)
         if slot is not None:
-            _apply_temp_bonus(eng, slot, blade=1, hearts={"green": 1})
-            try:
-                gs.log.append(f"[AUTO_EXT] +green+blade -> {chosen_pos} (百生吟子 resolve)")
-            except Exception:
-                pass
+            blade = int((ctx or {}).get("blade") or 0)
+            hearts = dict((ctx or {}).get("hearts") or {})
+            source_name = str((ctx or {}).get("source_name") or _ctx_source_cn(ctx) or "カード")
+            _apply_target_temp_bonus_with_log(
+                eng, gs, pos=chosen_pos, slot=slot, blade=blade, hearts=hearts, source_name=source_name, resolve=True
+            )
         return True
 
     # ==================================================================
@@ -647,6 +681,49 @@ def try_apply_live_start_ext(
             source_cn=src,
             options=options,
             require_other_member=require_other_member,
+        )
+
+
+    if ext_key == "live_start_activate_wait_member_and_both_temp_bonus":
+        src_pos = _ctx_src_pos(ctx)
+        src = _ctx_source_cn(ctx)
+        source_name = str((gd or {}).get("source_name") or src or "カード")
+        select_text = str((gd or {}).get("select_text") or "アクティブにするメンバーを選んでください")
+        no_target_log = str((gd or {}).get("no_target_log") or f"no other wait member on stage ({source_name})")
+        blade = int(str((gd or {}).get("blade") or "0") or "0")
+        hearts = _parse_hearts_csv((gd or {}).get("hearts"))
+        wait_others = _stage_other_wait_positions(gs, exclude_pos=src_pos)
+        if not wait_others:
+            try:
+                gs.log.append(f"[AUTO_EXT] {no_target_log}")
+            except Exception:
+                pass
+            return True
+        if len(wait_others) == 1:
+            return _apply_activate_wait_member_and_both_temp_bonus(
+                eng, gs, src_pos=src_pos, chosen_pos=wait_others[0], hearts=hearts, blade=blade, source_name=source_name
+            )
+        _queue_activate_wait_member_and_both_temp_bonus(
+            gs,
+            candidates=wait_others,
+            source_cn=src,
+            src_pos=src_pos,
+            source_name=source_name,
+            select_text=select_text,
+            hearts=hearts,
+            blade=blade,
+            log_line=f"[PENDING] {source_name}: choose wait member from {wait_others}",
+        )
+        return True
+
+    if ext_key == "live_start_activate_wait_member_and_both_temp_bonus__resolve":
+        chosen_pos = _ctx_choice_pos(ctx)
+        src_pos = _ctx_src_pos(ctx)
+        blade = int((ctx or {}).get("blade") or 0)
+        hearts = dict((ctx or {}).get("hearts") or {})
+        source_name = str((ctx or {}).get("source_name") or _ctx_source_cn(ctx) or "カード")
+        return _apply_activate_wait_member_and_both_temp_bonus(
+            eng, gs, src_pos=src_pos, chosen_pos=chosen_pos, hearts=hearts, blade=blade, source_name=source_name
         )
 
     # ------------------------------------------------------------------
