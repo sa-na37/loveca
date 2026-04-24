@@ -11,6 +11,20 @@ from typing import Any, Dict
 from .helpers import *  # noqa: F403
 
 
+def _append_ack_confirm(gs: Any, source_cn: str, text: str, detail_text: str) -> None:
+    try:
+        getattr(gs, "pending").append({
+            "kind": "confirm_effect",
+            "text": text,
+            "detail_text": detail_text,
+            "options": ["ok"],
+            "ctx": {"source_cn": source_cn, "_ack_only": True},
+            "source_cn": source_cn,
+        })
+    except Exception:
+        pass
+
+
 def try_apply_success_zone_ext(
     eng: Dict[str, Any],
     gs: Any,
@@ -71,12 +85,20 @@ def try_apply_success_zone_ext(
                 pass
             return True
 
+        source_cn = str((ctx or {}).get("source_cn") or "")
+
         if action == "activate_energy":
             moved = _activate_energy(gs, amount)
             try:
                 gs.log.append(f"[AUTO_EXT] success_score={total_score}>={threshold} -> activate {moved} energy ({source_name})")
             except Exception:
                 pass
+            _append_ack_confirm(
+                gs,
+                source_cn,
+                f"成功ライブカード置き場のスコア合計が{threshold}以上なので、エネルギーを{moved}枚アクティブにしました。",
+                f"自分の成功ライブカード置き場にあるカードのスコアの合計が{threshold}以上の場合、エネルギーを{amount}枚アクティブにする。",
+            )
             return True
 
         if action == "draw":
@@ -85,6 +107,12 @@ def try_apply_success_zone_ext(
                 gs.log.append(f"[AUTO_EXT] success_score={total_score}>={threshold} -> draw {drawn} ({source_name})")
             except Exception:
                 pass
+            _append_ack_confirm(
+                gs,
+                source_cn,
+                f"成功ライブカード置き場のスコア合計が{threshold}以上なので、カードを{drawn}枚引きました。",
+                f"自分の成功ライブカード置き場にあるカードのスコアの合計が{threshold}以上の場合、カードを{amount}枚引く。",
+            )
             return True
 
         try:

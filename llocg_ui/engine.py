@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: attach_detail_text_to_live_start_triggers_20260424a
+# BUILD_TAG: confirm_effect_ack_only_20260424a
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -6133,6 +6133,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         ctx0 = dict(p.get('ctx', {}) or {})
         src = str(p.get('source_cn', '') or '')
         low = choice_str.lower()
+        ack_only = bool(ctx0.get('_ack_only'))
         if low in ('skip', '__skip__', 'no', 'n', '0', 'false', 'cancel', 'skip effect', '使わない', 'いいえ', 'スキップ'):
             gs.log.append(f"[SKIP] {src}: skipped optional effect")
             _r = p.get('_resume') if isinstance(p, dict) else None
@@ -6145,6 +6146,12 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             return
         if src and not ctx0.get('source_cn'):
             ctx0['source_cn'] = src
+        if ack_only:
+            gs.log.append(f"[AUTO] {src}: confirm_effect acknowledged")
+            _r = p.get('_resume') if isinstance(p, dict) else None
+            if _r:
+                gs.pending.append(_r)
+            return
         applied = False
         if after_eff:
             try:

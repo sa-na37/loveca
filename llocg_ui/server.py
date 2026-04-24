@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: pending_modal_show_trigger_effect_text_20260424a
+# BUILD_TAG: confirm_effect_ack_popup_titles_20260424a
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1969,6 +1969,13 @@ HTML = r'''<!doctype html>
     if(low === 'ok') return '確認';
     return s;
   }
+  function isAckOnlyConfirm(p){
+    if(!p || String(p.kind || '').trim() !== 'confirm_effect') return false;
+    const ctx = (p && p.ctx) ? p.ctx : {};
+    if(ctx && ctx._ack_only) return true;
+    const opts = Array.isArray(p && p.options) ? p.options.map(x=>String(x).trim().toLowerCase()).filter(Boolean) : [];
+    return opts.length === 1 && opts[0] === 'ok';
+  }
   function cardChoiceCaption(cn, nth, tot){
     const name = cardNameFor(cn);
     if(tot && tot > 1) return `${name} (${nth}/${tot})`;
@@ -1976,6 +1983,7 @@ HTML = r'''<!doctype html>
   }
   function pendingTitleFor(p){
     const kind = String((p && p.kind) || '').trim();
+    if(kind === 'confirm_effect' && isAckOnlyConfirm(p)) return '効果を確認';
     if(kind === 'pay_or_skip' || kind === 'confirm_effect') return '効果を使いますか？';
     if(kind === 'choose_effects') return '効果を選択';
     if(kind === 'choose_stage_member_to_activate') return '対象メンバーを選択';
@@ -2002,6 +2010,7 @@ HTML = r'''<!doctype html>
     const explicit = summarizeEffectText(explicitRaw);
     if(explicit) return explicit;
     const kind = String((p && p.kind) || '').trim();
+    if(kind === 'confirm_effect' && isAckOnlyConfirm(p)) return '解決された効果の内容を確認してください。';
     if(kind === 'pay_or_skip' || kind === 'confirm_effect') return 'この効果を使うか、スキップするかを選んでください。';
     if(kind === 'choose_member_from_green_multi_up_to') return '控え室からカードを0〜指定枚数まで選び、確定を押してください。';
     if(kind === 'choose_stage_member_to_activate') return '対象にするメンバーを選んでください。';
@@ -2264,6 +2273,7 @@ HTML = r'''<!doctype html>
       if(sum >= t1) return met(`成功置き場のスコア合計 ${sum} ≥ ${t1}`);
       return unmet(`成功置き場のスコア合計 ${sum} < ${Math.min(t1||sum, t2||sum)}`);
     }
+    if(kind === 'confirm_effect' && isAckOnlyConfirm(p)) return neutral('解決後の確認です');
     if(kind === 'confirm_effect' || kind === 'pay_or_skip') return neutral('解決前の確認です');
     return null;
   }
