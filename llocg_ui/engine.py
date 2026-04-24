@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: auto_order_attach_enter_detail_and_ack_20260424b
+# BUILD_TAG: activate_ctx_attach_detail_text_for_green_pick_20260424a
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -6040,7 +6040,8 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                         gs.used_this_turn = {akey: 1}
                     except Exception:
                         pass
-            ctx = {'pos': pos, 'source_cn': ci.cardnumber}
+            detail_text = _build_clause_prompt_text(cost, eff)
+            ctx = {'pos': pos, 'src_pos': pos, 'source_cn': ci.cardnumber, 'detail_text': detail_text, 'effect_text': eff}
             matched = try_apply_effect_template(gs, rng, cards_db, eff, ctx)
             if not matched:
                 gs.log.append(f"[WARN] activate: unsupported effect_template: {eff}")
