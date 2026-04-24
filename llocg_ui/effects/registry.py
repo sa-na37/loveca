@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: registry_topk_filtered_optional_genericize_20260424a
+# BUILD_TAG: effect_registry_20260424_topk_reorder_genericize_b
 from __future__ import annotations
 
 """llocg_ui.effects.registry
@@ -178,28 +178,12 @@ EXTRA_EFFECT_RULES = [
     {
         "id": "body_pick_live_req_yellow_ge3_from_green",
         "effect_template": "控え室から必要ハートに<(黄)>を3以上含むライブカードを1枚手札に加える。",
-        "ext_key": "green_pick_filtered_to_hand",
-        "gd": {
-            "source_name": "南ことり PR-003",
-            "want_kind": "LIVE",
-            "req_heart_color": "yellow",
-            "req_heart_min": "3",
-            "pending_label": "【南ことり】控え室から必要ハートに黄を3以上含むライブカードを1枚選んでください",
-            "no_candidates_log": "[AUTO_EXT] no LIVE req[yellow]>=3 in green_room (南ことり PR-003)"
-        },
+        "ext_key": "body_pick_live_req_yellow_ge3_from_green",
     },
     {
         "id": "body_pick_live_req_pink_ge3_from_green",
         "effect_template": "自分の控え室から必要ハートに<(桃)>を3以上含むライブカードを1枚手札に加える。",
-        "ext_key": "green_pick_filtered_to_hand",
-        "gd": {
-            "source_name": "園田海未 PR-004",
-            "want_kind": "LIVE",
-            "req_heart_color": "pink",
-            "req_heart_min": "3",
-            "pending_label": "【園田海未】控え室から必要ハートに桃を3以上含むライブカードを1枚選んでください",
-            "no_candidates_log": "[AUTO_EXT] no LIVE req[pink]>=3 in green_room (園田海未 PR-004)"
-        },
+        "ext_key": "body_pick_live_req_pink_ge3_from_green",
     },
     # Prompt 73: PL!HS-bp2-001 日野下花帆 (起動)
     # コスト: <(E)><(E)> → engine 側起動コスト処理
@@ -269,16 +253,7 @@ EXTRA_EFFECT_RULES = [
     {
         "id": "enter_sayaka_pick_cost_le2_member_from_green_up_to_2",
         "effect_template": "自分の控え室からコスト2以下のメンバーカードを2枚まで手札に加える。",
-        "ext_key": "green_pick_filtered_to_hand_multi",
-        "gd": {
-            "source_name": "村野さやか bp2-002",
-            "want_kind": "MEMBER",
-            "cost_max": "2",
-            "min_picks": "0",
-            "max_picks": "2",
-            "pending_label": "【村野さやか】控え室からコスト2以下のメンバーカードを0〜2枚選んで手札に加える",
-            "no_candidates_log": "[AUTO_EXT] no MEMBER cost<=2 in green_room (村野さやか bp2-002)"
-        },
+        "ext_key": "enter_pick_cost_le2_member_from_green_up_to_2",
     },
     {
         "id": "body_sayaka_higher_cost_member_exists_blade3",
@@ -288,7 +263,8 @@ EXTRA_EFFECT_RULES = [
     {
         "id": "live_start_kozue_bp2003_reorder_top3",
         "effect_template": "自分のデッキの上からカードを3枚見る。その中から好きな枚数を好きな順番でデッキの上に置き、残りを控え室に置く。",
-        "ext_key": "reorder_from_top3",
+        "ext_key": "reorder_from_topk",
+        "gd": {"topk": "3", "source_name": "乙宗梢 bp2-003"},
     },
     {
         "id": "body_tsukasa_mirakupark_count_blade",
@@ -298,40 +274,23 @@ EXTRA_EFFECT_RULES = [
     {
         "id": "enter_kaho_bp2010_top5_member_optional",
         "effect_template": "自分のデッキの上からカードを5枚見る。その中からメンバーカードを1枚公開して手札に加えてもよい。残りを控え室に置く。",
-        "ext_key": "topk_filtered_optional_pick",
-        "gd": {
-            "source_name": "日野下花帆 bp2-010",
-            "topk": "5",
-            "filter_kind": "MEMBER",
-            "optional": "1"
-        },
+        "ext_key": "enter_top5_member_optional_pick",
     },
     {
         "id": "body_kozue_bp2012_stage_to_green_top5_member_optional",
         "effect_template": "このメンバーがステージから控え室に置かれたとき、自分のデッキの上からカードを5枚見る。その中からメンバーカードを1枚公開して手札に加えてもよい。残りを控え室に置く。",
-        "ext_key": "topk_filtered_optional_pick",
-        "gd": {
-            "source_name": "乙宗梢 bp2-012",
-            "topk": "5",
-            "filter_kind": "MEMBER",
-            "optional": "1"
-        },
+        "ext_key": "body_stage_to_green_top5_member_optional",
     },
     {
         "id": "body_tsuzuri_bp2013_stage_to_green_top5_live_optional",
         "effect_template": "このメンバーがステージから控え室に置かれたとき、自分のデッキの上からカードを5枚見る。その中からライブカードを1枚公開して手札に加えてもよい。残りを控え室に置く。",
-        "ext_key": "topk_filtered_optional_pick",
-        "gd": {
-            "source_name": "夕霧綴理 bp2-013",
-            "topk": "5",
-            "filter_kind": "LIVE",
-            "optional": "1"
-        },
+        "ext_key": "body_stage_to_green_top5_live_optional",
     },
     {
         "id": "enter_ginko_bp2016_reorder_top2",
         "effect_template": "自分のデッキの上からカードを2枚見る。その中から好きな枚数を好きな順番でデッキの上に置き、残りを控え室に置く。",
-        "ext_key": "reorder_from_top2",
+        "ext_key": "reorder_from_topk",
+        "gd": {"topk": "2", "source_name": "百生吟子 bp2-016"},
     },
     {
         "id": "enter_kosuzu_bp2017_green_ge10_draw1",
@@ -502,39 +461,6 @@ def try_match_effect_template_ext(
             "no_candidates_log": "[AUTO_EXT] no μ's LIVE in green_room (園田海未 bp3-004)"
         }),
          lambda t: ("成功カード置き場にカードがある場合" in t and "『μ's』のライブカードを1枚手札に加える。" in t)),
-
-        # Prompt 73: score<=3 / 蓮ノ空 live pick may arrive as full clause text
-        (("green_pick_filtered_to_hand", {
-            "source_name": "日野下花帆",
-            "want_kind": "LIVE",
-            "want_group": "蓮ノ空",
-            "score_max": "3",
-            "pending_label": "【日野下花帆】控え室からスコア3以下の蓮ノ空ライブカードを1枚選んでください",
-            "no_candidates_log": "[AUTO_EXT] no 蓮ノ空 LIVE score<=3 in green_room (日野下花帆)"
-        }),
-         lambda t: ("スコア3以下" in t and "『蓮ノ空』のライブカードを1枚手札に加える。" in t)),
-        # Prompt 76: other-member-gated Mirakura pick may arrive as full clause text
-        (("green_pick_filtered_to_hand", {
-            "source_name": "大沢瑠璃乃 bp2-005",
-            "want_group": "みらくらぱーく！",
-            "require_other_member": "1",
-            "pending_label": "【大沢瑠璃乃】控え室からみらくらぱーく！のカードを1枚選んでください",
-            "no_effect_log": "[AUTO_EXT] no other member on stage (大沢瑠璃乃 bp2-005 enter)",
-            "no_candidates_log": "[AUTO_EXT] no みらくらぱーく！ card in green_room (大沢瑠璃乃 bp2-005 enter)"
-        }),
-         lambda t: ("ステージにほかのメンバーがいる場合" in t and "『みらくらぱーく！』のカードを1枚手札に加える。" in t)),
-        # Prompt 56: BiBi diff-name gated member pick may arrive as full clause text
-        (("green_pick_filtered_to_hand", {
-            "source_name": "Cutie Panther",
-            "want_kind": "MEMBER",
-            "want_group": "BiBi",
-            "require_unit_diff_names_label": "BiBi",
-            "require_unit_diff_names_ge": "2",
-            "pending_label": "【Cutie Panther】控え室からBiBiのメンバーカードを1枚選んでください",
-            "no_effect_log": "[AUTO_EXT] BiBi diff_names<2, no effect (Cutie Panther)",
-            "no_candidates_log": "[AUTO_EXT] no BiBi MEMBER in green_room (Cutie Panther)"
-        }),
-         lambda t: ("名前の異なる『BiBi』のメンバーが2人以上いる場合" in t and "『BiBi』のメンバーカードを1枚手札に加える。" in t)),
         # Prompt 14: exact should normally hit, but keep a safe fallback
         ("enter_pick_mus_member_from_green",
          lambda t: ("『μ's』のメンバーカードを1枚手札に加える。" in t and "控え室から" in t)),

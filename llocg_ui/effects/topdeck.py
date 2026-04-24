@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: topdeck_filtered_optional_pick_genericize_20260424a
+# BUILD_TAG: topdeck_reorder_from_topk_genericize_20260424b
 from __future__ import annotations
 
 """llocg_ui.effects.topdeck
@@ -51,11 +51,16 @@ def try_apply_topdeck_ext(
             pass
         return True
 
-    # PL!HS-bp2-003 / PL!HS-bp2-016
-    if ext_key in ('reorder_from_top3', 'reorder_from_top2'):
-        k = 3 if ext_key == 'reorder_from_top3' else 2
+    # reorder top{k} keep any
+    if ext_key == 'reorder_from_topk':
+        try:
+            k = int(gd.get('topk') or 0)
+        except Exception:
+            k = 0
+        if k <= 0:
+            k = 3
         fn = eng.get('_enqueue_reorder_from_topk_keep_any')
-        label = '乙宗梢 bp2-003' if k == 3 else '百生吟子 bp2-016'
+        label = gd.get('source_name') or f'top{k} reorder'
         if callable(fn):
             try:
                 fn(gs, k, rng)
@@ -72,21 +77,19 @@ def try_apply_topdeck_ext(
                 pass
         return True
 
-    # topk filtered optional pick family
-    if ext_key == 'topk_filtered_optional_pick':
-        merged_gd = dict(gd or {})
-        try:
-            topk = int(str(merged_gd.get('topk') or '5').strip())
-        except Exception:
-            topk = 5
-        filter_kind = str(merged_gd.get('filter_kind') or 'MEMBER').strip().upper() or 'MEMBER'
-        optional = str(merged_gd.get('optional') or '1').strip().lower() not in ('0', 'false', 'no', 'off')
-        label = str(merged_gd.get('source_name') or 'topk filtered optional pick')
+    # PL!HS-bp2-010 / 012 / 013 top5 filtered optional
+    if ext_key in ('enter_top5_member_optional_pick', 'body_stage_to_green_top5_member_optional', 'body_stage_to_green_top5_live_optional'):
+        filter_kind = 'LIVE' if ext_key == 'body_stage_to_green_top5_live_optional' else 'MEMBER'
+        label = (
+            '日野下花帆 bp2-010' if ext_key == 'enter_top5_member_optional_pick' else
+            '乙宗梢 bp2-012' if ext_key == 'body_stage_to_green_top5_member_optional' else
+            '夕霧綴理 bp2-013'
+        )
         fn = eng.get('_enqueue_choose_from_topk_filtered')
         if callable(fn):
             try:
-                fn(gs, topk, rng, cards_db, filter_kind=filter_kind, optional=optional)
-                gs.log.append(f"[AUTO_EXT] {label}: enqueue choose_from_top{topk} filter_kind={filter_kind} optional={optional}")
+                fn(gs, 5, rng, cards_db, filter_kind=filter_kind, optional=True)
+                gs.log.append(f"[AUTO_EXT] {label}: enqueue choose_from_top5 filter_kind={filter_kind} optional=True")
             except Exception as e:
                 try:
                     gs.log.append(f"[ERR] {label}: _enqueue_choose_from_topk_filtered failed: {e}")
