@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: registry_green_pick_required_heart_genericize_20260424d
+# BUILD_TAG: registry_green_pick_multi_genericize_20260424e
 from __future__ import annotations
 
 """llocg_ui.effects.registry
@@ -269,7 +269,16 @@ EXTRA_EFFECT_RULES = [
     {
         "id": "enter_sayaka_pick_cost_le2_member_from_green_up_to_2",
         "effect_template": "自分の控え室からコスト2以下のメンバーカードを2枚まで手札に加える。",
-        "ext_key": "enter_pick_cost_le2_member_from_green_up_to_2",
+        "ext_key": "green_pick_filtered_to_hand_multi",
+        "gd": {
+            "source_name": "村野さやか bp2-002",
+            "want_kind": "MEMBER",
+            "cost_max": "2",
+            "min_picks": "0",
+            "max_picks": "2",
+            "pending_label": "【村野さやか】控え室からコスト2以下のメンバーカードを0〜2枚選んで手札に加える",
+            "no_candidates_log": "[AUTO_EXT] no MEMBER cost<=2 in green_room (村野さやか bp2-002)"
+        },
     },
     {
         "id": "body_sayaka_higher_cost_member_exists_blade3",
