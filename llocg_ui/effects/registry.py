@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: remove_unreachable_registry_matcher_tail_20260423a
+# BUILD_TAG: registry_choose_heart_genericize_20260423a
 from __future__ import annotations
 
 """llocg_ui.effects.registry
@@ -95,7 +95,8 @@ EXTRA_EFFECT_RULES = [
     {
         "id": "live_start_discard1_other_member_exists_choose_heart",
         "effect_template": "自分のステージにほかのメンバーがいる場合、好きなハートの色を1つ指定する。ライブ終了時まで、そのハートを1つ得る。",
-        "ext_key": "live_start_other_member_exists_choose_heart",
+        "ext_key": "live_start_choose_heart",
+        "gd": {"option_labels": "桃,赤,黄,緑,青,紫", "require_other_member": "1"},
     },
     # Prompt 14: PL!-bp3-003 南ことり (登場)
     # cost=このメンバーをウェイトにしてもよい → engine 側 self_wait pay_or_skip
@@ -120,12 +121,14 @@ EXTRA_EFFECT_RULES = [
     {
         "id": "live_start_discard1_choose_pink_yellow_purple_heart",
         "effect_template": "<(桃)>/<(黄)>/<(紫)>のうち1つを選ぶ。ライブ終了時まで、選んだハートを1つ得る。",
-        "ext_key": "live_start_choose_pinkYellowPurple_heart",
+        "ext_key": "live_start_choose_heart",
+        "gd": {"option_labels": "桃,黄,紫", "require_other_member": "0"},
     },
     {
         "id": "live_start_discard1_choose_pink_yellow_purple_heart_v7h",
         "effect_template": "<(桃)>か<(黄)>か<(紫)>のうち、1つを選ぶ。ライブ終了時まで、選んだハートを1つ得る。",
-        "ext_key": "live_start_choose_pinkYellowPurple_heart",
+        "ext_key": "live_start_choose_heart",
+        "gd": {"option_labels": "桃,黄,紫", "require_other_member": "0"},
     },
     # Prompt: PL!N-bp1-003 桜坂しずく (ライブ開始時)
     # cost=<(E)> 支払いは engine 側 pay_or_skip
@@ -133,7 +136,8 @@ EXTRA_EFFECT_RULES = [
     {
         "id": "live_start_pay1_choose_any_heart",
         "effect_template": "好きなハートの色を1つ指定する。ライブ終了時まで、そのハートを1つ得る。",
-        "ext_key": "live_start_choose_any_heart",
+        "ext_key": "live_start_choose_heart",
+        "gd": {"option_labels": "桃,赤,黄,緑,青,紫", "require_other_member": "0"},
     },
 
     # Generalized from engine special-case: PL!N-bp3-008 エマ・ヴェルデ (ライブ開始時)
@@ -360,9 +364,9 @@ def try_match_effect_template_ext(
         if not tpl:
             continue
         if s == tpl:
-            return ({"id": r.get("id"), "op": "__ext__", "ext_key": r.get("ext_key")}, {})
+            return ({"id": r.get("id"), "op": "__ext__", "ext_key": r.get("ext_key")}, dict(r.get("gd") or {}))
         if s_norm == _norm_ws(tpl):
-            return ({"id": r.get("id"), "op": "__ext__", "ext_key": r.get("ext_key")}, {})
+            return ({"id": r.get("id"), "op": "__ext__", "ext_key": r.get("ext_key")}, dict(r.get("gd") or {}))
 
     # cards_compiled_v7b splits some abilities into multiple clauses.
     # Match the actual clause fragment that engine.py sees.
@@ -370,7 +374,7 @@ def try_match_effect_template_ext(
         # Prompt 60: cost-only split clause should be matched narrowly.
         # Do NOT match broader sentences like PL!-bp3-004 that also contain
         # "手札を1枚控え室に置いてもよい" but are different effects.
-        ("live_start_choose_pinkYellowPurple_heart",
+        (("live_start_choose_heart", {"option_labels": "桃,黄,紫", "require_other_member": "0"}),
          lambda t: (_norm_ws(t) == _norm_ws("手札を1枚控え室に置いてもよい："))),
         # Prompt 27: second clause is the unique condition/result fragment
         ("live_start_no_mus_blade5_force_not_center",
@@ -385,10 +389,15 @@ def try_match_effect_template_ext(
         ("body_leave_stage_draw2_discard1",
          lambda t: ("ステージから控え室に置かれたとき" in t and "カードを2枚引き" in t and "手札を1枚控え室に置く。" in t)),
     ]
-    for ext_key, pred in fragment_rules:
+    for payload, pred in fragment_rules:
         try:
-            if pred(s_norm):
-                return ({"id": ext_key, "op": "__ext__", "ext_key": ext_key}, {})
+            if not pred(s_norm):
+                continue
+            if isinstance(payload, tuple):
+                ext_key, gd = payload
+                return ({"id": ext_key, "op": "__ext__", "ext_key": ext_key}, dict(gd or {}))
+            ext_key = payload
+            return ({"id": ext_key, "op": "__ext__", "ext_key": ext_key}, {})
         except Exception:
             pass
     return None

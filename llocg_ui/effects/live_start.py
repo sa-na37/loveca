@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_start_wait_and_same_name_helper_cleanup_20260423b
+# BUILD_TAG: live_start_choose_heart_generic_20260423c
 from __future__ import annotations
 
 """llocg_ui.effects.live_start
@@ -99,6 +99,36 @@ def _queue_choose_heart_color(
     }
     _append_pending(gs, payload, log_line)
 
+
+def _parse_option_labels_csv(raw: Any, default: list[str] | None = None) -> list[str]:
+    vals = [str(x).strip() for x in str(raw or "").split(",") if str(x).strip()]
+    return vals or list(default or [])
+
+
+def _queue_generic_choose_heart(
+    gs: Any,
+    *,
+    src_pos: str,
+    source_cn: str,
+    options: list[str],
+    require_other_member: bool,
+) -> bool:
+    if require_other_member and not _stage_has_any_other_member(gs, exclude_pos=src_pos):
+        try:
+            gs.log.append("[AUTO_EXT] no other member on stage, no effect (choose heart)")
+        except Exception:
+            pass
+        return True
+    pretty = "/".join(options) if options else "好きな色"
+    _queue_choose_heart_color(
+        gs,
+        pos=src_pos,
+        source_cn=source_cn,
+        options=options,
+        text=f"{source_cn}: {pretty}から1つ選ぶ → ライブ終了時まで+1",
+        log_line=f"[PENDING] {source_cn}: choose heart color",
+    )
+    return True
 
 
 def _ctx_choice_pos(ctx: Dict[str, Any]) -> str:
@@ -535,133 +565,24 @@ def try_apply_live_start_ext(
     # ==================================================================
 
     # ------------------------------------------------------------------
-    # Prompt 69: PL!HS-bp1-006 藤島慈 (ライブ開始時)
-    # cost=手札1枚控え室へ → engine 側 pay_or_skip
-    # 他メンバーがいる場合: ハートの色を1つ選んで ライブ終了時まで得る
-
+    # Generic choose-heart family
+    # - any color
+    # - 桃/黄/紫 限定
+    # - 他メンバー存在条件付き
+    # parameters are supplied from registry.gd
     # ------------------------------------------------------------------
-    if ext_key == "live_start_other_member_exists_choose_heart":
+    if ext_key == "live_start_choose_heart":
         src_pos = _ctx_src_pos(ctx)
         src = _ctx_source_cn(ctx)
-        if not _stage_has_any_other_member(gs, exclude_pos=src_pos):
-            try:
-                gs.log.append("[AUTO_EXT] no other member on stage, no effect (藤島慈)")
-            except Exception:
-                pass
-            return True
-        _queue_choose_heart_color(
+        options = _parse_option_labels_csv((gd or {}).get("option_labels"), ["桃", "赤", "黄", "緑", "青", "紫"])
+        require_other_member = str((gd or {}).get("require_other_member") or "0") == "1"
+        return _queue_generic_choose_heart(
             gs,
-            pos=src_pos,
-            source_cn=src,
-            options=["桃", "赤", "黄", "緑", "青", "紫"],
-            text=f"{src}: 好きなハートの色を1つ指定する → ライブ終了時まで+1",
-            log_line="[PENDING] 藤島慈: choose heart color (self)",
-        )
-        return True
-
-    # ------------------------------------------------------------------
-    # Prompt 14: PL!-bp3-003 南ことり (登場)
-    # cost=このメンバーをウェイトにしてもよい → engine 側 self_wait pay_or_skip
-    # 控え室から μ's のメンバーカードを1枚手札に加える
-    # ------------------------------------------------------------------
-
-    # ------------------------------------------------------------------
-    # Generalized from engine special-case: PL!N-bp3-008 エマ・ヴェルデ (ライブ開始時)
-    # 手札を2枚控え室に置いてもよい：
-    # このメンバー以外のウェイト状態のメンバー1人をアクティブにする。
-    # そうした場合、そのメンバーとこのメンバーはそれぞれ緑+1（ライブ終了時まで）
-    # ------------------------------------------------------------------
-    if ext_key == "live_start_activate_other_wait_member_both_green1":
-        src_pos = _ctx_src_pos(ctx)
-        src = _ctx_source_cn(ctx)
-        st = getattr(gs, "stage", None)
-        if not isinstance(st, dict):
-            return True
-        cands = []
-        for pos, slot in st.items():
-            p = str(pos or "").upper()
-            if p not in ("L", "C", "R") or p == src_pos:
-                continue
-            if slot is None or bool(getattr(slot, "active", False)):
-                continue
-            info = _lookup_cardinfo(cards_db, getattr(slot, "cardnumber", "") or "")
-            ctype = ""
-            try:
-                ctype = str(getattr(info, "card_type", None) or (info if isinstance(info, dict) else {}).get("card_type") or "").upper()
-            except Exception:
-                ctype = ""
-            if ctype == "LIVE":
-                continue
-            cands.append(p)
-        if not cands:
-            try:
-                gs.log.append("[AUTO_EXT] Emma bp3-008: no other WAIT members")
-            except Exception:
-                pass
-            return True
-        if len(cands) == 1:
-            chosen = cands[0]
-            _apply_activate_other_wait_member_both_green1(eng, gs, src_pos=src_pos, chosen_pos=chosen)
-            try:
-                gs.log.append(f"[AUTO_EXT] Emma bp3-008: {chosen} ACTIVE; {src_pos} and {chosen} gain green +1")
-            except Exception:
-                pass
-            return True
-        _queue_other_wait_member_choice(
-            gs,
-            candidates=list(cands),
-            source_cn=src,
             src_pos=src_pos,
-            log_line=f"[PENDING] Emma bp3-008: choose WAIT member to activate from {cands}",
-        )
-        return True
-
-    if ext_key == "live_start_activate_other_wait_member_both_green1__resolve":
-        src_pos = str((ctx or {}).get("src_pos") or "").upper()
-        chosen = _ctx_choice_pos(ctx)
-        _apply_activate_other_wait_member_both_green1(eng, gs, src_pos=src_pos, chosen_pos=chosen)
-        try:
-            gs.log.append(f"[AUTO_EXT] Emma bp3-008 resolve: {chosen} ACTIVE; {src_pos} and {chosen} gain green +1")
-        except Exception:
-            pass
-        return True
-
-    # ------------------------------------------------------------------
-    # Generalized from engine special-case: PL!N-bp1-003 桜坂しずく (ライブ開始時)
-    # cost=<(E)> は engine 側 live_start_pay_effect
-    # 好きなハート色を1つ指定する。ライブ終了時まで、そのハートを1つ得る。
-    # ------------------------------------------------------------------
-    if ext_key == "live_start_choose_any_heart":
-        src_pos = _ctx_src_pos(ctx)
-        src = _ctx_source_cn(ctx)
-        _queue_choose_heart_color(
-            gs,
-            pos=src_pos,
             source_cn=src,
-            options=["桃", "赤", "黄", "緑", "青", "紫"],
-            text=f"{src}: 好きなハートの色を1つ指定する → ライブ終了時まで+1",
-            log_line="[PENDING] 桜坂しずく bp1-003: choose any heart color",
+            options=options,
+            require_other_member=require_other_member,
         )
-        return True
-
-    # ------------------------------------------------------------------
-    # Prompt 60: PL!-sd1-003 南ことり (ライブ開始時)
-    # cost=手札1枚控え室へ → engine 側 pay_or_skip
-    # 桃/黄/紫 のうち1つ選んでライブ終了時まで得る
-
-    # ------------------------------------------------------------------
-    if ext_key == "live_start_choose_pinkYellowPurple_heart":
-        src_pos = _ctx_src_pos(ctx)
-        src = _ctx_source_cn(ctx)
-        _queue_choose_heart_color(
-            gs,
-            pos=src_pos,
-            source_cn=src,
-            options=["桃", "黄", "紫"],
-            text=f"{src}: 桃/黄/紫から1つ選ぶ → ライブ終了時まで+1",
-            log_line="[PENDING] 南ことり sd1-003: choose pink/yellow/purple heart",
-        )
-        return True
 
     # ------------------------------------------------------------------
     # Prompt 73: PL!HS-bp2-001 日野下花帆 (起動)

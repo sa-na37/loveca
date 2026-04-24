@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: fix_live_success_revealed_wait_energy_wrappers_20260421t2
+# BUILD_TAG: choose_heart_prompt_genericize_20260423a
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -1207,8 +1207,13 @@ def _pretty_optional_effect_prompt_text(trigger_label: str, source_cn: str, cost
         return f"{prefix}: このメンバーをウェイトにしてもよい → 自分の控え室から『μ's』のメンバーカードを1枚手札に加える"
     if ext_key == 'live_start_pick_mus_live_from_green':
         return f"{prefix}: 自分の成功カード置き場にカードがある場合、手札を1枚控え室に置いてもよい → 自分の控え室から『μ's』のライブカードを1枚手札に加える"
-    if ext_key == 'live_start_choose_pinkYellowPurple_heart':
-        return f"{prefix}: 手札を1枚控え室に置いてもよい → 桃 / 黄 / 紫 から1つ選び、ライブ終了時までそのハートを1つ得る"
+    if ext_key == 'live_start_choose_heart':
+        gd = m[1] if isinstance(m, tuple) and len(m) > 1 and isinstance(m[1], dict) else {}
+        opts = [str(x).strip() for x in str((gd or {}).get('option_labels') or '').split(',') if str(x).strip()]
+        require_other = str((gd or {}).get('require_other_member') or '0') == '1'
+        opt_txt = ' / '.join(opts) if opts else '好きなハートの色'
+        cond = '自分のステージにほかのメンバーがいる場合、' if require_other else ''
+        return f"{prefix}: {cond}{opt_txt}から1つ選び、ライブ終了時までそのハートを1つ得る"
     if ext_key == 'live_start_no_mus_blade5_force_not_center':
         return f"{prefix}: 自分のステージにブレード5以上の『μ's』メンバーがいない場合、このメンバーはセンターエリア以外にポジションチェンジする"
     if cost and eff:
