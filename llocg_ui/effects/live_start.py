@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_start_dual_target_bonus_and_same_name_generic_20260424b
+# BUILD_TAG: live_start_dual_target_bonus_and_same_name_generic_fix_wait_positions_20260424c
 from __future__ import annotations
 
 """llocg_ui.effects.live_start
@@ -275,6 +275,26 @@ def _parse_hearts_csv(raw: Any) -> Dict[str, int]:
     return out
 
 
+
+
+def _stage_other_wait_positions(gs: Any, exclude_pos: str = "") -> list[str]:
+    out: list[str] = []
+    try:
+        st = getattr(gs, "stage", None)
+        if not isinstance(st, dict):
+            return out
+        ex = str(exclude_pos or "").upper()
+        for pos in ("L", "C", "R"):
+            if pos == ex:
+                continue
+            slot = st.get(pos)
+            if slot is None or not bool(getattr(slot, "cardnumber", None)):
+                continue
+            if not bool(getattr(slot, "active", True)):
+                out.append(pos)
+    except Exception:
+        return []
+    return out
 def _stage_target_candidates(
     gs: Any,
     cards_db: Dict[str, Any],
