@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: registry_green_pick_multi_genericize_20260424e
+# BUILD_TAG: registry_topk_filtered_optional_genericize_20260424a
 from __future__ import annotations
 
 """llocg_ui.effects.registry
@@ -298,17 +298,35 @@ EXTRA_EFFECT_RULES = [
     {
         "id": "enter_kaho_bp2010_top5_member_optional",
         "effect_template": "自分のデッキの上からカードを5枚見る。その中からメンバーカードを1枚公開して手札に加えてもよい。残りを控え室に置く。",
-        "ext_key": "enter_top5_member_optional_pick",
+        "ext_key": "topk_filtered_optional_pick",
+        "gd": {
+            "source_name": "日野下花帆 bp2-010",
+            "topk": "5",
+            "filter_kind": "MEMBER",
+            "optional": "1"
+        },
     },
     {
         "id": "body_kozue_bp2012_stage_to_green_top5_member_optional",
         "effect_template": "このメンバーがステージから控え室に置かれたとき、自分のデッキの上からカードを5枚見る。その中からメンバーカードを1枚公開して手札に加えてもよい。残りを控え室に置く。",
-        "ext_key": "body_stage_to_green_top5_member_optional",
+        "ext_key": "topk_filtered_optional_pick",
+        "gd": {
+            "source_name": "乙宗梢 bp2-012",
+            "topk": "5",
+            "filter_kind": "MEMBER",
+            "optional": "1"
+        },
     },
     {
         "id": "body_tsuzuri_bp2013_stage_to_green_top5_live_optional",
         "effect_template": "このメンバーがステージから控え室に置かれたとき、自分のデッキの上からカードを5枚見る。その中からライブカードを1枚公開して手札に加えてもよい。残りを控え室に置く。",
-        "ext_key": "body_stage_to_green_top5_live_optional",
+        "ext_key": "topk_filtered_optional_pick",
+        "gd": {
+            "source_name": "夕霧綴理 bp2-013",
+            "topk": "5",
+            "filter_kind": "LIVE",
+            "optional": "1"
+        },
     },
     {
         "id": "enter_ginko_bp2016_reorder_top2",
