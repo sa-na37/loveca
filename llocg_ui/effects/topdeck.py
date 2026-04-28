@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: topdeck_mill_topk_genericize_20260424c
+# BUILD_TAG: topdeck_choose_one_from_topk_and_mill_genericize_20260424d
 from __future__ import annotations
 
 """llocg_ui.effects.topdeck
@@ -8,6 +8,7 @@ from __future__ import annotations
 - reorder_from_top{k}
 - choose_from_top5 filtered optional
 - mill top{k} -> green_room
+- look top{k}, choose 1 to hand, rest to green
 """
 
 from typing import Any, Dict
@@ -54,6 +55,33 @@ def try_apply_topdeck_ext(
         except Exception as e:
             try:
                 gs.log.append(f"[ERR] {label}: mill_topk_to_green failed: {e}")
+            except Exception:
+                pass
+        return True
+
+
+    # look top{k}, choose 1 to hand, rest to green
+    if ext_key == 'topk_choose_one_to_hand_rest_green':
+        try:
+            k = int(gd.get('topk') or 0)
+        except Exception:
+            k = 0
+        if k <= 0:
+            k = 3
+        fn = eng.get('_enqueue_choose_from_topk')
+        label = gd.get('source_name') or f'top{k} choose1'
+        if callable(fn):
+            try:
+                fn(gs, k, rng)
+                gs.log.append(f"[AUTO_EXT] {label}: enqueue choose_one_from_top{k}")
+            except Exception as e:
+                try:
+                    gs.log.append(f"[ERR] {label}: _enqueue_choose_from_topk failed: {e}")
+                except Exception:
+                    pass
+        else:
+            try:
+                gs.log.append(f"[ERR] {label}: _enqueue_choose_from_topk not found")
             except Exception:
                 pass
         return True

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: effect_registry_20260424_mill_topk_genericize_c
+# BUILD_TAG: effect_registry_20260424_topk_choose_one_rest_green_genericize_d
 from __future__ import annotations
 
 """llocg_ui.effects.registry
@@ -61,6 +61,19 @@ EXTRA_EFFECT_RULES = [
         "ext_key": "live_success_success_zone_has_mus_draw1",
     },
     # Prompt 63: PL!-sd1-008 小泉花陽 (BODY 起動)
+
+    {
+        "id": "look_top2_choose_one_to_hand_rest_green",
+        "effect_template": "自分のデッキの上からカードを2枚見る。その中から1枚を手札に加え、残りを控え室に置く。",
+        "ext_key": "topk_choose_one_to_hand_rest_green",
+        "gd": {"topk": "2", "source_name": "top2 choose1"},
+    },
+    {
+        "id": "look_top3_choose_one_to_hand_rest_green",
+        "effect_template": "自分のデッキの上からカードを3枚見る。その中から1枚を手札に加え、残りを控え室に置く。",
+        "ext_key": "topk_choose_one_to_hand_rest_green",
+        "gd": {"topk": "3", "source_name": "top3 choose1"},
+    },
     {
         "id": "body_mill10",
         "effect_template": "自分のデッキの上からカードを10枚控え室に置く。",
