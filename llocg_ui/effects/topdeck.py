@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: topdeck_split_hand_top_green_restore_old_step_ui_20260428b
+# BUILD_TAG: topdeck_split_hand_top_green_step_labels_20260428c
 from __future__ import annotations
 
 """llocg_ui.effects.topdeck
@@ -117,22 +117,45 @@ def try_apply_topdeck_ext(
         if k <= 0:
             k = 3
         label = gd.get('source_name') or f'top{k} split1/1/rest'
-        fn = eng.get('_enqueue_look_top_3way_split')
-        if callable(fn):
-            try:
-                # Keep using the legacy step-based pending/UI here.
-                # This family is already a clean textual common part, but the
-                # old dedicated UI is clearer than the generic text override.
-                fn(gs, k, rng)
-                gs.log.append(f"[AUTO_EXT] {label}: enqueue look_top_3way_split top{k} (legacy step UI)")
-            except Exception as e:
+        try:
+            refresh = eng.get('_rule_refresh_for_top_access')
+            if callable(refresh):
+                refresh(gs, rng, k, reason='look_top_3way')
+            if not getattr(gs, 'deck', None):
                 try:
-                    gs.log.append(f"[ERR] {label}: _enqueue_look_top_3way_split failed: {e}")
+                    gs.log.append('[INFO] look_top_3way: deck empty')
                 except Exception:
                     pass
-        else:
+                return True
+            pool = [gs.deck.pop(0) for _ in range(min(k, len(gs.deck)))]
+            if len(pool) < 3:
+                gs.hand.extend(pool)
+                try:
+                    gs.log.append(f'[AUTO] look_top_3way: only {len(pool)} cards -> all to hand')
+                except Exception:
+                    pass
+                return True
+            detail_text = str(ctx.get('detail_text') or ctx.get('effect_text') or '')
+            gs.pending.append({
+                'kind': 'look_top_3way_step',
+                'text': f'手札に加えるカードを選ぶ（デッキ上{len(pool)}枚から1枚）',
+                'options': list(pool),
+                'pool': list(pool),
+                'display_cards': list(pool),
+                'step': 'hand',
+                'picked_hand': '',
+                'picked_top': '',
+                'detail_text': detail_text,
+                'effect_text': detail_text,
+            })
             try:
-                gs.log.append(f"[ERR] {label}: _enqueue_look_top_3way_split not found")
+                gs.log.append(f"[AUTO_EXT] {label}: enqueue look_top_3way_split top{k} (legacy step UI + clearer labels)")
+                gs.log.append(f'[PENDING] look_top_3way: pool={pool}')
+            except Exception:
+                pass
+        except Exception as e:
+            try:
+                gs.log.append(f"[ERR] {label}: topk_split_one_hand_one_top_rest_green failed: {e}")
             except Exception:
                 pass
         return True
