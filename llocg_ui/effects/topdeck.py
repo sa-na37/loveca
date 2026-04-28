@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: topdeck_choose_one_from_topk_and_mill_genericize_20260424d
+# BUILD_TAG: topdeck_choose_one_from_topk_and_mill_fix_inline_pending_20260424e
 from __future__ import annotations
 
 """llocg_ui.effects.topdeck
@@ -68,20 +68,42 @@ def try_apply_topdeck_ext(
             k = 0
         if k <= 0:
             k = 3
-        fn = eng.get('_enqueue_choose_from_topk')
         label = gd.get('source_name') or f'top{k} choose1'
-        if callable(fn):
+        try:
+            refresh = eng.get('_rule_refresh_for_top_access')
+            if callable(refresh):
+                refresh(gs, rng, k, reason='look_top_choose_one_rest_green')
+            deck = getattr(gs, 'deck', None)
+            if not deck:
+                gs.log.append(f'[INFO] {label}: deck empty')
+                return True
+            pool = []
+            for _ in range(min(k, len(deck))):
+                pool.append(deck.pop(0))
+            if not pool:
+                gs.log.append(f'[INFO] {label}: no cards after refresh')
+                return True
+            if len(pool) == 1:
+                pick = pool[0]
+                gs.hand.append(pick)
+                gs.log.append(f'[AUTO_EXT] {label}: only 1 -> hand {pick}')
+                return True
+            detail_text = str(ctx.get('detail_text') or ctx.get('effect_text') or '')
+            gs.pending.append({
+                'kind': 'choose_from_topk',
+                'text': f'デッキ上から{len(pool)}枚を見る：その中から1枚を手札に加え、残りを控え室に置く',
+                'options': list(pool),
+                'pool': list(pool),
+                'display_cards': list(pool),
+                'candidates': list(pool),
+                'optional': False,
+                'detail_text': detail_text,
+                'effect_text': detail_text,
+            })
+            gs.log.append(f"[AUTO_EXT] {label}: inline choose_from_top{len(pool)} pending")
+        except Exception as e:
             try:
-                fn(gs, k, rng)
-                gs.log.append(f"[AUTO_EXT] {label}: enqueue choose_one_from_top{k}")
-            except Exception as e:
-                try:
-                    gs.log.append(f"[ERR] {label}: _enqueue_choose_from_topk failed: {e}")
-                except Exception:
-                    pass
-        else:
-            try:
-                gs.log.append(f"[ERR] {label}: _enqueue_choose_from_topk not found")
+                gs.log.append(f"[ERR] {label}: inline topk_choose_one_to_hand_rest_green failed: {e}")
             except Exception:
                 pass
         return True
