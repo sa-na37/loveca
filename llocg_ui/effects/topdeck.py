@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: topdeck_reorder_from_topk_genericize_20260424b
+# BUILD_TAG: topdeck_mill_topk_genericize_20260424c
 from __future__ import annotations
 
 """llocg_ui.effects.topdeck
@@ -7,7 +7,7 @@ from __future__ import annotations
 山札上から扱う系の ext apply を分離した正本。
 - reorder_from_top{k}
 - choose_from_top5 filtered optional
-- mill 10 / mill 5
+- mill top{k} -> green_room
 """
 
 from typing import Any, Dict
@@ -25,30 +25,37 @@ def try_apply_topdeck_ext(
     ext_key: str,
 ) -> bool:
 
-    # ------------------------------------------------------------------
-    # Prompt 63: PL!-sd1-008 小泉花陽
-    # デッキ上から 10 枚控え室へ (mill 10)
-    # ------------------------------------------------------------------
-    if ext_key == "body_mill10":
+    # mill top{k} -> green_room
+    if ext_key == "mill_topk_to_green":
+        try:
+            k = int(gd.get('topk') or 0)
+        except Exception:
+            k = 0
+        if k <= 0:
+            k = 5
+        label = gd.get('source_name') or f'top{k} mill'
         milled = 0
         try:
-            deck = getattr(gs, "deck", None)
-            waiting = getattr(gs, "green_room", None)
+            deck = getattr(gs, 'deck', None)
+            waiting = getattr(gs, 'green_room', None)
             if waiting is None:
                 waiting = (
-                    getattr(gs, "waiting_room", None)
-                    or getattr(gs, "graveyard", None)
-                    or getattr(gs, "discard", None)
+                    getattr(gs, 'waiting_room', None)
+                    or getattr(gs, 'graveyard', None)
+                    or getattr(gs, 'discard', None)
                 )
             if deck is not None and waiting is not None:
-                for _ in range(10):
+                for _ in range(k):
                     if not deck:
                         break
                     waiting.append(deck.pop(0))
                     milled += 1
-            gs.log.append(f"[AUTO_EXT] mill {milled} cards to waiting_room (小泉花陽)")
-        except Exception:
-            pass
+            gs.log.append(f"[AUTO_EXT] {label}: milled {milled}/{k} to waiting_room")
+        except Exception as e:
+            try:
+                gs.log.append(f"[ERR] {label}: mill_topk_to_green failed: {e}")
+            except Exception:
+                pass
         return True
 
     # reorder top{k} keep any
@@ -102,29 +109,5 @@ def try_apply_topdeck_ext(
                 pass
         return True
 
-    if ext_key == "enter_mill5":
-        milled = 0
-        try:
-            deck = getattr(gs, "deck", None)
-            waiting = getattr(gs, "green_room", None)
-            if waiting is None:
-                waiting = (
-                    getattr(gs, "waiting_room", None)
-                    or getattr(gs, "graveyard", None)
-                    or getattr(gs, "discard", None)
-                )
-            if deck is not None and waiting is not None:
-                for _ in range(5):
-                    if not deck:
-                        break
-                    waiting.append(deck.pop(0))
-                    milled += 1
-        except Exception:
-            pass
-        try:
-            gs.log.append(f"[AUTO_EXT] mill {milled}/5 cards to waiting_room (村野さやか bp2-011)")
-        except Exception:
-            pass
-        return True
 
     return False

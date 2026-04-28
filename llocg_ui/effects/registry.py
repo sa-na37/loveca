@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: effect_registry_20260424_topk_reorder_genericize_b
+# BUILD_TAG: effect_registry_20260424_mill_topk_genericize_c
 from __future__ import annotations
 
 """llocg_ui.effects.registry
@@ -64,7 +64,8 @@ EXTRA_EFFECT_RULES = [
     {
         "id": "body_mill10",
         "effect_template": "自分のデッキの上からカードを10枚控え室に置く。",
-        "ext_key": "body_mill10",
+        "ext_key": "mill_topk_to_green",
+        "gd": {"topk": "10", "source_name": "小泉花陽 sd1-008"},
     },
     # Prompt 67: PL!HS-bp1-004 夕霧綴理 (ライブ開始時)
     {
@@ -365,7 +366,8 @@ EXTRA_EFFECT_RULES = [
     {
         "id": "enter_sayaka_bp2011_mill5",
         "effect_template": "デッキの上からカードを5枚控え室に置く。",
-        "ext_key": "enter_mill5",
+        "ext_key": "mill_topk_to_green",
+        "gd": {"topk": "5", "source_name": "村野さやか bp2-011"},
     },
     {
         "id": "body_megumi_bp2015_leave_stage_draw2_discard1",
