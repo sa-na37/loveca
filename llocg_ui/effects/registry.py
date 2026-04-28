@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: effect_registry_20260428_topk_filtered_optional_group_cost_name_genericize_g
+# BUILD_TAG: effect_registry_20260428_success_zone_threshold_action_expand_h
 from __future__ import annotations
 
 """llocg_ui.effects.registry
@@ -47,6 +47,18 @@ EXTRA_EFFECT_RULES = [
         "effect_template": "自分の成功ライブカード置き場にあるカードのスコアの合計が3以上の場合、カードを1枚引く。",
         "ext_key": "success_zone_score_threshold_action",
         "gd": {"threshold": "3", "action": "draw", "amount": "1", "source_name": "東條希"},
+    },
+    {
+        "id": "enter_success_score_ge3_draw1_b5_015",
+        "effect_template": "自分の成功ライブカード置き場にあるカードのスコアの合計が3以上の場合、カードを1枚引く。",
+        "ext_key": "success_zone_score_threshold_action",
+        "gd": {"threshold": "3", "action": "draw", "amount": "1", "source_name": "西木野真姫 bp5-015"},
+    },
+    {
+        "id": "enter_success_score_ge6_put_active_energy1",
+        "effect_template": "自分の成功ライブカード置き場にあるカードのスコアの合計が6以上の場合、自分のエネルギーデッキから、エネルギーカードを1枚アクティブ状態で置く。",
+        "ext_key": "success_zone_score_threshold_action",
+        "gd": {"threshold": "6", "action": "put_active_energy_from_deck", "amount": "1", "source_name": "星空凛 bp5-005"},
     },
     # Prompt 41: PL!-pb1-003 南ことり (登場) ※コストはエンジン側が pay_or_skip を積む想定
     {

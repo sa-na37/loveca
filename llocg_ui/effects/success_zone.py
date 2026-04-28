@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: success_zone_count_and_threshold_genericize_20260424b
+# BUILD_TAG: success_zone_count_and_threshold_genericize_20260424a
 from __future__ import annotations
 
 """llocg_ui.effects.success_zone
@@ -9,6 +9,20 @@ from __future__ import annotations
 
 from typing import Any, Dict
 from .helpers import *  # noqa: F403
+
+
+def _append_ack_confirm(gs: Any, source_cn: str, text: str, detail_text: str) -> None:
+    try:
+        getattr(gs, "pending").append({
+            "kind": "confirm_effect",
+            "text": text,
+            "detail_text": detail_text,
+            "options": ["ok"],
+            "ctx": {"source_cn": source_cn, "_ack_only": True},
+            "source_cn": source_cn,
+        })
+    except Exception:
+        pass
 
 
 def try_apply_success_zone_ext(
@@ -98,6 +112,36 @@ def try_apply_success_zone_ext(
                 source_cn,
                 f"成功ライブカード置き場のスコア合計が{threshold}以上なので、カードを{drawn}枚引きました。",
                 f"自分の成功ライブカード置き場にあるカードのスコアの合計が{threshold}以上の場合、カードを{amount}枚引く。",
+            )
+            return True
+
+        if action == "put_active_energy_from_deck":
+            added = 0
+            try:
+                put_active = eng.get("_put_active_energy_from_deck")
+                if callable(put_active):
+                    added = int(put_active(gs, amount, reason=source_name) or 0)
+                else:
+                    rem_fn = eng.get("_energy_remaining_in_deck")
+                    clamp_fn = eng.get("_clamp_energy_zone")
+                    rem = int(rem_fn(gs) if callable(rem_fn) else 0)
+                    n = min(int(amount or 0), max(0, rem))
+                    if n > 0:
+                        gs.energy_active = int(getattr(gs, "energy_active", 0) or 0) + n
+                        if callable(clamp_fn):
+                            clamp_fn(gs)
+                        added = n
+            except Exception:
+                pass
+            try:
+                gs.log.append(f"[AUTO_EXT] success_score={total_score}>={threshold} -> put_active_energy {added} ({source_name})")
+            except Exception:
+                pass
+            _append_ack_confirm(
+                gs,
+                source_cn,
+                f"成功ライブカード置き場のスコア合計が{threshold}以上なので、エネルギーデッキからエネルギーを{added}枚アクティブ状態で置きました。",
+                f"自分の成功ライブカード置き場にあるカードのスコアの合計が{threshold}以上の場合、自分のエネルギーデッキから、エネルギーカードを{amount}枚アクティブ状態で置く。",
             )
             return True
 
