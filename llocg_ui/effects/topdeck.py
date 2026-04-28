@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: topdeck_split_hand_top_green_step_labels_20260428c
+# BUILD_TAG: topdeck_filtered_optional_pick_genericize_20260428g
 from __future__ import annotations
 
 """llocg_ui.effects.topdeck
@@ -187,19 +187,34 @@ def try_apply_topdeck_ext(
                 pass
         return True
 
-    # PL!HS-bp2-010 / 012 / 013 top5 filtered optional
-    if ext_key in ('enter_top5_member_optional_pick', 'body_stage_to_green_top5_member_optional', 'body_stage_to_green_top5_live_optional'):
-        filter_kind = 'LIVE' if ext_key == 'body_stage_to_green_top5_live_optional' else 'MEMBER'
-        label = (
+    # look top{k}, optionally pick 1 filtered card to hand, rest to green
+    if ext_key in ('topk_filtered_optional_pick', 'enter_top5_member_optional_pick', 'body_stage_to_green_top5_member_optional', 'body_stage_to_green_top5_live_optional'):
+        try:
+            k = int(gd.get('topk') or 0)
+        except Exception:
+            k = 0
+        if k <= 0:
+            k = 5
+
+        filter_kind = str(gd.get('filter_kind') or '').strip().upper()
+        if not filter_kind:
+            filter_kind = 'LIVE' if ext_key == 'body_stage_to_green_top5_live_optional' else 'MEMBER'
+
+        optional_raw = str(gd.get('optional') if gd.get('optional') is not None else '1').strip().lower()
+        optional = optional_raw not in ('0', 'false', 'no', 'off')
+
+        label = gd.get('source_name') or (
             '日野下花帆 bp2-010' if ext_key == 'enter_top5_member_optional_pick' else
             '乙宗梢 bp2-012' if ext_key == 'body_stage_to_green_top5_member_optional' else
-            '夕霧綴理 bp2-013'
+            '夕霧綴理 bp2-013' if ext_key == 'body_stage_to_green_top5_live_optional' else
+            f'top{k} filtered optional pick'
         )
+
         fn = eng.get('_enqueue_choose_from_topk_filtered')
         if callable(fn):
             try:
-                fn(gs, 5, rng, cards_db, filter_kind=filter_kind, optional=True)
-                gs.log.append(f"[AUTO_EXT] {label}: enqueue choose_from_top5 filter_kind={filter_kind} optional=True")
+                fn(gs, k, rng, cards_db, filter_kind=filter_kind, optional=optional)
+                gs.log.append(f"[AUTO_EXT] {label}: enqueue choose_from_top{k} filter_kind={filter_kind} optional={optional}")
             except Exception as e:
                 try:
                     gs.log.append(f"[ERR] {label}: _enqueue_choose_from_topk_filtered failed: {e}")
