@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: topdeck_split_hand_top_green_text_fix_20260428a
+# BUILD_TAG: topdeck_split_hand_top_green_restore_old_step_ui_20260428b
 from __future__ import annotations
 
 """llocg_ui.effects.topdeck
@@ -120,15 +120,11 @@ def try_apply_topdeck_ext(
         fn = eng.get('_enqueue_look_top_3way_split')
         if callable(fn):
             try:
+                # Keep using the legacy step-based pending/UI here.
+                # This family is already a clean textual common part, but the
+                # old dedicated UI is clearer than the generic text override.
                 fn(gs, k, rng)
-                try:
-                    if getattr(gs, 'pending', None):
-                        p = gs.pending[-1]
-                        if isinstance(p, dict) and p.get('kind') == 'look_top_3way_step' and str(p.get('step') or 'hand') == 'hand':
-                            p['text'] = f'まず、デッキの上から見た{len(p.get("pool") or [])}枚の中から、手札に加える1枚を選ぶ。次に、残りからデッキの上に置く1枚を選ぶ。最後の1枚は控え室に置かれる。'
-                except Exception:
-                    pass
-                gs.log.append(f"[AUTO_EXT] {label}: enqueue look_top_3way_split top{k}")
+                gs.log.append(f"[AUTO_EXT] {label}: enqueue look_top_3way_split top{k} (legacy step UI)")
             except Exception as e:
                 try:
                     gs.log.append(f"[ERR] {label}: _enqueue_look_top_3way_split failed: {e}")
