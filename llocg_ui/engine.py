@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: activate_ctx_attach_detail_text_for_green_pick_20260424a
+# BUILD_TAG: enter_optional_self_wait_plus_discard_cost_fix_20260428a
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -1207,13 +1207,8 @@ def _pretty_optional_effect_prompt_text(trigger_label: str, source_cn: str, cost
         return f"{prefix}: このメンバーをウェイトにしてもよい → 自分の控え室から『μ's』のメンバーカードを1枚手札に加える"
     if ext_key == 'live_start_pick_mus_live_from_green':
         return f"{prefix}: 自分の成功カード置き場にカードがある場合、手札を1枚控え室に置いてもよい → 自分の控え室から『μ's』のライブカードを1枚手札に加える"
-    if ext_key == 'live_start_choose_heart':
-        gd = m[1] if isinstance(m, tuple) and len(m) > 1 and isinstance(m[1], dict) else {}
-        opts = [str(x).strip() for x in str((gd or {}).get('option_labels') or '').split(',') if str(x).strip()]
-        require_other = str((gd or {}).get('require_other_member') or '0') == '1'
-        opt_txt = ' / '.join(opts) if opts else '好きなハートの色'
-        cond = '自分のステージにほかのメンバーがいる場合、' if require_other else ''
-        return f"{prefix}: {cond}{opt_txt}から1つ選び、ライブ終了時までそのハートを1つ得る"
+    if ext_key == 'live_start_choose_pinkYellowPurple_heart':
+        return f"{prefix}: 手札を1枚控え室に置いてもよい → 桃 / 黄 / 紫 から1つ選び、ライブ終了時までそのハートを1つ得る"
     if ext_key == 'live_start_no_mus_blade5_force_not_center':
         return f"{prefix}: 自分のステージにブレード5以上の『μ's』メンバーがいない場合、このメンバーはセンターエリア以外にポジションチェンジする"
     if cost and eff:
@@ -3061,7 +3056,6 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                                     'source_cn': ci.cardnumber,
                                     'label': f'{pos}: {ci.cardnumber} ライブ開始時',
                                     'pos': pos.upper(),
-                                    'detail_text': eff,
                                 })
                             else:
                                 triggers.append({
@@ -3070,7 +3064,6 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                                     'label': f'{pos}: {ci.cardnumber} ライブ開始時',
                                     'pos': pos.upper(),
                                     'effect': eff,
-                                    'detail_text': eff,
                                 })
                         continue
                 # self-wait コスト（Eコストあり扱いで来た場合のフォールバック・通常は上のブロックで処理済み）
@@ -3174,10 +3167,6 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                         gs, cards_db, build_text, src_live, f'{src_live} ライブ開始時', {'source_cn': src_live, 'set_idx': _set_idx}
                     )
                     if trig:
-                        try:
-                            trig.setdefault('detail_text', build_text)
-                        except Exception:
-                            pass
                         triggers.append(trig)
                         continue
                     # Only generic no-cost LIVE-card hooks here.
@@ -3213,7 +3202,6 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                             'source_cn': src_live,
                             'label': f'{src_live} ライブ開始時',
                             'effect': eff,
-                            'detail_text': eff,
                         })
     except Exception:
         pass
@@ -3458,24 +3446,23 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
                 if n <= 0 and ("手札を1枚控え室に置いてもよい" in cost):
                     n = 1
                 if n > 0:
-                    detail_text = _build_clause_prompt_text(cost, eff)
-                    ctx = {'pos': pos.upper(), 'source_cn': canon, 'detail_text': detail_text, 'effect_text': eff}
+                    ctx = {'pos': pos.upper(), 'source_cn': canon}
+                    combo_self_wait = _cost_requires_self_wait(cost) and not _cost_requires_self_to_green(cost)
                     gs.pending.append({
                         'kind': 'pay_or_skip',
                         'text': _pretty_optional_effect_prompt_text('登場', canon, cost, eff),
                         'options': ['pay', 'skip'],
-                        'cost_kind': 'discard_from_hand',
+                        'cost_kind': ('self_wait_and_discard_from_hand' if combo_self_wait else 'discard_from_hand'),
                         'cost_n': n,
                         'after_effect_template': eff,
                         'ctx': ctx,
                         'source_cn': canon,
                     })
-                    gs.log.append(f"[PENDING] {canon}[登場]: pay/skip -> discard {n} then {eff}")
+                    gs.log.append(f"[PENDING] {canon}[登場]: pay/skip -> {'self_wait + ' if combo_self_wait else ''}discard {n} then {eff}")
                     return
                 e_cost = _parse_energy_cost(cost)
                 if e_cost > 0 and _match_effect_template(eff):
-                    detail_text = _build_clause_prompt_text(cost, eff)
-                    ctx = {'pos': pos.upper(), 'source_cn': canon, 'detail_text': detail_text, 'effect_text': eff}
+                    ctx = {'pos': pos.upper(), 'source_cn': canon}
                     gs.pending.append({
                         'kind': 'pay_or_skip',
                         'text': _pretty_optional_effect_prompt_text('登場', canon, cost, eff),
@@ -3489,8 +3476,7 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
                     gs.log.append(f"[PENDING] {canon}[登場]: pay/skip -> energy {e_cost} then {eff}")
                     return
                 if _cost_requires_self_wait(cost) and not _cost_requires_self_to_green(cost):
-                    detail_text = _build_clause_prompt_text(cost, eff)
-                    ctx = {'pos': pos.upper(), 'source_cn': canon, 'detail_text': detail_text, 'effect_text': eff}
+                    ctx = {'pos': pos.upper(), 'source_cn': canon}
                     gs.pending.append({
                         'kind': 'pay_or_skip',
                         'text': _pretty_optional_effect_prompt_text('登場', canon, cost, eff),
@@ -3509,8 +3495,7 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
             # costless-only for now
             if _parse_energy_cost(cost) > 0 or _cost_requires_self_to_green(cost):
                 continue
-            detail_text = _build_clause_prompt_text(cost, eff)
-            ctx = {'pos': pos.upper(), 'source_cn': canon, 'detail_text': detail_text, 'effect_text': eff}
+            ctx = {'pos': pos.upper(), 'source_cn': canon}
             if try_apply_effect_template(gs, rng, cards_db, eff, ctx):
                 gs.log.append(f"[AUTO] {canon}[登場]: applied {eff}")
                 if gs.pending:
@@ -3687,61 +3672,6 @@ def _list_active_cost10_member_enter_draw_positions(gs: GameState, cards_db: Dic
     return out
 def _has_active_cost10_member_enter_draw_trigger(gs: GameState, cards_db: Dict[str, CardInfo], entered_cn: str) -> bool:
     return bool(_list_active_cost10_member_enter_draw_positions(gs, cards_db, entered_cn))
-def _build_clause_prompt_text(cost: str, eff: str) -> str:
-    try:
-        cost_s = str(cost or '').strip()
-        eff_s = str(eff or '').strip()
-        if cost_s and cost_s != eff_s:
-            return f"{cost_s}：{eff_s}"
-        return eff_s
-    except Exception:
-        return str(eff or '').strip()
-
-
-def _first_supported_trigger_detail_text(ci: Optional[CardInfo], trigger_keyword: str) -> str:
-    if not ci or not getattr(ci, 'abilities', None):
-        return ''
-    try:
-        abilities = list(getattr(ci, 'abilities', []) or [])
-    except Exception:
-        abilities = []
-    for ab in abilities:
-        if not isinstance(ab, dict):
-            continue
-        trig = str(ab.get('trigger', '') or '')
-        if trigger_keyword == '登場':
-            if '登場' not in trig:
-                continue
-        elif trigger_keyword == 'stage_to_green':
-            if trig not in ('BODY', '自動', '') and ('控え室に置かれたとき' not in trig):
-                continue
-        clauses = ab.get('clauses', [])
-        if not isinstance(clauses, list):
-            continue
-        first = clauses[0] if clauses and isinstance(clauses[0], dict) else {}
-        first_eff = str(first.get('effect_template', '') or first.get('raw', '') or '').strip()
-        if trigger_keyword == '登場' and ('以下から' in first_eff) and ('選ぶ' in first_eff):
-            mode_lines = []
-            for cl in clauses[1:]:
-                if not isinstance(cl, dict):
-                    continue
-                eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
-                if eff:
-                    mode_lines.append(f"・{eff}")
-            return '\n'.join([first_eff] + mode_lines) if mode_lines else first_eff
-        for cl in clauses:
-            if not isinstance(cl, dict):
-                continue
-            cost = str(cl.get('cost_template', '') or '')
-            eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
-            if not eff:
-                continue
-            if trigger_keyword == 'stage_to_green' and 'このメンバーがステージから控え室に置かれたとき' not in eff:
-                continue
-            return _build_clause_prompt_text(cost, eff)
-    return ''
-
-
 def _collect_auto_triggers_on_member_leave_stage(gs: GameState, cards_db: Dict[str, CardInfo], left_pos: str, left_cn: str) -> List[Dict[str, Any]]:
     """Collect auto triggers that happen when a MEMBER leaves your stage and goes to green room.
     Narrow support for cards whose compiled clause keeps the full trigger text inside
@@ -3783,7 +3713,6 @@ def _collect_auto_triggers_on_member_leave_stage(gs: GameState, cards_db: Dict[s
                 'pos': str(left_pos or 'C').upper(),
                 'cn': left_cn,
                 'effect': eff,
-                'detail_text': _build_clause_prompt_text(cost, eff),
                 'label': f'{canon_left}[stage->green]',
             })
     return out
@@ -3802,7 +3731,6 @@ def _collect_auto_triggers_on_member_enter(gs: GameState, cards_db: Dict[str, Ca
             'source_cn': canon_enter,
             'pos': str(entered_pos or 'C').upper(),
             'cn': entered_cn,
-            'detail_text': _first_supported_trigger_detail_text(ci_enter, '登場'),
         })
     # Generic: one trigger per unused member whose BODY says "when a cost-10 member enters, draw 1"
     for src_pos in _list_active_cost10_member_enter_draw_positions(gs, cards_db, entered_cn):
@@ -3814,7 +3742,6 @@ def _collect_auto_triggers_on_member_enter(gs: GameState, cards_db: Dict[str, Ca
             'source_pos': str(src_pos).upper(),
             'entered_pos': str(entered_pos or 'C').upper(),
             'entered_cn': entered_cn,
-            'detail_text': '自分のステージにコスト10のメンバーが登場したとき、カードを1枚引く。',
         })
     return out
 def _auto_trigger_option_text(t: Dict[str, Any]) -> str:
@@ -3853,7 +3780,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
                 rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0) + 17)
             except Exception:
                 rng2 = random.Random(17)
-            ctx = {'source_cn': src_cn, 'detail_text': str((trig or {}).get('detail_text', '') or eff), 'effect_text': eff}
+            ctx = {'source_cn': src_cn}
             if pos:
                 ctx.update({'pos': pos, 'src_pos': pos})
             try_apply_effect_template(gs, rng2, cards_db, eff, ctx)
@@ -3868,7 +3795,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
                 rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
             except Exception:
                 rng2 = random.Random(0)
-            ctx = {'source_cn': src_cn, 'detail_text': str((trig or {}).get('detail_text', '') or eff), 'effect_text': eff}
+            ctx = {'source_cn': src_cn}
             if pos:
                 ctx.update({'pos': pos, 'src_pos': pos})
             try_apply_effect_template(gs, rng2, cards_db, eff, ctx)
@@ -6040,8 +5967,7 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                         gs.used_this_turn = {akey: 1}
                     except Exception:
                         pass
-            detail_text = _build_clause_prompt_text(cost, eff)
-            ctx = {'pos': pos, 'src_pos': pos, 'source_cn': ci.cardnumber, 'detail_text': detail_text, 'effect_text': eff}
+            ctx = {'pos': pos, 'source_cn': ci.cardnumber}
             matched = try_apply_effect_template(gs, rng, cards_db, eff, ctx)
             if not matched:
                 gs.log.append(f"[WARN] activate: unsupported effect_template: {eff}")
@@ -6196,7 +6122,6 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         ctx0 = dict(p.get('ctx', {}) or {})
         src = str(p.get('source_cn', '') or '')
         low = choice_str.lower()
-        ack_only = bool(ctx0.get('_ack_only'))
         if low in ('skip', '__skip__', 'no', 'n', '0', 'false', 'cancel', 'skip effect', '使わない', 'いいえ', 'スキップ'):
             gs.log.append(f"[SKIP] {src}: skipped optional effect")
             _r = p.get('_resume') if isinstance(p, dict) else None
@@ -6209,12 +6134,6 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             return
         if src and not ctx0.get('source_cn'):
             ctx0['source_cn'] = src
-        if ack_only:
-            gs.log.append(f"[AUTO] {src}: confirm_effect acknowledged")
-            _r = p.get('_resume') if isinstance(p, dict) else None
-            if _r:
-                gs.pending.append(_r)
-            return
         applied = False
         if after_eff:
             try:
@@ -6427,6 +6346,31 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             return
         if src and not ctx0.get('source_cn'):
             ctx0['source_cn'] = src
+        if cost_kind == 'self_wait_and_discard_from_hand':
+            pos = str(ctx0.get('pos', '') or '').upper()
+            slot = (gs.stage or {}).get(pos) if isinstance(getattr(gs, 'stage', None), dict) else None
+            if cost_n <= 0:
+                gs.log.append("[ERR] pay_or_skip: invalid combo cost_n")
+                return
+            if len(gs.hand) < cost_n:
+                gs.log.append(f"[ERR] pay_or_skip: not enough cards in hand for combo cost (need {cost_n})")
+                return
+            if slot is None or not bool(getattr(slot, 'cardnumber', None)):
+                gs.log.append(f"[ERR] pay_or_skip: combo self_wait stage empty {pos}")
+                return
+            slot.active = False
+            gs.log.append(f"[COST] {pos}: {getattr(slot,'cardnumber','?')} -> WAIT (self-wait cost)")
+            gs.pending.append({
+                'kind': 'discard_from_hand',
+                'remaining': cost_n,
+                'text': f'手札を{cost_n}枚控え室に置く',
+                'options': list(gs.hand),
+                'after_effect_template': after_eff,
+                'after_ctx': ctx0,
+                'after_source_cn': src,
+            })
+            return
+
         if cost_kind == 'discard_from_hand':
             if cost_n <= 0:
                 gs.log.append("[ERR] pay_or_skip: invalid cost_n")
