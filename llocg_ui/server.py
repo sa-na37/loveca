@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: server_restore_hand_live_rotation_and_fix_hand_choice_popup_20260428b
+# BUILD_TAG: server_choice_popup_live_fill_fix_20260428c
 from __future__ import annotations
 
 """llocg_ui.server
@@ -2608,20 +2608,31 @@ HTML = r'''<!doctype html>
       btn.appendChild(img);
       return;
     }
+
+    const inner = document.createElement('div');
+    inner.className = 'rot';
+    inner.style.position = 'absolute';
+    inner.style.left = '50%';
+    inner.style.top = '50%';
+    inner.style.width = (btn.clientHeight || btn.offsetHeight || 0) + 'px';
+    inner.style.height = (btn.clientWidth || btn.offsetWidth || 0) + 'px';
+    inner.style.transform = (wantOrient === 'portrait')
+      ? 'translate(-50%, -50%) rotate(90deg)'
+      : 'translate(-50%, -50%) rotate(-90deg)';
+    inner.style.transformOrigin = 'center center';
+
     const img = document.createElement('img');
     img.src = imgUrl(cn);
     img.alt = cn;
     img.style.position = 'absolute';
-    img.style.top = '50%';
-    img.style.left = '50%';
-    img.style.transform = (wantOrient === 'portrait')
-      ? 'translate(-50%, -50%) rotate(90deg)'
-      : 'translate(-50%, -50%) rotate(-90deg)';
-    img.style.transformOrigin = 'center center';
-    img.style.width = btn.clientHeight ? (btn.clientHeight + 'px') : '100%';
-    img.style.height = btn.clientWidth ? (btn.clientWidth + 'px') : '100%';
+    img.style.left = '0';
+    img.style.top = '0';
+    img.style.width = '100%';
+    img.style.height = '100%';
+    img.style.borderRadius = '8px';
     img.style.objectFit = 'contain';
-    btn.appendChild(img);
+    inner.appendChild(img);
+    btn.appendChild(inner);
   }
 
   function renderFan(zoneEl, cards, wantOrient){
