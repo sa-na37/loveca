@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: effect_registry_20260428_topk_filtered_optional_genericize_f
+# BUILD_TAG: effect_registry_20260428_topk_filtered_optional_group_cost_name_genericize_g
 from __future__ import annotations
 
 """llocg_ui.effects.registry
@@ -308,6 +308,30 @@ EXTRA_EFFECT_RULES = [
         "effect_template": "このメンバーがステージから控え室に置かれたとき、自分のデッキの上からカードを5枚見る。その中からライブカードを1枚公開して手札に加えてもよい。残りを控え室に置く。",
         "ext_key": "topk_filtered_optional_pick",
         "gd": {"topk": "5", "filter_kind": "LIVE", "optional": "1", "source_name": "夕霧綴理 bp2-013"},
+    },
+    {
+        "id": "enter_umi_sd1004_top5_mus_live_optional",
+        "effect_template": "自分のデッキの上からカードを5枚見る。その中から『μ's』のライブカードを1枚公開して手札に加えてもよい。残りを控え室に置く。",
+        "ext_key": "topk_filtered_optional_pick",
+        "gd": {"topk": "5", "filter_kind": "LIVE", "filter_group": "μ's", "optional": "1", "source_name": "園田海未 sd1-004"},
+    },
+    {
+        "id": "enter_ren_bp1005_top5_liella_card_optional",
+        "effect_template": "自分のデッキの上からカードを5枚見る。その中から『Liella!』のカードを1枚まで公開して手札に加えてもよい。残りを控え室に置く。",
+        "ext_key": "topk_filtered_optional_pick",
+        "gd": {"topk": "5", "filter_group": "Liella!", "optional": "1", "source_name": "葉月恋 bp1-005"},
+    },
+    {
+        "id": "enter_karin_pb1016_top2_named_member_optional",
+        "effect_template": "自分のデッキの上からカードを2枚見る。その中から『朝香果林』のメンバーカードを1枚公開して手札に加えてもよい。残りを控え室に置く。",
+        "ext_key": "topk_filtered_optional_pick",
+        "gd": {"topk": "2", "filter_kind": "MEMBER", "filter_names": "朝香果林", "optional": "1", "source_name": "朝香果林 pb1-016"},
+    },
+    {
+        "id": "enter_eri_bp5002_top5_cost9_ge_mus_member_optional",
+        "effect_template": "自分のデッキの上からカードを5枚見る。その中からコスト9以上の『μ's』のメンバーカードを1枚公開して手札に加えてもよい。残りを控え室に置く。",
+        "ext_key": "topk_filtered_optional_pick",
+        "gd": {"topk": "5", "filter_kind": "MEMBER", "filter_group": "μ's", "cost_min": "9", "optional": "1", "source_name": "絢瀬絵里 bp5-002"},
     },
     {
         "id": "enter_ginko_bp2016_reorder_top2",

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: topdeck_filtered_optional_pick_genericize_20260428g
+# BUILD_TAG: topdeck_filtered_optional_pick_group_cost_name_genericize_20260428h
 from __future__ import annotations
 
 """llocg_ui.effects.topdeck
@@ -200,6 +200,18 @@ def try_apply_topdeck_ext(
         if not filter_kind:
             filter_kind = 'LIVE' if ext_key == 'body_stage_to_green_top5_live_optional' else 'MEMBER'
 
+        filter_group = str(gd.get('filter_group') or '').strip()
+        raw_names = str(gd.get('filter_names') or '').strip()
+        filter_names = [s.strip() for s in raw_names.split(',') if s.strip()]
+        try:
+            cost_min = int(gd.get('cost_min') or 0)
+        except Exception:
+            cost_min = 0
+        try:
+            cost_max = int(gd.get('cost_max') or 0)
+        except Exception:
+            cost_max = 0
+
         optional_raw = str(gd.get('optional') if gd.get('optional') is not None else '1').strip().lower()
         optional = optional_raw not in ('0', 'false', 'no', 'off')
 
@@ -210,19 +222,96 @@ def try_apply_topdeck_ext(
             f'top{k} filtered optional pick'
         )
 
-        fn = eng.get('_enqueue_choose_from_topk_filtered')
-        if callable(fn):
+        detail_text = str(ctx.get('detail_text') or ctx.get('effect_text') or '')
+        try:
+            refresh = eng.get('_rule_refresh_for_top_access')
+            if callable(refresh):
+                refresh(gs, rng, k, reason='look_top_filtered')
+            deck = getattr(gs, 'deck', None)
+            if not deck:
+                gs.log.append(f'[INFO] {label}: deck empty')
+                return True
+            pool = [deck.pop(0) for _ in range(min(k, len(deck)))]
+            if not pool:
+                gs.log.append(f'[INFO] {label}: no cards after refresh')
+                return True
+
+            def _matches(cn: str) -> bool:
+                ci = _get_card(cards_db, cn)  # noqa: F405
+                if not ci:
+                    return False
+                if filter_kind == 'LIVE' and not _is_live_ci(ci):  # noqa: F405
+                    return False
+                if filter_kind == 'MEMBER' and not _is_member_ci(ci):  # noqa: F405
+                    return False
+                if filter_group:
+                    group = str(getattr(ci, 'group', '') or '')
+                    if filter_group not in group:
+                        return False
+                if filter_names:
+                    name = str(getattr(ci, 'name', '') or getattr(ci, 'cardname', '') or cn)
+                    if not any(n in name for n in filter_names):
+                        return False
+                if cost_min or cost_max:
+                    try:
+                        cost_val = int(getattr(ci, 'cost', 0) or 0)
+                    except Exception:
+                        cost_val = 0
+                    if cost_min and cost_val < cost_min:
+                        return False
+                    if cost_max and cost_val > cost_max:
+                        return False
+                return True
+
+            candidates = [cn for cn in pool if _matches(cn)]
+
+            label_parts = []
+            if cost_min and cost_max:
+                label_parts.append(f'コスト{cost_min}〜{cost_max}')
+            elif cost_min:
+                label_parts.append(f'コスト{cost_min}以上')
+            elif cost_max:
+                label_parts.append(f'コスト{cost_max}以下')
+            if filter_group:
+                label_parts.append(f'『{filter_group}』')
+            if filter_names:
+                label_parts.append('か'.join(f'「{n}」' for n in filter_names))
+            if filter_kind:
+                label_parts.append({'LIVE': 'ライブカード', 'MEMBER': 'メンバーカード'}.get(filter_kind, filter_kind))
+            label_text = ''.join(label_parts) if label_parts else 'カード'
+
+            if not candidates:
+                gs.pending.append({
+                    'kind': 'view_topk_no_match',
+                    'text': f'デッキ上{len(pool)}枚を公開（{label_text}なし）→ 全て控え室へ',
+                    'options': ['確認'],
+                    'pool': list(pool),
+                    'display_cards': list(pool),
+                    'detail_text': detail_text,
+                    'effect_text': detail_text,
+                })
+                gs.log.append(f'[PENDING] {label}: no match in top{len(pool)}')
+                return True
+
+            opts = list(candidates)
+            if optional:
+                opts.append('skip')
+            gs.pending.append({
+                'kind': 'choose_from_topk',
+                'text': f'デッキ上{len(pool)}枚から{label_text}を1枚公開して手札へ' + ('（スキップ可）' if optional else ''),
+                'options': opts,
+                'pool': list(pool),
+                'display_cards': list(pool),
+                'display_pool_all': list(pool),
+                'candidates': list(candidates),
+                'optional': optional,
+                'detail_text': detail_text,
+                'effect_text': detail_text,
+            })
+            gs.log.append(f"[AUTO_EXT] {label}: enqueue choose_from_top{k} kind={filter_kind or '-'} group={filter_group or '-'} names={filter_names or '-'} cost_min={cost_min} cost_max={cost_max} optional={optional}")
+        except Exception as e:
             try:
-                fn(gs, k, rng, cards_db, filter_kind=filter_kind, optional=optional)
-                gs.log.append(f"[AUTO_EXT] {label}: enqueue choose_from_top{k} filter_kind={filter_kind} optional={optional}")
-            except Exception as e:
-                try:
-                    gs.log.append(f"[ERR] {label}: _enqueue_choose_from_topk_filtered failed: {e}")
-                except Exception:
-                    pass
-        else:
-            try:
-                gs.log.append(f"[ERR] {label}: _enqueue_choose_from_topk_filtered not found")
+                gs.log.append(f"[ERR] {label}: topk_filtered_optional_pick failed: {e}")
             except Exception:
                 pass
         return True
