@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: confirm_effect_ack_popup_titles_20260424a
+# BUILD_TAG: server_pending_pool_kept_cn2type_fix_20260424a
 from __future__ import annotations
 
 """llocg_ui.server
@@ -910,6 +910,8 @@ class App:
                 _add(item.get("cards"))
                 _add(item.get("shown"))
                 _add(item.get("display_cards"))
+                _add(item.get("pool"))
+                _add(item.get("kept"))
         except Exception:
             pass
 
@@ -1610,10 +1612,10 @@ HTML = r'''<!doctype html>
   #modalCond.condMet{display:block;background:rgba(30,120,60,.18);color:#b8f3c7;border-color:rgba(90,220,130,.45);}
   #modalCond.condUnmet{display:block;background:rgba(140,40,40,.18);color:#ffbcbc;border-color:rgba(255,110,110,.45);}
   #modalCond.condNeutral{display:block;background:rgba(255,255,255,.06);color:#ddd;border-color:rgba(255,255,255,.18);}
-  #modalCardTextWrap{display:none;margin:2px 0 8px 0;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);overflow:hidden;flex:0 0 88px;min-height:88px;max-height:88px;}
-  #modalCardTextWrap.visible{display:flex;flex-direction:column;}
-  #modalCardTextTitle{font-size:11px;font-weight:bold;letter-spacing:.04em;color:#bbb;margin-bottom:6px;flex:0 0 auto;}
-  #modalCardText{font-size:12px;color:#ddd;line-height:1.55;white-space:pre-wrap;overflow:auto;flex:1 1 auto;min-height:0;}
+  #modalCardTextWrap{display:none;margin:2px 0 10px 0;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);}
+  #modalCardTextWrap.visible{display:block;}
+  #modalCardTextTitle{font-size:11px;font-weight:bold;letter-spacing:.04em;color:#bbb;margin-bottom:6px;}
+  #modalCardText{font-size:12px;color:#ddd;line-height:1.55;white-space:pre-wrap;max-height:220px;overflow:auto;}
   #modalSourceCard{width:150px;min-width:150px;}
   #modalSourceCard img{display:block;width:150px;height:auto;max-height:220px;object-fit:cover;border-radius:12px;border:1px solid rgba(255,255,255,.14);box-shadow:0 8px 24px rgba(0,0,0,.35);}
   #modalSourceName{width:150px;font-weight:700;color:#fff;font-size:13px;line-height:1.35;white-space:normal;word-break:break-word;}
@@ -1694,7 +1696,7 @@ HTML = r'''<!doctype html>
             <div id="modalText"></div>
             <div id="modalCond"></div>
             <div id="modalCardTextWrap">
-              <div id="modalCardTextTitle">現在の解決内容</div>
+              <div id="modalCardTextTitle">カードテキスト</div>
               <div id="modalCardText"></div>
             </div>
             <div id="modalCards"></div>
@@ -1770,7 +1772,6 @@ HTML = r'''<!doctype html>
   const elModalText = document.getElementById('modalText');
   const elModalCond = document.getElementById('modalCond');
   const elModalCardTextWrap = document.getElementById('modalCardTextWrap');
-  const elModalCardTextTitle = document.getElementById('modalCardTextTitle');
   const elModalCardText = document.getElementById('modalCardText');
   const elModalCards = document.getElementById('modalCards');
   const elModalActions = document.getElementById('modalActions');
@@ -1793,34 +1794,6 @@ HTML = r'''<!doctype html>
   let bannerTimer = null;
   let stdPortrait = null;
   let stdLandscape = null;
-
-  function resetModalCardsBox(){
-    elModalCards.style.flex = '';
-    elModalCards.style.minHeight = '';
-    elModalCards.style.maxHeight = '';
-    elModalCards.style.overflowY = '';
-  }
-
-  function reserveModalCardsBox(pxHeight){
-    const h = Math.max(0, Math.ceil(Number(pxHeight || 0)));
-    if(!h){
-      resetModalCardsBox();
-      return;
-    }
-    elModalCards.style.flex = `0 0 ${h}px`;
-    elModalCards.style.minHeight = h + 'px';
-    elModalCards.style.maxHeight = h + 'px';
-    elModalCards.style.overflowY = 'hidden';
-  }
-
-  function reserveModalCardsForElements(...els){
-    let total = 0;
-    els.forEach(el=>{
-      if(!el) return;
-      total += Math.ceil(el.scrollHeight || el.offsetHeight || 0);
-    });
-    if(total > 0) reserveModalCardsBox(total + 6);
-  }
 
   // ── Card detail panel ──
   const elCardDetail  = document.getElementById('cardDetail');
@@ -1969,13 +1942,6 @@ HTML = r'''<!doctype html>
     if(low === 'ok') return '確認';
     return s;
   }
-  function isAckOnlyConfirm(p){
-    if(!p || String(p.kind || '').trim() !== 'confirm_effect') return false;
-    const ctx = (p && p.ctx) ? p.ctx : {};
-    if(ctx && ctx._ack_only) return true;
-    const opts = Array.isArray(p && p.options) ? p.options.map(x=>String(x).trim().toLowerCase()).filter(Boolean) : [];
-    return opts.length === 1 && opts[0] === 'ok';
-  }
   function cardChoiceCaption(cn, nth, tot){
     const name = cardNameFor(cn);
     if(tot && tot > 1) return `${name} (${nth}/${tot})`;
@@ -1983,7 +1949,6 @@ HTML = r'''<!doctype html>
   }
   function pendingTitleFor(p){
     const kind = String((p && p.kind) || '').trim();
-    if(kind === 'confirm_effect' && isAckOnlyConfirm(p)) return '効果を確認';
     if(kind === 'pay_or_skip' || kind === 'confirm_effect') return '効果を使いますか？';
     if(kind === 'choose_effects') return '効果を選択';
     if(kind === 'choose_stage_member_to_activate') return '対象メンバーを選択';
@@ -2010,7 +1975,6 @@ HTML = r'''<!doctype html>
     const explicit = summarizeEffectText(explicitRaw);
     if(explicit) return explicit;
     const kind = String((p && p.kind) || '').trim();
-    if(kind === 'confirm_effect' && isAckOnlyConfirm(p)) return '解決された効果の内容を確認してください。';
     if(kind === 'pay_or_skip' || kind === 'confirm_effect') return 'この効果を使うか、スキップするかを選んでください。';
     if(kind === 'choose_member_from_green_multi_up_to') return '控え室からカードを0〜指定枚数まで選び、確定を押してください。';
     if(kind === 'choose_stage_member_to_activate') return '対象にするメンバーを選んでください。';
@@ -2020,25 +1984,6 @@ HTML = r'''<!doctype html>
     if(kind === 'auto_order') return '解決順を選んでください。';
     if(kind === 'position_change') return '移動先のエリアを選んでください。';
     return pendingSourceCn(p) ? '効果を解決するため、対象または選択肢を選んでください。' : '';
-  }
-  function pendingDetailTextFor(p){
-    const candidates = [
-      p && p.detail_text,
-      p && p.current_text,
-      p && p.effect,
-      p && p.text,
-      p && p.prompt && p.prompt.text,
-      p && p.prompt && p.prompt.effect,
-      p && p.message,
-      p && p.description,
-      p && p.after_effect_template,
-      p && p.effect_template,
-    ];
-    for(const raw of candidates){
-      const s = String(raw || '').trim();
-      if(s) return s;
-    }
-    return '';
   }
   function setRichText(el, raw){
     const s = String(raw || '');
@@ -2095,7 +2040,6 @@ HTML = r'''<!doctype html>
     elModalCond.style.display = 'none';
     elModalCond.textContent = '';
     elModalCardTextWrap.classList.remove('visible');
-    if(elModalCardTextTitle) elModalCardTextTitle.textContent = '現在の解決内容';
     elModalCardText.textContent = '';
   }
   function pendingSourceCn(p){
@@ -2273,7 +2217,6 @@ HTML = r'''<!doctype html>
       if(sum >= t1) return met(`成功置き場のスコア合計 ${sum} ≥ ${t1}`);
       return unmet(`成功置き場のスコア合計 ${sum} < ${Math.min(t1||sum, t2||sum)}`);
     }
-    if(kind === 'confirm_effect' && isAckOnlyConfirm(p)) return neutral('解決後の確認です');
     if(kind === 'confirm_effect' || kind === 'pay_or_skip') return neutral('解決前の確認です');
     return null;
   }
@@ -2289,31 +2232,11 @@ HTML = r'''<!doctype html>
       return info;
     }catch(e){ cardInfoCache.set(key, null); return null; }
   }
-
-  async function fallbackPendingDetailTextFor(p){
-    const cn = pendingSourceCn(p);
-    if(!cn) return '';
-    try{
-      const info = await getCardInfoCached(cn);
-      if(!info) return '';
-      const abilities = Array.isArray(info.abilities) ? info.abilities.map(v=>String(v||'').trim()).filter(Boolean) : [];
-      if(!abilities.length) return '';
-      const trig = String(pendingTriggerLabel(p) || '').trim();
-      if(trig){
-        const matched = abilities.find(a => a.includes(`<${trig}>`) || a.includes(trig));
-        if(matched) return matched;
-      }
-      return abilities[0] || '';
-    }catch(e){
-      return '';
-    }
-  }
   async function updateModalContextFromPending(p, token){
     elModalCond.className = '';
     elModalCond.style.display = 'none';
     elModalCond.textContent = '';
     elModalCardTextWrap.classList.remove('visible');
-    if(elModalCardTextTitle) elModalCardTextTitle.textContent = '現在の解決内容';
     elModalCardText.textContent = '';
     const status = pendingConditionStatus(p);
     if(status && status.text){
@@ -2321,14 +2244,14 @@ HTML = r'''<!doctype html>
       elModalCond.className = status.state === 'met' ? 'condMet' : (status.state === 'unmet' ? 'condUnmet' : 'condNeutral');
       elModalCond.style.display = 'block';
     }
+    const cn = pendingSourceCn(p);
+    if(!cn) return;
+    const info = await getCardInfoCached(cn);
     if(token != null && token !== modalContextToken) return;
-    let detail = pendingDetailTextFor(p);
-    if(!detail){
-      detail = await fallbackPendingDetailTextFor(p);
-    }
-    if(!detail) return;
+    if(!info) return;
+    const txt = Array.isArray(info.abilities) && info.abilities.length ? info.abilities.join('\n\n') : '（効果なし）';
     if(token != null && token !== modalContextToken) return;
-    setRichText(elModalCardText, detail);
+    elModalCardText.textContent = txt;
     elModalCardTextWrap.classList.add('visible');
   }
   function setModalChoiceHoverHint(msg){
@@ -2938,7 +2861,20 @@ inner.appendChild(card);
         const tmpHearts = Object.assign({}, det.temp_hearts || {});
         const alwHearts = Object.assign({}, det.always_hearts_bonus || {});
 
-        const alwBlade = alwBlade0;
+        // Love wing bell の常時ブレードは、state_detail に乗らない環境でも
+        // success_zone から再計算して可視バッジへ反映する
+        let alwBlade = alwBlade0;
+        try{
+          if(alwBlade <= 0 && slotKey === 'C'){
+            const sz = Array.isArray(st && st.success_zone) ? st.success_zone : [];
+            const cnSelf = String(cn || '');
+            // μ's カードは cardnumber が PL!- で始まる前提
+            if(cnSelf.startsWith('PL!-')){
+              const lwCount = sz.filter(x => String(x||'') === 'PL!-bp4-020').length;
+              if(lwCount > 0) alwBlade += lwCount;
+            }
+          }
+        }catch(e){}
         const totalBlade = tmpBlade + alwBlade;
 
         const hasBonus = totalBlade !== 0 || alwScore !== 0 || Object.keys(alwHearts).some(k=>Number(alwHearts[k])!==0) || Object.keys(tmpHearts).some(k=>Number(tmpHearts[k])!==0);
@@ -3203,7 +3139,6 @@ inner.appendChild(card);
       setRichText(elModalText, helperText || '');
       elModalActions.innerHTML = '';
       elModalCards.innerHTML = '';
-      resetModalCardsBox();
     }
 
     const targetCards = useViewer ? elViewerCards : elModalCards;
@@ -3934,7 +3869,6 @@ inner.appendChild(card);
       updateCounter();
       elModalCards.appendChild(counter);
       elModalCards.appendChild(row);
-      reserveModalCardsForElements(counter, row);
       elModalActions.appendChild(doneBtn);
       elMask.style.display = 'block';
       return;
@@ -4194,7 +4128,6 @@ inner.appendChild(card);
     const allowSkip = !!((p && (p.allow_less || p.allow_skip)) || /Skip可/i.test(pendText) || /\bskip\b/i.test(pendText) || (kind && /pick/i.test(kind)));
     elModalActions.innerHTML = '';
     elModalCards.innerHTML = '';
-    resetModalCardsBox();
 
     const opts = (p && (Array.isArray(p.options)?p.options: (Array.isArray(p.candidates)?p.candidates:(Array.isArray(p.cards)?p.cards:(Array.isArray(p.shown)?p.shown:[]))))) || [];
 
@@ -4235,7 +4168,6 @@ inner.appendChild(card);
 
       if(cards.length){
         elModalCards.appendChild(row);
-        reserveModalCardsForElements(row);
       }else{
         const note = document.createElement('div');
         note.style.opacity = '0.85';
@@ -4319,7 +4251,6 @@ inner.appendChild(card);
       });
 
       elModalCards.appendChild(row);
-      reserveModalCardsForElements(row);
       elMask.style.display = 'block';
       return;
     }
@@ -4399,7 +4330,6 @@ inner.appendChild(card);
           row.appendChild(b);
         });
         elModalCards.appendChild(row);
-        reserveModalCardsForElements(row);
         if(stagePosHasSkipPC){
           const bSkip = document.createElement('button');
           bSkip.className = 'miniBtn'; bSkip.textContent = 'スキップ';
@@ -4477,7 +4407,6 @@ inner.appendChild(card);
         row.appendChild(b);
       });
       elModalCards.appendChild(row);
-      reserveModalCardsForElements(row);
       if(allowSkip || stagePosHasSkip){
         const bSkip = document.createElement('button');
         bSkip.className = 'miniBtn'; bSkip.textContent = 'スキップ';
@@ -4527,7 +4456,6 @@ inner.appendChild(card);
         row.appendChild(b);
       });
       elModalCards.appendChild(row);
-      reserveModalCardsForElements(row);
       if(hasSkip){
         const bSkip = document.createElement('button');
         bSkip.className = 'miniBtn'; bSkip.textContent = 'スキップ';
@@ -4594,7 +4522,6 @@ inner.appendChild(card);
       });
 
       elModalCards.appendChild(row);
-      reserveModalCardsForElements(row);
 
       if(allowSkip){
         const bSkip = document.createElement('button');
