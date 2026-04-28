@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: server_pending_pool_kept_cn2type_fix_20260424a
+# BUILD_TAG: server_hand_live_intrinsic_orientation_fix_20260428a
 from __future__ import annotations
 
 """llocg_ui.server
@@ -2566,28 +2566,38 @@ HTML = r'''<!doctype html>
     // cache standard card size from hand area
     stdPortrait = {w: sz.w, h: sz.h};
     stdLandscape = {w: sz.h, h: sz.w};
+
+    const dimsByCard = cards.map(cn=>{
+      const intr = intrinsicOrient(cn);
+      return (intr === 'landscape') ? stdLandscape : stdPortrait;
+    });
+
+    const slotW = dimsByCard.reduce((m,d)=>Math.max(m,d.w), 0);
+    const slotH = dimsByCard.reduce((m,d)=>Math.max(m,d.h), 0);
     const n = cards.length;
 
     let step = 0;
     if(n <= 1){
       step = 0;
     }else{
-      const maxStep = sz.w + px(8);
-      const fitStep = (availW - sz.w) / (n - 1);
+      const maxStep = slotW + px(8);
+      const fitStep = (availW - slotW) / (n - 1);
       step = Math.min(maxStep, fitStep);
       if(!isFinite(step) || step < 0) step = 0;
     }
 
-    const totalW = (n===0) ? 0 : (sz.w + step*(n-1));
+    const totalW = (n===0) ? 0 : (slotW + step*(n-1));
     const startX = (availW > totalW) ? (availW - totalW)/2 : 0;
-    const baseY = padTop + Math.max(0, (availH - sz.h)/2);
+    const baseY = padTop + Math.max(0, (availH - slotH)/2);
 
     cards.forEach((cn, i)=>{
-      const x = padX + startX + step*i;
-      const y = baseY;
+      const d = dimsByCard[i];
+      const intr = intrinsicOrient(cn);
+      const x = padX + startX + step*i + Math.max(0, (slotW - d.w)/2);
+      const y = baseY + Math.max(0, (slotH - d.h)/2);
       const cap = labelFor(cn);
       const isSel = selHand.includes(i);
-      const card = makeCard(cn, 'portrait', x, y, sz.w, sz.h, cap, ()=>toggleSel(i), isSel, 100+i);
+      const card = makeCard(cn, intr, x, y, d.w, d.h, cap, ()=>toggleSel(i), isSel, 100+i);
       inner.appendChild(card);
     });
 
