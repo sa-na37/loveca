@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: server_hand_live_intrinsic_orientation_fix_20260428a
+# BUILD_TAG: server_restore_hand_live_rotation_and_fix_hand_choice_popup_20260428b
 from __future__ import annotations
 
 """llocg_ui.server
@@ -2566,38 +2566,28 @@ HTML = r'''<!doctype html>
     // cache standard card size from hand area
     stdPortrait = {w: sz.w, h: sz.h};
     stdLandscape = {w: sz.h, h: sz.w};
-
-    const dimsByCard = cards.map(cn=>{
-      const intr = intrinsicOrient(cn);
-      return (intr === 'landscape') ? stdLandscape : stdPortrait;
-    });
-
-    const slotW = dimsByCard.reduce((m,d)=>Math.max(m,d.w), 0);
-    const slotH = dimsByCard.reduce((m,d)=>Math.max(m,d.h), 0);
     const n = cards.length;
 
     let step = 0;
     if(n <= 1){
       step = 0;
     }else{
-      const maxStep = slotW + px(8);
-      const fitStep = (availW - slotW) / (n - 1);
+      const maxStep = sz.w + px(8);
+      const fitStep = (availW - sz.w) / (n - 1);
       step = Math.min(maxStep, fitStep);
       if(!isFinite(step) || step < 0) step = 0;
     }
 
-    const totalW = (n===0) ? 0 : (slotW + step*(n-1));
+    const totalW = (n===0) ? 0 : (sz.w + step*(n-1));
     const startX = (availW > totalW) ? (availW - totalW)/2 : 0;
-    const baseY = padTop + Math.max(0, (availH - slotH)/2);
+    const baseY = padTop + Math.max(0, (availH - sz.h)/2);
 
     cards.forEach((cn, i)=>{
-      const d = dimsByCard[i];
-      const intr = intrinsicOrient(cn);
-      const x = padX + startX + step*i + Math.max(0, (slotW - d.w)/2);
-      const y = baseY + Math.max(0, (slotH - d.h)/2);
+      const x = padX + startX + step*i;
+      const y = baseY;
       const cap = labelFor(cn);
       const isSel = selHand.includes(i);
-      const card = makeCard(cn, intr, x, y, d.w, d.h, cap, ()=>toggleSel(i), isSel, 100+i);
+      const card = makeCard(cn, 'portrait', x, y, sz.w, sz.h, cap, ()=>toggleSel(i), isSel, 100+i);
       inner.appendChild(card);
     });
 
@@ -2605,6 +2595,33 @@ HTML = r'''<!doctype html>
     badge.className = 'countBadge';
     badge.textContent = String(cards.length);
     zoneEl.appendChild(badge);
+  }
+
+  function appendChoiceCardImage(btn, cn, wantOrient='portrait'){
+    const intr = intrinsicOrient(cn);
+    btn.style.position = 'relative';
+    btn.style.overflow = 'hidden';
+    if(intr === wantOrient){
+      const img = document.createElement('img');
+      img.src = imgUrl(cn);
+      img.alt = cn;
+      btn.appendChild(img);
+      return;
+    }
+    const img = document.createElement('img');
+    img.src = imgUrl(cn);
+    img.alt = cn;
+    img.style.position = 'absolute';
+    img.style.top = '50%';
+    img.style.left = '50%';
+    img.style.transform = (wantOrient === 'portrait')
+      ? 'translate(-50%, -50%) rotate(90deg)'
+      : 'translate(-50%, -50%) rotate(-90deg)';
+    img.style.transformOrigin = 'center center';
+    img.style.width = btn.clientHeight ? (btn.clientHeight + 'px') : '100%';
+    img.style.height = btn.clientWidth ? (btn.clientWidth + 'px') : '100%';
+    img.style.objectFit = 'contain';
+    btn.appendChild(img);
   }
 
   function renderFan(zoneEl, cards, wantOrient){
@@ -3836,10 +3853,7 @@ inner.appendChild(card);
         b.style.width = dimsP.w + 'px';
         b.style.height = dimsP.h + 'px';
 
-        const img = document.createElement('img');
-        img.src = imgUrl(cn);
-        img.alt = cn;
-        b.appendChild(img);
+        appendChoiceCardImage(b, cn, 'portrait');
 
         const cap = document.createElement('div');
         cap.className = 'choiceCap';
@@ -3948,10 +3962,7 @@ inner.appendChild(card);
         b.style.width = dimsP.w + 'px';
         b.style.height = dimsP.h + 'px';
 
-        const img = document.createElement('img');
-        img.src = imgUrl(cn);
-        img.alt = cn;
-        b.appendChild(img);
+        appendChoiceCardImage(b, cn, 'portrait');
 
         const cap = document.createElement('div');
         cap.className = 'choiceCap';
