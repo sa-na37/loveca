@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: topdeck_choose_one_from_topk_and_mill_fix_inline_pending_20260424e
+# BUILD_TAG: topdeck_split_hand_top_green_genericize_20260424f
 from __future__ import annotations
 
 """llocg_ui.effects.topdeck
@@ -107,6 +107,33 @@ def try_apply_topdeck_ext(
             except Exception:
                 pass
         return True
+
+    # look top{k}, choose 1 to hand, 1 to deck top, rest to green
+    if ext_key == 'topk_split_one_hand_one_top_rest_green':
+        try:
+            k = int(gd.get('topk') or 0)
+        except Exception:
+            k = 0
+        if k <= 0:
+            k = 3
+        label = gd.get('source_name') or f'top{k} split1/1/rest'
+        fn = eng.get('_enqueue_look_top_3way_split')
+        if callable(fn):
+            try:
+                fn(gs, k, rng)
+                gs.log.append(f"[AUTO_EXT] {label}: enqueue look_top_3way_split top{k}")
+            except Exception as e:
+                try:
+                    gs.log.append(f"[ERR] {label}: _enqueue_look_top_3way_split failed: {e}")
+                except Exception:
+                    pass
+        else:
+            try:
+                gs.log.append(f"[ERR] {label}: _enqueue_look_top_3way_split not found")
+            except Exception:
+                pass
+        return True
+
 
     # reorder top{k} keep any
     if ext_key == 'reorder_from_topk':
