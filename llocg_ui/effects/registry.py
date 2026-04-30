@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: effect_registry_20260428_live_start_choose_heart_per_success_count_genericize_i
+# BUILD_TAG: effect_registry_20260430_live_start_choose_heart_then_counted_bonus_split_a
 from __future__ import annotations
 
 """llocg_ui.effects.registry
@@ -140,25 +140,25 @@ EXTRA_EFFECT_RULES = [
         "id": "live_start_choose_pinkYellowPurple_heart_per_success_count_bp3_011",
         "effect_template": "<(桃)>か<(黄)>か<(紫)>のうち、1つを選ぶ。ライブ終了時まで、自分の成功ライブカード置き場にあるカード1枚につき、選んだハートを1つ得る。",
         "ext_key": "live_start_choose_heart_per_success_count",
-        "gd": {"option_labels": "桃,黄,紫", "source_name": "絢瀬絵里 bp3-011"},
+        "gd": {"option_labels": "桃,黄,紫", "count_source": "success_zone", "source_name": "絢瀬絵里 bp3-011"},
     },
     {
         "id": "live_start_choose_pinkYellowPurple_heart_per_success_count_bp3_012",
         "effect_template": "<(桃)>か<(黄)>か<(紫)>のうち、1つを選ぶ。ライブ終了時まで、自分の成功ライブカード置き場にあるカード1枚につき、選んだハートを1つ得る。",
         "ext_key": "live_start_choose_heart_per_success_count",
-        "gd": {"option_labels": "桃,黄,紫", "source_name": "南ことり bp3-012"},
+        "gd": {"option_labels": "桃,黄,紫", "count_source": "success_zone", "source_name": "南ことり bp3-012"},
     },
     {
         "id": "live_start_choose_pinkYellowPurple_heart_per_success_count_bp3_013",
         "effect_template": "<(桃)>か<(黄)>か<(紫)>のうち、1つを選ぶ。ライブ終了時まで、自分の成功ライブカード置き場にあるカード1枚につき、選んだハートを1つ得る。",
         "ext_key": "live_start_choose_heart_per_success_count",
-        "gd": {"option_labels": "桃,黄,紫", "source_name": "園田海未 bp3-013"},
+        "gd": {"option_labels": "桃,黄,紫", "count_source": "success_zone", "source_name": "園田海未 bp3-013"},
     },
     {
         "id": "live_start_choose_greenBluePurple_heart_per_success_count_bp5_011",
         "effect_template": "<(緑)>か<(青)>か<(紫)>のうち、1つを選ぶ。ライブ終了時まで、自分の成功ライブカード置き場にあるカード1枚につき、選んだハートを1つ得る。",
         "ext_key": "live_start_choose_heart_per_success_count",
-        "gd": {"option_labels": "緑,青,紫", "source_name": "絢瀬絵里 bp5-011"},
+        "gd": {"option_labels": "緑,青,紫", "count_source": "success_zone", "source_name": "絢瀬絵里 bp5-011"},
     },
     # Prompt 14: PL!-bp3-003 南ことり (登場)
     # cost=このメンバーをウェイトにしてもよい → engine 側 self_wait pay_or_skip

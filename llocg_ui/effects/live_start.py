@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_start_choose_heart_per_success_count_genericize_20260428k
+# BUILD_TAG: live_start_choose_heart_then_counted_bonus_split_20260430a
 from __future__ import annotations
 
 """llocg_ui.effects.live_start
@@ -131,22 +131,34 @@ def _queue_generic_choose_heart(
     return True
 
 
-def _queue_choose_heart_per_success_count(
+def _count_cards_for_heart_bonus(gs: Any, *, count_source: str) -> int:
+    src = str(count_source or "").strip()
+    if src == "success_zone":
+        return len(_success_zone_cards(gs))  # noqa: F405
+    return 0
+
+
+def _queue_choose_heart_then_counted_bonus(
     gs: Any,
     *,
     src_pos: str,
     source_cn: str,
     options: list[str],
     source_name: str,
+    count_source: str,
     no_effect_log: str,
 ) -> bool:
-    count = len(_success_zone_cards(gs))  # noqa: F405
+    count = _count_cards_for_heart_bonus(gs, count_source=count_source)
     if count <= 0:
         try:
             gs.log.append(f"[AUTO_EXT] {no_effect_log}")
         except Exception:
             pass
         return True
+
+    # 共通部を二つに分ける:
+    # 1. 「＜色A＞か＜色B＞か＜色C＞のうち、1つを選ぶ。」
+    # 2. 「成功ライブ置き場のカード1枚につき、選んだハートを1つ得る。」
     pretty = "/".join(options) if options else "好きな色"
     label_head = source_name or source_cn or "カード"
     _queue_choose_heart_color(
@@ -154,13 +166,15 @@ def _queue_choose_heart_per_success_count(
         pos=src_pos,
         source_cn=source_cn,
         options=options,
-        text=f"【{label_head}】{pretty}から1つ選ぶ → 成功ライブ置き場{count}枚ぶん",
-        log_line=f"[PENDING] {label_head}: choose heart color x{count} by success count",
+        text=f"【{label_head}】{pretty}から1つ選ぶ",
+        log_line=f"[PENDING] {label_head}: choose heart color then counted bonus x{count}",
     )
     try:
         p = getattr(gs, 'pending', [])[-1]
         if isinstance(p, dict):
             p['n'] = int(count)
+            p['count_source'] = str(count_source or '')
+            p['counted_bonus_text'] = f"ライブ終了時まで、{count_source} {count}枚ぶん"
     except Exception:
         pass
     return True
@@ -744,13 +758,15 @@ def try_apply_live_start_ext(
         src = _ctx_source_cn(ctx)
         options = _parse_option_labels_csv((gd or {}).get("option_labels"), ["桃", "赤", "黄", "緑", "青", "紫"])
         source_name = str((gd or {}).get("source_name") or src or "カード")
-        no_effect_log = str((gd or {}).get("no_effect_log") or f"success zone empty, no effect ({source_name})")
-        return _queue_choose_heart_per_success_count(
+        count_source = str((gd or {}).get("count_source") or "success_zone")
+        no_effect_log = str((gd or {}).get("no_effect_log") or f"{count_source} empty, no effect ({source_name})")
+        return _queue_choose_heart_then_counted_bonus(
             gs,
             src_pos=src_pos,
             source_cn=src,
             options=options,
             source_name=source_name,
+            count_source=count_source,
             no_effect_log=no_effect_log,
         )
 
