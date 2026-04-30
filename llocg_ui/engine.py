@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: engine_choose_heart_after_ext_route_20260430a
+# BUILD_TAG: engine_remove_live_start_success_heart_special_20260430b
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -2923,27 +2923,6 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
             clauses = ab.get("clauses", [])
             if not isinstance(clauses, list):
                 continue
-            if (not str(getattr(gs, 'success_zone_heart_color', '') or '').strip()):
-                try:
-                    blob_all = ''.join([str((cl0.get('raw') or cl0.get('effect_template') or '') ) for cl0 in clauses if isinstance(cl0, dict)])
-                except Exception:
-                    blob_all = ''
-                if (
-                    ('成功ライブカード置き場' in blob_all) and
-                    ('選んだハート' in blob_all) and
-                    (('1つを選ぶ' in blob_all) or ('1つ選ぶ' in blob_all))
-                ):
-                    opts = [c for c in ['桃', '黄', '紫'] if f"<({c})>" in blob_all]
-                    if len(opts) >= 2:
-                        pr = {
-                            'kind': 'live_start_success_heart_by_success',
-                            'pos': pos,
-                            'cn': ci.cardnumber,
-                            'text': f"{pos}: {ci.cardnumber} ライブ開始時 → ({'/'.join(opts)})から1つ選ぶ：成功ライブ置き場1枚につき選んだハート+1 (ライブ終了時まで)",
-                            'options': opts,
-                        }
-                        _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
-                        continue
             for cl in clauses:
                 if not isinstance(cl, dict):
                     continue
@@ -2952,20 +2931,6 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                 eff = str(cl.get("effect_template", "") or raw)
                 if "<(E)>" not in cost and "[E]" not in cost and "Ｅ" not in cost and "E" not in cost:
                     blob = str(eff or "")
-                    if (not str(getattr(gs, 'success_zone_heart_color', '') or '').strip()) and (
-                        ('成功ライブカード置き場' in blob) and ('選んだハート' in blob) and
-                        ('<(桃)>' in blob) and ('<(黄)>' in blob) and ('<(紫)>' in blob) and
-                        ('1つを選ぶ' in blob)
-                    ):
-                        pr = {
-                            'kind': 'live_start_success_heart_by_success',
-                            'pos': pos,
-                            'cn': ci.cardnumber,
-                            'text': f"{pos}: {ci.cardnumber} ライブ開始時 → (桃/黄/紫)を選ぶ：成功ライブ置き場1枚につき選んだハート+1 (ライブ終了時まで)",
-                            'options': ['桃', '黄', '紫'],
-                        }
-                        _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
-                        continue
                     # ハート変換（元々持つハートは選んだハートになる）
                     if '元々持つハートは選んだハートになる' in blob and '選ぶ' in blob:
                         opts_hr = re.findall(r'<\(([^)]+)\)>', blob)
@@ -6556,25 +6521,33 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         gs.log.append(f"[ACT] success_store: moved {pick_cn} -> success storage")
         return
     if kind == 'live_start_success_heart_by_success':
+        # Legacy special path removed.
+        # Keep a soft bridge for any stale pending that might still exist.
         ch = str(choice_str or '').strip()
         m = {
             '桃': 'pink',
             '黄': 'yellow',
             '紫': 'purple',
+            '緑': 'green',
+            '青': 'blue',
+            '赤': 'red',
             'pink': 'pink',
             'yellow': 'yellow',
             'purple': 'purple',
+            'green': 'green',
+            'blue': 'blue',
+            'red': 'red',
         }
         col = m.get(ch, '')
         if not col:
-            gs.log.append(f"[ERR] live_start_success_heart: invalid choice '{ch}'")
+            gs.log.append(f"[ERR] legacy live_start_success_heart: invalid choice '{ch}'")
             gs.pending.append(p)
             return
-        try:
-            gs.success_zone_heart_color = col
-        except Exception:
-            pass
-        gs.log.append(f"[ACT] live_start_success_heart: choose={col} (per success card, until end_of_live)")
+        pos = str(p.get('pos', '') or '').upper()
+        slot = gs.stage.get(pos)
+        if slot:
+            _grant_temp_heart(slot, col, len(getattr(gs, 'success_zone', []) or []))
+            gs.log.append(f"[WARN] legacy live_start_success_heart fallback used: {pos} +{len(getattr(gs, 'success_zone', []) or [])} {col}")
         return
     if kind == 'live_start_heart_replace':
         pos2 = str(p.get('pos', '') or '').upper()
