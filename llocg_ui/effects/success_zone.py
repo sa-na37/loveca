@@ -77,6 +77,8 @@ def try_apply_success_zone_ext(
         action = str((gd or {}).get("action") or "")
         amount = int(str((gd or {}).get("amount") or "0") or "0")
         source_name = str((gd or {}).get("source_name") or _ctx_source_cn(ctx) or "カード")
+        source_cn = str((ctx or {}).get("source_cn") or "")
+        preconfirm_done = bool((ctx or {}).get("_success_zone_preconfirm_done"))
 
         if total_score < threshold:
             try:
@@ -85,37 +87,74 @@ def try_apply_success_zone_ext(
                 pass
             return True
 
-        source_cn = str((ctx or {}).get("source_cn") or "")
-
         if action == "activate_energy":
+            detail_text = f"自分の成功ライブカード置き場にあるカードのスコアの合計が{threshold}以上の場合、エネルギーを{amount}枚アクティブにする。"
+            confirm_text = f"成功ライブカード置き場のスコア合計が{threshold}以上です。エネルギーを{amount}枚アクティブにします。"
+            if not preconfirm_done:
+                try:
+                    getattr(gs, "pending").append({
+                        "kind": "confirm_effect",
+                        "text": confirm_text,
+                        "detail_text": detail_text,
+                        "options": ["ok"],
+                        "after_effect_template": detail_text,
+                        "ctx": {"source_cn": source_cn, "_success_zone_preconfirm_done": True},
+                        "source_cn": source_cn,
+                    })
+                except Exception:
+                    pass
+                return True
+
             moved = _activate_energy(gs, amount)
             try:
                 gs.log.append(f"[AUTO_EXT] success_score={total_score}>={threshold} -> activate {moved} energy ({source_name})")
             except Exception:
                 pass
-            _append_ack_confirm(
-                gs,
-                source_cn,
-                f"成功ライブカード置き場のスコア合計が{threshold}以上なので、エネルギーを{moved}枚アクティブにしました。",
-                f"自分の成功ライブカード置き場にあるカードのスコアの合計が{threshold}以上の場合、エネルギーを{amount}枚アクティブにする。",
-            )
             return True
 
         if action == "draw":
+            detail_text = f"自分の成功ライブカード置き場にあるカードのスコアの合計が{threshold}以上の場合、カードを{amount}枚引く。"
+            confirm_text = f"成功ライブカード置き場のスコア合計が{threshold}以上です。カードを{amount}枚引きます。"
+            if not preconfirm_done:
+                try:
+                    getattr(gs, "pending").append({
+                        "kind": "confirm_effect",
+                        "text": confirm_text,
+                        "detail_text": detail_text,
+                        "options": ["ok"],
+                        "after_effect_template": detail_text,
+                        "ctx": {"source_cn": source_cn, "_success_zone_preconfirm_done": True},
+                        "source_cn": source_cn,
+                    })
+                except Exception:
+                    pass
+                return True
+
             drawn = _draw_cards(eng, gs, amount)
             try:
                 gs.log.append(f"[AUTO_EXT] success_score={total_score}>={threshold} -> draw {drawn} ({source_name})")
             except Exception:
                 pass
-            _append_ack_confirm(
-                gs,
-                source_cn,
-                f"成功ライブカード置き場のスコア合計が{threshold}以上なので、カードを{drawn}枚引きました。",
-                f"自分の成功ライブカード置き場にあるカードのスコアの合計が{threshold}以上の場合、カードを{amount}枚引く。",
-            )
             return True
 
         if action == "put_active_energy_from_deck":
+            detail_text = f"自分の成功ライブカード置き場にあるカードのスコアの合計が{threshold}以上の場合、自分のエネルギーデッキから、エネルギーカードを{amount}枚アクティブ状態で置く。"
+            confirm_text = f"成功ライブカード置き場のスコア合計が{threshold}以上です。エネルギーデッキからエネルギーを{amount}枚アクティブ状態で置きます。"
+            if not preconfirm_done:
+                try:
+                    getattr(gs, "pending").append({
+                        "kind": "confirm_effect",
+                        "text": confirm_text,
+                        "detail_text": detail_text,
+                        "options": ["ok"],
+                        "after_effect_template": detail_text,
+                        "ctx": {"source_cn": source_cn, "_success_zone_preconfirm_done": True},
+                        "source_cn": source_cn,
+                    })
+                except Exception:
+                    pass
+                return True
+
             added = 0
             try:
                 put_active = eng.get("_put_active_energy_from_deck")
@@ -137,12 +176,6 @@ def try_apply_success_zone_ext(
                 gs.log.append(f"[AUTO_EXT] success_score={total_score}>={threshold} -> put_active_energy {added} ({source_name})")
             except Exception:
                 pass
-            _append_ack_confirm(
-                gs,
-                source_cn,
-                f"成功ライブカード置き場のスコア合計が{threshold}以上なので、エネルギーデッキからエネルギーを{added}枚アクティブ状態で置きました。",
-                f"自分の成功ライブカード置き場にあるカードのスコアの合計が{threshold}以上の場合、自分のエネルギーデッキから、エネルギーカードを{amount}枚アクティブ状態で置く。",
-            )
             return True
 
         try:
