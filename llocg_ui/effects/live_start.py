@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_start_choose_heart_token_text_fix_20260430b
+# BUILD_TAG: live_start_choose_heart_via_generic_temp_bonus_20260430c
 from __future__ import annotations
 
 """llocg_ui.effects.live_start
@@ -108,6 +108,8 @@ def _queue_choose_heart_color(
     text: str,
     log_line: str,
     detail_text: str = "",
+    after_ext_key: str = "",
+    extra_ctx: Dict[str, Any] | None = None,
 ) -> None:
     payload = {
         "kind": "choose_heart_color",
@@ -121,6 +123,10 @@ def _queue_choose_heart_color(
     if str(detail_text or "").strip():
         payload["detail_text"] = str(detail_text)
         payload["effect_text"] = str(detail_text)
+    if str(after_ext_key or "").strip():
+        payload["after_ext_key"] = str(after_ext_key).strip()
+    if extra_ctx:
+        payload["ctx"] = dict(extra_ctx)
     _append_pending(gs, payload, log_line)
 
 
@@ -151,6 +157,13 @@ def _queue_generic_choose_heart(
         options=options,
         text=f"{source_cn}: {pretty}から1つ選ぶ → ライブ終了時まで+1",
         detail_text=f"{pretty}のうち、1つを選ぶ。ライブ終了時まで、選んだハートを1つ得る。",
+        after_ext_key="live_start_apply_chosen_heart_bonus",
+        extra_ctx={
+            "src_pos": str(src_pos or "").upper(),
+            "source_cn": source_cn,
+            "source_name": source_cn,
+            "bonus_n": 1,
+        },
         log_line=f"[PENDING] {source_cn}: choose heart color",
     )
     return True
@@ -194,16 +207,17 @@ def _queue_choose_heart_then_counted_bonus(
         options=options,
         text=f"【{label_head}】{pretty}から1つ選ぶ",
         detail_text=f"{pretty}のうち、1つを選ぶ。ライブ終了時まで、{count_label}1枚につき、選んだハートを1つ得る。",
+        after_ext_key="live_start_apply_chosen_heart_bonus",
+        extra_ctx={
+            "src_pos": str(src_pos or "").upper(),
+            "source_cn": source_cn,
+            "source_name": label_head,
+            "bonus_n": int(count),
+            "count_source": str(count_source or ''),
+            "counted_bonus_text": f"ライブ終了時まで、{count_label}1枚につき、選んだハートを1つ得る。",
+        },
         log_line=f"[PENDING] {label_head}: choose heart color then counted bonus x{count}",
     )
-    try:
-        p = getattr(gs, 'pending', [])[-1]
-        if isinstance(p, dict):
-            p['n'] = int(count)
-            p['count_source'] = str(count_source or '')
-            p['counted_bonus_text'] = f"ライブ終了時まで、{count_label}1枚につき、選んだハートを1つ得る。"
-    except Exception:
-        pass
     return True
 
 
@@ -797,6 +811,34 @@ def try_apply_live_start_ext(
             no_effect_log=no_effect_log,
         )
 
+
+    if ext_key == "live_start_apply_chosen_heart_bonus":
+        src_pos = _ctx_src_pos(ctx)
+        source_name = str((ctx or {}).get("source_name") or _ctx_source_cn(ctx) or "カード")
+        chosen = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_color") or "").strip()
+        try:
+            bonus_n = int((ctx or {}).get("bonus_n") or 1)
+        except Exception:
+            bonus_n = 1
+        if not chosen or bonus_n <= 0:
+            try:
+                gs.log.append(f"[AUTO_EXT] invalid chosen heart bonus, no effect ({source_name})")
+            except Exception:
+                pass
+            return True
+        slot = _stage_slot_at(gs, src_pos)
+        if slot is None:
+            try:
+                gs.log.append(f"[ERR] {source_name} resolve: empty source slot {src_pos}")
+            except Exception:
+                pass
+            return True
+        _apply_temp_bonus(eng, slot, hearts={str(chosen): int(bonus_n)})
+        try:
+            gs.log.append(f"[AUTO_EXT] {source_name}: temp heart +{bonus_n} {chosen} via generic bonus route")
+        except Exception:
+            pass
+        return True
 
     if ext_key == "live_start_activate_wait_member_and_both_temp_bonus":
         src_pos = _ctx_src_pos(ctx)

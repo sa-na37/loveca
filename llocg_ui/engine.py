@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: enter_optional_self_wait_plus_discard_cost_fix_20260428a
+# BUILD_TAG: engine_choose_heart_after_ext_route_20260430a
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -169,11 +169,17 @@ def _cost_requires_self_to_green(cost_text: str) -> bool:
 def _cost_requires_self_wait(cost_text: str) -> bool:
     """Return True if cost requires this member to become WAIT (but NOT sent to green).
     Matches both 'ウェイトにする' and 'ウェイトにしてもよい' (optional cost).
+
+    Important:
+    - Do NOT reject just because the whole sentence contains '控え室'.
+      Example:
+        「このメンバーをウェイトにし、手札を1枚控え室に置いてもよい」
+      is still a valid self-wait cost.
+    - Only exclude true self-to-green costs.
     """
     t = str(cost_text or '').strip()
     if 'ウェイトにし' in t and 'このメンバー' in t:
-        # Exclude self-to-green costs ("このメンバーをステージから控え室に置く")
-        if '控え室' not in t and 'ステージから' not in t:
+        if not _cost_requires_self_to_green(t):
             return True
     return False
 def _cost_requires_other_group_member_wait(cost_text: str) -> Dict[str, Any]:
@@ -3447,13 +3453,17 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
                     n = 1
                 if n > 0:
                     ctx = {'pos': pos.upper(), 'source_cn': canon}
-                    combo_self_wait = _cost_requires_self_wait(cost) and not _cost_requires_self_to_green(cost)
+                    combo_self_wait = (
+                        ('このメンバーをウェイトにし' in cost and '手札' in cost and '控え室に置いてもよい' in cost)
+                        or (_cost_requires_self_wait(cost) and not _cost_requires_self_to_green(cost))
+                    )
                     gs.pending.append({
                         'kind': 'pay_or_skip',
                         'text': _pretty_optional_effect_prompt_text('登場', canon, cost, eff),
                         'options': ['pay', 'skip'],
                         'cost_kind': ('self_wait_and_discard_from_hand' if combo_self_wait else 'discard_from_hand'),
                         'cost_n': n,
+                        'cost_text': cost,
                         'after_effect_template': eff,
                         'ctx': ctx,
                         'source_cn': canon,
@@ -6346,7 +6356,13 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             return
         if src and not ctx0.get('source_cn'):
             ctx0['source_cn'] = src
-        if cost_kind == 'self_wait_and_discard_from_hand':
+        combo_cost_text = str(p.get('cost_text') or p.get('text') or '')
+        combo_self_wait = (
+            ('このメンバーをウェイトにし' in combo_cost_text and '手札' in combo_cost_text and '控え室に置いてもよい' in combo_cost_text)
+            or (_cost_requires_self_wait(combo_cost_text) and not _cost_requires_self_to_green(combo_cost_text))
+        )
+
+        if cost_kind == 'self_wait_and_discard_from_hand' or (cost_kind == 'discard_from_hand' and combo_self_wait):
             pos = str(ctx0.get('pos', '') or '').upper()
             slot = (gs.stage or {}).get(pos) if isinstance(getattr(gs, 'stage', None), dict) else None
             if cost_n <= 0:
@@ -7811,6 +7827,34 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
     if kind == 'choose_heart_color':
         pos = str(p.get('pos', '') or '').upper()
         n = int(p.get('n', 1) or 1)
+        after_ext_key = str(p.get('after_ext_key', '') or '').strip()
+        if after_ext_key:
+            src = str(p.get('source_cn', '') or '')
+            ctx2 = dict(p.get('ctx', {}) or {})
+            if src and not ctx2.get('source_cn'):
+                ctx2['source_cn'] = src
+            ctx2['pos'] = pos
+            ctx2['src_pos'] = pos
+            ctx2['choice'] = str(choice_str or '').strip()
+            ctx2['chosen_color'] = str(choice_str or '').strip()
+            ctx2['bonus_n'] = int(ctx2.get('bonus_n', n) or n)
+            try:
+                rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
+            except Exception:
+                rng2 = random.Random()
+            applied = False
+            try:
+                _apply_effect_by_rule(gs, rng2, cards_db, {'op':'__ext__','ext_key':after_ext_key}, {}, ctx2)
+                applied = True
+            except Exception:
+                applied = False
+                raise
+            finally:
+                try:
+                    gs.log.append(f"[AUTO] choose_heart_color -> {'applied' if applied else 'error'} {after_ext_key} ({choice_str})")
+                except Exception:
+                    pass
+            return
         slot = gs.stage.get(pos)
         if not slot:
             gs.log.append(f'[SKIP] choose_heart_color: stage {pos} empty')
