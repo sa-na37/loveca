@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_start_dual_target_bonus_and_same_name_generic_fix_wait_positions_20260424c
+# BUILD_TAG: live_start_choose_heart_per_success_count_genericize_20260428k
 from __future__ import annotations
 
 """llocg_ui.effects.live_start
@@ -128,6 +128,41 @@ def _queue_generic_choose_heart(
         text=f"{source_cn}: {pretty}から1つ選ぶ → ライブ終了時まで+1",
         log_line=f"[PENDING] {source_cn}: choose heart color",
     )
+    return True
+
+
+def _queue_choose_heart_per_success_count(
+    gs: Any,
+    *,
+    src_pos: str,
+    source_cn: str,
+    options: list[str],
+    source_name: str,
+    no_effect_log: str,
+) -> bool:
+    count = len(_success_zone_cards(gs))  # noqa: F405
+    if count <= 0:
+        try:
+            gs.log.append(f"[AUTO_EXT] {no_effect_log}")
+        except Exception:
+            pass
+        return True
+    pretty = "/".join(options) if options else "好きな色"
+    label_head = source_name or source_cn or "カード"
+    _queue_choose_heart_color(
+        gs,
+        pos=src_pos,
+        source_cn=source_cn,
+        options=options,
+        text=f"【{label_head}】{pretty}から1つ選ぶ → 成功ライブ置き場{count}枚ぶん",
+        log_line=f"[PENDING] {label_head}: choose heart color x{count} by success count",
+    )
+    try:
+        p = getattr(gs, 'pending', [])[-1]
+        if isinstance(p, dict):
+            p['n'] = int(count)
+    except Exception:
+        pass
     return True
 
 
@@ -701,6 +736,22 @@ def try_apply_live_start_ext(
             source_cn=src,
             options=options,
             require_other_member=require_other_member,
+        )
+
+
+    if ext_key == "live_start_choose_heart_per_success_count":
+        src_pos = _ctx_src_pos(ctx)
+        src = _ctx_source_cn(ctx)
+        options = _parse_option_labels_csv((gd or {}).get("option_labels"), ["桃", "赤", "黄", "緑", "青", "紫"])
+        source_name = str((gd or {}).get("source_name") or src or "カード")
+        no_effect_log = str((gd or {}).get("no_effect_log") or f"success zone empty, no effect ({source_name})")
+        return _queue_choose_heart_per_success_count(
+            gs,
+            src_pos=src_pos,
+            source_cn=src,
+            options=options,
+            source_name=source_name,
+            no_effect_log=no_effect_log,
         )
 
 
