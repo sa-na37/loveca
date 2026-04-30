@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_start_choose_heart_then_counted_bonus_split_20260430a
+# BUILD_TAG: live_start_choose_heart_token_text_fix_20260430b
 from __future__ import annotations
 
 """llocg_ui.effects.live_start
@@ -79,6 +79,26 @@ def _queue_choose_stage_member(
     _append_pending(gs, payload, log_line)
 
 
+def _heart_token(label: str) -> str:
+    m = {
+        "桃": "<(桃)>",
+        "赤": "<(赤)>",
+        "黄": "<(黄)>",
+        "緑": "<(緑)>",
+        "青": "<(青)>",
+        "紫": "<(紫)>",
+        "任意": "<(任意)>",
+        "虹": "<(虹)>",
+    }
+    s = str(label or "").strip()
+    return m.get(s, s)
+
+
+def _token_join_options(options: list[str]) -> str:
+    vals = [_heart_token(x) for x in list(options or []) if str(x or "").strip()]
+    return " / ".join(vals)
+
+
 def _queue_choose_heart_color(
     gs: Any,
     *,
@@ -87,6 +107,7 @@ def _queue_choose_heart_color(
     options: list[str],
     text: str,
     log_line: str,
+    detail_text: str = "",
 ) -> None:
     payload = {
         "kind": "choose_heart_color",
@@ -97,6 +118,9 @@ def _queue_choose_heart_color(
         "source_cn": source_cn,
         "src_pos": str(pos or "").upper(),
     }
+    if str(detail_text or "").strip():
+        payload["detail_text"] = str(detail_text)
+        payload["effect_text"] = str(detail_text)
     _append_pending(gs, payload, log_line)
 
 
@@ -119,13 +143,14 @@ def _queue_generic_choose_heart(
         except Exception:
             pass
         return True
-    pretty = "/".join(options) if options else "好きな色"
+    pretty = _token_join_options(options) if options else "好きな色"
     _queue_choose_heart_color(
         gs,
         pos=src_pos,
         source_cn=source_cn,
         options=options,
         text=f"{source_cn}: {pretty}から1つ選ぶ → ライブ終了時まで+1",
+        detail_text=f"{pretty}のうち、1つを選ぶ。ライブ終了時まで、選んだハートを1つ得る。",
         log_line=f"[PENDING] {source_cn}: choose heart color",
     )
     return True
@@ -159,14 +184,16 @@ def _queue_choose_heart_then_counted_bonus(
     # 共通部を二つに分ける:
     # 1. 「＜色A＞か＜色B＞か＜色C＞のうち、1つを選ぶ。」
     # 2. 「成功ライブ置き場のカード1枚につき、選んだハートを1つ得る。」
-    pretty = "/".join(options) if options else "好きな色"
+    pretty = _token_join_options(options) if options else "好きな色"
     label_head = source_name or source_cn or "カード"
+    count_label = "自分の成功ライブカード置き場にあるカード"
     _queue_choose_heart_color(
         gs,
         pos=src_pos,
         source_cn=source_cn,
         options=options,
         text=f"【{label_head}】{pretty}から1つ選ぶ",
+        detail_text=f"{pretty}のうち、1つを選ぶ。ライブ終了時まで、{count_label}1枚につき、選んだハートを1つ得る。",
         log_line=f"[PENDING] {label_head}: choose heart color then counted bonus x{count}",
     )
     try:
@@ -174,7 +201,7 @@ def _queue_choose_heart_then_counted_bonus(
         if isinstance(p, dict):
             p['n'] = int(count)
             p['count_source'] = str(count_source or '')
-            p['counted_bonus_text'] = f"ライブ終了時まで、{count_source} {count}枚ぶん"
+            p['counted_bonus_text'] = f"ライブ終了時まで、{count_label}1枚につき、選んだハートを1つ得る。"
     except Exception:
         pass
     return True
