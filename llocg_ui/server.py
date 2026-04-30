@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: server_choice_popup_live_fill_fix_20260428c
+# BUILD_TAG: server_choose_heart_option_icon_fix_20260430a
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1942,7 +1942,32 @@ HTML = r'''<!doctype html>
     if(low === 'ok') return '確認';
     return s;
   }
-  function cardChoiceCaption(cn, nth, tot){
+  
+  function choiceRichTextLabel(raw, kind){
+    const s = String(raw || '').trim();
+    const low = s.toLowerCase();
+    if(kind === 'choose_heart_color' || kind === 'choose_heart_color_for_other'){
+      const tokenMap = {
+        '桃':'<(桃)>',
+        '赤':'<(赤)>',
+        '黄':'<(黄)>',
+        '緑':'<(緑)>',
+        '青':'<(青)>',
+        '紫':'<(紫)>',
+        '任意':'<(任意)>',
+        '虹':'<(虹)>',
+      };
+      if(tokenMap[s]) return tokenMap[s];
+    }
+    if(!s) return '';
+    if(low === 'skip' || low === '__skip__') return 'スキップ';
+    if(low === 'pay' || low === 'yes' || low === 'y' || low === '1' || low === 'true' || low === 'apply' || low === 'use') return '使う';
+    if(low === 'no' || low === 'n' || low === '0' || low === 'false') return '使わない';
+    if(low === 'ok') return '確認';
+    return s;
+  }
+
+function cardChoiceCaption(cn, nth, tot){
     const name = cardNameFor(cn);
     if(tot && tot > 1) return `${name} (${nth}/${tot})`;
     return name;
@@ -2217,7 +2242,11 @@ HTML = r'''<!doctype html>
       if(sum >= t1) return met(`成功置き場のスコア合計 ${sum} ≥ ${t1}`);
       return unmet(`成功置き場のスコア合計 ${sum} < ${Math.min(t1||sum, t2||sum)}`);
     }
-    if(kind === 'confirm_effect' || kind === 'pay_or_skip') return neutral('解決前の確認です');
+    if(kind === 'confirm_effect'){
+      if(p && p.ctx && p.ctx._ack_only) return neutral('解決後の確認です');
+      return neutral('解決前の確認です');
+    }
+    if(kind === 'pay_or_skip') return neutral('解決前の確認です');
     return null;
   }
   async function getCardInfoCached(cn){
@@ -2609,13 +2638,16 @@ HTML = r'''<!doctype html>
       return;
     }
 
+    const slotW = parseFloat(btn.style.width) || btn.clientWidth || btn.offsetWidth || 0;
+    const slotH = parseFloat(btn.style.height) || btn.clientHeight || btn.offsetHeight || 0;
+
     const inner = document.createElement('div');
     inner.className = 'rot';
     inner.style.position = 'absolute';
     inner.style.left = '50%';
     inner.style.top = '50%';
-    inner.style.width = (btn.clientHeight || btn.offsetHeight || 0) + 'px';
-    inner.style.height = (btn.clientWidth || btn.offsetWidth || 0) + 'px';
+    inner.style.width = slotH + 'px';
+    inner.style.height = slotW + 'px';
     inner.style.transform = (wantOrient === 'portrait')
       ? 'translate(-50%, -50%) rotate(90deg)'
       : 'translate(-50%, -50%) rotate(-90deg)';
@@ -4574,7 +4606,11 @@ inner.appendChild(card);
       opts.forEach(opt=>{
         const b = document.createElement('button');
         b.className = 'miniBtn';
-        b.textContent = choiceTextLabel(opt);
+        b.style.display = 'inline-flex';
+        b.style.alignItems = 'center';
+        b.style.justifyContent = 'center';
+        b.style.gap = '4px';
+        setRichText(b, choiceRichTextLabel(opt, kind));
         b.addEventListener('click', async (ev)=>{
           ev.stopPropagation();
           st = await apiCmd('resolve_pending', {idx:0, choice:String(opt)});
