@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: server_choose_heart_option_icon_fix_20260430a
+# BUILD_TAG: server_choose_heart_colored_choice_fix_20260430b
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1965,6 +1965,51 @@ HTML = r'''<!doctype html>
     if(low === 'no' || low === 'n' || low === '0' || low === 'false') return '使わない';
     if(low === 'ok') return '確認';
     return s;
+  }
+
+  function renderChoiceLabel(el, raw, kind){
+    const s = String(raw || '').trim();
+    if(kind === 'choose_heart_color' || kind === 'choose_heart_color_for_other'){
+      const map = {
+        '桃': {glyph:'♥', color:'#ff88cc', label:'桃'},
+        '赤': {glyph:'♥', color:'#ff5555', label:'赤'},
+        '黄': {glyph:'♥', color:'#ffe566', label:'黄'},
+        '緑': {glyph:'♥', color:'#44dd88', label:'緑'},
+        '青': {glyph:'♥', color:'#55aaff', label:'青'},
+        '紫': {glyph:'♥', color:'#cc77ff', label:'紫'},
+        '任意': {glyph:'♥', color:'#dddddd', label:'任意'},
+        '虹': {glyph:'★', color:'#ffffff', label:'虹'},
+      };
+      const d = map[s];
+      if(d){
+        el.innerHTML = '';
+        const wrap = document.createElement('span');
+        wrap.style.display = 'inline-flex';
+        wrap.style.alignItems = 'center';
+        wrap.style.justifyContent = 'center';
+        wrap.style.gap = '6px';
+
+        const ico = document.createElement('span');
+        ico.textContent = d.glyph;
+        ico.style.color = d.color;
+        ico.style.fontSize = '18px';
+        ico.style.lineHeight = '1';
+        ico.style.fontWeight = '700';
+        ico.style.textShadow = '0 0 0 transparent';
+
+        const txt = document.createElement('span');
+        txt.textContent = d.label;
+        txt.style.color = '#eee';
+        txt.style.fontSize = '14px';
+        txt.style.lineHeight = '1';
+
+        wrap.appendChild(ico);
+        wrap.appendChild(txt);
+        el.appendChild(wrap);
+        return;
+      }
+    }
+    setRichText(el, choiceRichTextLabel(raw, kind));
   }
 
 function cardChoiceCaption(cn, nth, tot){
@@ -4610,7 +4655,7 @@ inner.appendChild(card);
         b.style.alignItems = 'center';
         b.style.justifyContent = 'center';
         b.style.gap = '4px';
-        setRichText(b, choiceRichTextLabel(opt, kind));
+        renderChoiceLabel(b, opt, kind);
         b.addEventListener('click', async (ev)=>{
           ev.stopPropagation();
           st = await apiCmd('resolve_pending', {idx:0, choice:String(opt)});
