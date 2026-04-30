@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: server_choose_heart_colored_choice_fix_20260430b
+# BUILD_TAG: server_choice_texticons_word_and_overlay_colored_20260430c
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1971,14 +1971,14 @@ HTML = r'''<!doctype html>
     const s = String(raw || '').trim();
     if(kind === 'choose_heart_color' || kind === 'choose_heart_color_for_other'){
       const map = {
-        '桃': {glyph:'♥', color:'#ff88cc', label:'桃'},
-        '赤': {glyph:'♥', color:'#ff5555', label:'赤'},
-        '黄': {glyph:'♥', color:'#ffe566', label:'黄'},
-        '緑': {glyph:'♥', color:'#44dd88', label:'緑'},
-        '青': {glyph:'♥', color:'#55aaff', label:'青'},
-        '紫': {glyph:'♥', color:'#cc77ff', label:'紫'},
-        '任意': {glyph:'♥', color:'#dddddd', label:'任意'},
-        '虹': {glyph:'★', color:'#ffffff', label:'虹'},
+        '桃': {token:'<(桃)>', label:'桃'},
+        '赤': {token:'<(赤)>', label:'赤'},
+        '黄': {token:'<(黄)>', label:'黄'},
+        '緑': {token:'<(緑)>', label:'緑'},
+        '青': {token:'<(青)>', label:'青'},
+        '紫': {token:'<(紫)>', label:'紫'},
+        '任意': {token:'<(任意)>', label:'任意'},
+        '虹': {token:'<(虹)>', label:'虹'},
       };
       const d = map[s];
       if(d){
@@ -1990,12 +1990,9 @@ HTML = r'''<!doctype html>
         wrap.style.gap = '6px';
 
         const ico = document.createElement('span');
-        ico.textContent = d.glyph;
-        ico.style.color = d.color;
-        ico.style.fontSize = '18px';
-        ico.style.lineHeight = '1';
-        ico.style.fontWeight = '700';
-        ico.style.textShadow = '0 0 0 transparent';
+        ico.style.display = 'inline-flex';
+        ico.style.alignItems = 'center';
+        setRichText(ico, d.token);
 
         const txt = document.createElement('span');
         txt.textContent = d.label;
@@ -3027,6 +3024,26 @@ inner.appendChild(card);
               'flex-shrink:0',
             ].join(';');
             icons.forEach((ico, i)=>{
+              if(ico.kind === 'glyph'){
+                const sp = document.createElement('span');
+                sp.textContent = ico.glyph || '♥';
+                sp.style.cssText = [
+                  'position:absolute',
+                  `left:${STEP * i}px`,
+                  'top:0',
+                  `width:${ICO}px`,
+                  `height:${ICO}px`,
+                  'display:flex',
+                  'align-items:center',
+                  'justify-content:center',
+                  `font-size:${ICO - 1}px`,
+                  `color:${ico.color || '#fff'}`,
+                  'font-weight:700',
+                  `z-index:${10 + i}`,
+                ].join(';');
+                wrap.appendChild(sp);
+                return;
+              }
               const img = document.createElement('img');
               img.src = ico.src;
               img.alt = ico.alt;
@@ -3121,7 +3138,9 @@ inner.appendChild(card);
             const fc   = heartColor[col] || '#fff';
             const absn = Math.abs(n);
             const icons = Array.from({length: absn}, ()=>({
-              src: ICON_BASE + file,
+              kind: 'glyph',
+              glyph: '♥',
+              color: fc,
               alt: fb,
               fallbackText: '♥',
               fallbackColor: fc,
@@ -3138,7 +3157,9 @@ inner.appendChild(card);
             const fc   = heartColor[col] || '#fff';
             const absn = Math.abs(n);
             const icons = Array.from({length: absn}, ()=>({
-              src: ICON_BASE + file,
+              kind: 'glyph',
+              glyph: '♥',
+              color: fc,
               alt: fb,
               fallbackText: '♥',
               fallbackColor: fc,
