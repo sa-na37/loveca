@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: server_choice_popup_live_fill_fix_20260428c
+# BUILD_TAG: server_shared_texticon_overlay_20260430a
 from __future__ import annotations
 
 """llocg_ui.server
@@ -58,7 +58,7 @@ from .engine import (
     StageSlot,
 )
 
-APP_VERSION = "texticon_stack_overlay_20260408f_livequeue_reqicons"
+APP_VERSION = "shared_texticon_overlay_20260430a"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -1985,50 +1985,125 @@ HTML = r'''<!doctype html>
     if(kind === 'position_change') return '移動先のエリアを選んでください。';
     return pendingSourceCn(p) ? '効果を解決するため、対象または選択肢を選んでください。' : '';
   }
+  const TEXTICON_BASE = '/llocg_db_out_full/card_images/texticons/';
+  const TEXTICON_FILE_BY_TOKEN = {
+    '<(ブレード)>':'icon_blade.png',
+    '<(桃)>':'heart_01.png',
+    '<(赤)>':'heart_02.png',
+    '<(黄)>':'heart_03.png',
+    '<(緑)>':'heart_04.png',
+    '<(青)>':'heart_05.png',
+    '<(紫)>':'heart_06.png',
+    '<(任意)>':'heart_00.png',
+    '<(虹)>':'icon_all.png',
+    '<(すべて)>':'icon_all.png',
+  };
+  const TEXTICON_LABEL_BY_TOKEN = {
+    '<(ブレード)>':'ブレード',
+    '<(桃)>':'桃',
+    '<(赤)>':'赤',
+    '<(黄)>':'黄',
+    '<(緑)>':'緑',
+    '<(青)>':'青',
+    '<(紫)>':'紫',
+    '<(任意)>':'任意',
+    '<(虹)>':'ALL',
+    '<(すべて)>':'ALL',
+  };
+  const HEART_TOKEN_BY_COLOR = {
+    pink:'<(桃)>', red:'<(赤)>', yellow:'<(黄)>', green:'<(緑)>',
+    blue:'<(青)>', purple:'<(紫)>', any:'<(任意)>', all:'<(虹)>',
+  };
+  const HEART_LABEL_BY_COLOR = {
+    pink:'桃', red:'赤', yellow:'黄', green:'緑', blue:'青', purple:'紫', any:'任意', all:'ALL',
+  };
+  const TEXTICON_TOKEN_RE = /<\((ブレード|桃|赤|黄|緑|青|紫|任意|虹|すべて)\)>/g;
+
+  function textIconLabel(tok, fallback){
+    return TEXTICON_LABEL_BY_TOKEN[tok] || fallback || tok;
+  }
+  function makeTextIconImg(tok, fallback, sizeCss){
+    const srcFile = TEXTICON_FILE_BY_TOKEN[tok] || '';
+    if(!srcFile){
+      return document.createTextNode(textIconLabel(tok, fallback));
+    }
+    const img = document.createElement('img');
+    img.src = TEXTICON_BASE + srcFile;
+    img.alt = textIconLabel(tok, fallback);
+    img.style.width = sizeCss || '1em';
+    img.style.height = sizeCss || '1em';
+    img.style.objectFit = 'contain';
+    img.style.verticalAlign = '-0.12em';
+    img.style.margin = '0 0.05em';
+    img.onerror = ()=>{
+      const sp = document.createElement('span');
+      sp.textContent = textIconLabel(tok, fallback);
+      sp.style.cssText = img.style.cssText + ';display:inline-flex;align-items:center;justify-content:center;font-size:.72em;line-height:1;font-weight:700;color:#fff;';
+      img.replaceWith(sp);
+    };
+    return img;
+  }
   function setRichText(el, raw){
     const s = String(raw || '');
     el.innerHTML = '';
     if(!s) return;
-    const ICON_BASE = '/llocg_db_out_full/card_images/texticons/';
-    const tokenMap = {
-      '<(ブレード)>':'icon_blade.png',
-      '<(桃)>':'heart_01.png',
-      '<(赤)>':'heart_02.png',
-      '<(黄)>':'heart_03.png',
-      '<(緑)>':'heart_04.png',
-      '<(青)>':'heart_05.png',
-      '<(紫)>':'heart_06.png',
-      '<(任意)>':'heart_00.png',
-      '<(虹)>':'icon_all.png',
-      '<(すべて)>':'icon_all.png',
-    };
-    const reTok = /<\((ブレード|桃|赤|黄|緑|青|紫|任意|虹|すべて)\)>/g;
     let last = 0;
     let m;
-    while((m = reTok.exec(s)) !== null){
+    TEXTICON_TOKEN_RE.lastIndex = 0;
+    while((m = TEXTICON_TOKEN_RE.exec(s)) !== null){
       if(m.index > last){
         el.appendChild(document.createTextNode(s.slice(last, m.index)));
       }
-      const tok = m[0];
-      const srcFile = tokenMap[tok];
-      if(srcFile){
-        const img = document.createElement('img');
-        img.src = ICON_BASE + srcFile;
-        img.alt = m[1];
-        img.style.width = '1em';
-        img.style.height = '1em';
-        img.style.objectFit = 'contain';
-        img.style.verticalAlign = '-0.12em';
-        img.style.margin = '0 0.05em';
-        el.appendChild(img);
-      }else{
-        el.appendChild(document.createTextNode(tok));
-      }
-      last = reTok.lastIndex;
+      el.appendChild(makeTextIconImg(m[0], m[1], '1em'));
+      last = TEXTICON_TOKEN_RE.lastIndex;
     }
     if(last < s.length){
       el.appendChild(document.createTextNode(s.slice(last)));
     }
+  }
+  function makeTextIconStack(iconSpecs, titleAll, iconPx=16, stepPx=10){
+    const n = iconSpecs.length;
+    const totalW = iconPx + stepPx * Math.max(0, n - 1);
+    const wrap = document.createElement('div');
+    wrap.title = titleAll || '';
+    wrap.style.cssText = ['position:relative', `width:${totalW}px`, `height:${iconPx}px`, 'flex-shrink:0'].join(';');
+    iconSpecs.forEach((spec, i)=>{
+      const tok = (typeof spec === 'string') ? spec : String(spec.token || '');
+      const fb = (typeof spec === 'string') ? textIconLabel(tok, '') : String(spec.alt || spec.fallback || '');
+      const node = makeTextIconImg(tok, fb, `${iconPx}px`);
+      if(node.nodeType === Node.TEXT_NODE){
+        const sp = document.createElement('span');
+        sp.textContent = node.textContent || fb || tok;
+        sp.style.cssText = [
+          'position:absolute', `left:${stepPx*i}px`, 'top:0', `width:${iconPx}px`, `height:${iconPx}px`,
+          'display:flex', 'align-items:center', 'justify-content:center', `font-size:${Math.max(9, iconPx-6)}px`,
+          'font-weight:700', 'line-height:1', 'color:#fff', `z-index:${10+i}`,
+        ].join(';');
+        wrap.appendChild(sp);
+        return;
+      }
+      node.style.position = 'absolute';
+      node.style.left = `${stepPx*i}px`;
+      node.style.top = '0';
+      node.style.width = `${iconPx}px`;
+      node.style.height = `${iconPx}px`;
+      node.style.margin = '0';
+      node.style.verticalAlign = 'initial';
+      node.style.zIndex = String(10+i);
+      wrap.appendChild(node);
+    });
+    return wrap;
+  }
+  function makeTextIconRow(signText, stack, titleAll){
+    const row = document.createElement('div');
+    row.title = titleAll || '';
+    row.style.cssText = 'display:flex;align-items:center;gap:2px;';
+    const sign = document.createElement('span');
+    sign.textContent = signText;
+    sign.style.cssText = ['color:#fff','font-size:11px','font-weight:700','line-height:1','flex-shrink:0'].join(';');
+    row.appendChild(sign);
+    row.appendChild(stack);
+    return row;
   }
 
   function clearModalLead(){
@@ -2917,76 +2992,8 @@ inner.appendChild(card);
 
         const hasBonus = totalBlade !== 0 || alwScore !== 0 || Object.keys(alwHearts).some(k=>Number(alwHearts[k])!==0) || Object.keys(tmpHearts).some(k=>Number(tmpHearts[k])!==0);
         if(hasBonus){
-          const ICON_BASE = '/llocg_db_out_full/card_images/texticons/';
-          const heartIconFile = {
-            pink:'heart_01.png', red:'heart_02.png', yellow:'heart_03.png',
-            green:'heart_04.png', blue:'heart_05.png', purple:'heart_06.png',
-            any:'heart_00.png', all:'icon_all.png',
-          };
-          const heartFallback = {
-            pink:'桃', red:'赤', yellow:'黄', green:'緑', blue:'青', purple:'紫', any:'無', all:'ALL',
-          };
-          const heartColor = {
-            pink:'#ff88cc', red:'#ff5555', yellow:'#ffe566',
-            green:'#44dd88', blue:'#55aaff', purple:'#cc77ff', any:'#ddd', all:'#fff',
-          };
-
-          // アイコンサイズと重なり量
-          const ICO  = 16;   // アイコン1枚の幅・高さ (px)
-          const STEP = 10;   // 右が前面になる重なりオフセット (px)
-
-          // アイコンスタックを作る関数
-          // icons: [{src, alt, fallbackText, fallbackColor, title}...]
-          // 右が前面 = index大ほど z-index高
-          const makeIconStack = (icons, titleAll)=>{
-            const n = icons.length;
-            const totalW = ICO + STEP * (n - 1);
-            const wrap = document.createElement('div');
-            wrap.title = titleAll;
-            wrap.style.cssText = [
-              'position:relative',
-              `width:${totalW}px`,
-              `height:${ICO}px`,
-              'flex-shrink:0',
-            ].join(';');
-            icons.forEach((ico, i)=>{
-              const img = document.createElement('img');
-              img.src = ico.src;
-              img.alt = ico.alt;
-              img.style.cssText = [
-                'position:absolute',
-                `left:${STEP * i}px`,
-                'top:0',
-                `width:${ICO}px`,
-                `height:${ICO}px`,
-                'object-fit:contain',
-                `z-index:${10 + i}`,
-              ].join(';');
-              img.onerror = ()=>{
-                const sp = document.createElement('span');
-                sp.textContent = ico.fallbackText;
-                sp.style.cssText = [
-                  'position:absolute',
-                  `left:${STEP * i}px`,
-                  'top:0',
-                  `width:${ICO}px`,
-                  `height:${ICO}px`,
-                  'display:flex',
-                  'align-items:center',
-                  'justify-content:center',
-                  `font-size:${ICO - 2}px`,
-                  `color:${ico.fallbackColor}`,
-                  `z-index:${10 + i}`,
-                ].join(';');
-                img.replaceWith(sp);
-              };
-              wrap.appendChild(img);
-            });
-            return wrap;
-          };
-
           // オーバーレイ本体（縦並び、カード右上）
-          // card(.cardWrap) の子にすることでホバー時の z-index 上昇に追従する
+          // heart / blade は modal の setRichText と同じ texticons map を使う
           const ov = document.createElement('div');
           ov.style.cssText = [
             'position:absolute',
@@ -3003,71 +3010,33 @@ inner.appendChild(card);
             'z-index:50',
           ].join(';');
 
-          // アイコン行（＋ラベル + スタック）を作る関数
-          const makeIconRow = (signText, stack, titleAll)=>{
-            const row = document.createElement('div');
-            row.title = titleAll;
-            row.style.cssText = 'display:flex;align-items:center;gap:2px;';
-            const plus = document.createElement('span');
-            plus.textContent = signText;
-            plus.style.cssText = [
-              'color:#fff',
-              'font-size:11px',
-              'font-weight:700',
-              'line-height:1',
-              'flex-shrink:0',
-            ].join(';');
-            row.appendChild(plus);
-            row.appendChild(stack);
-            return row;
+          const appendBonusIconRow = (signText, specs, titleStr)=>{
+            if(!specs || !specs.length) return;
+            ov.appendChild(makeTextIconRow(signText, makeTextIconStack(specs, '', 16, 10), titleStr));
+          };
+          const appendHeartBonusRows = (bonusMap, suffix)=>{
+            for(const [col, cnt] of Object.entries(bonusMap || {})){
+              const n = Number(cnt);
+              if(!n) continue;
+              const token = HEART_TOKEN_BY_COLOR[col] || '<(任意)>';
+              const label = HEART_LABEL_BY_COLOR[col] || col;
+              const absn = Math.abs(n);
+              const specs = Array.from({length: absn}, ()=>({token, alt: label}));
+              appendBonusIconRow(n > 0 ? '＋' : '－', specs, `${label}ハート ${n > 0 ? '+' : ''}${n}${suffix || ''}`);
+            }
           };
 
           // ブレードスタック
           if(totalBlade !== 0){
             const absBlade = Math.abs(totalBlade);
-            const icons = Array.from({length: absBlade}, ()=>({
-              src: ICON_BASE + 'icon_blade.png',
-              alt: '▲',
-              fallbackText: '▲',
-              fallbackColor: '#ffe566',
-            }));
+            const specs = Array.from({length: absBlade}, ()=>({token:'<(ブレード)>', alt:'ブレード'}));
             const titleStr = `ブレード ${totalBlade > 0 ? '+' : ''}${totalBlade}`;
-            ov.appendChild(makeIconRow(totalBlade > 0 ? '＋' : '－', makeIconStack(icons, ''), titleStr));
+            appendBonusIconRow(totalBlade > 0 ? '＋' : '－', specs, titleStr);
           }
 
-          // 常時ハート（色別）
-          for(const [col, cnt] of Object.entries(alwHearts)){
-            const n = Number(cnt);
-            if(!n) continue;
-            const file = heartIconFile[col] || `heart_${col}.png`;
-            const fb   = heartFallback[col] || col;
-            const fc   = heartColor[col] || '#fff';
-            const absn = Math.abs(n);
-            const icons = Array.from({length: absn}, ()=>({
-              src: ICON_BASE + file,
-              alt: fb,
-              fallbackText: '♥',
-              fallbackColor: fc,
-            }));
-            ov.appendChild(makeIconRow(n > 0 ? '＋' : '－', makeIconStack(icons, ''), `${fb}ハート ${n > 0 ? '+' : ''}${n}`));
-          }
-
-          // 一時ハート（色別）
-          for(const [col, cnt] of Object.entries(tmpHearts)){
-            const n = Number(cnt);
-            if(!n) continue;
-            const file = heartIconFile[col] || `heart_${col}.png`;
-            const fb   = heartFallback[col] || col;
-            const fc   = heartColor[col] || '#fff';
-            const absn = Math.abs(n);
-            const icons = Array.from({length: absn}, ()=>({
-              src: ICON_BASE + file,
-              alt: fb,
-              fallbackText: '♥',
-              fallbackColor: fc,
-            }));
-            ov.appendChild(makeIconRow(n > 0 ? '＋' : '－', makeIconStack(icons, ''), `${fb}ハート ${n > 0 ? '+' : ''}${n}（一時）`));
-          }
+          // 常時ハート / 一時ハート（色別）
+          appendHeartBonusRows(alwHearts, '');
+          appendHeartBonusRows(tmpHearts, '（一時）');
 
           if(alwScore !== 0){
             const sb = document.createElement('div');
