@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: enter_optional_self_wait_plus_discard_cost_fix_20260428a
+# BUILD_TAG: yell_revealed_auto_prompt_queue_20260513a
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -1243,6 +1243,7 @@ class StageSlot:
     active: bool = True
     temp_blade: int = 0
     temp_hearts: Dict[str, int] = field(default_factory=dict)
+    temp_score: int = 0
     temp_until: str = ""  # e.g., end_of_live
     energy_under: int = 0  # number of energy cards under this member (UI + some effects)
     heart_replace_color: str = ""  # 元々持つハートを置換する色（ライブ終了時まで）。空=無効
@@ -1294,6 +1295,7 @@ class GameState:
     need_success_store_choice: bool = False
     # live-start buff (until end of live): for each card in success storage, gain chosen heart
     success_zone_heart_color: str = ""  # e.g., 'pink'/'yellow'/'purple'
+    success_zone_heart_pos: str = ""    # source stage slot for UI overlay, e.g., 'L'/'C'/'R'
     deck_refreshed_this_turn: bool = False
     live_start_score_bonus_by_set_idx: Dict[int, int] = field(default_factory=dict)
     live_start_required_any_reduction_by_set_idx: Dict[int, int] = field(default_factory=dict)
@@ -1361,7 +1363,7 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
         if slot is None:
             stage_snap[k] = None
         else:
-            stage_snap[k] = {"cardnumber": slot.cardnumber, "active": bool(slot.active), "temp_blade": int(getattr(slot, "temp_blade", 0) or 0), "temp_hearts": dict(getattr(slot, "temp_hearts", {}) or {}), "temp_until": str(getattr(slot, "temp_until", "") or ""), "energy_under": int(getattr(slot, "energy_under", 0) or 0), "heart_replace_color": str(getattr(slot, "heart_replace_color", "") or "")}
+            stage_snap[k] = {"cardnumber": slot.cardnumber, "active": bool(slot.active), "temp_blade": int(getattr(slot, "temp_blade", 0) or 0), "temp_hearts": dict(getattr(slot, "temp_hearts", {}) or {}), "temp_score": int(getattr(slot, "temp_score", 0) or 0), "temp_until": str(getattr(slot, "temp_until", "") or ""), "energy_under": int(getattr(slot, "energy_under", 0) or 0), "heart_replace_color": str(getattr(slot, "heart_replace_color", "") or "")}
     return {
         "phase": gs.phase,
         "deck": list(gs.deck),
@@ -1390,6 +1392,7 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
         "need_success_store_choice": bool(getattr(gs, 'need_success_store_choice', False)),
         # end-of-live buffs
         "success_zone_heart_color": str(getattr(gs, 'success_zone_heart_color', '') or ''),
+        "success_zone_heart_pos": str(getattr(gs, 'success_zone_heart_pos', '') or ''),
         "deck_refreshed_this_turn": bool(getattr(gs, 'deck_refreshed_this_turn', False)),
         "live_start_score_bonus_by_set_idx": {int(k): int(v) for k, v in dict(getattr(gs, "live_start_score_bonus_by_set_idx", {}) or {}).items()},
         "live_start_required_any_reduction_by_set_idx": {int(k): int(v) for k, v in dict(getattr(gs, "live_start_required_any_reduction_by_set_idx", {}) or {}).items()},
@@ -1417,7 +1420,7 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
         if v is None:
             stage_new[k] = None
         else:
-            stage_new[k] = StageSlot(cardnumber=str(v.get("cardnumber", "")), active=bool(v.get("active", True)), temp_blade=_safe_int(v.get("temp_blade", 0), 0), temp_hearts=dict(v.get("temp_hearts", {}) or {}), temp_until=str(v.get("temp_until", "") or ""), energy_under=_safe_int(v.get("energy_under", 0), 0), heart_replace_color=str(v.get("heart_replace_color", "") or ""))
+            stage_new[k] = StageSlot(cardnumber=str(v.get("cardnumber", "")), active=bool(v.get("active", True)), temp_blade=_safe_int(v.get("temp_blade", 0), 0), temp_hearts=dict(v.get("temp_hearts", {}) or {}), temp_score=_safe_int(v.get("temp_score", 0), 0), temp_until=str(v.get("temp_until", "") or ""), energy_under=_safe_int(v.get("energy_under", 0), 0), heart_replace_color=str(v.get("heart_replace_color", "") or ""))
     gs.stage = stage_new
     gs.green_room = list(snap.get("green_room", gs.green_room))
     gs.set_zone = list(snap.get("set_zone", gs.set_zone))
@@ -1451,6 +1454,7 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
     gs.need_live_success_triggers = bool(snap.get('need_live_success_triggers', getattr(gs, 'need_live_success_triggers', False)))
     gs.need_success_store_choice = bool(snap.get('need_success_store_choice', getattr(gs, 'need_success_store_choice', False)))
     gs.success_zone_heart_color = str(snap.get('success_zone_heart_color', getattr(gs, 'success_zone_heart_color', '') or '') or '')
+    gs.success_zone_heart_pos = str(snap.get('success_zone_heart_pos', getattr(gs, 'success_zone_heart_pos', '') or '') or '')
     gs.deck_refreshed_this_turn = bool(snap.get('deck_refreshed_this_turn', getattr(gs, 'deck_refreshed_this_turn', False)))
     try:
         gs.live_start_score_bonus_by_set_idx = {int(k): int(v) for k, v in dict(snap.get('live_start_score_bonus_by_set_idx', getattr(gs, 'live_start_score_bonus_by_set_idx', {}) or {}) or {}).items()}
@@ -2042,7 +2046,7 @@ def _slot_always_score_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos: 
         ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
         if not ci or _is_live_ci(ci):
             return 0
-        bonus = 0
+        bonus = int(getattr(slot, 'temp_score', 0) or 0)
         for _eff, blob in _iter_body_always_effects(ci):
             try:
                 if 'エリアすべてに『' in blob and 'のメンバーが登場しており、かつ名前が異なる場合' in blob and 'ライブの合計スコアを+1する' in blob:
@@ -3229,6 +3233,10 @@ def _clear_end_of_live_buffs(gs: GameState, cards_db: Optional[Dict[str, CardInf
         if getattr(slot, "temp_until", "") == "end_of_live":
             slot.temp_blade = 0
             slot.temp_hearts = {}
+            try:
+                slot.temp_score = 0
+            except Exception:
+                pass
             slot.temp_until = ""
         # Always clear heart_replace_color at end of live (it's always "until end of live")
         try:
@@ -3248,6 +3256,7 @@ def _clear_end_of_live_buffs(gs: GameState, cards_db: Optional[Dict[str, CardInf
     # clear global end-of-live buffs
     try:
         gs.success_zone_heart_color = ""
+        gs.success_zone_heart_pos = ""
     except Exception:
         pass
     try:
@@ -3766,6 +3775,13 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
     if kind == 'cost10_enter_draw1_auto':
         handle_stage_cost10_member_enter_draw1(gs, cards_db, entered_pos=str(trig.get('entered_pos','C') or 'C'), entered_cn=str(trig.get('entered_cn','') or ''), source_pos=str(trig.get('source_pos','') or ''))
         return
+    if kind == 'yell_revealed_body_auto':
+        try:
+            rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0) + 23)
+        except Exception:
+            rng2 = random.Random(23)
+        _apply_yell_revealed_body_auto_trigger(gs, rng2, cards_db, dict(trig or {}))
+        return
     if kind == 'enqueue_pending_prompt':
         prm = dict((trig or {}).get('prompt', {}) or {})
         if prm:
@@ -4256,6 +4272,7 @@ def cmd_yell(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo]) -
             draw_n += _count_draw_icons(c.blade_heart_tags_json)
     got = draw(gs, draw_n, rng) if draw_n > 0 else 0
     gs.log.append(f"[YELL] revealed {len(revealed)} (blade={n}), draw+{draw_n} -> drew {got}")
+    _enqueue_yell_revealed_body_auto_triggers(gs, cards_db, revealed)
 
 def _source_cn_or_default(source_cn: str, fallback: str = '') -> str:
     s = str(source_cn or '').strip()
@@ -5378,6 +5395,317 @@ def _count_yell_revealed_distinct_named_group_members(gs: GameState, cards_db: D
         if nm:
             names.add(nm)
     return int(len(names))
+
+def _yell_compact_text(text: str) -> str:
+    t = _norm_digits_jp(str(text or ''))
+    t = re.sub(r'\s+', '', t)
+    t = t.replace('，', '、')
+    return t
+
+def _parse_icons_compact(icon_blob: str) -> Tuple[int, Dict[str, int]]:
+    """Parse compact <(...)> icon blob into (blade_count, hearts incl. ALL)."""
+    b = 0
+    hearts: Dict[str, int] = {}
+    for m in re.finditer(r'<\(([^)]+)\)>', str(icon_blob or '')):
+        jp = str(m.group(1) or '').strip()
+        if jp == 'ブレード':
+            b += 1
+            continue
+        if jp == 'ALL':
+            hearts['all'] = int(hearts.get('all', 0) or 0) + 1
+            continue
+        col = _HEART_ICON_COLOR_MAP.get(jp)
+        if col:
+            hearts[col] = int(hearts.get(col, 0) or 0) + 1
+    return int(b), hearts
+
+def _grant_temp_icons_to_slot(slot: StageSlot, icon_blob: str, mult: int = 1) -> Tuple[int, Dict[str, int]]:
+    try:
+        mult_i = max(0, int(mult or 0))
+    except Exception:
+        mult_i = 1
+    b, hearts = _parse_icons_compact(icon_blob)
+    if b and mult_i:
+        slot.temp_blade = int(getattr(slot, 'temp_blade', 0) or 0) + int(b * mult_i)
+        slot.temp_until = 'end_of_live'
+    applied_hearts: Dict[str, int] = {}
+    for col, cnt in (hearts or {}).items():
+        n = int(cnt or 0) * int(mult_i)
+        if n:
+            _grant_temp_heart(slot, col, n)
+            applied_hearts[col] = int(applied_hearts.get(col, 0) or 0) + n
+    return int(b * mult_i), applied_hearts
+
+def _card_has_blade_heart(ci: Optional[CardInfo]) -> bool:
+    if not ci:
+        return False
+    try:
+        for _k, v in ((getattr(ci, 'blade_hearts', None) or {}) or {}).items():
+            if int(v or 0) > 0:
+                return True
+    except Exception:
+        pass
+    try:
+        txt = str(getattr(ci, 'blade_heart_tags_json', '') or '')
+    except Exception:
+        txt = ''
+    if '(ALL)' in txt or '(DRAW)' in txt or 'スコア' in txt:
+        return True
+    return False
+
+def _count_yell_revealed_no_bladeheart_cards(gs: GameState, cards_db: Dict[str, CardInfo], member_only: bool = False) -> int:
+    n = 0
+    for cn in list(getattr(gs, '_yell_revealed_this_live', []) or []):
+        ci = _get_card(cards_db, cn)
+        if not ci:
+            continue
+        if member_only and not _is_member_ci(ci):
+            continue
+        if not _card_has_blade_heart(ci):
+            n += 1
+    return int(n)
+
+def _yell_revealed_bladeheart_kind_count(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
+    kinds = set()
+    for cn in list(getattr(gs, '_yell_revealed_this_live', []) or []):
+        ci = _get_card(cards_db, cn)
+        if not ci:
+            continue
+        try:
+            for k, v in ((getattr(ci, 'blade_hearts', None) or {}) or {}).items():
+                if int(v or 0) > 0 and str(k or '').lower() in ('pink', 'red', 'yellow', 'green', 'blue', 'purple'):
+                    kinds.add(str(k or '').lower())
+        except Exception:
+            pass
+        try:
+            txt = str(getattr(ci, 'blade_heart_tags_json', '') or '')
+        except Exception:
+            txt = ''
+        if '(ALL)' in txt:
+            kinds.add('all')
+    return int(len(kinds))
+
+def _collect_yell_revealed_body_auto_triggers(gs: GameState, cards_db: Dict[str, CardInfo], revealed: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+    """Collect generic BODY <自動><ターン1回> triggers that look at this yell's revealed cards.
+
+    This function only detects triggered abilities and builds queue entries.
+    Actual effects are applied by _apply_yell_revealed_body_auto_trigger(), so the UI can always show
+    a popup before resolution, matching the project's auto-trigger policy.
+    """
+    if revealed is None:
+        revealed = list(getattr(gs, '_yell_revealed_this_live', []) or [])
+    if not revealed:
+        return []
+    triggers: List[Dict[str, Any]] = []
+    live_n = int(_count_yell_revealed_live_cards(gs, cards_db) or 0)
+    no_bh_cards = int(_count_yell_revealed_no_bladeheart_cards(gs, cards_db, member_only=False) or 0)
+    no_bh_members = int(_count_yell_revealed_no_bladeheart_cards(gs, cards_db, member_only=True) or 0)
+    bh_kind_n = int(_yell_revealed_bladeheart_kind_count(gs, cards_db) or 0)
+
+    def _append_trigger(pos: str, canon: str, usage_key: str, once_per_turn: bool, title: str, effect_kind: str, **params: Any) -> None:
+        triggers.append({
+            'kind': 'yell_revealed_body_auto',
+            'source_cn': canon,
+            'pos': str(pos or '').upper(),
+            'usage_key': usage_key,
+            'once_per_turn': bool(once_per_turn),
+            'label': f"{canon}({str(pos or '').upper()})[エール時]: {title}",
+            'effect_kind': effect_kind,
+            **params,
+        })
+
+    for pos in ('L', 'C', 'R'):
+        slot = (gs.stage or {}).get(pos)
+        if not slot or not getattr(slot, 'cardnumber', ''):
+            continue
+        canon = _canon_cardno(getattr(slot, 'cardnumber', '') or '')
+        ci_src = _get_card(cards_db, canon)
+        if not ci_src:
+            continue
+        abs_ = list(getattr(ci_src, 'abilities', []) or [])
+        for ai, ab in enumerate(abs_):
+            if not isinstance(ab, dict):
+                continue
+            at = str(ab.get('ability_type', '') or '')
+            trig = str(ab.get('trigger', '') or '')
+            if ('自動' not in at) and ('自動' not in trig) and ('BODY' not in trig):
+                continue
+            flags = _ability_usage_flags(ab)
+            clauses = ab.get('clauses', [])
+            if not isinstance(clauses, list):
+                continue
+            for ci_idx, cl in enumerate(clauses):
+                if not isinstance(cl, dict):
+                    continue
+                eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+                if 'エール' not in eff:
+                    continue
+                ec = _yell_compact_text(eff)
+                if 'ウェイト状態のメンバーが持つ' in ec:
+                    continue
+                key = f"{pos}:{canon}:yell_body:{ai}:{ci_idx}"
+                once_per_turn = bool(flags.get('once_per_turn'))
+                if once_per_turn and int((getattr(gs, 'used_this_turn', {}) or {}).get(key, 0) or 0) >= 1:
+                    continue
+                m_icons = re.search(r'ライブ終了時まで、?(?P<icons>(?:<\([^)]+\)>)+)を得る。?', ec)
+
+                # 自分がエールしたとき、同じグループを持つメンバーカードが3枚ある/以上 -> icons
+                if ('同じグループを持つメンバーカードが3枚' in ec) and m_icons:
+                    group = str(getattr(ci_src, 'group', '') or '').split('/')[0].strip()
+                    got = _count_yell_revealed_group_members(gs, cards_db, group)
+                    if got >= 3:
+                        _append_trigger(
+                            pos, canon, key, once_per_turn,
+                            f"エール公開の同グループメンバー{got}枚 → {m_icons.group('icons')}を得る",
+                            'gain_icons', icons=m_icons.group('icons'), mult=1,
+                            detail=f"same-group revealed members={got}; icons={m_icons.group('icons')}",
+                        )
+                    continue
+
+                # ブレードハートを持たないメンバーカードがN枚以上 -> icons
+                if ('ブレードハートを持たないメンバーカードが' in ec) and m_icons:
+                    m_need = re.search(r'ブレードハートを持たないメンバーカードが(?P<n>\d+)枚以上', ec)
+                    need = int(m_need.group('n')) if m_need else 1
+                    if no_bh_members >= need:
+                        _append_trigger(
+                            pos, canon, key, once_per_turn,
+                            f"ブレードハートなしメンバー{no_bh_members}/{need}枚 → {m_icons.group('icons')}を得る",
+                            'gain_icons', icons=m_icons.group('icons'), mult=1,
+                            detail=f"no-blade-heart revealed members={no_bh_members}; icons={m_icons.group('icons')}",
+                        )
+                    continue
+
+                # ライブカードが1枚以上 -> icons
+                if ('ライブカードが1枚以上' in ec) and ('ライブ終了時まで' in ec) and m_icons and ('手札が' not in ec):
+                    if live_n >= 1:
+                        _append_trigger(
+                            pos, canon, key, once_per_turn,
+                            f"エール公開にライブカード{live_n}枚 → {m_icons.group('icons')}を得る",
+                            'gain_icons', icons=m_icons.group('icons'), mult=1,
+                            detail=f"revealed live cards={live_n}; icons={m_icons.group('icons')}",
+                        )
+                    continue
+
+                # ライブカードが1枚以上 and hand <= N -> draw 1
+                if ('ライブカードが1枚以上' in ec) and ('手札が' in ec) and ('カードを1枚引く' in ec):
+                    m_hand = re.search(r'手札が(?P<n>\d+)枚以下の場合、カードを1枚引く', ec)
+                    hand_lim = int(m_hand.group('n')) if m_hand else 999
+                    if live_n >= 1 and len(list(getattr(gs, 'hand', []) or [])) <= hand_lim:
+                        _append_trigger(
+                            pos, canon, key, once_per_turn,
+                            f"エール公開にライブカード{live_n}枚かつ手札{len(list(getattr(gs, 'hand', []) or []))}/{hand_lim}枚以下 → 1ドロー",
+                            'draw1', hand_lim=hand_lim,
+                            detail=f"revealed live cards={live_n}; hand<={hand_lim}",
+                        )
+                    continue
+
+                # revealed live cards count -> one icon per live, cap N
+                if ('ライブカード1枚につき' in ec) and ('この能力では' in ec):
+                    m_per = re.search(r'ライブカード1枚につき、?(?P<icon><\([^)]+\)>)を得る', ec)
+                    m_cap = re.search(r'この能力では(?P<icon2><\([^)]+\)>)は(?P<n>\d+)つまで', ec)
+                    if m_per and live_n > 0:
+                        cap = int(m_cap.group('n')) if m_cap else live_n
+                        mult = min(int(live_n), int(cap))
+                        _append_trigger(
+                            pos, canon, key, once_per_turn,
+                            f"エール公開ライブ{live_n}枚ぶん（上限{cap}）→ {m_per.group('icon')}×{mult}を得る",
+                            'gain_icons', icons=m_per.group('icon'), mult=mult,
+                            detail=f"revealed live cards={live_n}; per-live icon={m_per.group('icon')} x{mult}",
+                        )
+                    continue
+
+                # no revealed blade-heart card -> icons
+                if ('ブレードハートを持つカードがないとき' in ec) and m_icons:
+                    if no_bh_cards == len(list(revealed or [])):
+                        _append_trigger(
+                            pos, canon, key, once_per_turn,
+                            f"ブレードハート持ち公開カードなし → {m_icons.group('icons')}を得る",
+                            'gain_icons', icons=m_icons.group('icons'), mult=1,
+                            detail=f"no revealed blade-heart cards; icons={m_icons.group('icons')}",
+                        )
+                    continue
+
+                # blade-heart kind count thresholds -> heart and optional score
+                if ('ブレードハートの中に' in ec) and ('3種類以上' in ec) and m_icons:
+                    if bh_kind_n >= 3:
+                        score_delta = 1 if (bh_kind_n >= 6 and 'ライブの合計スコアを+1する' in ec) else 0
+                        _append_trigger(
+                            pos, canon, key, once_per_turn,
+                            f"ブレードハート種類数{bh_kind_n} → {m_icons.group('icons')}を得る" + ("、スコア+1" if score_delta else ""),
+                            'gain_icons', icons=m_icons.group('icons'), mult=1, score_delta=score_delta,
+                            detail=f"blade-heart kinds={bh_kind_n}; icons={m_icons.group('icons')}" + ("; score+1" if score_delta else ""),
+                        )
+                    continue
+    return triggers
+
+
+def _apply_yell_revealed_body_auto_trigger(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], trig: Dict[str, Any]) -> bool:
+    """Resolve one queued yell-revealed BODY auto trigger."""
+    pos = str((trig or {}).get('pos', '') or '').upper()
+    src = str((trig or {}).get('source_cn', '') or '').strip()
+    usage_key = str((trig or {}).get('usage_key', '') or '').strip()
+    once_per_turn = bool((trig or {}).get('once_per_turn', False))
+    if once_per_turn and usage_key and int((getattr(gs, 'used_this_turn', {}) or {}).get(usage_key, 0) or 0) >= 1:
+        gs.log.append(f"[INFO] YELL AUTO: {src or '?'} already used this turn")
+        return False
+    effect_kind = str((trig or {}).get('effect_kind', '') or '')
+    detail = str((trig or {}).get('detail', '') or '')
+    ok = False
+    if effect_kind == 'draw1':
+        drew = draw(gs, 1, rng)
+        detail = (detail + f" -> drew {drew}").strip()
+        ok = True
+    elif effect_kind == 'gain_icons':
+        slot = (gs.stage or {}).get(pos)
+        if not slot or not getattr(slot, 'cardnumber', ''):
+            gs.log.append(f"[WARN] YELL AUTO: source slot {pos or '?'} is empty for {src or '?'}")
+            return False
+        if src and _canon_cardno(getattr(slot, 'cardnumber', '') or '') != _canon_cardno(src):
+            gs.log.append(f"[WARN] YELL AUTO: source card moved before resolution ({src} not at {pos})")
+            return False
+        icons = str((trig or {}).get('icons', '') or '')
+        mult = int((trig or {}).get('mult', 1) or 1)
+        b, hs = _grant_temp_icons_to_slot(slot, icons, mult)
+        score_delta = int((trig or {}).get('score_delta', 0) or 0)
+        if score_delta:
+            try:
+                slot.temp_score = int(getattr(slot, 'temp_score', 0) or 0) + int(score_delta)
+                slot.temp_until = 'end_of_live'
+            except Exception:
+                pass
+        detail = (detail + f"; applied blades={b} hearts={hs}" + (f" score+{score_delta}" if score_delta else '')).strip()
+        ok = True
+    else:
+        gs.log.append(f"[ERR] YELL AUTO: unsupported effect_kind={effect_kind}")
+        return False
+    if ok and once_per_turn and usage_key:
+        try:
+            gs.used_this_turn[usage_key] = 1
+        except Exception:
+            gs.used_this_turn = {usage_key: 1}
+    gs.log.append(f"[AUTO] YELL: {src or '?'}({pos or '?'}) {detail}")
+    return bool(ok)
+
+
+def _enqueue_yell_revealed_body_auto_triggers(gs: GameState, cards_db: Dict[str, CardInfo], revealed: Optional[List[str]] = None) -> int:
+    triggers = _collect_yell_revealed_body_auto_triggers(gs, cards_db, revealed)
+    if not triggers:
+        return 0
+    opts = [_auto_trigger_option_text(t) for t in triggers]
+    gs.pending.append({
+        'kind': 'auto_order',
+        'text': 'エール時の自動効果が発生：解決するカードを選択（1つずつ）',
+        'options': opts,
+        'queue': list(triggers),
+    })
+    gs.log.append(f"[PROMPT] yell-revealed auto abilities queued: {len(triggers)}")
+    return int(len(triggers))
+
+
+def _run_yell_revealed_body_auto_triggers(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], revealed: Optional[List[str]] = None) -> int:
+    """Backward-compatible name. Queue triggers instead of silently resolving them."""
+    return _enqueue_yell_revealed_body_auto_triggers(gs, cards_db, revealed)
+
 def _add_last_attempt_live_score_bonus(gs: GameState, cn_live, bonus: int) -> None:
     canon = _canon_cardno(cn_live)
     lives = list(getattr(gs, 'last_attempt_lives', []) or [])
@@ -6556,9 +6884,10 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             return
         try:
             gs.success_zone_heart_color = col
+            gs.success_zone_heart_pos = str(p.get('pos', '') or '').upper()
         except Exception:
             pass
-        gs.log.append(f"[ACT] live_start_success_heart: choose={col} (per success card, until end_of_live)")
+        gs.log.append(f"[ACT] live_start_success_heart: pos={str(p.get('pos', '') or '').upper()} choose={col} (per success card, until end_of_live)")
         return
     if kind == 'live_start_heart_replace':
         pos2 = str(p.get('pos', '') or '').upper()
