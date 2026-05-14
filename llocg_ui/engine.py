@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: yell_revealed_auto_prompt_queue_20260513a
+# BUILD_TAG: yell_revealed_count_compare_prompt_20260513d
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -95,6 +95,8 @@ _EFFECT_RULES = [
     {"id": "retrieve_yell_group_live", "pattern": r"^エールにより公開された自分のカードの中から、『(?P<group>[^』]+)』のライブカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "LIVE"},
     # Retrieve from yell reveals: cost2-member OR score2-live (e.g. PL!HS-PR-027, PL!N-PR-021, PL!SP-PR-016)
     {"id": "retrieve_yell_cost2member_or_score2live", "pattern": r"^エールにより公開された自分のカードの中から、コスト(?P<cost_lim>\d+)以下のメンバーカードか、スコア(?P<score_lim>\d+)以下のライブカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "COST_MEMBER_OR_SCORE_LIVE"},
+    # Put cards revealed by yell on the bottom of the deck (e.g. 未体験HORIZON).
+    {"id": "put_yell_revealed_type_upto_deck_bottom", "pattern": r"^エールにより公開された自分のカードの中から、(?:(?P<kind>ライブ|メンバー)カード|カード)を(?P<n>\d+)枚までデッキの一番下に置く。$", "op": "put_yell_to_deck_bottom"},
 ]
 _EFFECT_RULES_COMPILED = [{**r, "re": re.compile(r["pattern"])} for r in _EFFECT_RULES]
 _HEART_ICON_COLOR_MAP = {
@@ -138,6 +140,68 @@ def _match_effect_template(effect_text: str):
             gd = {k: v for k, v in m.groupdict().items() if v is not None}
             return (r, gd)
     return None
+
+def _yell_revealed_candidates(
+    gs: GameState,
+    cards_db: Dict[str, CardInfo],
+    card_kind: str = 'ANY',
+    group: str = '',
+    cost_lim: int = 99,
+    score_lim: int = 99,
+) -> List[str]:
+    """Return current selectable cards that were revealed by yell this live.
+
+    Cards may still be in resolve_zone, or may already have been acknowledged into
+    the green room. The tracker keeps the logical revealed set until live cleanup.
+    """
+    kind = str(card_kind or 'ANY').upper()
+    group = str(group or '')
+    pool = [_canon_cardno(x) for x in list(getattr(gs, '_yell_revealed_this_live', []) or [])]
+    cands: List[str] = []
+    seen: set = set()
+    for zone_name in ('resolve_zone', 'green_room'):
+        z = getattr(gs, zone_name, None)
+        if not isinstance(z, list):
+            continue
+        for cn2 in list(z):
+            canon2 = _canon_cardno(str(cn2 or ''))
+            if not canon2 or canon2 in seen:
+                continue
+            if canon2 not in pool:
+                continue
+            ci2 = _get_card(cards_db, cn2)
+            if not ci2:
+                continue
+            if kind == 'LIVE' and not _is_live_ci(ci2):
+                continue
+            if kind == 'MEMBER' and not _is_member_ci(ci2):
+                continue
+            if kind == 'COST_MEMBER_OR_SCORE_LIVE':
+                ok2 = False
+                if _is_member_ci(ci2) and int(getattr(ci2, 'cost', 0) or 0) <= int(cost_lim or 99):
+                    ok2 = True
+                if _is_live_ci(ci2) and int(getattr(ci2, 'score', 0) or 0) <= int(score_lim or 99):
+                    ok2 = True
+                if not ok2:
+                    continue
+            if group and (group not in str(getattr(ci2, 'group', '') or '')):
+                continue
+            seen.add(canon2)
+            cands.append(str(cn2 or ''))
+    return cands
+
+def _remove_from_yell_revealed_tracker(gs: GameState, cn: str) -> None:
+    try:
+        canon = _canon_cardno(str(cn or ''))
+        pool = list(getattr(gs, '_yell_revealed_this_live', []) or [])
+        for i, x in enumerate(list(pool)):
+            if _canon_cardno(x) == canon:
+                pool.pop(i)
+                break
+        setattr(gs, '_yell_revealed_this_live', pool)
+    except Exception:
+        pass
+
 def _parse_energy_cost(cost_text: str) -> int:
     """Parse energy cost from cost_template.
     Supports:
@@ -921,40 +985,7 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         cost_lim = int(gd.get('cost_lim', 99) or 99)
         score_lim = int(gd.get('score_lim', 99) or 99)
         src = str((ctx or {}).get('source_cn', '') or '')
-        pool = list(getattr(gs, '_yell_revealed_this_live', []) or [])
-        # collect candidates from resolve_zone first, then green_room (already sent there by ack)
-        cands: List[str] = []
-        seen: set = set()
-        for zone_name in ('resolve_zone', 'green_room'):
-            z = getattr(gs, zone_name, None)
-            if not isinstance(z, list):
-                continue
-            for cn2 in z:
-                canon2 = _canon_cardno(str(cn2 or ''))
-                if canon2 in seen:
-                    continue
-                # only consider cards that were part of yell reveals this live
-                if canon2 not in [_canon_cardno(x) for x in pool]:
-                    continue
-                ci2 = _get_card(cards_db, cn2)
-                if not ci2:
-                    continue
-                if kind == 'LIVE' and not _is_live_ci(ci2):
-                    continue
-                if kind == 'MEMBER' and not _is_member_ci(ci2):
-                    continue
-                if kind == 'COST_MEMBER_OR_SCORE_LIVE':
-                    ok2 = False
-                    if _is_member_ci(ci2) and int(getattr(ci2, 'cost', 0) or 0) <= cost_lim:
-                        ok2 = True
-                    if _is_live_ci(ci2) and int(getattr(ci2, 'score', 0) or 0) <= score_lim:
-                        ok2 = True
-                    if not ok2:
-                        continue
-                if group and (group not in str(getattr(ci2, 'group', '') or '')):
-                    continue
-                seen.add(canon2)
-                cands.append(cn2)
+        cands = _yell_revealed_candidates(gs, cards_db, kind, group, cost_lim, score_lim)
         if not cands:
             gs.log.append(f'[INFO] retrieve_from_yell: no matching card in yell reveals (kind={kind} group={group})')
             return
@@ -974,6 +1005,30 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
             'source_cn': src,
         })
         gs.log.append(f'[PENDING] retrieve_from_yell: {len(cands)} candidates')
+        return
+    if op == 'put_yell_to_deck_bottom':
+        kind_jp = str(gd.get('kind', '') or '')
+        kind = {'ライブ': 'LIVE', 'メンバー': 'MEMBER'}.get(kind_jp, 'ANY')
+        max_n = int(gd.get('n', 1) or 1)
+        src = str((ctx or {}).get('source_cn', '') or '')
+        cands = _yell_revealed_candidates(gs, cards_db, kind)
+        if not cands:
+            gs.log.append(f'[INFO] put_yell_to_deck_bottom: no matching card in yell reveals (kind={kind})')
+            return
+        label = f'{src}[ライブ成功時]: エールで公開されたカードから{max_n}枚までデッキの一番下に置く'
+        if kind == 'LIVE':
+            label += '（ライブカード）'
+        elif kind == 'MEMBER':
+            label += '（メンバーカード）'
+        gs.pending.append({
+            'kind': 'pick_from_yell_to_deck_bottom',
+            'text': label,
+            'options': ['skip'] + list(cands),
+            'source_cn': src,
+            'remaining_n': max_n,
+            'card_kind': kind,
+        })
+        gs.log.append(f'[PENDING] put_yell_to_deck_bottom: {len(cands)} candidates, up to {max_n}')
         return
     if op == 'draw_if':
         cond = str(rule.get('cond', '') or '')
@@ -4846,6 +4901,32 @@ def _build_live_success_trigger_from_effect(gs: GameState, cards_db: Dict[str, C
                 'ctx': dict(ctx or {}),
                 'label': str(label or ''),
             }
+    # Generalized live-success conditional wrapper: compare number of cards revealed by yell.
+    # This single-player simulator does not model the opponent's yell reveal pile, so the
+    # opponent-side condition is resolved by an explicit Apply/Skip prompt after the
+    # trigger has been queued at the normal live-success check timing.
+    m = re.match(r'^エールにより公開された自分のカードの枚数が、相手がエールによって公開したカードの枚数より少ない場合、(?P<inner>.+)$', eff_norm)
+    if m:
+        inner = str(m.group('inner') or '').strip()
+        if _match_effect_template(inner):
+            try:
+                self_revealed_n = len(list(getattr(gs, '_yell_revealed_this_live', []) or []))
+            except Exception:
+                self_revealed_n = 0
+            return {
+                'kind': 'enqueue_success_prompt',
+                'prompt': {
+                    'kind': 'confirm_effect',
+                    'text': f'{label} 条件付き効果：自分のエール公開枚数は{self_revealed_n}枚です。相手がエールによって公開したカードの枚数より少ない場合のみ解決します。条件を満たすなら Apply、満たさないなら Skip。',
+                    'options': ['apply', 'skip'],
+                    'after_effect_template': inner,
+                    'ctx': dict(ctx or {}),
+                    'source_cn': str(source_cn or ''),
+                },
+                'source_cn': str(source_cn or ''),
+                'label': str(label or ''),
+            }
+
     # Generalized from VIVID WORLD.
     # DB text may or may not include Japanese comma separators between the six icons.
     eff_compact = eff_norm.replace('、', '').replace('，', '').replace(' ', '')
@@ -7914,17 +7995,49 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             gs.log.append(f'[ERR] pick_from_yell: chosen card not found in zones {cn}')
             return
         gs.hand.append(moved)
-        # remove from tracker
-        try:
-            pool = list(getattr(gs, '_yell_revealed_this_live', []) or [])
-            for i, x in enumerate(list(pool)):
-                if _canon_cardno(x) == cn:
-                    pool.pop(i)
-                    break
-            setattr(gs, '_yell_revealed_this_live', pool)
-        except Exception:
-            pass
+        _remove_from_yell_revealed_tracker(gs, moved)
         gs.log.append(f'[ACT] pick_from_yell: took {moved} -> hand')
+        return
+    if kind == 'pick_from_yell_to_deck_bottom':
+        opts = list(p.get('options', []) or [])
+        if choice_str.lower() in ('skip', '__skip__', 'no', 'n', '0', 'false'):
+            gs.log.append('[SKIP] pick_from_yell_to_deck_bottom: done')
+            return
+        cn = _canon_cardno(choice_str)
+        valid_opts = [x for x in opts if str(x).lower() not in ('skip', '__skip__')]
+        if valid_opts and not any(_canon_cardno(x) == cn for x in valid_opts):
+            gs.log.append(f'[ERR] pick_from_yell_to_deck_bottom: invalid choice {choice_str}')
+            return
+        moved = None
+        for zone_name in ('resolve_zone', 'green_room'):
+            z = getattr(gs, zone_name, None)
+            if not isinstance(z, list):
+                continue
+            for i, x in enumerate(list(z)):
+                if _canon_cardno(x) == cn:
+                    moved = z.pop(i)
+                    break
+            if moved:
+                break
+        if not moved:
+            gs.log.append(f'[ERR] pick_from_yell_to_deck_bottom: chosen card not found in zones {cn}')
+            return
+        gs.deck.append(moved)
+        _remove_from_yell_revealed_tracker(gs, moved)
+        gs.log.append(f'[ACT] pick_from_yell_to_deck_bottom: moved {moved} -> deck bottom')
+        remaining = int(p.get('remaining_n', 1) or 1) - 1
+        if remaining > 0:
+            card_kind = str(p.get('card_kind', 'ANY') or 'ANY')
+            next_opts = _yell_revealed_candidates(gs, cards_db, card_kind)
+            if next_opts:
+                gs.pending.append({
+                    'kind': 'pick_from_yell_to_deck_bottom',
+                    'text': f'続けて、エールで公開されたカードをデッキの一番下に置く（残り{remaining}枚まで）',
+                    'options': ['skip'] + list(next_opts),
+                    'source_cn': str(p.get('source_cn', '') or ''),
+                    'remaining_n': remaining,
+                    'card_kind': card_kind,
+                })
         return
     # 1f) live-success optional-cost pay/skip (hand discard -> retrieve_from_yell)
     if kind == 'live_success_pay_effect':
