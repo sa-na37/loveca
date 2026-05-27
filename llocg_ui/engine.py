@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: success_zone_cond_yell_retrieve_multi_fix_20260513f
+# BUILD_TAG: auto_order_effect_visibility_and_deferred_resume_20260513i
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -86,16 +86,16 @@ _EFFECT_RULES = [
     # 3-way split: 1->hand, 1->deck top, 1->green
     {"id": "look_top_3_split", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から1枚を手札に加え、1枚をデッキの上に置き、1枚を控え室に置く。$", "op": "look_top_3way_split"},
     # Retrieve from yell reveals: group-filtered
-    {"id": "retrieve_yell_group_any", "pattern": r"^エールにより公開された自分のカードの中から、『(?P<group>[^』]+)』のカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "ANY"},
+    {"id": "retrieve_yell_group_any", "pattern": r"^エールにより公開された自分のカードの中から、?『(?P<group>[^』]+)』のカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "ANY"},
     # Retrieve from yell reveals: type-filtered (LIVE or MEMBER)
     {"id": "retrieve_yell_live", "pattern": r"^エールにより公開された自分のカードの中から、ライブカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "LIVE"},
     {"id": "retrieve_yell_member", "pattern": r"^エールにより公開された自分のカードの中から、メンバーカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "MEMBER"},
     # Retrieve up to N cards from yell reveals (e.g. not ALONE not HITORI).
     {"id": "retrieve_yell_type_upto_n", "pattern": r"^エールにより公開された自分のカードの中から、(?:(?P<kind>ライブ|メンバー)カード|カード)を(?P<n>\d+)枚まで手札に加える。$", "op": "retrieve_from_yell", "up_to": True},
     # Retrieve from yell reveals: group+type (e.g. 『μ's』のメンバーカード)
-    {"id": "retrieve_yell_group_member", "pattern": r"^エールにより公開された自分のカードの中から、『(?P<group>[^』]+)』のメンバーカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "MEMBER"},
-    {"id": "retrieve_yell_group_live", "pattern": r"^エールにより公開された自分のカードの中から、『(?P<group>[^』]+)』のライブカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "LIVE"},
-    {"id": "retrieve_yell_group_type_upto_n", "pattern": r"^エールにより公開された自分のカードの中から、『(?P<group>[^』]+)』の(?P<kind>ライブ|メンバー)カードを(?P<n>\d+)枚まで手札に加える。$", "op": "retrieve_from_yell", "up_to": True},
+    {"id": "retrieve_yell_group_member", "pattern": r"^エールにより公開された自分のカードの中から、?『(?P<group>[^』]+)』のメンバーカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "MEMBER"},
+    {"id": "retrieve_yell_group_live", "pattern": r"^エールにより公開された自分のカードの中から、?『(?P<group>[^』]+)』のライブカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "LIVE"},
+    {"id": "retrieve_yell_group_type_upto_n", "pattern": r"^エールにより公開された自分のカードの中から、?『(?P<group>[^』]+)』の(?P<kind>ライブ|メンバー)カードを(?P<n>\d+)枚まで手札に加える。$", "op": "retrieve_from_yell", "up_to": True},
     # Retrieve from yell reveals: cost2-member OR score2-live (e.g. PL!HS-PR-027, PL!N-PR-021, PL!SP-PR-016)
     {"id": "retrieve_yell_cost2member_or_score2live", "pattern": r"^エールにより公開された自分のカードの中から、コスト(?P<cost_lim>\d+)以下のメンバーカードか、スコア(?P<score_lim>\d+)以下のライブカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "COST_MEMBER_OR_SCORE_LIVE"},
     # Put cards revealed by yell on the bottom of the deck (e.g. 未体験HORIZON).
@@ -3827,17 +3827,43 @@ def _collect_auto_triggers_on_member_enter(gs: GameState, cards_db: Dict[str, Ca
             'entered_cn': entered_cn,
         })
     return out
+def _auto_trigger_effect_text(t: Dict[str, Any]) -> str:
+    """Return only the specific effect text represented by one queued auto trigger.
+
+    This is intentionally separate from the card text as a whole.  When a card has
+    multiple triggers at the same timing (e.g. Wish Song), the auto-order popup must
+    show which effect each option will resolve.
+    """
+    if not isinstance(t, dict):
+        return ''
+    for key in ('effect_text', 'effect'):
+        v = str(t.get(key, '') or '').strip()
+        if v:
+            return v
+    prm = t.get('prompt', {})
+    if isinstance(prm, dict):
+        for key in ('after_effect_template', 'effect'):
+            v = str(prm.get(key, '') or '').strip()
+            if v:
+                return v
+    return ''
+
 def _auto_trigger_option_text(t: Dict[str, Any]) -> str:
     try:
         lbl = str((t or {}).get('label', '') or '').strip()
     except Exception:
         lbl = ''
+    eff = _auto_trigger_effect_text(t or {})
+    if lbl and eff:
+        return f'{lbl}：{eff}'
     if lbl:
         return lbl
     try:
         cn = str((t or {}).get('source_cn', '') or '').strip()
     except Exception:
         cn = ''
+    if cn and eff:
+        return f'{cn}：{eff}'
     return cn
 def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[str, Any]) -> None:
     kind = str((trig or {}).get('kind', '') or '')
@@ -4241,6 +4267,25 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         else:
             gs.log.append(f"[SKIP] LIVE: {src_cn}[ライブ成功時] unresolved (revealed 『{group_name}』 cards: {got} < {need})")
         return
+    if kind in ('add_live_success_score_bonus_if_revealed_distinct_named_group_member_count_at_least',):
+        cn_live = str((trig or {}).get('source_cn', '') or '')
+        group_name = str((trig or {}).get('condition_group_name', '') or '')
+        need = int((trig or {}).get('condition_count', 0) or 0)
+        bonus = int((trig or {}).get('bonus', 0) or 0)
+        got = int(_count_yell_revealed_distinct_named_group_members(gs, cards_db, group_name))
+        if got >= need:
+            _add_live_success_score_bonus(gs, cn_live, bonus, detail=f"revealed distinct 『{group_name}』 members: {got}")
+        else:
+            msg = f"条件未達：エールにより公開された自分のカードの中の、名前が異なる『{group_name}』のメンバーカードは {got}/{need} 枚です。この効果は解決されません。"
+            gs.log.append(f"[SKIP] LIVE: {cn_live}[ライブ成功時] unresolved (revealed distinct 『{group_name}』 members: {got} < {need})")
+            gs.pending.append({
+                'kind': 'effect_notice',
+                'text': msg,
+                'options': ['ok'],
+                'source_cn': cn_live,
+                'effect_text': _auto_trigger_effect_text(trig or {}),
+            })
+        return
     if kind in ('apply_effect_template_if_revealed_distinct_named_group_member_count_at_least_on_live_success',):
         eff = str((trig or {}).get('effect', '') or '').strip()
         src_cn = str((trig or {}).get('source_cn', '') or '').strip()
@@ -4257,7 +4302,15 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
                 else:
                     gs.log.append(f"[AUTO] LIVE: {src_cn or '?'}[ライブ成功時] applied {eff}")
         else:
+            msg = f"条件未達：エールにより公開された自分のカードの中の、名前が異なる『{group_name}』のメンバーカードは {got}/{need} 枚です。この効果は解決されません。"
             gs.log.append(f"[SKIP] LIVE: {src_cn}[ライブ成功時] unresolved (revealed distinct 『{group_name}』 members: {got} < {need})")
+            gs.pending.append({
+                'kind': 'effect_notice',
+                'text': msg,
+                'options': ['ok'],
+                'source_cn': src_cn,
+                'effect_text': _auto_trigger_effect_text(trig or {}),
+            })
         return
     if kind in ('add_live_success_score_bonus_if_revealed_card_tag_count_at_least',):
         cn_live = str((trig or {}).get('source_cn', '') or '')
@@ -4978,6 +5031,39 @@ def _build_live_success_trigger_from_effect(gs: GameState, cards_db: Dict[str, C
                 'label': str(label or ''),
             }
 
+    # Generalized live-success conditional wrapper: distinct named group members revealed by yell.
+    # Examples:
+    # - PL!SP-bp4-006: if 3 distinct 『Liella!』 members were revealed, retrieve a 『Liella!』 LIVE from yell.
+    # - PL!SP-bp4-026: if 5 distinct 『Liella!』 members were revealed, this LIVE gets score +1.
+    m = re.match(r'^エールにより公開された自分のカードの中に、?名前が異なる『(?P<group>[^』]+)』のメンバーカードが(?P<count>\d+)枚以上ある場合、(?P<inner>.+)$', eff_norm)
+    if m:
+        group_name = str(m.group('group') or '').strip()
+        need = int(m.group('count') or 0)
+        inner = str(m.group('inner') or '').strip()
+        m_score = re.match(r'^このカードのスコアを\+(?P<delta>\d+)する。?$', inner)
+        if m_score:
+            return {
+                'kind': 'add_live_success_score_bonus_if_revealed_distinct_named_group_member_count_at_least',
+                'condition_group_name': group_name,
+                'condition_count': int(need),
+                'bonus': int(m_score.group('delta') or 0),
+                'source_cn': str(source_cn or ''),
+                'pos': str(pos or ''),
+                'ctx': dict(ctx or {}),
+                'label': str(label or ''),
+            }
+        if _match_effect_template(inner):
+            return {
+                'kind': 'apply_effect_template_if_revealed_distinct_named_group_member_count_at_least_on_live_success',
+                'effect': inner,
+                'condition_group_name': group_name,
+                'condition_count': int(need),
+                'source_cn': str(source_cn or ''),
+                'pos': str(pos or ''),
+                'ctx': dict(ctx or {}),
+                'label': str(label or ''),
+            }
+
     # Generalized from VIVID WORLD.
     # DB text may or may not include Japanese comma separators between the six icons.
     eff_compact = eff_norm.replace('、', '').replace('，', '').replace(' ', '')
@@ -5112,6 +5198,7 @@ def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict
                     cost_n = int(m_opt.group(1))
                     success_triggers.append({
                         'kind': 'enqueue_optional_discard_from_hand_for_effect_on_live_success',
+                        'effect_text': eff,
                         'prompt': {
                             'kind': 'live_success_pay_effect',
                             'pos': pos,
@@ -5138,6 +5225,10 @@ def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict
                     pos=pos,
                 )
                 if trig:
+                    try:
+                        trig.setdefault('effect_text', eff)
+                    except Exception:
+                        pass
                     success_triggers.append(trig)
     # Live-card success triggers
     for cn_live in list(lives or []):
@@ -5176,6 +5267,10 @@ def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict
                     {'source_cn': cn_live},
                 )
                 if trig:
+                    try:
+                        trig.setdefault('effect_text', eff)
+                    except Exception:
+                        pass
                     success_triggers.append(trig)
     if success_triggers:
         _enqueue_success_auto_order(gs, success_triggers)
@@ -5523,7 +5618,17 @@ def _count_yell_revealed_distinct_named_group_members(gs: GameState, cards_db: D
         ci = _get_card(cards_db, cn)
         if not ci or not _is_member_ci(ci) or not _ci_matches_group_or_unit(ci, group_name):
             continue
-        nm = str(getattr(ci, 'cardname', '') or '').strip()
+        # Runtime CardInfo normally exposes the display name as `name`; older
+        # extracted JSON uses `cardname`.  Use both before falling back to the
+        # card number.  Without this, valid revealed Liella! members can be
+        # counted as 0 because their group matches but their `cardname` attr is
+        # absent.
+        nm = str(
+            getattr(ci, 'name', '')
+            or getattr(ci, 'cardname', '')
+            or getattr(ci, 'title', '')
+            or cn
+        ).strip()
         if nm:
             names.add(nm)
     return int(len(names))
@@ -6556,14 +6661,22 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             return
         cn_choice = _canon_cardno(choice_str)
         pick_i = None
+        # First, require exact option text. This disambiguates multiple effects from
+        # the same card (e.g. a LIVE card with two <ライブ成功時> abilities).
         for i, t in enumerate(queue):
             txt = _auto_trigger_option_text(t)
             if txt and txt == choice_str:
                 pick_i = i
                 break
-            if _canon_cardno(str(t.get('source_cn', '') or '')) == cn_choice:
-                pick_i = i
-                break
+        # Card-number fallback is safe only when exactly one queued trigger has that source.
+        if pick_i is None and cn_choice:
+            source_matches = [i for i, t in enumerate(queue) if _canon_cardno(str(t.get('source_cn', '') or '')) == cn_choice]
+            if len(source_matches) == 1:
+                pick_i = source_matches[0]
+            elif len(source_matches) > 1:
+                gs.log.append(f"[ERR] auto_order: ambiguous source card {choice_str}; choose the effect-specific option")
+                gs.pending.append(p)
+                return
         if pick_i is None:
             gs.log.append(f"[ERR] auto_order: invalid choice {choice_str}")
             gs.pending.append(p)
@@ -6577,6 +6690,13 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             _enqueue_auto_order_from_deferred()
         return
     # --- Generic effect-engine prompts ---
+    if kind == 'effect_notice':
+        txt = str(p.get('text', '') or '').strip()
+        src = str(p.get('source_cn', '') or '').strip()
+        if txt:
+            gs.log.append(f"[INFO] {src or '?'}: notice acknowledged - {txt}")
+        _enqueue_auto_order_from_deferred()
+        return
     if kind == 'confirm_effect':
         after_eff = str(p.get('after_effect_template', '') or '').strip()
         ctx0 = dict(p.get('ctx', {}) or {})
@@ -6605,6 +6725,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         _r = p.get('_resume') if isinstance(p, dict) else None
         if _r:
             gs.pending.append(_r)
+        _enqueue_auto_order_from_deferred()
         return
     if kind == 'live_start_score_if_live_zone_group_count_at_least':
         low = choice_str.lower()
@@ -8026,6 +8147,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         opts = list(p.get('options', []) or [])
         if choice_str.lower() in ('skip', '__skip__', 'no', 'n', '0', 'false'):
             gs.log.append('[SKIP] pick_from_yell: done')
+            _enqueue_auto_order_from_deferred()
             return
         cn = _canon_cardno(choice_str)
         valid_opts = [x for x in opts if str(x).lower() not in ('skip', '__skip__')]
@@ -8073,11 +8195,13 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                     'score_lim': score_lim,
                     'up_to': up_to,
                 })
+        _enqueue_auto_order_from_deferred()
         return
     if kind == 'pick_from_yell_to_deck_bottom':
         opts = list(p.get('options', []) or [])
         if choice_str.lower() in ('skip', '__skip__', 'no', 'n', '0', 'false'):
             gs.log.append('[SKIP] pick_from_yell_to_deck_bottom: done')
+            _enqueue_auto_order_from_deferred()
             return
         cn = _canon_cardno(choice_str)
         valid_opts = [x for x in opts if str(x).lower() not in ('skip', '__skip__')]
@@ -8114,6 +8238,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                     'remaining_n': remaining,
                     'card_kind': card_kind,
                 })
+        _enqueue_auto_order_from_deferred()
         return
     # 1f) live-success optional-cost pay/skip (hand discard -> retrieve_from_yell)
     if kind == 'live_success_pay_effect':
