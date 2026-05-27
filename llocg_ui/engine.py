@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: yell_revealed_count_compare_prompt_20260513d
+# BUILD_TAG: success_zone_cond_yell_retrieve_multi_fix_20260513f
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -90,9 +90,12 @@ _EFFECT_RULES = [
     # Retrieve from yell reveals: type-filtered (LIVE or MEMBER)
     {"id": "retrieve_yell_live", "pattern": r"^エールにより公開された自分のカードの中から、ライブカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "LIVE"},
     {"id": "retrieve_yell_member", "pattern": r"^エールにより公開された自分のカードの中から、メンバーカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "MEMBER"},
+    # Retrieve up to N cards from yell reveals (e.g. not ALONE not HITORI).
+    {"id": "retrieve_yell_type_upto_n", "pattern": r"^エールにより公開された自分のカードの中から、(?:(?P<kind>ライブ|メンバー)カード|カード)を(?P<n>\d+)枚まで手札に加える。$", "op": "retrieve_from_yell", "up_to": True},
     # Retrieve from yell reveals: group+type (e.g. 『μ's』のメンバーカード)
     {"id": "retrieve_yell_group_member", "pattern": r"^エールにより公開された自分のカードの中から、『(?P<group>[^』]+)』のメンバーカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "MEMBER"},
     {"id": "retrieve_yell_group_live", "pattern": r"^エールにより公開された自分のカードの中から、『(?P<group>[^』]+)』のライブカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "LIVE"},
+    {"id": "retrieve_yell_group_type_upto_n", "pattern": r"^エールにより公開された自分のカードの中から、『(?P<group>[^』]+)』の(?P<kind>ライブ|メンバー)カードを(?P<n>\d+)枚まで手札に加える。$", "op": "retrieve_from_yell", "up_to": True},
     # Retrieve from yell reveals: cost2-member OR score2-live (e.g. PL!HS-PR-027, PL!N-PR-021, PL!SP-PR-016)
     {"id": "retrieve_yell_cost2member_or_score2live", "pattern": r"^エールにより公開された自分のカードの中から、コスト(?P<cost_lim>\d+)以下のメンバーカードか、スコア(?P<score_lim>\d+)以下のライブカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "COST_MEMBER_OR_SCORE_LIVE"},
     # Put cards revealed by yell on the bottom of the deck (e.g. 未体験HORIZON).
@@ -981,15 +984,22 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         return
     if op == 'retrieve_from_yell':
         kind = str(rule.get('card_kind', '') or '').upper() or 'ANY'
+        kind_jp = str(gd.get('kind', '') or '')
+        if kind_jp:
+            kind = {'ライブ': 'LIVE', 'メンバー': 'MEMBER'}.get(kind_jp, 'ANY')
         group = str(gd.get('group', '') or '')
         cost_lim = int(gd.get('cost_lim', 99) or 99)
         score_lim = int(gd.get('score_lim', 99) or 99)
+        max_n = int(gd.get('n', 1) or 1)
+        up_to = bool(rule.get('up_to', False))
         src = str((ctx or {}).get('source_cn', '') or '')
         cands = _yell_revealed_candidates(gs, cards_db, kind, group, cost_lim, score_lim)
         if not cands:
             gs.log.append(f'[INFO] retrieve_from_yell: no matching card in yell reveals (kind={kind} group={group})')
             return
-        label = f'{src}[ライブ成功時]: エールで公開されたカードから1枚手札に加える'
+        label = f'{src}[ライブ成功時]: エールで公開されたカードから{max_n}枚'
+        label += 'まで' if up_to else ''
+        label += '手札に加える'
         if kind == 'LIVE':
             label += '（ライブカード）'
         elif kind == 'MEMBER':
@@ -998,13 +1008,22 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
             label += f'（コスト{cost_lim}以下のメンバーかスコア{score_lim}以下のライブ）'
         if group:
             label += f'（{group}）'
+        opts = list(cands)
+        if up_to:
+            opts = ['skip'] + opts
         gs.pending.append({
             'kind': 'pick_from_yell',
             'text': label,
-            'options': list(cands),
+            'options': opts,
             'source_cn': src,
+            'remaining_n': max_n,
+            'card_kind': kind,
+            'group': group,
+            'cost_lim': cost_lim,
+            'score_lim': score_lim,
+            'up_to': up_to,
         })
-        gs.log.append(f'[PENDING] retrieve_from_yell: {len(cands)} candidates')
+        gs.log.append(f'[PENDING] retrieve_from_yell: {len(cands)} candidates, take {max_n}{" up to" if up_to else ""}')
         return
     if op == 'put_yell_to_deck_bottom':
         kind_jp = str(gd.get('kind', '') or '')
@@ -4862,6 +4881,38 @@ def _live_success_excess_color_and_stage_group_met(gs: GameState, cards_db: Dict
 def _build_live_success_trigger_from_effect(gs: GameState, cards_db: Dict[str, CardInfo], eff: str, source_cn: str, label: str, ctx: Dict[str, Any], pos: str = '') -> Optional[Dict[str, Any]]:
     eff_raw = str(eff or '').strip()
     eff_norm = eff_raw.replace('\n', '')
+    # Generalized live-success conditional wrapper: either player's success zone has at least N cards.
+    # We can verify our own success zone directly. Opponent state is not modeled in the current
+    # single-player simulator, so if our own side does not satisfy the condition we expose Apply/Skip.
+    m = re.match(r'^自分か相手の成功ライブカード置き場にカードが(?P<n>\d+)枚以上ある場合、(?P<inner>.+)$', eff_norm)
+    if m:
+        threshold = int(m.group('n') or 0)
+        inner = str(m.group('inner') or '').strip()
+        if _match_effect_template(inner):
+            own_n = len(list(getattr(gs, 'success_zone', []) or []))
+            if own_n >= threshold:
+                return {
+                    'kind': 'apply_effect_template_on_live_success',
+                    'effect': inner,
+                    'source_cn': str(source_cn or ''),
+                    'pos': str(pos or ''),
+                    'ctx': dict(ctx or {}),
+                    'label': f'{label} 自分の成功ライブカード置き場={own_n}枚で条件成立',
+                }
+            return {
+                'kind': 'enqueue_success_prompt',
+                'prompt': {
+                    'kind': 'confirm_effect',
+                    'text': f'{label} 条件付き効果：自分の成功ライブカード置き場は{own_n}枚です。相手の成功ライブカード置き場にカードが{threshold}枚以上ある場合のみ解決します。条件を満たすなら Apply、満たさないなら Skip。',
+                    'options': ['apply', 'skip'],
+                    'after_effect_template': inner,
+                    'ctx': dict(ctx or {}),
+                    'source_cn': str(source_cn or ''),
+                },
+                'source_cn': str(source_cn or ''),
+                'label': str(label or ''),
+            }
+
     # Generalized live-success conditional wrapper: opponent-score-higher -> confirm/skip, then existing template.
     # In this single-player simulator, conditions that compare with the opponent
     # cannot be auto-verified, so we normalize them into an explicit apply/skip prompt.
@@ -7970,14 +8021,15 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         slot.temp_until = 'end_of_live'
         gs.log.append(f'[AUTO] group-member temp blade: {pos} temp blade +1 (until end of live)')
         return
-    # 1e) Generic yell-retrieve: pick 1 card from yell reveals -> hand
+    # 1e) Generic yell-retrieve: pick card(s) from yell reveals -> hand
     if kind == 'pick_from_yell':
         opts = list(p.get('options', []) or [])
         if choice_str.lower() in ('skip', '__skip__', 'no', 'n', '0', 'false'):
-            gs.log.append('[SKIP] pick_from_yell: skipped')
+            gs.log.append('[SKIP] pick_from_yell: done')
             return
         cn = _canon_cardno(choice_str)
-        if opts and not any(_canon_cardno(x) == cn for x in opts):
+        valid_opts = [x for x in opts if str(x).lower() not in ('skip', '__skip__')]
+        if valid_opts and not any(_canon_cardno(x) == cn for x in valid_opts):
             gs.log.append(f'[ERR] pick_from_yell: invalid choice {choice_str}')
             return
         moved = None
@@ -7997,6 +8049,30 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         gs.hand.append(moved)
         _remove_from_yell_revealed_tracker(gs, moved)
         gs.log.append(f'[ACT] pick_from_yell: took {moved} -> hand')
+        remaining = int(p.get('remaining_n', 1) or 1) - 1
+        if remaining > 0:
+            card_kind = str(p.get('card_kind', 'ANY') or 'ANY')
+            group = str(p.get('group', '') or '')
+            cost_lim = int(p.get('cost_lim', 99) or 99)
+            score_lim = int(p.get('score_lim', 99) or 99)
+            up_to = bool(p.get('up_to', False))
+            next_opts = _yell_revealed_candidates(gs, cards_db, card_kind, group, cost_lim, score_lim)
+            if next_opts:
+                opts2 = list(next_opts)
+                if up_to:
+                    opts2 = ['skip'] + opts2
+                gs.pending.append({
+                    'kind': 'pick_from_yell',
+                    'text': f'続けて、エールで公開されたカードを手札に加える（残り{remaining}枚{"まで" if up_to else ""}）',
+                    'options': opts2,
+                    'source_cn': str(p.get('source_cn', '') or ''),
+                    'remaining_n': remaining,
+                    'card_kind': card_kind,
+                    'group': group,
+                    'cost_lim': cost_lim,
+                    'score_lim': score_lim,
+                    'up_to': up_to,
+                })
         return
     if kind == 'pick_from_yell_to_deck_bottom':
         opts = list(p.get('options', []) or [])
