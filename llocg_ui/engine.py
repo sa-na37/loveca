@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: named_hand_cost_result_20260604a
+# BUILD_TAG: topk_complex_filters_20260604a
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -39,6 +39,7 @@ _EFFECT_RULES = [
     {"id": "retrieve_waiting_member_n", "pattern": r"^自分の控え室からメンバーカードを(?P<n>\d+)枚手札に加える。$", "op": "retrieve_from_waiting_room", "card_kind": "MEMBER"},
     {"id": "retrieve_waiting_live_group_n", "pattern": r"^自分の控え室から『(?P<group>[^』]+)』のライブカードを(?P<n>\d+)枚手札に加える。$", "op": "retrieve_from_waiting_room", "card_kind": "LIVE"},
     {"id": "look_top_k_choose_1_rest_waiting", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から1枚を手札に加え、残りを控え室に置く。$", "op": "look_top_choose"},
+    {"id": "look_top_k_choose_if_energy_gte", "pattern": r"^自分のエネルギーが(?P<n>\d+)枚以上ある場合、自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から1枚を手札に加え、残りを控え室に置く。$", "op": "look_top_choose_if", "cond": "energy_gte"},
         {"id": "look_top_k_reorder_keep_any_rest_waiting", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から好きな枚数を好きな順番でデッキの上に置き、残りを控え室に置く。$", "op": "look_top_reorder_keep_any"},
     {"id": "topdeck_green_any_upto1", "pattern": r"^自分の控え室からカードを1枚までデッキの一番上に置く。$", "op": "topdeck_from_green", "card_kind": "ANY", "allow_less": True},
     {"id": "topdeck_green_member_n", "pattern": r"^自分の控え室にあるメンバーカード(?P<n>\d+)枚を好きな順番でデッキの一番上に置く。$", "op": "topdeck_from_green", "card_kind": "MEMBER", "allow_less": False},
@@ -83,6 +84,14 @@ _EFFECT_RULES = [
     {"id": "look_top_k_optional_group_type", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から『(?P<group>[^』]+)』の(?P<kind>ライブ|メンバー)カードを1枚(?:まで)?公開して手札に加えてもよい。残りを控え室に置く。$", "op": "look_top_choose_filtered", "optional": True},
     # with name filter: "その中から「名前A」か「名前B」のメンバーカードを1枚公開して..."
     {"id": "look_top_k_optional_names_type", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から(?P<names>(?:「[^」]+」(?:か「[^」]+」)*)の)?(?P<kind>ライブ|メンバー)カードを1枚公開して手札に加えてもよい。残りを控え室に置く。$", "op": "look_top_choose_filtered", "optional": True},
+    # Additional top-k filtered pick variants from the updated DB.  These still
+    # resolve through the same choose_from_topk pending; only the filter predicate
+    # is widened here.
+    {"id": "look_top_k_optional_cost_ge_any", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中からコスト(?P<cost_min>\d+)以上のカードを1枚公開して手札に加えてもよい。残りを控え室に置く。$", "op": "look_top_choose_filtered", "optional": True},
+    {"id": "look_top_k_optional_group_live_required_total_ge", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から必要ハートの合計が(?P<required_total_min>\d+)以上の『(?P<group>[^』]+)』のライブカードを1枚公開して手札に加えてもよい。残りを控え室に置く。$", "op": "look_top_choose_filtered", "optional": True, "card_kind": "LIVE"},
+    {"id": "look_top_k_optional_member_heart_color_min", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中からハートに(?P<member_heart_icon><(?:\([^)]+\)|[^<>]+)>)を(?P<member_heart_min>\d+)(?:つ|個)以上持つメンバーカードを1枚公開して手札に加えてもよい。残りを控え室に置く。$", "op": "look_top_choose_filtered", "optional": True, "card_kind": "MEMBER"},
+    {"id": "look_top_k_optional_member_heart_any_color", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中からハートに(?P<member_heart_icons>(?:<(?:\([^)]+\)|[^<>]+)>か?)+)を持つメンバーカードを1枚公開して手札に加えてもよい。残りを控え室に置く。$", "op": "look_top_choose_filtered", "optional": True, "card_kind": "MEMBER"},
+    {"id": "look_top_k_optional_member_heart_or_live_required", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中からハートに(?P<member_heart_icon><(?:\([^)]+\)|[^<>]+)>)を(?P<member_heart_min>\d+)(?:つ|個)以上持つメンバーカードか、必要ハートに(?P<live_req_icon><(?:\([^)]+\)|[^<>]+)>)を(?P<live_req_min>\d+)以上含むライブカードを1枚公開して手札に加えてもよい。残りを控え室に置く。$", "op": "look_top_choose_filtered", "optional": True, "filter_mode": "member_heart_or_live_req"},
     # 3-way split: 1->hand, 1->deck top, 1->green
     {"id": "look_top_3_split", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から1枚を手札に加え、1枚をデッキの上に置き、1枚を控え室に置く。$", "op": "look_top_3way_split"},
     # Retrieve from yell reveals: group-filtered
@@ -132,6 +141,62 @@ def _parse_heart_icons(icon_blob: str) -> Dict[str, int]:
         if col:
             counts[col] = counts.get(col, 0) + 1
     return counts
+
+def _heart_icon_to_color(icon_blob: str) -> str:
+    counts = _parse_heart_icons(str(icon_blob or ''))
+    for col in ('pink', 'red', 'yellow', 'green', 'blue', 'purple'):
+        if counts.get(col, 0) > 0:
+            return col
+    return ''
+
+def _heart_icons_to_colors(icon_blob: str) -> List[str]:
+    counts = _parse_heart_icons(str(icon_blob or ''))
+    return [col for col in ('pink', 'red', 'yellow', 'green', 'blue', 'purple') if counts.get(col, 0) > 0]
+
+def _ci_member_heart_count(ci: Optional[CardInfo], color: str) -> int:
+    """Count member heart icons of one color, including blade-hearts by rule 2.1.3."""
+    col = str(color or '').strip().lower()
+    if not ci or col not in {'pink','red','yellow','green','blue','purple'}:
+        return 0
+    total = 0
+    for attr in ('base_hearts', 'blade_hearts'):
+        try:
+            total += int((getattr(ci, attr, {}) or {}).get(col, 0) or 0)
+        except Exception:
+            pass
+    if total > 0:
+        return total
+    # fallback for older/newly scraped raw fields
+    raw = str(getattr(ci, 'base_hearts_raw', '') or '') + ' ' + str(getattr(ci, 'blade_heart_raw', '') or '')
+    return int(_parse_heart_icons(_normalize_icon_token_text(raw)).get(col, 0) or 0)
+
+def _ci_live_required_heart_count(ci: Optional[CardInfo], color: str) -> int:
+    col = str(color or '').strip().lower()
+    if not ci or col not in {'pink','red','yellow','green','blue','purple'}:
+        return 0
+    try:
+        val = int((getattr(ci, 'required_hearts', {}) or {}).get(col, 0) or 0)
+        if val > 0:
+            return val
+    except Exception:
+        pass
+    raw = str(getattr(ci, 'required_hearts_raw', '') or '')
+    return int(_parse_heart_icons(_normalize_icon_token_text(raw)).get(col, 0) or 0)
+
+def _ci_live_required_total(ci: Optional[CardInfo]) -> int:
+    if not ci:
+        return 0
+    try:
+        total = sum(int(v or 0) for v in (getattr(ci, 'required_hearts', {}) or {}).values())
+        if total > 0:
+            return total
+    except Exception:
+        pass
+    raw = str(getattr(ci, 'required_hearts_raw', '') or '')
+    m = re.search(r'合計\s*(\d+)', _norm_digits_jp(raw))
+    if m:
+        return int(m.group(1))
+    return sum(int(v or 0) for v in _parse_heart_icons(_normalize_icon_token_text(raw)).values())
 
 def _normalize_icon_token_text(text: str) -> str:
     """Normalize official-style icon tags to the older internal <(...)> form.
@@ -739,9 +804,19 @@ def _enqueue_choose_from_topk_filtered(
     filter_group: str = '',  # group name or ''
     filter_names: List[str] = None,  # card name list or []
     optional: bool = False,
+    cost_min: int = 0,
+    cost_max: int = 0,
+    required_total_min: int = 0,
+    member_heart_color: str = '',
+    member_heart_min: int = 0,
+    member_heart_colors_any: List[str] = None,
+    live_req_color: str = '',
+    live_req_min: int = 0,
+    filter_mode: str = '',
 ) -> None:
     """Look at top-k cards, let user pick 1 matching filter (optionally), rest to green."""
     filter_names = filter_names or []
+    member_heart_colors_any = member_heart_colors_any or []
     k = int(k or 0)
     if k <= 0:
         return
@@ -755,27 +830,79 @@ def _enqueue_choose_from_topk_filtered(
         ci = _get_card(cards_db, cn)
         if not ci:
             return False
+        mode = str(filter_mode or '').strip()
+        if mode == 'member_heart_or_live_req':
+            if _is_member_ci(ci):
+                return bool(member_heart_color and _ci_member_heart_count(ci, member_heart_color) >= int(member_heart_min or 1))
+            if _is_live_ci(ci):
+                return bool(live_req_color and _ci_live_required_heart_count(ci, live_req_color) >= int(live_req_min or 1))
+            return False
         if filter_kind:
             if filter_kind == 'LIVE' and not _is_live_ci(ci):
                 return False
             if filter_kind == 'MEMBER' and not _is_member_ci(ci):
                 return False
         if filter_group:
-            if filter_group not in str(getattr(ci, 'group', '') or ''):
+            if str(filter_group).strip() not in str(getattr(ci, 'group', '') or ''):
                 return False
         if filter_names:
             name = str(getattr(ci, 'name', '') or getattr(ci, 'cardname', '') or cn)
             if not any(n in name for n in filter_names):
                 return False
+        if cost_min or cost_max:
+            try:
+                cost_val = int(getattr(ci, 'cost', 0) or 0)
+            except Exception:
+                cost_val = 0
+            if cost_min and cost_val < int(cost_min):
+                return False
+            if cost_max and cost_val > int(cost_max):
+                return False
+        if required_total_min:
+            if not _is_live_ci(ci):
+                return False
+            if _ci_live_required_total(ci) < int(required_total_min):
+                return False
+        if member_heart_colors_any:
+            if not _is_member_ci(ci):
+                return False
+            if not any(_ci_member_heart_count(ci, col) > 0 for col in member_heart_colors_any):
+                return False
+        if member_heart_color and not mode:
+            if not _is_member_ci(ci):
+                return False
+            if _ci_member_heart_count(ci, member_heart_color) < int(member_heart_min or 1):
+                return False
+        if live_req_color and not mode:
+            if not _is_live_ci(ci):
+                return False
+            if _ci_live_required_heart_count(ci, live_req_color) < int(live_req_min or 1):
+                return False
         return True
     candidates = [cn for cn in pool if _matches(cn)]
     label_parts = []
-    if filter_kind:
-        label_parts.append({'LIVE': 'ライブカード', 'MEMBER': 'メンバーカード'}.get(filter_kind, filter_kind))
+    if cost_min and cost_max:
+        label_parts.append(f'コスト{cost_min}〜{cost_max}')
+    elif cost_min:
+        label_parts.append(f'コスト{cost_min}以上')
+    elif cost_max:
+        label_parts.append(f'コスト{cost_max}以下')
+    if required_total_min:
+        label_parts.append(f'必要ハート合計{required_total_min}以上')
     if filter_group:
-        label_parts.append(f'『{filter_group}』')
+        label_parts.append(f'『{str(filter_group).strip()}』')
     if filter_names:
         label_parts.append('・'.join(f'「{n}」' for n in filter_names))
+    if member_heart_colors_any:
+        label_parts.append('ハート' + '/'.join(member_heart_colors_any))
+    if member_heart_color and not filter_mode:
+        label_parts.append(f'{member_heart_color}ハート{int(member_heart_min or 1)}以上')
+    if live_req_color and not filter_mode:
+        label_parts.append(f'必要{live_req_color}{int(live_req_min or 1)}以上')
+    if filter_mode == 'member_heart_or_live_req':
+        label_parts.append(f'メンバー{member_heart_color}{int(member_heart_min or 1)}以上/ライブ必要{live_req_color}{int(live_req_min or 1)}以上')
+    if filter_kind:
+        label_parts.append({'LIVE': 'ライブカード', 'MEMBER': 'メンバーカード'}.get(filter_kind, filter_kind))
     label = '・'.join(label_parts) if label_parts else 'カード'
     if not candidates:
         # Show pool as popup even when no match; user confirms to send all to green
@@ -931,6 +1058,18 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         k = int(gd.get('k', 0) or 0)
         _enqueue_choose_from_topk(gs, k, rng)
         return
+    if op == 'look_top_choose_if':
+        cond = str(rule.get('cond', '') or '')
+        ok = True
+        if cond == 'energy_gte':
+            need = int(gd.get('n', 0) or 0)
+            ok = int(getattr(gs, 'energy_active', 0) or 0) + int(getattr(gs, 'energy_wait', 0) or 0) >= need
+        if not ok:
+            gs.log.append(f'[AUTO] look_top_choose_if: condition not met ({cond})')
+            return
+        k = int(gd.get('k', 0) or 0)
+        _enqueue_choose_from_topk(gs, k, rng)
+        return
     if op == 'look_top_choose_filtered':
         k = int(gd.get('k', 0) or 0)
         kind_jp = str(gd.get('kind', '') or '')
@@ -940,9 +1079,28 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         # parse names like 「名前A」か「名前B」
         names_raw = str(gd.get('names', '') or '')
         names = re.findall(r'「([^」]+)」', names_raw) if names_raw else []
+        if not kind:
+            kind = str(rule.get('card_kind', '') or '').strip().upper()
+        cost_min = int(gd.get('cost_min', 0) or 0)
+        cost_max = int(gd.get('cost_max', 0) or 0)
+        required_total_min = int(gd.get('required_total_min', 0) or 0)
+        member_heart_color = _heart_icon_to_color(str(gd.get('member_heart_icon', '') or ''))
+        member_heart_min = int(gd.get('member_heart_min', 0) or 0)
+        member_heart_colors_any = _heart_icons_to_colors(str(gd.get('member_heart_icons', '') or ''))
+        live_req_color = _heart_icon_to_color(str(gd.get('live_req_icon', '') or ''))
+        live_req_min = int(gd.get('live_req_min', 0) or 0)
+        filter_mode = str(rule.get('filter_mode', '') or '')
         _enqueue_choose_from_topk_filtered(gs, k, rng, cards_db,
                                            filter_kind=kind, filter_group=group,
-                                           filter_names=names, optional=optional)
+                                           filter_names=names, optional=optional,
+                                           cost_min=cost_min, cost_max=cost_max,
+                                           required_total_min=required_total_min,
+                                           member_heart_color=member_heart_color,
+                                           member_heart_min=member_heart_min,
+                                           member_heart_colors_any=member_heart_colors_any,
+                                           live_req_color=live_req_color,
+                                           live_req_min=live_req_min,
+                                           filter_mode=filter_mode)
         return
     if op == 'look_top_3way_split':
         k = int(gd.get('k', 0) or 0)
