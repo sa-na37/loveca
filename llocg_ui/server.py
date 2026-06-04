@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: server_auto_order_top_effect_text_20260513j
+# BUILD_TAG: server_effect_mode_choice_textlist_20260604a
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1660,6 +1660,13 @@ HTML = r'''<!doctype html>
   .choiceBtn img{width:100%;height:100%;object-fit:cover;display:block;border-radius:12px;}
   .choiceCap{position:absolute;left:0;right:0;bottom:0;font-size:11px;padding:4px 6px;background:linear-gradient(to top, rgba(0,0,0,.65), rgba(0,0,0,.05));color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6);border-bottom-left-radius:12px;border-bottom-right-radius:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .choiceTile{display:flex;flex-direction:column;align-items:stretch;gap:6px;flex:0 0 auto;max-width:240px;}
+  /* effect-mode choices: text choices, not card-list tiles */
+  .effectChoiceList{display:flex;flex-direction:column;gap:8px;max-width:min(76vw, 920px);padding:4px 2px 8px 2px;}
+  .effectChoiceBtn{display:grid;grid-template-columns:2.2em 1fr;align-items:start;gap:10px;width:100%;text-align:left;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.065);color:#eee;border-radius:12px;padding:10px 12px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.28);}
+  .effectChoiceBtn:hover{background:rgba(255,255,255,.10);outline:2px solid rgba(255,255,255,.20);outline-offset:-2px;}
+  .effectChoiceBullet{display:inline-flex;align-items:center;justify-content:center;width:1.8em;height:1.8em;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-weight:800;font-size:12px;line-height:1;margin-top:0.05em;}
+  .effectChoiceText{white-space:pre-wrap;line-height:1.55;font-size:13px;color:#f1f1f1;}
+  .effectChoiceMeta{margin-top:6px;color:#aaa;font-size:11px;line-height:1.3;}
   /* reorder drag-and-drop */
   .reorderHint{font-size:12px;color:#aaa;margin-bottom:6px;display:flex;align-items:center;gap:6px;}
   .reorderHint .arrow{font-size:16px;color:#f9a;}
@@ -4236,13 +4243,78 @@ inner.appendChild(card);
       return;
     }
 
-    if((kind === 'auto_order' && Array.isArray(p.queue) && p.queue.length) || (kind === 'choose_effects' && ((Array.isArray(p.queue) && p.queue.length) || (Array.isArray(p.remaining) && p.remaining.length)))){
+    if(kind === 'choose_effects'){
+      // This is an effect-mode choice ("以下から1つ/1つ以上を選ぶ"), not a card pick.
+      // Keep it as readable full-text options even when the option text contains card words.
+      setModalContextFromPending(p);
+      const list = document.createElement('div');
+      list.className = 'effectChoiceList';
+      const isDoneChoice = (v)=>{
+        const low = String(v || '').trim().toLowerCase();
+        return ['done','__done__','finish','end','終了','完了'].includes(low);
+      };
+      const effectOpts = opts.map(o=>String(o || '').trim()).filter(o=>o && !isDoneChoice(o));
+      const hasDone = opts.some(o=>isDoneChoice(o));
+      const pickedCount = Array.isArray(p.picked) ? p.picked.length : 0;
+      const maxPick = Number(p.max || 1);
+
+      effectOpts.forEach((opt, i)=>{
+        const b = document.createElement('button');
+        b.className = 'effectChoiceBtn';
+        const bullet = document.createElement('span');
+        bullet.className = 'effectChoiceBullet';
+        bullet.textContent = String(i + 1);
+        const body = document.createElement('div');
+        body.className = 'effectChoiceText';
+        setRichText(body, opt);
+        b.appendChild(bullet);
+        b.appendChild(body);
+        b.addEventListener('click', async (ev)=>{
+          ev.stopPropagation();
+          st = await apiCmd('resolve_pending', {idx:0, choice: opt});
+          selHand = [];
+          updateTop();
+          render();
+        });
+        list.appendChild(b);
+      });
+      if(!effectOpts.length){
+        const note = document.createElement('div');
+        note.className = 'effectChoiceMeta';
+        note.textContent = '選択できる効果がありません。ログを確認してください。';
+        list.appendChild(note);
+      }
+      if(maxPick > 1){
+        const meta = document.createElement('div');
+        meta.className = 'effectChoiceMeta';
+        meta.textContent = `選択済み: ${pickedCount} / 最大 ${maxPick}`;
+        list.appendChild(meta);
+      }
+      elModalCards.appendChild(list);
+      if(hasDone){
+        const bDone = document.createElement('button');
+        bDone.className = 'miniBtn';
+        bDone.textContent = '選択終了';
+        bDone.addEventListener('click', async (ev)=>{
+          ev.stopPropagation();
+          st = await apiCmd('resolve_pending', {idx:0, choice:'Done'});
+          selHand = [];
+          updateTop();
+          render();
+        });
+        elModalActions.appendChild(bDone);
+      }
+      elMask.style.display = 'block';
+      return;
+    }
+
+    if(kind === 'auto_order' && Array.isArray(p.queue) && p.queue.length){
       const row = document.createElement('div');
       row.className = 'choiceRow';
 
       const dimsP = standardSize('portrait');
       const dimsL = standardSize('landscape');
-      const queue = Array.isArray(p.queue) && p.queue.length ? p.queue : (Array.isArray(p.remaining) ? p.remaining : []);
+      const queue = Array.isArray(p.queue) && p.queue.length ? p.queue : [];
 
       const items = opts.map((opt, i)=>{
         const trig = queue[i] || {};
