@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: under_energy_common_bonus_20260604a
+# BUILD_TAG: named_hand_cost_result_20260604a
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -98,6 +98,12 @@ _EFFECT_RULES = [
     {"id": "retrieve_yell_group_type_upto_n", "pattern": r"^エールにより公開された自分のカードの中から、?『(?P<group>[^』]+)』の(?P<kind>ライブ|メンバー)カードを(?P<n>\d+)枚まで手札に加える。$", "op": "retrieve_from_yell", "up_to": True},
     # Retrieve from yell reveals: cost2-member OR score2-live (e.g. PL!HS-PR-027, PL!N-PR-021, PL!SP-PR-016)
     {"id": "retrieve_yell_cost2member_or_score2live", "pattern": r"^エールにより公開された自分のカードの中から、コスト(?P<cost_lim>\d+)以下のメンバーカードか、スコア(?P<score_lim>\d+)以下のライブカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "COST_MEMBER_OR_SCORE_LIVE"},
+    # Retrieve from yell reveals: additional generic filters introduced in newer DB.
+    {"id": "retrieve_yell_any_one", "pattern": r"^エールにより公開された自分のカードの中から、カードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "ANY"},
+    {"id": "retrieve_yell_cost_member_le", "pattern": r"^エールにより公開された自分のカードの中から、コスト(?P<cost_lim>\d+)以下のメンバーカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "COST_MEMBER_LE"},
+    {"id": "retrieve_yell_cost_member_ge", "pattern": r"^エールにより公開された自分のカードの中から、コスト(?P<cost_min>\d+)以上のメンバーカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "COST_MEMBER_GE"},
+    {"id": "retrieve_yell_group_cost_member_between", "pattern": r"^エールにより公開された自分のカードの中から、コスト(?P<cost_min>\d+)以上(?P<cost_lim>\d+)以下の『(?P<group>[^』]+)』のメンバーカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "COST_MEMBER_RANGE"},
+    {"id": "put_yell_revealed_any_to_deck_top_optional", "pattern": r"^エールで公開された自分のカードの中から、カードを1枚デッキの一番上に置いてもよい。$", "op": "put_yell_to_deck_top", "card_kind": "ANY", "up_to": True},
     # Put cards revealed by yell on the bottom of the deck (e.g. 未体験HORIZON).
     {"id": "put_yell_revealed_type_upto_deck_bottom", "pattern": r"^エールにより公開された自分のカードの中から、(?:(?P<kind>ライブ|メンバー)カード|カード)を(?P<n>\d+)枚までデッキの一番下に置く。$", "op": "put_yell_to_deck_bottom"},
 ]
@@ -126,6 +132,119 @@ def _parse_heart_icons(icon_blob: str) -> Dict[str, int]:
         if col:
             counts[col] = counts.get(col, 0) + 1
     return counts
+
+def _normalize_icon_token_text(text: str) -> str:
+    """Normalize official-style icon tags to the older internal <(...)> form.
+
+    The updated DB contains both <桃>/<ALL>/<スコア+1> and legacy <(桃)> forms.
+    Runtime regexes historically used <(...)>, so normalize at parser boundaries.
+    """
+    t = str(text or '')
+    # Normalize split score icon spelling such as <(スコア)+1> into <(スコア+1)>.
+    t = re.sub(r'<\(\s*スコア\s*\)\s*([+＋]\s*\d+)\s*>', lambda m: '<(スコア' + m.group(1).replace('＋', '+').replace(' ', '') + ')>', t)
+
+    def repl(m: re.Match) -> str:
+        inner = str(m.group(1) or '').strip()
+        if not inner:
+            return m.group(0)
+        if inner.startswith('(') and inner.endswith(')'):
+            return '<' + inner + '>'
+        key = inner.replace('＋', '+').replace(' ', '')
+        if key in {'桃', '赤', '黄', '緑', '青', '紫', 'ALL', 'ブレード', 'E'}:
+            return f'<({key})>'
+        if re.match(r'^(?:スコア|ドロー)[+\-]\d+$', key):
+            return f'<({key})>'
+        return m.group(0)
+
+    return re.sub(r'<([^<>]+)>', repl, t)
+
+
+def _parse_named_hand_discard_cost(cost_text: str) -> Optional[Dict[str, Any]]:
+    """Parse optional costs that discard named cards from hand.
+
+    Supported shared forms:
+      - 手札の「A」と「B」と「C」を好きな枚数控え室に置いてもよい
+      - 手札の「A」と「B」と「C」を、好きな組み合わせで合計3枚、控え室に置いてもよい
+
+    Returns a small contract used by the generic hand-card selection pending.
+    """
+    t = str(cost_text or '').strip()
+    if not t or '手札の「' not in t or '控え室に置いてもよい' not in t:
+        return None
+    t = _normalize_icon_token_text(t)
+    names = [str(x or '').strip() for x in re.findall(r'「([^」]+)」', t) if str(x or '').strip()]
+    if not names:
+        return None
+    # Exact-N optional cost: user may pay exactly N cards, or skip the optional cost.
+    m_exact = re.search(r'好きな組み合わせで合計\s*(\d+)\s*枚、?控え室に置いてもよい', t)
+    if m_exact:
+        n = int(m_exact.group(1) or 0)
+        if n <= 0:
+            return None
+        return {
+            'names': names,
+            'min_picks': n,
+            'max_picks': n,
+            'exact_or_zero': True,
+            'mode': 'exact_or_skip',
+        }
+    # Up-to-any optional cost: after choosing Pay, the user may still choose 0..available.
+    if re.search(r'好きな枚数控え室に置いてもよい', t):
+        return {
+            'names': names,
+            'min_picks': 0,
+            'max_picks': None,
+            'exact_or_zero': False,
+            'mode': 'up_to_any',
+        }
+    return None
+
+
+def _hand_named_card_candidates(gs: 'GameState', cards_db: Dict[str, CardInfo], names: List[str]) -> List[str]:
+    wanted = {str(x or '').strip() for x in list(names or []) if str(x or '').strip()}
+    out: List[str] = []
+    if not wanted:
+        return out
+    for cn in list(getattr(gs, 'hand', []) or []):
+        ci = _get_card(cards_db, cn)
+        nm = str(getattr(ci, 'name', '') or getattr(ci, 'cardname', '') or '').strip() if ci else ''
+        if nm in wanted:
+            out.append(cn)
+    return out
+
+
+def _card_heart_colors_for_cost_result(ci: Optional[CardInfo]) -> List[str]:
+    """Return distinct colored heart names a card has for cost-result effects.
+
+    Blade-heart icons are also heart icons by rule, so include both base_hearts
+    and blade_hearts. Ignore any/all/non-colored tags for this effect.
+    """
+    cols: List[str] = []
+    if not ci:
+        return cols
+    for mp in (getattr(ci, 'base_hearts', {}) or {}, getattr(ci, 'blade_hearts', {}) or {}):
+        try:
+            items = list(mp.items())
+        except Exception:
+            items = []
+        for col, n in items:
+            c = str(col or '').strip().lower()
+            if c in ('pink', 'red', 'yellow', 'green', 'blue', 'purple') and int(n or 0) > 0 and c not in cols:
+                cols.append(c)
+    return cols
+
+def _is_named_hand_cost_result_effect(effect_text: str) -> bool:
+    """Return True for effect templates whose value depends on selected/discarded hand cards."""
+    t = _normalize_icon_token_text(str(effect_text or '').strip()).replace('\n', '')
+    if not t:
+        return False
+    patterns = [
+        r'^ライブ終了時まで、「<常時>ライブの合計スコアを\+\d+する。」を得る。$',
+        r'^ライブ終了時まで、これ(?:によって|により)控え室に置いた枚数1枚につき(?:<\([^)]+\)>)+を得る。$',
+        r'^ライブ終了時まで、これにより控え室に置いたそれらのカードが持つハートの色1つにつき、その色のハートを1つずつ得る。$',
+    ]
+    return any(re.match(pat, t) for pat in patterns)
+
 def _match_effect_template(effect_text: str):
     s = (effect_text or "").strip()
     if not s:
@@ -142,11 +261,16 @@ def _match_effect_template(effect_text: str):
             return m_ext
     except Exception:
         pass
-    for r in _EFFECT_RULES_COMPILED:
-        m = r["re"].match(s)
-        if m:
-            gd = {k: v for k, v in m.groupdict().items() if v is not None}
-            return (r, gd)
+    candidates = [s]
+    s_norm = _normalize_icon_token_text(s)
+    if s_norm != s:
+        candidates.append(s_norm)
+    for ss in candidates:
+        for r in _EFFECT_RULES_COMPILED:
+            m = r["re"].match(ss)
+            if m:
+                gd = {k: v for k, v in m.groupdict().items() if v is not None}
+                return (r, gd)
     return None
 
 def _yell_revealed_candidates(
@@ -156,6 +280,7 @@ def _yell_revealed_candidates(
     group: str = '',
     cost_lim: int = 99,
     score_lim: int = 99,
+    cost_min: int = 0,
 ) -> List[str]:
     """Return current selectable cards that were revealed by yell this live.
 
@@ -191,6 +316,16 @@ def _yell_revealed_candidates(
                 if _is_live_ci(ci2) and int(getattr(ci2, 'score', 0) or 0) <= int(score_lim or 99):
                     ok2 = True
                 if not ok2:
+                    continue
+            if kind == 'COST_MEMBER_LE':
+                if not (_is_member_ci(ci2) and int(getattr(ci2, 'cost', 0) or 0) <= int(cost_lim or 99)):
+                    continue
+            if kind == 'COST_MEMBER_GE':
+                if not (_is_member_ci(ci2) and int(getattr(ci2, 'cost', 0) or 0) >= int(cost_min or 0)):
+                    continue
+            if kind == 'COST_MEMBER_RANGE':
+                cst = int(getattr(ci2, 'cost', 0) or 0)
+                if not (_is_member_ci(ci2) and cst >= int(cost_min or 0) and cst <= int(cost_lim or 99)):
                     continue
             if group and (group not in str(getattr(ci2, 'group', '') or '')):
                 continue
@@ -996,11 +1131,12 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
             kind = {'ライブ': 'LIVE', 'メンバー': 'MEMBER'}.get(kind_jp, 'ANY')
         group = str(gd.get('group', '') or '')
         cost_lim = int(gd.get('cost_lim', 99) or 99)
+        cost_min = int(gd.get('cost_min', 0) or 0)
         score_lim = int(gd.get('score_lim', 99) or 99)
         max_n = int(gd.get('n', 1) or 1)
         up_to = bool(rule.get('up_to', False))
         src = str((ctx or {}).get('source_cn', '') or '')
-        cands = _yell_revealed_candidates(gs, cards_db, kind, group, cost_lim, score_lim)
+        cands = _yell_revealed_candidates(gs, cards_db, kind, group, cost_lim, score_lim, cost_min)
         if not cands:
             gs.log.append(f'[INFO] retrieve_from_yell: no matching card in yell reveals (kind={kind} group={group})')
             return
@@ -1013,6 +1149,12 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
             label += '（メンバーカード）'
         elif kind == 'COST_MEMBER_OR_SCORE_LIVE':
             label += f'（コスト{cost_lim}以下のメンバーかスコア{score_lim}以下のライブ）'
+        elif kind == 'COST_MEMBER_LE':
+            label += f'（コスト{cost_lim}以下のメンバー）'
+        elif kind == 'COST_MEMBER_GE':
+            label += f'（コスト{cost_min}以上のメンバー）'
+        elif kind == 'COST_MEMBER_RANGE':
+            label += f'（コスト{cost_min}以上{cost_lim}以下のメンバー）'
         if group:
             label += f'（{group}）'
         opts = list(cands)
@@ -1028,9 +1170,29 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
             'group': group,
             'cost_lim': cost_lim,
             'score_lim': score_lim,
+            'cost_min': cost_min,
             'up_to': up_to,
         })
         gs.log.append(f'[PENDING] retrieve_from_yell: {len(cands)} candidates, take {max_n}{" up to" if up_to else ""}')
+        return
+    if op == 'put_yell_to_deck_top':
+        kind = str(rule.get('card_kind', '') or '').upper() or 'ANY'
+        max_n = int(gd.get('n', 1) or 1)
+        src = str((ctx or {}).get('source_cn', '') or '')
+        cands = _yell_revealed_candidates(gs, cards_db, kind)
+        if not cands:
+            gs.log.append(f'[INFO] put_yell_to_deck_top: no matching card in yell reveals (kind={kind})')
+            return
+        gs.pending.append({
+            'kind': 'pick_from_yell_to_deck_top',
+            'text': f'{src}[ライブ成功時]: エールで公開されたカードから1枚までデッキの一番上に置く',
+            'options': ['skip'] + list(cands),
+            'source_cn': src,
+            'remaining_n': max_n,
+            'card_kind': kind,
+            'up_to': True,
+        })
+        gs.log.append(f'[PENDING] put_yell_to_deck_top: {len(cands)} candidates, up to {max_n}')
         return
     if op == 'put_yell_to_deck_bottom':
         kind_jp = str(gd.get('kind', '') or '')
@@ -1101,6 +1263,52 @@ def try_apply_effect_template(gs: 'GameState', rng: random.Random, cards_db: Dic
     text = str(effect_text or '').strip()
     if not text:
         return False
+    text_norm = _normalize_icon_token_text(text).replace('\n', '')
+    # Cost-result: gain total live score while this source member remains in the live.
+    # e.g. ライブ終了時まで、「<常時>ライブの合計スコアを+3する。」を得る。
+    m_score = re.match(r'^ライブ終了時まで、「<常時>ライブの合計スコアを\+(?P<n>\d+)する。」を得る。$', text_norm)
+    if m_score:
+        pos = str((ctx or {}).get('pos', '') or '').upper()
+        slot = gs.stage.get(pos) if pos in ('L', 'C', 'R') else None
+        if not slot:
+            gs.log.append('[WARN] named-hand cost-result score: no source slot')
+            return True
+        n = int(m_score.group('n') or 0)
+        slot.temp_score = int(getattr(slot, 'temp_score', 0) or 0) + n
+        slot.temp_until = 'end_of_live'
+        gs.log.append(f'[AUTO] {pos}: live total score +{n} (until end_of_live)')
+        return True
+    # Cost-result: gain icons once per card discarded by this cost.
+    m_icons_per_discard = re.match(r'^ライブ終了時まで、これ(?:によって|により)控え室に置いた枚数1枚につき(?P<icons>(?:<\([^)]+\)>)+)を得る。$', text_norm)
+    if m_icons_per_discard:
+        pos = str((ctx or {}).get('pos', '') or '').upper()
+        slot = gs.stage.get(pos) if pos in ('L', 'C', 'R') else None
+        if not slot:
+            gs.log.append('[WARN] named-hand cost-result icons/count: no source slot')
+            return True
+        n = int((ctx or {}).get('discarded_count', 0) or 0)
+        icons = str(m_icons_per_discard.group('icons') or '')
+        b, hs = _grant_temp_icons_to_slot(slot, icons, n)
+        gs.log.append(f'[AUTO] {pos}: cost-result discarded_count={n} -> icons {icons} x{n} (blades={b} hearts={hs})')
+        return True
+    # Cost-result: gain one heart of each color among discarded named cards' hearts.
+    m_hearts_from_discarded = re.match(r'^ライブ終了時まで、これにより控え室に置いたそれらのカードが持つハートの色1つにつき、その色のハートを1つずつ得る。$', text_norm)
+    if m_hearts_from_discarded:
+        pos = str((ctx or {}).get('pos', '') or '').upper()
+        slot = gs.stage.get(pos) if pos in ('L', 'C', 'R') else None
+        if not slot:
+            gs.log.append('[WARN] named-hand cost-result hearts/colors: no source slot')
+            return True
+        cols: List[str] = []
+        for cn in list((ctx or {}).get('discarded_cns', []) or []):
+            ci2 = _get_card(cards_db, cn)
+            for col in _card_heart_colors_for_cost_result(ci2):
+                if col not in cols:
+                    cols.append(col)
+        for col in cols:
+            _grant_temp_heart(slot, col, 1)
+        gs.log.append(f'[AUTO] {pos}: cost-result discarded heart colors -> {cols}')
+        return True
     # Mode wrapper: choose one / choose one or more (Daydream Mermaid etc.)
     # Example:
     #   以下から1つを選ぶ。自分の成功ライブカード置き場に『虹ヶ咲』のカードがある場合、代わりに1つ以上を選ぶ。
@@ -3064,11 +3272,23 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                             _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
                             continue
                     # Optional hand-discard cost（「手札をN枚控え室に置いてもよい」「手札のXを1枚控え室に置いてもよい」）
-                    if '控え室に置いてもよい' in cost and _match_effect_template(eff):
-                        # 手札のライブカードを捨てるコスト
+                    if '控え室に置いてもよい' in cost and (_match_effect_template(eff) or _is_named_hand_cost_result_effect(eff)):
+                        # 手札のライブカード / 任意カード / 指定名カードを捨てる optional cost.
+                        named_cost = _parse_named_hand_discard_cost(cost)
                         m_live = re.search(r'手札のライブカードを(\d+)枚控え室に置いてもよい', cost)
                         m_hand = re.search(r'手札を(\d+)枚控え室に置いてもよい', cost)
-                        if m_live:
+                        extra_cost: Dict[str, Any] = {}
+                        if named_cost:
+                            cost_kind = 'discard_named_from_hand'
+                            cost_n = int(named_cost.get('max_picks') or 0)
+                            extra_cost = {
+                                'cost_names': list(named_cost.get('names', []) or []),
+                                'min_picks': int(named_cost.get('min_picks', 0) or 0),
+                                'max_picks': named_cost.get('max_picks', None),
+                                'exact_or_zero': bool(named_cost.get('exact_or_zero', False)),
+                                'named_cost_mode': str(named_cost.get('mode', '') or ''),
+                            }
+                        elif m_live:
                             cost_kind = 'discard_live_from_hand'
                             cost_n = int(m_live.group(1))
                         elif m_hand:
@@ -3088,6 +3308,7 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                             'text': _pretty_optional_effect_prompt_text('ライブ開始時', ci.cardnumber, cost, eff),
                             'options': ['pay', 'skip'],
                         }
+                        pr.update(extra_cost)
                         _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
                         continue
                     # self-wait コスト（「このメンバーをウェイトにしてもよい」「ウェイトにする」）付き効果
@@ -4247,6 +4468,35 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         else:
             gs.log.append(f"[SKIP] LIVE: {cn_live}[ライブ成功時] unresolved (revealed 『{group_name}』 members: {got} < {need})")
         return
+    if kind in ('add_live_success_score_bonus_if_revealed_live_count_at_least',):
+        cn_live = str((trig or {}).get('source_cn', '') or '')
+        need = int((trig or {}).get('condition_count', 0) or 0)
+        bonus = int((trig or {}).get('bonus', 0) or 0)
+        got = int(_count_yell_revealed_live_cards(gs, cards_db))
+        if got >= need:
+            _add_live_success_score_bonus(gs, cn_live, bonus, detail=f"revealed live cards: {got}")
+        else:
+            gs.log.append(f"[SKIP] LIVE: {cn_live}[ライブ成功時] unresolved (revealed live cards: {got} < {need})")
+        return
+    if kind in ('add_live_success_score_bonus_if_revealed_group_live_has_tag',):
+        cn_live = str((trig or {}).get('source_cn', '') or '')
+        group_name = str((trig or {}).get('condition_group_name', '') or '')
+        tag = str((trig or {}).get('condition_tag', '') or '')
+        bonus = int((trig or {}).get('bonus', 0) or 0)
+        got = 0
+        for cn2 in list(getattr(gs, '_yell_revealed_this_live', []) or []):
+            ci2 = _get_card(cards_db, cn2)
+            if not ci2 or not _is_live_ci(ci2):
+                continue
+            if group_name and group_name not in str(getattr(ci2, 'group', '') or ''):
+                continue
+            if _ci_blade_heart_has_tag(ci2, tag):
+                got += 1
+        if got >= 1:
+            _add_live_success_score_bonus(gs, cn_live, bonus, detail=f"revealed 『{group_name}』 live with {tag}: {got}")
+        else:
+            gs.log.append(f"[SKIP] LIVE: {cn_live}[ライブ成功時] unresolved (revealed 『{group_name}』 live with {tag}: 0)")
+        return
     if kind in ('put_wait_energy_if_revealed_group_card_count_at_least',):
         src_cn = str((trig or {}).get('source_cn', '') or '').strip()
         group_name = str((trig or {}).get('condition_group_name', '') or '')
@@ -4762,7 +5012,7 @@ def _parse_live_start_score_and_increase_any_per_success_zone_cardname_count(ci:
 
 def _build_live_start_trigger_from_effect(gs: GameState, cards_db: Dict[str, CardInfo], eff: str, source_cn: str, label: str, ctx: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     eff_raw = str(eff or '').strip()
-    eff_norm = eff_raw.replace('\n', '')
+    eff_norm = _normalize_icon_token_text(eff_raw).replace('\n', '')
     # Generalized from Rise Up High!
     m = re.match(r'^このゲームの1ターン目のライブフェイズの場合、このカードのスコアを\+1し、ライブ終了時まで、自分のステージにいる『(?P<group>[^』]+)』のメンバー1人は、<\(ブレード\)>を得る。$', eff_norm)
     if m:
@@ -4925,7 +5175,7 @@ def _live_success_excess_color_and_stage_group_met(gs: GameState, cards_db: Dict
     return bool(_has_group_member_on_stage(gs, cards_db, group_name))
 def _build_live_success_trigger_from_effect(gs: GameState, cards_db: Dict[str, CardInfo], eff: str, source_cn: str, label: str, ctx: Dict[str, Any], pos: str = '') -> Optional[Dict[str, Any]]:
     eff_raw = str(eff or '').strip()
-    eff_norm = eff_raw.replace('\n', '')
+    eff_norm = _normalize_icon_token_text(eff_raw).replace('\n', '')
     # Generalized live-success conditional wrapper: either player's success zone has at least N cards.
     # We can verify our own success zone directly. Opponent state is not modeled in the current
     # single-player simulator, so if our own side does not satisfy the condition we expose Apply/Skip.
@@ -5110,6 +5360,41 @@ def _build_live_success_trigger_from_effect(gs: GameState, cards_db: Dict[str, C
             'condition_group_name': group_name,
             'condition_count': int(need),
             'count': int(n),
+            'source_cn': str(source_cn or ''),
+            'pos': str(pos or ''),
+            'ctx': dict(ctx or {}),
+            'label': str(label or ''),
+        }
+    m = re.match(r'^エールにより公開された自分のカードの中に『(?P<group>[^』]+)』のメンバーカードが(?P<count>\d+)枚以上ある場合、このカードのスコアを\+(?P<delta>\d+)する。?$', eff_norm)
+    if m:
+        return {
+            'kind': 'add_live_success_score_bonus_if_revealed_group_member_count_at_least',
+            'condition_group_name': str(m.group('group') or '').strip(),
+            'condition_count': int(m.group('count') or 0),
+            'bonus': int(m.group('delta') or 0),
+            'source_cn': str(source_cn or ''),
+            'pos': str(pos or ''),
+            'ctx': dict(ctx or {}),
+            'label': str(label or ''),
+        }
+    m = re.match(r'^エールにより公開された自分のカードの中にライブカードが(?:1枚以上)?ある場合、このカードのスコアを\+(?P<delta>\d+)する。?$', eff_norm)
+    if m:
+        return {
+            'kind': 'add_live_success_score_bonus_if_revealed_live_count_at_least',
+            'condition_count': 1,
+            'bonus': int(m.group('delta') or 0),
+            'source_cn': str(source_cn or ''),
+            'pos': str(pos or ''),
+            'ctx': dict(ctx or {}),
+            'label': str(label or ''),
+        }
+    m = re.match(r'^エールにより公開された自分のカードの中に、?(?P<tag><\([^)]+\)>)を持つ『(?P<group>[^』]+)』のライブカードが(?:1枚以上)?ある場合、ライブの合計スコアを\+(?P<delta>\d+)する。?$', eff_norm)
+    if m:
+        return {
+            'kind': 'add_live_success_score_bonus_if_revealed_group_live_has_tag',
+            'condition_tag': str(m.group('tag') or '').strip(),
+            'condition_group_name': str(m.group('group') or '').strip(),
+            'bonus': int(m.group('delta') or 0),
             'source_cn': str(source_cn or ''),
             'pos': str(pos or ''),
             'ctx': dict(ctx or {}),
@@ -5558,11 +5843,72 @@ def _green_unique_live_names_count(gs: GameState, cards_db: Dict[str, CardInfo],
         if nm:
             names.add(nm)
     return int(len(names))
+
+def _ci_blade_heart_raw_text(ci: Optional[CardInfo]) -> str:
+    if not ci:
+        return ''
+    parts: List[str] = []
+    raw = str(getattr(ci, 'blade_heart_raw', '') or '').strip()
+    if raw:
+        parts.append(raw)
+    try:
+        tags = _parse_tags_json(str(getattr(ci, 'blade_heart_tags_json', '') or '[]'))
+        parts.extend([str(x) for x in tags if str(x).strip()])
+    except Exception:
+        pass
+    try:
+        for k, v in (getattr(ci, 'blade_hearts', {}) or {}).items():
+            if int(v or 0) > 0:
+                jp = {'pink':'桃','red':'赤','yellow':'黄','green':'緑','blue':'青','purple':'紫','all':'ALL'}.get(str(k), str(k))
+                parts.append(f'<{jp}>')
+    except Exception:
+        pass
+    return _normalize_icon_token_text(' '.join(parts))
+
+
+def _ci_has_blade_heart_payload(ci: Optional[CardInfo]) -> bool:
+    txt = _ci_blade_heart_raw_text(ci)
+    if not txt:
+        return False
+    if txt.strip() in {'なし', '-', '[]'}:
+        return False
+    return bool(re.search(r'<\([^)]+\)>', txt))
+
+
+def _ci_blade_heart_has_tag(ci: Optional[CardInfo], tag_text: str) -> bool:
+    marker = _normalize_tag_marker(_normalize_icon_token_text(tag_text))
+    if not marker:
+        return False
+    txt = _ci_blade_heart_raw_text(ci)
+    # Compare by normalized inner marker: ALL, スコア+1, ドロー+1, etc.
+    inners = [str(x).strip().replace('＋', '+').replace(' ', '') for x in re.findall(r'<\(([^)]+)\)>', txt)]
+    return marker.replace('＋', '+').replace(' ', '') in inners
+
+
+def _ci_base_heart_color_keys(ci: Optional[CardInfo]) -> set:
+    colors = set()
+    if not ci:
+        return colors
+    try:
+        for k, v in (getattr(ci, 'base_hearts', {}) or {}).items():
+            if int(v or 0) > 0 and str(k) in {'pink','red','yellow','green','blue','purple'}:
+                colors.add(str(k))
+    except Exception:
+        pass
+    raw = _normalize_icon_token_text(str(getattr(ci, 'base_hearts_raw', '') or ''))
+    for inner in re.findall(r'<\(([^)]+)\)>', raw):
+        col = _HEART_ICON_COLOR_MAP.get(str(inner or '').strip())
+        if col:
+            colors.add(col)
+    return colors
+
 def _normalize_tag_marker(tag_text: str) -> str:
-    tag = str(tag_text or '').strip()
-    if tag.startswith('<') and tag.endswith('>'):
+    tag = _normalize_icon_token_text(str(tag_text or '').strip())
+    if tag.startswith('<(') and tag.endswith(')>'):
+        tag = tag[2:-2].strip()
+    elif tag.startswith('<') and tag.endswith('>'):
         tag = tag[1:-1].strip()
-    return str(tag or '')
+    return str(tag or '').replace('＋', '+').replace(' ', '')
 
 def _count_yell_revealed_cards_with_tag(gs: GameState, cards_db: Dict[str, CardInfo], tag_text: str) -> int:
     tag = _normalize_tag_marker(tag_text)
@@ -5573,8 +5919,7 @@ def _count_yell_revealed_cards_with_tag(gs: GameState, cards_db: Dict[str, CardI
         ci = _get_card(cards_db, cn)
         if not ci:
             continue
-        txt = str(getattr(ci, 'blade_heart_tags_json', '') or '')
-        if tag in txt:
+        if _ci_blade_heart_has_tag(ci, tag):
             n += 1
     return int(n)
 def _count_yell_revealed_live_cards(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
@@ -5626,16 +5971,17 @@ def _count_yell_revealed_distinct_named_group_members(gs: GameState, cards_db: D
     return int(len(names))
 
 def _yell_compact_text(text: str) -> str:
-    t = _norm_digits_jp(str(text or ''))
+    t = _normalize_icon_token_text(_norm_digits_jp(str(text or '')))
     t = re.sub(r'\s+', '', t)
     t = t.replace('，', '、')
     return t
 
 def _parse_icons_compact(icon_blob: str) -> Tuple[int, Dict[str, int]]:
-    """Parse compact <(...)> icon blob into (blade_count, hearts incl. ALL)."""
+    """Parse compact icon blob into (blade_count, hearts incl. ALL)."""
     b = 0
     hearts: Dict[str, int] = {}
-    for m in re.finditer(r'<\(([^)]+)\)>', str(icon_blob or '')):
+    blob = _normalize_icon_token_text(str(icon_blob or ''))
+    for m in re.finditer(r'<\(([^)]+)\)>', blob):
         jp = str(m.group(1) or '').strip()
         if jp == 'ブレード':
             b += 1
@@ -5666,21 +6012,7 @@ def _grant_temp_icons_to_slot(slot: StageSlot, icon_blob: str, mult: int = 1) ->
     return int(b * mult_i), applied_hearts
 
 def _card_has_blade_heart(ci: Optional[CardInfo]) -> bool:
-    if not ci:
-        return False
-    try:
-        for _k, v in ((getattr(ci, 'blade_hearts', None) or {}) or {}).items():
-            if int(v or 0) > 0:
-                return True
-    except Exception:
-        pass
-    try:
-        txt = str(getattr(ci, 'blade_heart_tags_json', '') or '')
-    except Exception:
-        txt = ''
-    if '(ALL)' in txt or '(DRAW)' in txt or 'スコア' in txt:
-        return True
-    return False
+    return _ci_has_blade_heart_payload(ci)
 
 def _count_yell_revealed_no_bladeheart_cards(gs: GameState, cards_db: Dict[str, CardInfo], member_only: bool = False) -> int:
     n = 0
@@ -5690,29 +6022,25 @@ def _count_yell_revealed_no_bladeheart_cards(gs: GameState, cards_db: Dict[str, 
             continue
         if member_only and not _is_member_ci(ci):
             continue
-        if not _card_has_blade_heart(ci):
+        if not _ci_has_blade_heart_payload(ci):
             n += 1
     return int(n)
 
 def _yell_revealed_bladeheart_kind_count(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
-    kinds = set()
+    colors = set()
     for cn in list(getattr(gs, '_yell_revealed_this_live', []) or []):
         ci = _get_card(cards_db, cn)
         if not ci:
             continue
-        try:
-            for k, v in ((getattr(ci, 'blade_hearts', None) or {}) or {}).items():
-                if int(v or 0) > 0 and str(k or '').lower() in ('pink', 'red', 'yellow', 'green', 'blue', 'purple'):
-                    kinds.add(str(k or '').lower())
-        except Exception:
-            pass
-        try:
-            txt = str(getattr(ci, 'blade_heart_tags_json', '') or '')
-        except Exception:
-            txt = ''
-        if '(ALL)' in txt:
-            kinds.add('all')
-    return int(len(kinds))
+        txt = _ci_blade_heart_raw_text(ci)
+        for inner in re.findall(r'<\(([^)]+)\)>', txt):
+            key = str(inner or '').strip()
+            col = _HEART_ICON_COLOR_MAP.get(key)
+            if col:
+                colors.add(col)
+            elif key == 'ALL':
+                colors.update(['pink', 'red', 'yellow', 'green', 'blue', 'purple'])
+    return int(len(colors))
 
 def _collect_yell_revealed_body_auto_triggers(gs: GameState, cards_db: Dict[str, CardInfo], revealed: Optional[List[str]] = None) -> List[Dict[str, Any]]:
     """Collect generic BODY <自動><ターン1回> triggers that look at this yell's revealed cards.
@@ -5801,6 +6129,28 @@ def _collect_yell_revealed_body_auto_triggers(gs: GameState, cards_db: Dict[str,
                             f"ブレードハートなしメンバー{no_bh_members}/{need}枚 → {m_icons.group('icons')}を得る",
                             'gain_icons', icons=m_icons.group('icons'), mult=1,
                             detail=f"no-blade-heart revealed members={no_bh_members}; icons={m_icons.group('icons')}",
+                        )
+                    continue
+
+                # revealed <スコア+1> group live cards -> icons
+                if ('スコア+1' in ec) and ('ライブカードが1枚以上' in ec) and ('ライブ終了時まで' in ec) and m_icons:
+                    m_group = re.search(r'を持つ『(?P<group>[^』]+)』のライブカードが1枚以上', ec)
+                    group = str(m_group.group('group') or '').strip() if m_group else ''
+                    got = 0
+                    for cn2 in list(getattr(gs, '_yell_revealed_this_live', []) or []):
+                        ci2 = _get_card(cards_db, cn2)
+                        if not ci2 or not _is_live_ci(ci2):
+                            continue
+                        if group and group not in str(getattr(ci2, 'group', '') or ''):
+                            continue
+                        if _ci_blade_heart_has_tag(ci2, '<スコア+1>'):
+                            got += 1
+                    if got >= 1:
+                        _append_trigger(
+                            pos, canon, key, once_per_turn,
+                            f"エール公開に<スコア+1>を持つ『{group}』ライブ{got}枚 → {m_icons.group('icons')}を得る",
+                            'gain_icons', icons=m_icons.group('icons'), mult=1,
+                            detail=f"revealed {group} live with score+1={got}; icons={m_icons.group('icons')}",
                         )
                     continue
 
@@ -7210,7 +7560,13 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         min_picks = int(p.get('min_picks', 0) or 0)
         options = list(p.get('options', []) or [])
         raw_picks = [s.strip() for s in choice_str.split(',') if s.strip() and s.strip().lower() not in ('__done__', 'done', 'skip')]
-        if len(raw_picks) < min_picks or len(raw_picks) > max_picks:
+        exact_or_zero = bool(p.get('exact_or_zero', False))
+        if exact_or_zero:
+            if not (len(raw_picks) == 0 or len(raw_picks) == max_picks):
+                gs.log.append(f"[ERR] choose_member_from_green_multi_up_to: invalid pick count {len(raw_picks)} (need 0 or {max_picks})")
+                gs.pending.insert(0, p)
+                return
+        elif len(raw_picks) < min_picks or len(raw_picks) > max_picks:
             gs.log.append(f"[ERR] choose_member_from_green_multi_up_to: invalid pick count {len(raw_picks)} (min={min_picks}, max={max_picks})")
             gs.pending.insert(0, p)
             return
@@ -7244,6 +7600,11 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             after_eff = str(p.get('after_effect_template', '') or '').strip()
             after_ctx = dict(p.get('after_ctx', {}) or {})
             after_src = str(p.get('after_source_cn', '') or '')
+            try:
+                after_ctx['discarded_cns'] = [str(x or '') for x in list(picked or [])]
+                after_ctx['discarded_count'] = int(len(picked or []))
+            except Exception:
+                pass
             if picked:
                 try:
                     after_ctx['discarded_cn'] = str(picked[-1] or '')
@@ -8068,6 +8429,38 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                     'after_source_cn': src_cn,
                 })
                 return
+            # 手札の指定名カードを捨てるコスト → ユーザーにカードを選ばせる
+            if cost_kind == 'discard_named_from_hand':
+                names = [str(x or '').strip() for x in list(p.get('cost_names', []) or []) if str(x or '').strip()]
+                cands = _hand_named_card_candidates(gs, cards_db, names)
+                exact_or_zero = bool(p.get('exact_or_zero', False))
+                min_picks = int(p.get('min_picks', 0) or 0)
+                max_raw = p.get('max_picks', None)
+                if max_raw is None:
+                    max_picks = len(cands)
+                else:
+                    max_picks = int(max_raw or 0)
+                if max_picks < 0:
+                    max_picks = 0
+                if exact_or_zero and len(cands) < max_picks:
+                    gs.log.append(f"[ERR] live_start_pay_effect: not enough named cards in hand for {names} (need {max_picks}, have {len(cands)})")
+                    return
+                if (not exact_or_zero) and max_picks > len(cands):
+                    max_picks = len(cands)
+                gs.pending.append({
+                    'kind': 'choose_member_from_green_multi_up_to',
+                    'source_zone': 'hand',
+                    'action': 'discard_from_hand',
+                    'min_picks': int(min_picks),
+                    'max_picks': int(max_picks),
+                    'exact_or_zero': bool(exact_or_zero),
+                    'text': f"手札から {', '.join(names)} を{('0枚または' + str(max_picks) + '枚') if exact_or_zero else ('0〜' + str(max_picks) + '枚')}選び、控え室に置く",
+                    'options': list(cands),
+                    'after_effect_template': eff,
+                    'after_ctx': after_ctx,
+                    'after_source_cn': src_cn,
+                })
+                return
             # 手札を捨てるコスト（汎用）→ ユーザーに選ばせる
             if cost_kind == 'discard_from_hand' and cost_n > 0:
                 if len(gs.hand) < cost_n:
@@ -8165,7 +8558,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             cost_lim = int(p.get('cost_lim', 99) or 99)
             score_lim = int(p.get('score_lim', 99) or 99)
             up_to = bool(p.get('up_to', False))
-            next_opts = _yell_revealed_candidates(gs, cards_db, card_kind, group, cost_lim, score_lim)
+            next_opts = _yell_revealed_candidates(gs, cards_db, card_kind, group, cost_lim, score_lim, int(pend.get('cost_min', 0) or 0))
             if next_opts:
                 opts2 = list(next_opts)
                 if up_to:
@@ -8183,6 +8576,35 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                     'up_to': up_to,
                 })
         _enqueue_auto_order_from_deferred()
+        return
+    if kind == 'pick_from_yell_to_deck_top':
+        if choice_str == 'skip':
+            gs.log.append('[ACT] pick_from_yell_to_deck_top: skipped')
+            gs.pending.clear()
+            return
+        try:
+            idx = int(choice_str)
+            opts = list(pend.get('options', []) or [])
+            cn = opts[idx] if 0 <= idx < len(opts) else choice_str
+        except Exception:
+            cn = choice_str
+        moved = ''
+        for zone_name in ('resolve_zone', 'green_room'):
+            z = getattr(gs, zone_name, None)
+            if isinstance(z, list):
+                for i, x in enumerate(list(z)):
+                    if _canon_cardno(x) == _canon_cardno(cn):
+                        moved = z.pop(i)
+                        break
+            if moved:
+                break
+        if not moved:
+            gs.log.append(f'[ERR] pick_from_yell_to_deck_top: chosen card not found in zones {cn}')
+            return
+        gs.deck.insert(0, moved)
+        _remove_from_yell_revealed_tracker(gs, moved)
+        gs.log.append(f'[ACT] pick_from_yell_to_deck_top: moved {moved} -> deck top')
+        gs.pending.clear()
         return
     if kind == 'pick_from_yell_to_deck_bottom':
         opts = list(p.get('options', []) or [])

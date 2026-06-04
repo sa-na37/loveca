@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: server_effect_mode_choice_textlist_20260604a
+# BUILD_TAG: server_named_hand_cost_exact_zero_20260604a
 from __future__ import annotations
 
 """llocg_ui.server
@@ -3931,8 +3931,11 @@ inner.appendChild(card);
     if(kind === 'choose_member_from_green_multi_up_to'){
       const maxPicks = (p && p.max_picks != null) ? parseInt(p.max_picks) : ((p && p.maxPicks != null) ? parseInt(p.maxPicks) : 0);
       const minPicks = (p && p.min_picks != null) ? parseInt(p.min_picks) : 0;
+      const exactOrZero = !!(p && p.exact_or_zero);
+      const sourceZone = String((p && p.source_zone) ? p.source_zone : 'green').toLowerCase();
       const opts = (p && Array.isArray(p.options)) ? p.options : [];
-      const title = String((p && (p.text || p.prompt || p.message)) ? (p.text || p.prompt || p.message) : `控え室から0〜${maxPicks}枚選択`);
+      const defaultTitle = sourceZone === 'hand' ? `手札から${exactOrZero ? '0枚または' + maxPicks + '枚' : '0〜' + maxPicks + '枚'}選択` : `控え室から0〜${maxPicks}枚選択`;
+      const title = String((p && (p.text || p.prompt || p.message)) ? (p.text || p.prompt || p.message) : defaultTitle);
 
       popup = {type:'pending', closable:false};
       elModalTitle.textContent = '選択';
@@ -3958,9 +3961,9 @@ inner.appendChild(card);
 
       function updateCounter(){
         const n = selected.length;
-        counter.textContent = `選択: ${n} / 0〜${maxPicks}`;
+        counter.textContent = exactOrZero ? `選択: ${n} / 0 または ${maxPicks}` : `選択: ${n} / 0〜${maxPicks}`;
         doneBtn.textContent = `確定 (${n}/${maxPicks})`;
-        doneBtn.disabled = (n < minPicks || n > maxPicks);
+        doneBtn.disabled = exactOrZero ? !(n === 0 || n === maxPicks) : (n < minPicks || n > maxPicks);
         doneBtn.style.opacity = doneBtn.disabled ? '0.5' : '1';
 
         opts.forEach((cn, i) => {
