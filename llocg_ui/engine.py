@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: auto_order_effect_visibility_and_deferred_resume_20260513i
+# BUILD_TAG: under_energy_common_bonus_20260604a
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -32,7 +32,7 @@ import re
 # - Matching is strict (regex anchored with ^...$).
 _EFFECT_RULES = [
     {"id": "draw_n", "pattern": r"^カードを(?P<n>\d+)枚引く。$", "op": "draw"},
-    {"id": "draw_n_then_gain_icons_until_end_live", "pattern": r"^カードを(?P<n>\d+)枚引き、ライブ終了時まで、(?P<icons>(?:<\([^)]+\)>)+)を得る。$", "op": "draw_then_gain_icons_until_end_live"},
+    {"id": "draw_n_then_gain_icons_until_end_live", "pattern": r"^カードを(?P<n>\d+)枚引き、ライブ終了時まで、(?P<icons>(?:<(?:\([^)]+\)|[^<>]+)>)+)を得る。$", "op": "draw_then_gain_icons_until_end_live"},
     {"id": "draw_n_discard_m", "pattern": r"^カードを(?P<n>\d+)枚引き、手札を(?P<m>\d+)枚控え室に置く。$", "op": "draw_then_discard"},
     {"id": "discard_hand_n", "pattern": r"^手札を(?P<n>\d+)枚控え室に置く。$", "op": "discard_from_hand"},
     {"id": "retrieve_waiting_live_n", "pattern": r"^自分の控え室からライブカードを(?P<n>\d+)枚手札に加える。$", "op": "retrieve_from_waiting_room", "card_kind": "LIVE"},
@@ -50,7 +50,7 @@ _EFFECT_RULES = [
     {"id": "activate_stage_member_upto1", "pattern": r"^自分のステージにいるメンバーを1人までアクティブにする。$", "op": "activate_stage_member"},
     # Fixed-color hearts (and mixed hearts+blades): e.g. "ライブ終了時まで、<(黄)><(黄)>を得る。"
     # Must come AFTER gain_blade_until_end_live so pure-blade still matches first.
-    {"id": "gain_icons_until_end_live", "pattern": r"^ライブ終了時まで、(?P<icons>(?:<\([^)]+\)>)+)を得る。$", "op": "gain_icons_until_end_live"},
+    {"id": "gain_icons_until_end_live", "pattern": r"^ライブ終了時まで、(?P<icons>(?:<(?:\([^)]+\)|[^<>]+)>)+)を得る。$", "op": "gain_icons_until_end_live"},
     # Free heart choice (self): "好きなハートの色を1つ指定する。ライブ終了時まで、そのハートを1つ得る。"
     {"id": "choose_heart_gain_self", "pattern": r"^好きなハートの色を1つ指定する。ライブ終了時まで、そのハートを1つ得る。$", "op": "choose_heart_gain_self"},
     # Free heart choice (other group member)
@@ -113,10 +113,15 @@ _HEART_JP_MAP = {
     'green': 'green', 'blue': 'blue', 'purple': 'purple',
 }
 def _parse_heart_icons(icon_blob: str) -> Dict[str, int]:
-    """Parse <(色)> icon string into color -> count dict (excluding blades)."""
+    """Parse heart icon strings into color -> count dict.
+
+    The current compiled DB may contain either official-style ``<桃>`` tokens or
+    older normalized ``<(桃)>`` tokens. Treat both as the same icon family, while
+    ignoring non-heart tags such as ブレード / E / ALL.
+    """
     counts: Dict[str, int] = {}
-    for m in re.finditer(r'<\(([^)]+)\)>', str(icon_blob or '')):
-        jp = m.group(1)
+    for m in re.finditer(r'<(?:\(([^)]+)\)|([^<>]+))>', str(icon_blob or '')):
+        jp = str((m.group(1) or m.group(2) or '')).strip()
         col = _HEART_ICON_COLOR_MAP.get(jp)
         if col:
             counts[col] = counts.get(col, 0) + 1
@@ -397,8 +402,9 @@ def can_activate_in_state(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: s
             need_e = _parse_energy_cost(cost)
             if need_e > 0 and int(gs.energy_active or 0) < need_e:
                 continue
-            # special cost: move active energy to under
-            if _cost_move_active_energy_to_under(cost) and int(gs.energy_active or 0) < 1:
+            # special cost: move 1 energy from the energy zone under this member.
+            # This is not an [E] payment, so either ACTIVE or WAIT energy can satisfy it.
+            if _cost_move_active_energy_to_under(cost) and (int(gs.energy_active or 0) + int(gs.energy_wait or 0)) < 1:
                 continue
             # named_cards_to_deck_bottom cost check: need enough matching cards in green room
             named_cost = _cost_named_cards_to_deck_bottom(cost)
@@ -429,7 +435,8 @@ def can_activate_in_state(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: s
             return True
     return False
 def _count_blade_icons_from_tagblob(s: str) -> int:
-    return (s or "").count("<(ブレード)>")
+    t = str(s or "")
+    return len(re.findall(r'<(?:\(ブレード\)|ブレード)>', t))
 def _is_live_ci(ci: Optional[CardInfo]) -> bool:
     if not ci:
         return False
@@ -1803,16 +1810,6 @@ def _return_under_energy_to_deck_from_slot(gs: 'GameState', slot: Optional['Stag
     if n <= 0:
         return 0
     try:
-        if slot is not None and cards_db:
-            try:
-                ci_slot = _get_card(cards_db, str(getattr(slot, 'cardnumber', '') or ''))
-            except Exception:
-                ci_slot = None
-            if _has_under_energy_blade_bonus(ci_slot):
-                try:
-                    slot.temp_blade = max(0, int(getattr(slot, 'temp_blade', 0) or 0) - n)
-                except Exception:
-                    pass
         if slot is not None:
             slot.energy_under = 0
     except Exception:
@@ -2105,7 +2102,7 @@ def _success_zone_live_body_always_blade_bonus_for_slot(gs: GameState, cards_db:
                         continue
                     tag = _quoted_tag(blob)
                     if tag and _slot_matches_group_tag(c_slot, tag):
-                        total += int(blob.count('<(ブレード)>'))
+                        total += int(_count_blade_icons_from_tagblob(blob))
                 except Exception:
                     pass
         return int(total)
@@ -2186,14 +2183,19 @@ def _slot_always_blade_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos: 
             bonus += int(_success_zone_live_body_always_blade_bonus_for_slot(gs, cards_db, pos, slot, c) or 0)
         except Exception:
             pass
+        if _has_under_energy_blade_bonus(c):
+            try:
+                bonus += int(getattr(slot, 'energy_under', 0) or 0)
+            except Exception:
+                pass
         for _eff, blob in _iter_body_always_effects(c):
             try:
                 if '成功ライブカード置き場にあるカード1枚につき' in blob and 'ブレード' in blob:
-                    bonus += int(blob.count('<(ブレード)>')) * len(list(getattr(gs, 'success_zone', []) or []))
+                    bonus += int(_count_blade_icons_from_tagblob(blob)) * len(list(getattr(gs, 'success_zone', []) or []))
                 elif 'このメンバーよりコストの大きいメンバーがいる場合' in blob and 'ブレード' in blob:
                     self_cost = int(getattr(c, 'cost', 0) or 0)
                     if _stage_has_other_higher_cost_member(gs, cards_db, pos, self_cost):
-                        bonus += int(blob.count('<(ブレード)>'))
+                        bonus += int(_count_blade_icons_from_tagblob(blob))
                 elif 'ほかの『' in blob and 'のメンバー1人につき' in blob and 'ブレード' in blob:
                     tag = _quoted_tag(blob)
                     others = 0
@@ -2205,7 +2207,7 @@ def _slot_always_blade_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos: 
                             continue
                         if _slot_matches_group_tag(ci2, tag):
                             others += 1
-                    bonus += int(blob.count('<(ブレード)>')) * int(others)
+                    bonus += int(_count_blade_icons_from_tagblob(blob)) * int(others)
                 elif ('自分のライブ中のカードが' in blob and 'その中に『' in blob and 'のライブカードを1枚以上含む場合' in blob and 'ブレード' in blob):
                     m = re.search(r'自分のライブ中のカードが(\d+)枚以上', blob)
                     need = int(m.group(1)) if m else 0
@@ -2219,7 +2221,7 @@ def _slot_always_blade_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos: 
                                 has_group_live = True
                                 break
                         if has_group_live:
-                            bonus += int(blob.count('<(ブレード)>'))
+                            bonus += int(_count_blade_icons_from_tagblob(blob))
             except Exception:
                 pass
         return int(bonus)
@@ -2621,7 +2623,7 @@ def _solve_multi_live_allocations(lives: List[str], cards_db: Dict[str, CardInfo
     return False, {}
 def _count_blade_icons(text: str) -> int:
     t = text or ""
-    n = t.count("<(ブレード)>")
+    n = len(re.findall(r'<(?:\(ブレード\)|ブレード)>', t))
     if n > 0:
         return n
     if "ブレードを一本" in t or "ブレードを1本" in t:
@@ -3317,16 +3319,6 @@ def _clear_end_of_live_buffs(gs: GameState, cards_db: Optional[Dict[str, CardInf
             slot.heart_replace_color = ""
         except Exception:
             pass
-        if cards_db:
-            try:
-                ci_slot = _get_card(cards_db, str(getattr(slot, 'cardnumber', '') or ''))
-            except Exception:
-                ci_slot = None
-            if _has_under_energy_blade_bonus(ci_slot):
-                try:
-                    slot.temp_blade = int(getattr(slot, 'energy_under', 0) or 0)
-                except Exception:
-                    pass
     # clear global end-of-live buffs
     try:
         gs.success_zone_heart_color = ""
@@ -6435,11 +6427,6 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                     pass
                 try:
                     slot.energy_under = int(getattr(slot, 'energy_under', 0) or 0) + 1
-                except Exception:
-                    pass
-                try:
-                    if _has_under_energy_blade_bonus(ci):
-                        slot.temp_blade = int(getattr(slot, 'temp_blade', 0) or 0) + 1
                 except Exception:
                     pass
                 gs.log.append(f"[COST] moved 1 energy under {pos} from {src} (under={int(getattr(slot,'energy_under',0) or 0)}; E active={gs.energy_active} wait={gs.energy_wait})")

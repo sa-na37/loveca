@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: yell_retrieve_heart_replace_20260325
+# BUILD_TAG: engine_base_under_energy_cost_check_20260604a
 from __future__ import annotations
 
 """llocg_ui.engine_base
@@ -197,8 +197,9 @@ def can_activate_in_state(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: s
             need_e = _parse_energy_cost(cost)
             if need_e > 0 and int(gs.energy_active or 0) < need_e:
                 continue
-            # special cost: move active energy to under
-            if _cost_move_active_energy_to_under(cost) and int(gs.energy_active or 0) < 1:
+            # special cost: move 1 energy from the energy zone under this member.
+            # This is not an [E] payment, so either ACTIVE or WAIT energy can satisfy it.
+            if _cost_move_active_energy_to_under(cost) and (int(gs.energy_active or 0) + int(gs.energy_wait or 0)) < 1:
                 continue
             # named_cards_to_deck_bottom cost check: need enough matching cards in green room
             named_cost = _cost_named_cards_to_deck_bottom(cost)
@@ -226,7 +227,8 @@ def can_activate_in_state(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: s
     return False
 
 def _count_blade_icons_from_tagblob(s: str) -> int:
-    return (s or "").count("<(ブレード)>")
+    t = str(s or "")
+    return len(re.findall(r'<(?:\(ブレード\)|ブレード)>', t))
 
 
 def _is_live_ci(ci: Optional[CardInfo]) -> bool:
@@ -1655,7 +1657,7 @@ def _solve_multi_live_allocations(lives: List[str], cards_db: Dict[str, CardInfo
 
 def _count_blade_icons(text: str) -> int:
     t = text or ""
-    n = t.count("<(ブレード)>")
+    n = len(re.findall(r'<(?:\(ブレード\)|ブレード)>', t))
     if n > 0:
         return n
     if "ブレードを一本" in t or "ブレードを1本" in t:
