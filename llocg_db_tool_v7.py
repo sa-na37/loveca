@@ -17,7 +17,7 @@ Deps:
 
 from __future__ import annotations
 
-BUILD_TAG = "db_tool_cardtype_infer_20260410a"
+BUILD_TAG = "db_tool_parse_official_icon_counts_20260604a"
 
 import argparse
 import hashlib
@@ -95,18 +95,20 @@ KEY_MAP_CONTAINS = [
 ]
 
 COLOR_MAP = {
-    "(桃)": "pink",
-    "(黄)": "yellow",
-    "(紫)": "purple",
-    "(青)": "blue",
-    "(緑)": "green",
-    "(赤)": "red",
-    "(白)": "white",
-    "(黒)": "black",
-    "(任意)": "any",
+    "桃": "pink", "(桃)": "pink",
+    "黄": "yellow", "(黄)": "yellow",
+    "紫": "purple", "(紫)": "purple",
+    "青": "blue", "(青)": "blue",
+    "緑": "green", "(緑)": "green",
+    "赤": "red", "(赤)": "red",
+    "白": "white", "(白)": "white",
+    "黒": "black", "(黒)": "black",
+    "任意": "any", "(任意)": "any",
+    "ALL": "all", "(ALL)": "all",
 }
 
-ICON_COUNT_RE = re.compile(r"<\(([^)]+)\)>\s*(?:×|x|X)?\s*(\d+)?")
+# Accept both old normalized icons '<(桃)>×2' and new official-like icons '<桃> 2'.
+ICON_COUNT_RE = re.compile(r"<\s*\(?\s*([^<>（）()]+?)\s*\)?\s*>\s*(?:(?:×|x|X)\s*)?([0-9０-９]+)?")
 TOTAL_RE = re.compile(r"\(合計\s*(\d+)\)")
 FW_DIGITS = str.maketrans("０１２３４５６７８９", "0123456789")
 
@@ -549,13 +551,14 @@ def parse_heart_expr(raw: str) -> Tuple[Dict[str, int], Optional[int], List[str]
     total = int(m_total.group(1)) if m_total else None
 
     for m in ICON_COUNT_RE.finditer(s):
-        token = f"({m.group(1)})"
-        n = int(m.group(2)) if m.group(2) else 1
+        raw_token = str(m.group(1) or "").strip().replace(" ", "")
+        token = raw_token if raw_token in COLOR_MAP else f"({raw_token})"
+        n = int(str(m.group(2)).translate(FW_DIGITS)) if m.group(2) else 1
         if token in COLOR_MAP:
             key = COLOR_MAP[token]
             counts[key] = counts.get(key, 0) + n
         else:
-            tags.append(token)
+            tags.append(f"({raw_token})")
     return counts, total, tags
 
 
@@ -645,13 +648,14 @@ def extract_effect_tokens(effect_text_norm: str) -> Dict[str, Any]:
     s = effect_text_norm
 
     for m in ICON_COUNT_RE.finditer(s):
-        token = f"({m.group(1)})"
-        n = int(m.group(2)) if m.group(2) else 1
+        raw_token = str(m.group(1) or "").strip().replace(" ", "")
+        token = raw_token if raw_token in COLOR_MAP else f"({raw_token})"
+        n = int(str(m.group(2)).translate(FW_DIGITS)) if m.group(2) else 1
         if token in COLOR_MAP:
             key = COLOR_MAP[token]
             tokens["hearts"][key] = tokens["hearts"].get(key, 0) + n
         else:
-            tokens.setdefault("tags", []).append(token)
+            tokens.setdefault("tags", []).append(f"({raw_token})")
     return tokens
 
 

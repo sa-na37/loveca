@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-# BUILD_TAG: db_out_full_prefer_cardtype_repair_20260410b
+# BUILD_TAG: db_parse_raw_heart_icons_20260604a
 
 """llocg_ui.db
 
@@ -64,6 +64,85 @@ def _hearts_from_counts_json(counts_json: str) -> Dict[str, int]:
     except Exception:
         return {}
     return {}
+
+
+_COLOR_TOKEN_TO_KEY = {
+    "桃": "pink", "赤": "red", "黄": "yellow",
+    "緑": "green", "青": "blue", "紫": "purple",
+    "任意": "any", "ALL": "all",
+    "pink": "pink", "red": "red", "yellow": "yellow",
+    "green": "green", "blue": "blue", "purple": "purple",
+    "any": "any", "all": "all",
+}
+_ICON_TOKEN_RE = re.compile(r"<\s*\(?\s*([^<>（）()]+?)\s*\)?\s*>\s*(?:(?:×|x|X)\s*)?([0-9０-９]+)?")
+_FW_DIGITS = str.maketrans("０１２３４５６７８９", "0123456789")
+
+
+def _parse_raw_icon_counts(raw: str, *, include_any: bool = True, include_all: bool = True) -> Dict[str, int]:
+    """Parse official-style icon text such as '<赤> 2 <任意> 7'.
+
+    The 2026 DB update changed many stat fields from legacy '<(赤)>×2'
+    normalized counts to raw official-like '<赤> 2' strings.  Older runtime code
+    only trusted *_counts_json, so LIVE required hearts could become req={}.  This
+    parser is intentionally local to runtime DB loading so the simulator remains
+    usable even before DB regeneration.
+    """
+    txt = str(raw or "").strip().replace("＋", "+")
+    if not txt or txt in {"なし", "-", "nan", "None", "null"}:
+        return {}
+    out: Dict[str, int] = {}
+    for m in _ICON_TOKEN_RE.finditer(txt):
+        token = str(m.group(1) or "").strip().replace(" ", "")
+        key = _COLOR_TOKEN_TO_KEY.get(token)
+        if not key:
+            continue
+        if key == "any" and not include_any:
+            continue
+        if key == "all" and not include_all:
+            continue
+        n_raw = str(m.group(2) or "").strip().translate(_FW_DIGITS)
+        n = int(n_raw) if n_raw else 1
+        if n > 0:
+            out[key] = int(out.get(key, 0) or 0) + n
+    return out
+
+
+def _merge_counts_with_raw(counts: Dict[str, int], raw: str, *, include_any: bool = True, include_all: bool = True) -> Dict[str, int]:
+    base = dict(counts or {})
+    # Existing normalized columns are authoritative when populated.  Fall back to
+    # raw only when the normalized column is blank/broken.
+    if any(int(v or 0) > 0 for v in base.values()):
+        return {str(k): int(v) for k, v in base.items() if int(v or 0) != 0}
+    return _parse_raw_icon_counts(raw, include_any=include_any, include_all=include_all)
+
+
+def _parse_raw_icon_tags(raw: str) -> List[str]:
+    """Return non-count icon tags from raw blade-heart text.
+
+    Examples: '<ALL>' -> '(ALL)', '<ドロー+1>' -> '(ドロー+1)', '<スコア+1>' -> '(スコア+1)'.
+    Color icons are not returned here because they are represented in *_hearts.
+    """
+    txt = str(raw or "").strip().replace("＋", "+")
+    if not txt or txt in {"なし", "-", "nan", "None", "null"}:
+        return []
+    tags: List[str] = []
+    for m in _ICON_TOKEN_RE.finditer(txt):
+        token = str(m.group(1) or "").strip().replace(" ", "")
+        if token in _COLOR_TOKEN_TO_KEY:
+            # Keep ALL both as a wildcard heart and as a tag, because some effect
+            # filters check for blade-heart payload tags explicitly.
+            if token == "ALL":
+                tags.append("(ALL)")
+            continue
+        if token:
+            tags.append(f"({token})")
+    return list(dict.fromkeys(tags))
+
+
+def _merge_tags_with_raw(tags_json: str, raw: str) -> str:
+    tags = _parse_tags_json(tags_json)
+    tags.extend(_parse_raw_icon_tags(raw))
+    return json.dumps(list(dict.fromkeys([str(t) for t in tags if str(t).strip()])), ensure_ascii=False)
 
 
 def _parse_tags_json(tags_json: str) -> List[str]:
@@ -178,6 +257,11 @@ class CardInfo:
     required_hearts: Dict[str, int] = field(default_factory=dict)
     blade_hearts: Dict[str, int] = field(default_factory=dict)
     blade_heart_tags_json: str = "[]"
+    # Preserve original DB text as a fallback for newly scraped official-style icons
+    # such as <ALL>, <スコア+1>, <桃>, when normalized count/tag columns are empty.
+    base_hearts_raw: str = ""
+    required_hearts_raw: str = ""
+    blade_heart_raw: str = ""
     group: str = ""
     unit: str = ""
     abilities: List[Dict[str, Any]] = field(default_factory=list)
@@ -251,10 +335,31 @@ def load_tokv1_json(path: Path) -> Dict[str, CardInfo]:
             cost=_safe_int(r.get("cost", 0), 0),
             blade=_safe_int(r.get("blade", 0), 0),
             score=_safe_int(r.get("score", 0), 0),
-            base_hearts=_hearts_from_counts_json(str(r.get("base_hearts_counts_json", ""))),
-            required_hearts=_hearts_from_counts_json(str(r.get("required_hearts_counts_json", ""))),
-            blade_hearts=_hearts_from_counts_json(str(r.get("blade_heart_counts_json", ""))),
-            blade_heart_tags_json=str(r.get("blade_heart_tags_json", "[]")) or "[]",
+            base_hearts=_merge_counts_with_raw(
+                _hearts_from_counts_json(str(r.get("base_hearts_counts_json", ""))),
+                str(r.get("base_hearts_raw", "") or ""),
+                include_any=False,
+                include_all=True,
+            ),
+            required_hearts=_merge_counts_with_raw(
+                _hearts_from_counts_json(str(r.get("required_hearts_counts_json", ""))),
+                str(r.get("required_hearts_raw", "") or ""),
+                include_any=True,
+                include_all=True,
+            ),
+            blade_hearts=_merge_counts_with_raw(
+                _hearts_from_counts_json(str(r.get("blade_heart_counts_json", ""))),
+                str(r.get("blade_heart_raw", "") or ""),
+                include_any=False,
+                include_all=True,
+            ),
+            blade_heart_tags_json=_merge_tags_with_raw(
+                str(r.get("blade_heart_tags_json", "[]")) or "[]",
+                str(r.get("blade_heart_raw", "") or ""),
+            ),
+            base_hearts_raw=str(r.get("base_hearts_raw", "") or "").strip(),
+            required_hearts_raw=str(r.get("required_hearts_raw", "") or "").strip(),
+            blade_heart_raw=str(r.get("blade_heart_raw", "") or "").strip(),
             # NOTE: some tokv1.json exports include these columns; keep if present.
             group=str(r.get("group", "") or "").strip(),
             unit=str(r.get("unit", "") or "").strip(),
@@ -381,10 +486,31 @@ def load_cards_min(root: Path) -> Dict[str, CardInfo]:
                 cost=_safe_int(r.get("cost", 0), 0),
                 blade=_safe_int(r.get("blade", 0), 0),
                 score=_safe_int(r.get("score", 0), 0),
-                base_hearts=_hearts_from_counts_json(str(r.get("base_hearts_counts_json", ""))),
-                required_hearts=_hearts_from_counts_json(str(r.get("required_hearts_counts_json", ""))),
-                blade_hearts=_hearts_from_counts_json(str(r.get("blade_heart_counts_json", ""))),
-                blade_heart_tags_json=str(r.get("blade_heart_tags_json", "[]")) or "[]",
+                base_hearts=_merge_counts_with_raw(
+                    _hearts_from_counts_json(str(r.get("base_hearts_counts_json", ""))),
+                    str(r.get("base_hearts_raw", "") or ""),
+                    include_any=False,
+                    include_all=True,
+                ),
+                required_hearts=_merge_counts_with_raw(
+                    _hearts_from_counts_json(str(r.get("required_hearts_counts_json", ""))),
+                    str(r.get("required_hearts_raw", "") or ""),
+                    include_any=True,
+                    include_all=True,
+                ),
+                blade_hearts=_merge_counts_with_raw(
+                    _hearts_from_counts_json(str(r.get("blade_heart_counts_json", ""))),
+                    str(r.get("blade_heart_raw", "") or ""),
+                    include_any=False,
+                    include_all=True,
+                ),
+                blade_heart_tags_json=_merge_tags_with_raw(
+                    str(r.get("blade_heart_tags_json", "[]")) or "[]",
+                    str(r.get("blade_heart_raw", "") or ""),
+                ),
+                base_hearts_raw=str(r.get("base_hearts_raw", "") or "").strip(),
+                required_hearts_raw=str(r.get("required_hearts_raw", "") or "").strip(),
+                blade_heart_raw=str(r.get("blade_heart_raw", "") or "").strip(),
                 group=str(r.get("group", "") or "").strip(),
                 unit=str(r.get("unit", "") or "").strip(),
             ))

@@ -1,0 +1,1780 @@
+cardnumber,cardname,card_type,field,raw,raw_parsed,stored_counts,runtime_counts,stored_blank,runtime_blank_after_patch
+LL-PR-004,愛♡スクリ～ム！,LIVE,required,<桃> 3 <赤> 3 <緑> 3 (合計9),"{""green"": 3, ""pink"": 3, ""red"": 3}",{},"{""green"": 3, ""pink"": 3, ""red"": 3}",1,0
+LL-PR-004,愛♡スクリ～ム！,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+LL-PR-004,愛♡スクリ～ム！,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+LL-bp1-001,上原歩夢＆澁谷かのん＆日野下花帆,MEMBER,base,<桃> 3 <緑> 3 <紫> 3,"{""green"": 3, ""pink"": 3, ""purple"": 3}",{},"{""green"": 3, ""pink"": 3, ""purple"": 3}",1,0
+LL-bp2-001,渡辺曜＆鬼塚夏美＆大沢瑠璃乃,MEMBER,base,<桃> 2 <黄> 2 <緑> 2,"{""green"": 2, ""pink"": 2, ""yellow"": 2}",{},"{""green"": 2, ""pink"": 2, ""yellow"": 2}",1,0
+LL-bp3-001,園田海未＆津島善子＆天王寺璃奈,MEMBER,base,<桃> 2 <青> 2 <紫> 2,"{""blue"": 2, ""pink"": 2, ""purple"": 2}",{},"{""blue"": 2, ""pink"": 2, ""purple"": 2}",1,0
+LL-bp4-001,絢瀬絵里＆朝香果林＆葉月恋,MEMBER,base,<赤> 2 <青> 2 <紫> 2,"{""blue"": 2, ""purple"": 2, ""red"": 2}",{},"{""blue"": 2, ""purple"": 2, ""red"": 2}",1,0
+LL-bp5-001,Live with a smile!,LIVE,required,<赤> 1 <任意> 3 (合計4),"{""any"": 3, ""red"": 1}",{},"{""any"": 3, ""red"": 1}",1,0
+LL-bp5-001,Live with a smile!,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+LL-bp5-002,Bring the LOVE！,LIVE,required,<桃> 2 <赤> 2 <黄> 1 <任意> 5 (合計10),"{""any"": 5, ""pink"": 2, ""red"": 2, ""yellow"": 1}",{},"{""any"": 5, ""pink"": 2, ""red"": 2, ""yellow"": 1}",1,0
+LL-bp5-002,Bring the LOVE！,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+LL-bp5-002,Bring the LOVE！,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+LL-bp6-001,南ことり＆黒澤ダイヤ＆徒町小鈴,MEMBER,base,<赤> 2 <黄> 2 <青> 2,"{""blue"": 2, ""red"": 2, ""yellow"": 2}",{},"{""blue"": 2, ""red"": 2, ""yellow"": 2}",1,0
+PL!-PR-001,高坂穂乃果,MEMBER,base,<黄> 2,"{""yellow"": 2}",{},"{""yellow"": 2}",1,0
+PL!-PR-002,絢瀬絵里,MEMBER,base,<紫> 2,"{""purple"": 2}",{},"{""purple"": 2}",1,0
+PL!-PR-003,南ことり,MEMBER,base,<桃> 2 <黄> 3 <紫> 1,"{""pink"": 2, ""purple"": 1, ""yellow"": 3}",{},"{""pink"": 2, ""purple"": 1, ""yellow"": 3}",1,0
+PL!-PR-003,南ことり,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-PR-004,園田海未,MEMBER,base,<桃> 3 <黄> 1 <紫> 2,"{""pink"": 3, ""purple"": 2, ""yellow"": 1}",{},"{""pink"": 3, ""purple"": 2, ""yellow"": 1}",1,0
+PL!-PR-004,園田海未,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-PR-005,星空凛,MEMBER,base,<桃> 1 <黄> 1 <紫> 1,"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",1,0
+PL!-PR-006,西木野真姫,MEMBER,base,<桃> 1 <黄> 1 <紫> 1,"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",1,0
+PL!-PR-007,東條希,MEMBER,base,<桃> 1,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-PR-008,小泉花陽,MEMBER,base,<桃> 1 <黄> 1 <紫> 1,"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",1,0
+PL!-PR-009,矢澤にこ,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-PR-012,小泉花陽,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-PR-012,小泉花陽,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-PR-014,園田海未,MEMBER,base,<桃> 1,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-PR-014,園田海未,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-PR-015,西木野真姫,MEMBER,base,<黄> 3 <紫> 3,"{""purple"": 3, ""yellow"": 3}",{},"{""purple"": 3, ""yellow"": 3}",1,0
+PL!-PR-015,西木野真姫,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-PR-017,矢澤にこ,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-PR-017,矢澤にこ,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-PR-018,東條希,MEMBER,base,<桃> 3 <紫> 3,"{""pink"": 3, ""purple"": 3}",{},"{""pink"": 3, ""purple"": 3}",1,0
+PL!-PR-018,東條希,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-bp3-001,高坂穂乃果,MEMBER,base,<桃> 2 <黄> 2 <紫> 2,"{""pink"": 2, ""purple"": 2, ""yellow"": 2}",{},"{""pink"": 2, ""purple"": 2, ""yellow"": 2}",1,0
+PL!-bp3-001,高坂穂乃果,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-bp3-002,絢瀬絵里,MEMBER,base,<桃> 1 <黄> 1 <紫> 2,"{""pink"": 1, ""purple"": 2, ""yellow"": 1}",{},"{""pink"": 1, ""purple"": 2, ""yellow"": 1}",1,0
+PL!-bp3-003,南ことり,MEMBER,base,<桃> 1 <黄> 1 <紫> 1,"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",1,0
+PL!-bp3-003,南ことり,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-bp3-004,園田海未,MEMBER,base,<桃> 2 <黄> 1 <紫> 1,"{""pink"": 2, ""purple"": 1, ""yellow"": 1}",{},"{""pink"": 2, ""purple"": 1, ""yellow"": 1}",1,0
+PL!-bp3-005,星空凛,MEMBER,base,<桃> 1,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-bp3-005,星空凛,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-bp3-006,西木野真姫,MEMBER,base,<桃> 2 <黄> 1 <紫> 2,"{""pink"": 2, ""purple"": 2, ""yellow"": 1}",{},"{""pink"": 2, ""purple"": 2, ""yellow"": 1}",1,0
+PL!-bp3-007,東條希,MEMBER,base,<桃> 1 <黄> 1 <紫> 1,"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",1,0
+PL!-bp3-008,小泉花陽,MEMBER,base,<桃> 2 <黄> 2 <紫> 2,"{""pink"": 2, ""purple"": 2, ""yellow"": 2}",{},"{""pink"": 2, ""purple"": 2, ""yellow"": 2}",1,0
+PL!-bp3-008,小泉花陽,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-bp3-009,矢澤にこ,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-bp3-010,高坂穂乃果,MEMBER,base,<桃> 1 <黄> 2,"{""pink"": 1, ""yellow"": 2}",{},"{""pink"": 1, ""yellow"": 2}",1,0
+PL!-bp3-011,絢瀬絵里,MEMBER,base,<桃> 1 <紫> 1,"{""pink"": 1, ""purple"": 1}",{},"{""pink"": 1, ""purple"": 1}",1,0
+PL!-bp3-012,南ことり,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-bp3-013,園田海未,MEMBER,base,<桃> 3 <黄> 1 <紫> 1,"{""pink"": 3, ""purple"": 1, ""yellow"": 1}",{},"{""pink"": 3, ""purple"": 1, ""yellow"": 1}",1,0
+PL!-bp3-013,園田海未,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-bp3-014,星空凛,MEMBER,base,<桃> 1,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-bp3-014,星空凛,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-bp3-015,西木野真姫,MEMBER,base,<黄> 1 <紫> 1,"{""purple"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""yellow"": 1}",1,0
+PL!-bp3-015,西木野真姫,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-bp3-016,東條希,MEMBER,base,<桃> 2 <紫> 1,"{""pink"": 2, ""purple"": 1}",{},"{""pink"": 2, ""purple"": 1}",1,0
+PL!-bp3-017,小泉花陽,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-bp3-017,小泉花陽,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-bp3-018,矢澤にこ,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-bp3-018,矢澤にこ,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-bp3-019,僕らのLIVE 君とのLIFE,LIVE,required,<桃> 1 <紫> 1 (合計2),"{""pink"": 1, ""purple"": 1}",{},"{""pink"": 1, ""purple"": 1}",1,0
+PL!-bp3-019,僕らのLIVE 君とのLIFE,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!-bp3-020,Snow halation,LIVE,required,<桃> 1 <紫> 1 <任意> 3 (合計5),"{""any"": 3, ""pink"": 1, ""purple"": 1}",{},"{""any"": 3, ""pink"": 1, ""purple"": 1}",1,0
+PL!-bp3-020,Snow halation,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!-bp3-020,Snow halation,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!-bp3-021,愛してるばんざーい!,LIVE,required,<桃> 3 <紫> 4 <任意> 7 (合計14),"{""any"": 7, ""pink"": 3, ""purple"": 4}",{},"{""any"": 7, ""pink"": 3, ""purple"": 4}",1,0
+PL!-bp3-021,愛してるばんざーい!,LIVE,blade_heart,<紫> <ドロー+1>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-bp3-021,愛してるばんざーい!,LIVE,blade_heart_tags,<紫> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!-bp3-022,ユメノトビラ,LIVE,required,<桃> 3 <黄> 3 <紫> 3 <任意> 4 (合計13),"{""any"": 4, ""pink"": 3, ""purple"": 3, ""yellow"": 3}",{},"{""any"": 4, ""pink"": 3, ""purple"": 3, ""yellow"": 3}",1,0
+PL!-bp3-022,ユメノトビラ,LIVE,blade_heart,<桃> <ドロー+1>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-bp3-022,ユメノトビラ,LIVE,blade_heart_tags,<桃> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!-bp3-023,ミはμ'sicのミ,LIVE,required,<桃> 2 <紫> 2 <任意> 4 (合計8),"{""any"": 4, ""pink"": 2, ""purple"": 2}",{},"{""any"": 4, ""pink"": 2, ""purple"": 2}",1,0
+PL!-bp3-023,ミはμ'sicのミ,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!-bp3-023,ミはμ'sicのミ,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!-bp3-024,"夏色えがおで1,2,Jump!",LIVE,required,<桃> 2 <黄> 2 <紫> 2 (合計6),"{""pink"": 2, ""purple"": 2, ""yellow"": 2}",{},"{""pink"": 2, ""purple"": 2, ""yellow"": 2}",1,0
+PL!-bp3-024,"夏色えがおで1,2,Jump!",LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!-bp3-024,"夏色えがおで1,2,Jump!",LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!-bp3-025,タカラモノズ,LIVE,required,<桃> 2 <黄> 2 <紫> 2 <任意> 4 (合計10),"{""any"": 4, ""pink"": 2, ""purple"": 2, ""yellow"": 2}",{},"{""any"": 4, ""pink"": 2, ""purple"": 2, ""yellow"": 2}",1,0
+PL!-bp3-025,タカラモノズ,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!-bp3-025,タカラモノズ,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!-bp3-026,"Oh,Love＆Peace!",LIVE,required,<桃> 2 <黄> 5 <紫> 2 <任意> 6 (合計15),"{""any"": 6, ""pink"": 2, ""purple"": 2, ""yellow"": 5}",{},"{""any"": 6, ""pink"": 2, ""purple"": 2, ""yellow"": 5}",1,0
+PL!-bp3-026,"Oh,Love＆Peace!",LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!-bp3-026,"Oh,Love＆Peace!",LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!-bp4-001,高坂穂乃果,MEMBER,base,<桃> 1 <黄> 1 <紫> 1,"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",1,0
+PL!-bp4-002,絢瀬絵里,MEMBER,base,<桃> 2 <黄> 2 <紫> 2,"{""pink"": 2, ""purple"": 2, ""yellow"": 2}",{},"{""pink"": 2, ""purple"": 2, ""yellow"": 2}",1,0
+PL!-bp4-002,絢瀬絵里,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-bp4-003,南ことり,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-bp4-003,南ことり,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-bp4-004,園田海未,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-bp4-004,園田海未,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-bp4-005,星空凛,MEMBER,base,<桃> 2 <黄> 2 <紫> 1,"{""pink"": 2, ""purple"": 1, ""yellow"": 2}",{},"{""pink"": 2, ""purple"": 1, ""yellow"": 2}",1,0
+PL!-bp4-005,星空凛,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-bp4-006,西木野真姫,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-bp4-006,西木野真姫,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-bp4-007,東條希,MEMBER,base,<桃> 2 <黄> 1 <紫> 1,"{""pink"": 2, ""purple"": 1, ""yellow"": 1}",{},"{""pink"": 2, ""purple"": 1, ""yellow"": 1}",1,0
+PL!-bp4-007,東條希,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-bp4-008,小泉花陽,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-bp4-009,矢澤にこ,MEMBER,base,<桃> 1 <黄> 1 <紫> 1,"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",1,0
+PL!-bp4-010,高坂穂乃果,MEMBER,base,<桃> 2 <黄> 2 <紫> 2,"{""pink"": 2, ""purple"": 2, ""yellow"": 2}",{},"{""pink"": 2, ""purple"": 2, ""yellow"": 2}",1,0
+PL!-bp4-010,高坂穂乃果,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-bp4-011,絢瀬絵里,MEMBER,base,<桃> 1 <紫> 1,"{""pink"": 1, ""purple"": 1}",{},"{""pink"": 1, ""purple"": 1}",1,0
+PL!-bp4-012,南ことり,MEMBER,base,<桃> 1 <黄> 2,"{""pink"": 1, ""yellow"": 2}",{},"{""pink"": 1, ""yellow"": 2}",1,0
+PL!-bp4-013,園田海未,MEMBER,base,<桃> 1 <紫> 1,"{""pink"": 1, ""purple"": 1}",{},"{""pink"": 1, ""purple"": 1}",1,0
+PL!-bp4-014,星空凛,MEMBER,base,<桃> 1 <黄> 1 <紫> 1,"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",1,0
+PL!-bp4-015,西木野真姫,MEMBER,base,<黄> 1 <紫> 2,"{""purple"": 2, ""yellow"": 1}",{},"{""purple"": 2, ""yellow"": 1}",1,0
+PL!-bp4-016,東條希,MEMBER,base,<桃> 1,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-bp4-016,東條希,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-bp4-017,小泉花陽,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-bp4-017,小泉花陽,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-bp4-018,矢澤にこ,MEMBER,base,<桃> 1 <黄> 2 <紫> 2,"{""pink"": 1, ""purple"": 2, ""yellow"": 2}",{},"{""pink"": 1, ""purple"": 2, ""yellow"": 2}",1,0
+PL!-bp4-018,矢澤にこ,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-bp4-019,Angelic Angel,LIVE,required,<桃> 2 <黄> 2 <紫> 2 <任意> 4 (合計10),"{""any"": 4, ""pink"": 2, ""purple"": 2, ""yellow"": 2}",{},"{""any"": 4, ""pink"": 2, ""purple"": 2, ""yellow"": 2}",1,0
+PL!-bp4-019,Angelic Angel,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!-bp4-019,Angelic Angel,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!-bp4-020,Love wing bell,LIVE,required,<桃> 3 <黄> 3 <任意> 2 (合計8),"{""any"": 2, ""pink"": 3, ""yellow"": 3}",{},"{""any"": 2, ""pink"": 3, ""yellow"": 3}",1,0
+PL!-bp4-020,Love wing bell,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!-bp4-020,Love wing bell,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!-bp4-021,？←HEARTBEAT,LIVE,required,<桃> 2 <黄> 2 <紫> 2 <任意> 8 (合計14),"{""any"": 8, ""pink"": 2, ""purple"": 2, ""yellow"": 2}",{},"{""any"": 8, ""pink"": 2, ""purple"": 2, ""yellow"": 2}",1,0
+PL!-bp4-021,？←HEARTBEAT,LIVE,blade_heart,<黄> <ドロー+1>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-bp4-021,？←HEARTBEAT,LIVE,blade_heart_tags,<黄> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!-bp4-022,No brand girls,LIVE,required,<桃> 3 <黄> 3 <紫> 3 <任意> 9 (合計18),"{""any"": 9, ""pink"": 3, ""purple"": 3, ""yellow"": 3}",{},"{""any"": 9, ""pink"": 3, ""purple"": 3, ""yellow"": 3}",1,0
+PL!-bp4-022,No brand girls,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!-bp4-023,もぎゅっと”love”で接近中！,LIVE,required,<桃> 2 <黄> 1 <紫> 1 <任意> 3 (合計7),"{""any"": 3, ""pink"": 2, ""purple"": 1, ""yellow"": 1}",{},"{""any"": 3, ""pink"": 2, ""purple"": 1, ""yellow"": 1}",1,0
+PL!-bp4-023,もぎゅっと”love”で接近中！,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!-bp4-023,もぎゅっと”love”で接近中！,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!-bp4-024,小夜啼鳥恋詩,LIVE,required,<桃> 2 <黄> 2 <任意> 1 (合計5),"{""any"": 1, ""pink"": 2, ""yellow"": 2}",{},"{""any"": 1, ""pink"": 2, ""yellow"": 2}",1,0
+PL!-bp4-024,小夜啼鳥恋詩,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!-bp4-024,小夜啼鳥恋詩,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!-bp4-025,微熱からMystery,LIVE,required,<桃> 3 <紫> 3 <任意> 6 (合計12),"{""any"": 6, ""pink"": 3, ""purple"": 3}",{},"{""any"": 6, ""pink"": 3, ""purple"": 3}",1,0
+PL!-bp4-025,微熱からMystery,LIVE,blade_heart,<桃> <ドロー+1>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-bp4-025,微熱からMystery,LIVE,blade_heart_tags,<桃> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!-bp4-026,ダイヤモンドプリンセスの憂鬱,LIVE,required,<黄> 1 <紫> 1 <任意> 1 (合計3),"{""any"": 1, ""purple"": 1, ""yellow"": 1}",{},"{""any"": 1, ""purple"": 1, ""yellow"": 1}",1,0
+PL!-bp4-026,ダイヤモンドプリンセスの憂鬱,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!-bp5-001,高坂穂乃果,MEMBER,base,<黄> 1 <青> 1,"{""blue"": 1, ""yellow"": 1}",{},"{""blue"": 1, ""yellow"": 1}",1,0
+PL!-bp5-002,絢瀬絵里,MEMBER,base,<桃> 1,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-bp5-002,絢瀬絵里,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-bp5-003,南ことり,MEMBER,base,<黄> 3 <青> 1,"{""blue"": 1, ""yellow"": 3}",{},"{""blue"": 1, ""yellow"": 3}",1,0
+PL!-bp5-003,南ことり,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-bp5-004,園田海未,MEMBER,base,<桃> 2 <黄> 2 <紫> 2,"{""pink"": 2, ""purple"": 2, ""yellow"": 2}",{},"{""pink"": 2, ""purple"": 2, ""yellow"": 2}",1,0
+PL!-bp5-004,園田海未,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-bp5-005,星空凛,MEMBER,base,<桃> 1 <黄> 1 <紫> 2,"{""pink"": 1, ""purple"": 2, ""yellow"": 1}",{},"{""pink"": 1, ""purple"": 2, ""yellow"": 1}",1,0
+PL!-bp5-006,西木野真姫,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-bp5-006,西木野真姫,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-bp5-007,東條希,MEMBER,base,<桃> 2 <黄> 1 <紫> 2,"{""pink"": 2, ""purple"": 2, ""yellow"": 1}",{},"{""pink"": 2, ""purple"": 2, ""yellow"": 1}",1,0
+PL!-bp5-007,東條希,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-bp5-008,小泉花陽,MEMBER,base,<桃> 1 <黄> 3 <紫> 2,"{""pink"": 1, ""purple"": 2, ""yellow"": 3}",{},"{""pink"": 1, ""purple"": 2, ""yellow"": 3}",1,0
+PL!-bp5-008,小泉花陽,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-bp5-009,矢澤にこ,MEMBER,base,<桃> 1 <黄> 2 <紫> 3,"{""pink"": 1, ""purple"": 3, ""yellow"": 2}",{},"{""pink"": 1, ""purple"": 3, ""yellow"": 2}",1,0
+PL!-bp5-009,矢澤にこ,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-bp5-010,高坂穂乃果,MEMBER,base,<桃> 1 <青> 1,"{""blue"": 1, ""pink"": 1}",{},"{""blue"": 1, ""pink"": 1}",1,0
+PL!-bp5-011,絢瀬絵里,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-bp5-012,南ことり,MEMBER,base,<黄> 1 <紫> 1,"{""purple"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""yellow"": 1}",1,0
+PL!-bp5-012,南ことり,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-bp5-013,園田海未,MEMBER,base,<桃> 1 <黄> 1 <紫> 1,"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",1,0
+PL!-bp5-014,星空凛,MEMBER,base,<青> 1 <紫> 1,"{""blue"": 1, ""purple"": 1}",{},"{""blue"": 1, ""purple"": 1}",1,0
+PL!-bp5-015,西木野真姫,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!-bp5-015,西木野真姫,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!-bp5-016,東條希,MEMBER,base,<桃> 1 <黄> 1,"{""pink"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""yellow"": 1}",1,0
+PL!-bp5-016,東條希,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-bp5-017,小泉花陽,MEMBER,base,<桃> 1 <黄> 1 <青> 1 <紫> 1,"{""blue"": 1, ""pink"": 1, ""purple"": 1, ""yellow"": 1}",{},"{""blue"": 1, ""pink"": 1, ""purple"": 1, ""yellow"": 1}",1,0
+PL!-bp5-018,矢澤にこ,MEMBER,base,<桃> 1 <紫> 1,"{""pink"": 1, ""purple"": 1}",{},"{""pink"": 1, ""purple"": 1}",1,0
+PL!-bp5-018,矢澤にこ,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-bp5-019,それは僕たちの奇跡,LIVE,required,<黄> 1 <紫> 1 <任意> 3 (合計5),"{""any"": 3, ""purple"": 1, ""yellow"": 1}",{},"{""any"": 3, ""purple"": 1, ""yellow"": 1}",1,0
+PL!-bp5-019,それは僕たちの奇跡,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!-bp5-019,それは僕たちの奇跡,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!-bp5-020,Wonder zone,LIVE,required,<黄> 3 <青> 2 <任意> 7 (合計12),"{""any"": 7, ""blue"": 2, ""yellow"": 3}",{},"{""any"": 7, ""blue"": 2, ""yellow"": 3}",1,0
+PL!-bp5-020,Wonder zone,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!-bp5-020,Wonder zone,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!-bp5-021,SUNNY DAY SONG,LIVE,required,<桃> 2 <黄> 3 <紫> 2 <任意> 2 (合計9),"{""any"": 2, ""pink"": 2, ""purple"": 2, ""yellow"": 3}",{},"{""any"": 2, ""pink"": 2, ""purple"": 2, ""yellow"": 3}",1,0
+PL!-bp5-021,SUNNY DAY SONG,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!-bp5-021,SUNNY DAY SONG,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!-bp5-022,A song for You! You? You!!,LIVE,required,<桃> 2 <黄> 2 <紫> 2 <任意> 6 (合計12),"{""any"": 6, ""pink"": 2, ""purple"": 2, ""yellow"": 2}",{},"{""any"": 6, ""pink"": 2, ""purple"": 2, ""yellow"": 2}",1,0
+PL!-bp5-022,A song for You! You? You!!,LIVE,blade_heart,<桃> <ドロー+1>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-bp5-022,A song for You! You? You!!,LIVE,blade_heart_tags,<桃> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!-bp5-023,乙姫心で恋宮殿,LIVE,required,<桃> 3 <紫> 2 <任意> 3 (合計8),"{""any"": 3, ""pink"": 3, ""purple"": 2}",{},"{""any"": 3, ""pink"": 3, ""purple"": 2}",1,0
+PL!-bp5-023,乙姫心で恋宮殿,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!-bp5-023,乙姫心で恋宮殿,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!-bp5-024,Private Wars,LIVE,required,<桃> 1 <黄> 1 <青> 7 <紫> 1 (合計10),"{""blue"": 7, ""pink"": 1, ""purple"": 1, ""yellow"": 1}",{},"{""blue"": 7, ""pink"": 1, ""purple"": 1, ""yellow"": 1}",1,0
+PL!-bp5-024,Private Wars,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!-bp5-024,Private Wars,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!-bp5-111,綺羅ツバサ,MEMBER,base,<黄> 1 <青> 3,"{""blue"": 3, ""yellow"": 1}",{},"{""blue"": 3, ""yellow"": 1}",1,0
+PL!-bp5-111,綺羅ツバサ,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!-bp5-222,優木あんじゅ,MEMBER,base,<桃> 1,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-bp5-222,優木あんじゅ,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!-bp5-333,統堂英玲奈,MEMBER,base,<青> 2 <紫> 1,"{""blue"": 2, ""purple"": 1}",{},"{""blue"": 2, ""purple"": 1}",1,0
+PL!-bp6-001,高坂穂乃果,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-bp6-002,絢瀬絵里,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-bp6-002,絢瀬絵里,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-bp6-003,南ことり,MEMBER,base,<桃> 1 <黄> 3 <紫> 1,"{""pink"": 1, ""purple"": 1, ""yellow"": 3}",{},"{""pink"": 1, ""purple"": 1, ""yellow"": 3}",1,0
+PL!-bp6-003,南ことり,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-bp6-004,園田海未,MEMBER,base,<桃> 1 <黄> 1,"{""pink"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""yellow"": 1}",1,0
+PL!-bp6-005,星空凛,MEMBER,base,<桃> 1 <黄> 2 <紫> 1,"{""pink"": 1, ""purple"": 1, ""yellow"": 2}",{},"{""pink"": 1, ""purple"": 1, ""yellow"": 2}",1,0
+PL!-bp6-005,星空凛,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-bp6-006,西木野真姫,MEMBER,base,<桃> 2 <黄> 2 <紫> 3,"{""pink"": 2, ""purple"": 3, ""yellow"": 2}",{},"{""pink"": 2, ""purple"": 3, ""yellow"": 2}",1,0
+PL!-bp6-006,西木野真姫,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-bp6-007,東條希,MEMBER,base,<桃> 2 <黄> 1 <紫> 1,"{""pink"": 2, ""purple"": 1, ""yellow"": 1}",{},"{""pink"": 2, ""purple"": 1, ""yellow"": 1}",1,0
+PL!-bp6-007,東條希,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-bp6-008,小泉花陽,MEMBER,base,<桃> 1 <黄> 1 <紫> 1,"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",1,0
+PL!-bp6-009,矢澤にこ,MEMBER,base,<黄> 1 <紫> 1,"{""purple"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""yellow"": 1}",1,0
+PL!-bp6-010,高坂穂乃果,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-bp6-010,高坂穂乃果,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-bp6-011,絢瀬絵里,MEMBER,base,<桃> 1 <黄> 1 <紫> 2,"{""pink"": 1, ""purple"": 2, ""yellow"": 1}",{},"{""pink"": 1, ""purple"": 2, ""yellow"": 1}",1,0
+PL!-bp6-011,絢瀬絵里,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-bp6-012,南ことり,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-bp6-012,南ことり,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-bp6-013,園田海未,MEMBER,base,<桃> 1 <黄> 1 <紫> 1,"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",1,0
+PL!-bp6-014,星空凛,MEMBER,base,<桃> 1,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-bp6-014,星空凛,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-bp6-015,西木野真姫,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-bp6-015,西木野真姫,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-bp6-016,東條希,MEMBER,base,<桃> 1,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-bp6-016,東條希,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-bp6-017,小泉花陽,MEMBER,base,<桃> 1 <黄> 1,"{""pink"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""yellow"": 1}",1,0
+PL!-bp6-017,小泉花陽,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-bp6-018,矢澤にこ,MEMBER,base,<桃> 3 <黄> 3,"{""pink"": 3, ""yellow"": 3}",{},"{""pink"": 3, ""yellow"": 3}",1,0
+PL!-bp6-018,矢澤にこ,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-bp6-019,Music S.T.A.R.T!!,LIVE,required,<桃> 1 <黄> 1 <紫> 1 <任意> 2 (合計5),"{""any"": 2, ""pink"": 1, ""purple"": 1, ""yellow"": 1}",{},"{""any"": 2, ""pink"": 1, ""purple"": 1, ""yellow"": 1}",1,0
+PL!-bp6-019,Music S.T.A.R.T!!,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!-bp6-019,Music S.T.A.R.T!!,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!-bp6-020,Dancing stars on me!,LIVE,required,<桃> 2 <黄> 2 <紫> 2 <任意> 6 (合計12),"{""any"": 6, ""pink"": 2, ""purple"": 2, ""yellow"": 2}",{},"{""any"": 6, ""pink"": 2, ""purple"": 2, ""yellow"": 2}",1,0
+PL!-bp6-020,Dancing stars on me!,LIVE,blade_heart,<桃> <ドロー+1>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-bp6-020,Dancing stars on me!,LIVE,blade_heart_tags,<桃> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!-bp6-021,Wonderful Rush,LIVE,required,<黄> 8 <任意> 7 (合計15),"{""any"": 7, ""yellow"": 8}",{},"{""any"": 7, ""yellow"": 8}",1,0
+PL!-bp6-021,Wonderful Rush,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!-bp6-021,Wonderful Rush,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!-bp6-022,Dreamin' Go! Go!!,LIVE,required,<桃> 5 <黄> 5 <紫> 5 <任意> 5 (合計20),"{""any"": 5, ""pink"": 5, ""purple"": 5, ""yellow"": 5}",{},"{""any"": 5, ""pink"": 5, ""purple"": 5, ""yellow"": 5}",1,0
+PL!-bp6-022,Dreamin' Go! Go!!,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!-bp6-023,sweet＆sweet holiday,LIVE,required,<桃> 2 <黄> 4 <任意> 4 (合計10),"{""any"": 4, ""pink"": 2, ""yellow"": 4}",{},"{""any"": 4, ""pink"": 2, ""yellow"": 4}",1,0
+PL!-bp6-023,sweet＆sweet holiday,LIVE,blade_heart,<黄> <ドロー+1>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-bp6-023,sweet＆sweet holiday,LIVE,blade_heart_tags,<黄> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!-bp6-024,錯覚CROSSROADS,LIVE,required,<桃> 1 <黄> 1 <紫> 2 <任意> 3 (合計7),"{""any"": 3, ""pink"": 1, ""purple"": 2, ""yellow"": 1}",{},"{""any"": 3, ""pink"": 1, ""purple"": 2, ""yellow"": 1}",1,0
+PL!-bp6-024,錯覚CROSSROADS,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!-bp6-024,錯覚CROSSROADS,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!-pb1-001,高坂穂乃果,MEMBER,base,<桃> 2 <黄> 3 <紫> 1,"{""pink"": 2, ""purple"": 1, ""yellow"": 3}",{},"{""pink"": 2, ""purple"": 1, ""yellow"": 3}",1,0
+PL!-pb1-001,高坂穂乃果,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-pb1-002,絢瀬絵里,MEMBER,base,<桃> 1 <黄> 2 <紫> 2,"{""pink"": 1, ""purple"": 2, ""yellow"": 2}",{},"{""pink"": 1, ""purple"": 2, ""yellow"": 2}",1,0
+PL!-pb1-002,絢瀬絵里,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-pb1-003,南ことり,MEMBER,base,<桃> 2 <黄> 2 <紫> 1,"{""pink"": 2, ""purple"": 1, ""yellow"": 2}",{},"{""pink"": 2, ""purple"": 1, ""yellow"": 2}",1,0
+PL!-pb1-003,南ことり,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-pb1-004,園田海未,MEMBER,base,<桃> 3 <黄> 1 <紫> 2,"{""pink"": 3, ""purple"": 2, ""yellow"": 1}",{},"{""pink"": 3, ""purple"": 2, ""yellow"": 1}",1,0
+PL!-pb1-004,園田海未,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-pb1-005,星空凛,MEMBER,base,<桃> 1,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-pb1-005,星空凛,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-pb1-006,西木野真姫,MEMBER,base,<黄> 2 <紫> 3,"{""purple"": 3, ""yellow"": 2}",{},"{""purple"": 3, ""yellow"": 2}",1,0
+PL!-pb1-006,西木野真姫,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-pb1-007,東條希,MEMBER,base,<桃> 3 <黄> 1 <紫> 2,"{""pink"": 3, ""purple"": 2, ""yellow"": 1}",{},"{""pink"": 3, ""purple"": 2, ""yellow"": 1}",1,0
+PL!-pb1-008,小泉花陽,MEMBER,base,<桃> 1 <黄> 3 <紫> 1,"{""pink"": 1, ""purple"": 1, ""yellow"": 3}",{},"{""pink"": 1, ""purple"": 1, ""yellow"": 3}",1,0
+PL!-pb1-009,矢澤にこ,MEMBER,base,<黄> 1 <紫> 1,"{""purple"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""yellow"": 1}",1,0
+PL!-pb1-010,高坂穂乃果,MEMBER,base,<桃> 2 <黄> 3,"{""pink"": 2, ""yellow"": 3}",{},"{""pink"": 2, ""yellow"": 3}",1,0
+PL!-pb1-011,絢瀬絵里,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-pb1-011,絢瀬絵里,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-pb1-012,南ことり,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-pb1-013,園田海未,MEMBER,base,<桃> 3 <紫> 1,"{""pink"": 3, ""purple"": 1}",{},"{""pink"": 3, ""purple"": 1}",1,0
+PL!-pb1-014,星空凛,MEMBER,base,<桃> 3 <黄> 2 <紫> 2,"{""pink"": 3, ""purple"": 2, ""yellow"": 2}",{},"{""pink"": 3, ""purple"": 2, ""yellow"": 2}",1,0
+PL!-pb1-014,星空凛,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-pb1-015,西木野真姫,MEMBER,base,<桃> 1 <黄> 1 <紫> 3,"{""pink"": 1, ""purple"": 3, ""yellow"": 1}",{},"{""pink"": 1, ""purple"": 3, ""yellow"": 1}",1,0
+PL!-pb1-015,西木野真姫,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-pb1-016,東條希,MEMBER,base,<桃> 2 <紫> 1,"{""pink"": 2, ""purple"": 1}",{},"{""pink"": 2, ""purple"": 1}",1,0
+PL!-pb1-017,小泉花陽,MEMBER,base,<桃> 1 <黄> 1,"{""pink"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""yellow"": 1}",1,0
+PL!-pb1-018,矢澤にこ,MEMBER,base,<紫> 2,"{""purple"": 2}",{},"{""purple"": 2}",1,0
+PL!-pb1-019,高坂穂乃果,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-pb1-019,高坂穂乃果,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-pb1-020,絢瀬絵里,MEMBER,base,<紫> 2,"{""purple"": 2}",{},"{""purple"": 2}",1,0
+PL!-pb1-020,絢瀬絵里,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-pb1-021,南ことり,MEMBER,base,<黄> 2 <紫> 1,"{""purple"": 1, ""yellow"": 2}",{},"{""purple"": 1, ""yellow"": 2}",1,0
+PL!-pb1-022,園田海未,MEMBER,base,<桃> 2 <黄> 1,"{""pink"": 2, ""yellow"": 1}",{},"{""pink"": 2, ""yellow"": 1}",1,0
+PL!-pb1-023,星空凛,MEMBER,base,<桃> 2,"{""pink"": 2}",{},"{""pink"": 2}",1,0
+PL!-pb1-023,星空凛,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-pb1-024,西木野真姫,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-pb1-024,西木野真姫,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-pb1-025,東條希,MEMBER,base,<桃> 1,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-pb1-025,東條希,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-pb1-026,小泉花陽,MEMBER,base,<黄> 2,"{""yellow"": 2}",{},"{""yellow"": 2}",1,0
+PL!-pb1-026,小泉花陽,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-pb1-027,矢澤にこ,MEMBER,base,<桃> 1 <紫> 2,"{""pink"": 1, ""purple"": 2}",{},"{""pink"": 1, ""purple"": 2}",1,0
+PL!-pb1-028,WAO-WAO Powerful day!,LIVE,required,<桃> 2 <黄> 4 <任意> 7 (合計13),"{""any"": 7, ""pink"": 2, ""yellow"": 4}",{},"{""any"": 7, ""pink"": 2, ""yellow"": 4}",1,0
+PL!-pb1-028,WAO-WAO Powerful day!,LIVE,blade_heart,<黄> <ドロー+1>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-pb1-028,WAO-WAO Powerful day!,LIVE,blade_heart_tags,<黄> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!-pb1-029,知らないLove*教えてLove,LIVE,required,<桃> 2 <紫> 1 (合計3),"{""pink"": 2, ""purple"": 1}",{},"{""pink"": 2, ""purple"": 1}",1,0
+PL!-pb1-029,知らないLove*教えてLove,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!-pb1-030,Cutie Panther,LIVE,required,<黄> 2 <紫> 4 <任意> 7 (合計13),"{""any"": 7, ""purple"": 4, ""yellow"": 2}",{},"{""any"": 7, ""purple"": 4, ""yellow"": 2}",1,0
+PL!-pb1-030,Cutie Panther,LIVE,blade_heart,<紫> <ドロー+1>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-pb1-030,Cutie Panther,LIVE,blade_heart_tags,<紫> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!-pb1-031,輝夜の城で踊りたい,LIVE,required,<紫> 1 <任意> 2 (合計3),"{""any"": 2, ""purple"": 1}",{},"{""any"": 2, ""purple"": 1}",1,0
+PL!-pb1-031,輝夜の城で踊りたい,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!-pb1-031,輝夜の城で踊りたい,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!-pb1-032,SENTIMENTAL StepS,LIVE,required,<桃> 1 <黄> 1 <紫> 1 <任意> 2 (合計5),"{""any"": 2, ""pink"": 1, ""purple"": 1, ""yellow"": 1}",{},"{""any"": 2, ""pink"": 1, ""purple"": 1, ""yellow"": 1}",1,0
+PL!-pb1-032,SENTIMENTAL StepS,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!-pb1-032,SENTIMENTAL StepS,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!-pb1-033,KiRa-KiRa Sensation!,LIVE,required,<桃> 4 <黄> 4 <紫> 4 <任意> 6 (合計18),"{""any"": 6, ""pink"": 4, ""purple"": 4, ""yellow"": 4}",{},"{""any"": 6, ""pink"": 4, ""purple"": 4, ""yellow"": 4}",1,0
+PL!-pb1-033,KiRa-KiRa Sensation!,LIVE,blade_heart,<桃> <ドロー+1>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-pb1-033,KiRa-KiRa Sensation!,LIVE,blade_heart_tags,<桃> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!-sd1-001,高坂穂乃果,MEMBER,base,<桃> 1 <黄> 2 <紫> 1,"{""pink"": 1, ""purple"": 1, ""yellow"": 2}",{},"{""pink"": 1, ""purple"": 1, ""yellow"": 2}",1,0
+PL!-sd1-002,絢瀬絵里,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-sd1-002,絢瀬絵里,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-sd1-003,南ことり,MEMBER,base,<桃> 1 <黄> 2 <紫> 2,"{""pink"": 1, ""purple"": 2, ""yellow"": 2}",{},"{""pink"": 1, ""purple"": 2, ""yellow"": 2}",1,0
+PL!-sd1-003,南ことり,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-sd1-004,園田海未,MEMBER,base,<桃> 2 <黄> 1 <紫> 1,"{""pink"": 2, ""purple"": 1, ""yellow"": 1}",{},"{""pink"": 2, ""purple"": 1, ""yellow"": 1}",1,0
+PL!-sd1-004,園田海未,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-sd1-005,星空凛,MEMBER,base,<桃> 1,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-sd1-005,星空凛,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-sd1-006,西木野真姫,MEMBER,base,<桃> 1 <黄> 1 <紫> 2,"{""pink"": 1, ""purple"": 2, ""yellow"": 1}",{},"{""pink"": 1, ""purple"": 2, ""yellow"": 1}",1,0
+PL!-sd1-007,東條希,MEMBER,base,<桃> 1 <黄> 1 <紫> 1,"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",1,0
+PL!-sd1-008,小泉花陽,MEMBER,base,<桃> 1 <黄> 1,"{""pink"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""yellow"": 1}",1,0
+PL!-sd1-008,小泉花陽,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-sd1-009,矢澤にこ,MEMBER,base,<桃> 2 <黄> 2 <紫> 2,"{""pink"": 2, ""purple"": 2, ""yellow"": 2}",{},"{""pink"": 2, ""purple"": 2, ""yellow"": 2}",1,0
+PL!-sd1-009,矢澤にこ,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!-sd1-010,高坂穂乃果,MEMBER,base,<桃> 1 <黄> 1,"{""pink"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""yellow"": 1}",1,0
+PL!-sd1-010,高坂穂乃果,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-sd1-011,絢瀬絵里,MEMBER,base,<桃> 1 <紫> 1,"{""pink"": 1, ""purple"": 1}",{},"{""pink"": 1, ""purple"": 1}",1,0
+PL!-sd1-012,南ことり,MEMBER,base,<黄> 1 <紫> 1,"{""purple"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""yellow"": 1}",1,0
+PL!-sd1-013,園田海未,MEMBER,base,<桃> 1 <紫> 1,"{""pink"": 1, ""purple"": 1}",{},"{""pink"": 1, ""purple"": 1}",1,0
+PL!-sd1-013,園田海未,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!-sd1-014,星空凛,MEMBER,base,<桃> 2 <黄> 1 <紫> 1,"{""pink"": 2, ""purple"": 1, ""yellow"": 1}",{},"{""pink"": 2, ""purple"": 1, ""yellow"": 1}",1,0
+PL!-sd1-015,西木野真姫,MEMBER,base,<桃> 1 <紫> 2,"{""pink"": 1, ""purple"": 2}",{},"{""pink"": 1, ""purple"": 2}",1,0
+PL!-sd1-016,東條希,MEMBER,base,<桃> 1 <黄> 1,"{""pink"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""yellow"": 1}",1,0
+PL!-sd1-017,小泉花陽,MEMBER,base,<桃> 1 <黄> 2 <紫> 1,"{""pink"": 1, ""purple"": 1, ""yellow"": 2}",{},"{""pink"": 1, ""purple"": 1, ""yellow"": 2}",1,0
+PL!-sd1-018,矢澤にこ,MEMBER,base,<桃> 1 <黄> 1 <紫> 2,"{""pink"": 1, ""purple"": 2, ""yellow"": 1}",{},"{""pink"": 1, ""purple"": 2, ""yellow"": 1}",1,0
+PL!-sd1-019,START：DASH!!,LIVE,required,<桃> 1 <黄> 1 <紫> 1 (合計3),"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",1,0
+PL!-sd1-019,START：DASH!!,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!-sd1-020,きっと青春が聞こえる,LIVE,required,<桃> 1 <黄> 1 <任意> 3 (合計5),"{""any"": 3, ""pink"": 1, ""yellow"": 1}",{},"{""any"": 3, ""pink"": 1, ""yellow"": 1}",1,0
+PL!-sd1-020,きっと青春が聞こえる,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!-sd1-020,きっと青春が聞こえる,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!-sd1-021,これからのSomeday,LIVE,required,<桃> 1 <黄> 1 <紫> 1 <任意> 4 (合計7),"{""any"": 4, ""pink"": 1, ""purple"": 1, ""yellow"": 1}",{},"{""any"": 4, ""pink"": 1, ""purple"": 1, ""yellow"": 1}",1,0
+PL!-sd1-021,これからのSomeday,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!-sd1-021,これからのSomeday,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!-sd1-022,僕らは今のなかで,LIVE,required,<桃> 2 <黄> 2 <紫> 2 <任意> 6 (合計12),"{""any"": 6, ""pink"": 2, ""purple"": 2, ""yellow"": 2}",{},"{""any"": 6, ""pink"": 2, ""purple"": 2, ""yellow"": 2}",1,0
+PL!-sd1-022,僕らは今のなかで,LIVE,blade_heart,<黄> <ドロー+1>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!-sd1-022,僕らは今のなかで,LIVE,blade_heart_tags,<黄> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!HS-PR-001,日野下花帆,MEMBER,base,<桃> 1 <緑> 2 <青> 1,"{""blue"": 1, ""green"": 2, ""pink"": 1}",{},"{""blue"": 1, ""green"": 2, ""pink"": 1}",1,0
+PL!HS-PR-002,村野さやか,MEMBER,base,<桃> 1 <緑> 1 <青> 2,"{""blue"": 2, ""green"": 1, ""pink"": 1}",{},"{""blue"": 2, ""green"": 1, ""pink"": 1}",1,0
+PL!HS-PR-003,乙宗梢,MEMBER,base,<緑> 1 <青> 1,"{""blue"": 1, ""green"": 1}",{},"{""blue"": 1, ""green"": 1}",1,0
+PL!HS-PR-003,乙宗梢,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-PR-004,夕霧綴理,MEMBER,base,<桃> 1 <青> 1,"{""blue"": 1, ""pink"": 1}",{},"{""blue"": 1, ""pink"": 1}",1,0
+PL!HS-PR-004,夕霧綴理,MEMBER,blade_heart,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-PR-005,大沢瑠璃乃,MEMBER,base,<桃> 2 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""pink"": 2}",{},"{""blue"": 1, ""green"": 1, ""pink"": 2}",1,0
+PL!HS-PR-006,藤島慈,MEMBER,base,<桃> 1 <緑> 1,"{""green"": 1, ""pink"": 1}",{},"{""green"": 1, ""pink"": 1}",1,0
+PL!HS-PR-006,藤島慈,MEMBER,blade_heart,<桃> 1,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!HS-PR-007,百生吟子,MEMBER,base,<桃> 1 <緑> 2 <青> 1,"{""blue"": 1, ""green"": 2, ""pink"": 1}",{},"{""blue"": 1, ""green"": 2, ""pink"": 1}",1,0
+PL!HS-PR-008,徒町小鈴,MEMBER,base,<桃> 1 <緑> 1 <青> 2,"{""blue"": 2, ""green"": 1, ""pink"": 1}",{},"{""blue"": 2, ""green"": 1, ""pink"": 1}",1,0
+PL!HS-PR-009,安養寺姫芽,MEMBER,base,<桃> 2 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""pink"": 2}",{},"{""blue"": 1, ""green"": 1, ""pink"": 2}",1,0
+PL!HS-PR-010,Reflection in the mirror,LIVE,required,<緑> 3 <任意> 2,"{""any"": 2, ""green"": 3}",{},"{""any"": 2, ""green"": 3}",1,0
+PL!HS-PR-010,Reflection in the mirror,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-PR-010,Reflection in the mirror,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-PR-011,Sparkly Spot,LIVE,required,<青> 4 <任意> 3,"{""any"": 3, ""blue"": 4}",{},"{""any"": 3, ""blue"": 4}",1,0
+PL!HS-PR-011,Sparkly Spot,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-PR-011,Sparkly Spot,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-PR-012,アイデンティティ,LIVE,required,<桃> 2 <任意> 1,"{""any"": 1, ""pink"": 2}",{},"{""any"": 1, ""pink"": 2}",1,0
+PL!HS-PR-012,アイデンティティ,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-PR-012,アイデンティティ,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-PR-014,日野下花帆,MEMBER,base,<緑> 1,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-PR-014,日野下花帆,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-PR-016,日野下花帆,MEMBER,base,<桃> 1 <緑> 4 <青> 1,"{""blue"": 1, ""green"": 4, ""pink"": 1}",{},"{""blue"": 1, ""green"": 4, ""pink"": 1}",1,0
+PL!HS-PR-017,村野さやか,MEMBER,base,<桃> 1 <緑> 1 <青> 4,"{""blue"": 4, ""green"": 1, ""pink"": 1}",{},"{""blue"": 4, ""green"": 1, ""pink"": 1}",1,0
+PL!HS-PR-018,大沢瑠璃乃,MEMBER,base,<桃> 2,"{""pink"": 2}",{},"{""pink"": 2}",1,0
+PL!HS-PR-018,大沢瑠璃乃,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!HS-PR-019,百生吟子,MEMBER,base,<緑> 1,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-PR-019,百生吟子,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-PR-020,徒町小鈴,MEMBER,base,<青> 2,"{""blue"": 2}",{},"{""blue"": 2}",1,0
+PL!HS-PR-020,徒町小鈴,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-PR-021,安養寺姫芽,MEMBER,base,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!HS-PR-021,安養寺姫芽,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!HS-PR-022,セラス 柳田 リリエンフェルト,MEMBER,base,<紫> 2,"{""purple"": 2}",{},"{""purple"": 2}",1,0
+PL!HS-PR-022,セラス 柳田 リリエンフェルト,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!HS-PR-023,桂城泉,MEMBER,base,<紫> 2,"{""purple"": 2}",{},"{""purple"": 2}",1,0
+PL!HS-PR-023,桂城泉,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!HS-PR-026,村野さやか,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-PR-026,村野さやか,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-PR-027,徒町小鈴,MEMBER,base,<黄> 1 <紫> 1,"{""purple"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""yellow"": 1}",1,0
+PL!HS-PR-028,Echoes Beyond,LIVE,required,<桃> 2 <緑> 2 <青> 2 <紫> 2 <任意> 4 (合計12),"{""any"": 4, ""blue"": 2, ""green"": 2, ""pink"": 2, ""purple"": 2}",{},"{""any"": 4, ""blue"": 2, ""green"": 2, ""pink"": 2, ""purple"": 2}",1,0
+PL!HS-PR-028,Echoes Beyond,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-PR-028,Echoes Beyond,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-PR-029,大沢瑠璃乃,MEMBER,base,<桃> 1 <緑> 1,"{""green"": 1, ""pink"": 1}",{},"{""green"": 1, ""pink"": 1}",1,0
+PL!HS-PR-031,日野下花帆,MEMBER,base,<桃> 1 <赤> 1 <緑> 1,"{""green"": 1, ""pink"": 1, ""red"": 1}",{},"{""green"": 1, ""pink"": 1, ""red"": 1}",1,0
+PL!HS-PR-031,日野下花帆,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!HS-PR-032,セラス 柳田 リリエンフェルト,MEMBER,base,<桃> 3 <紫> 3,"{""pink"": 3, ""purple"": 3}",{},"{""pink"": 3, ""purple"": 3}",1,0
+PL!HS-PR-032,セラス 柳田 リリエンフェルト,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!HS-bp1-001,日野下花帆,MEMBER,base,<桃> 1 <緑> 2 <青> 1,"{""blue"": 1, ""green"": 2, ""pink"": 1}",{},"{""blue"": 1, ""green"": 2, ""pink"": 1}",1,0
+PL!HS-bp1-001,日野下花帆,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-bp1-002,村野さやか,MEMBER,base,<桃> 1 <緑> 1 <青> 2,"{""blue"": 2, ""green"": 1, ""pink"": 1}",{},"{""blue"": 2, ""green"": 1, ""pink"": 1}",1,0
+PL!HS-bp1-003,乙宗梢,MEMBER,base,<桃> 1 <緑> 4 <青> 1,"{""blue"": 1, ""green"": 4, ""pink"": 1}",{},"{""blue"": 1, ""green"": 4, ""pink"": 1}",1,0
+PL!HS-bp1-003,乙宗梢,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-bp1-004,夕霧綴理,MEMBER,base,<桃> 1 <緑> 1 <青> 4,"{""blue"": 4, ""green"": 1, ""pink"": 1}",{},"{""blue"": 4, ""green"": 1, ""pink"": 1}",1,0
+PL!HS-bp1-004,夕霧綴理,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-bp1-005,大沢瑠璃乃,MEMBER,base,<桃> 2 <緑> 1,"{""green"": 1, ""pink"": 2}",{},"{""green"": 1, ""pink"": 2}",1,0
+PL!HS-bp1-006,藤島慈,MEMBER,base,<桃> 2 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""pink"": 2}",{},"{""blue"": 1, ""green"": 1, ""pink"": 2}",1,0
+PL!HS-bp1-006,藤島慈,MEMBER,blade_heart,<桃> 1,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!HS-bp1-007,百生吟子,MEMBER,base,<緑> 1,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-bp1-007,百生吟子,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-bp1-008,徒町小鈴,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-bp1-008,徒町小鈴,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-bp1-009,安養寺姫芽,MEMBER,base,<桃> 2,"{""pink"": 2}",{},"{""pink"": 2}",1,0
+PL!HS-bp1-009,安養寺姫芽,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!HS-bp1-010,日野下花帆,MEMBER,base,<緑> 2,"{""green"": 2}",{},"{""green"": 2}",1,0
+PL!HS-bp1-011,村野さやか,MEMBER,base,<緑> 1 <青> 2,"{""blue"": 2, ""green"": 1}",{},"{""blue"": 2, ""green"": 1}",1,0
+PL!HS-bp1-012,乙宗梢,MEMBER,base,<緑> 1 <青> 1,"{""blue"": 1, ""green"": 1}",{},"{""blue"": 1, ""green"": 1}",1,0
+PL!HS-bp1-012,乙宗梢,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-bp1-013,夕霧綴理,MEMBER,base,<桃> 1 <青> 1,"{""blue"": 1, ""pink"": 1}",{},"{""blue"": 1, ""pink"": 1}",1,0
+PL!HS-bp1-013,夕霧綴理,MEMBER,blade_heart,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-bp1-014,大沢瑠璃乃,MEMBER,base,<桃> 2,"{""pink"": 2}",{},"{""pink"": 2}",1,0
+PL!HS-bp1-015,藤島慈,MEMBER,base,<桃> 1 <緑> 1,"{""green"": 1, ""pink"": 1}",{},"{""green"": 1, ""pink"": 1}",1,0
+PL!HS-bp1-015,藤島慈,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!HS-bp1-016,百生吟子,MEMBER,base,<桃> 1 <緑> 2 <青> 1,"{""blue"": 1, ""green"": 2, ""pink"": 1}",{},"{""blue"": 1, ""green"": 2, ""pink"": 1}",1,0
+PL!HS-bp1-017,徒町小鈴,MEMBER,base,<桃> 1 <緑> 1 <青> 2,"{""blue"": 2, ""green"": 1, ""pink"": 1}",{},"{""blue"": 2, ""green"": 1, ""pink"": 1}",1,0
+PL!HS-bp1-018,安養寺姫芽,MEMBER,base,<桃> 2 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""pink"": 2}",{},"{""blue"": 1, ""green"": 1, ""pink"": 2}",1,0
+PL!HS-bp1-019,Dream Believers,LIVE,required,<任意> 4 (合計4),"{""any"": 4}",{},"{""any"": 4}",1,0
+PL!HS-bp1-019,Dream Believers,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!HS-bp1-020,365 Days,LIVE,required,<任意> 6 (合計6),"{""any"": 6}",{},"{""any"": 6}",1,0
+PL!HS-bp1-020,365 Days,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-bp1-020,365 Days,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-bp1-021,Holiday∞Holiday,LIVE,required,<緑> 5 <任意> 5 (合計10),"{""any"": 5, ""green"": 5}",{},"{""any"": 5, ""green"": 5}",1,0
+PL!HS-bp1-021,Holiday∞Holiday,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-bp1-021,Holiday∞Holiday,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-bp1-022,AWOKE,LIVE,required,<青> 6 <任意> 6 (合計12),"{""any"": 6, ""blue"": 6}",{},"{""any"": 6, ""blue"": 6}",1,0
+PL!HS-bp1-022,AWOKE,LIVE,blade_heart,<青> <ドロー+1>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-bp1-022,AWOKE,LIVE,blade_heart_tags,<青> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!HS-bp1-023,ド！ド！ド！,LIVE,required,<桃> 3 <任意> 2 (合計5),"{""any"": 2, ""pink"": 3}",{},"{""any"": 2, ""pink"": 3}",1,0
+PL!HS-bp1-023,ド！ド！ド！,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-bp1-023,ド！ド！ド！,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-bp2-001,日野下花帆,MEMBER,base,<赤> 1 <緑> 3 <青> 1,"{""blue"": 1, ""green"": 3, ""red"": 1}",{},"{""blue"": 1, ""green"": 3, ""red"": 1}",1,0
+PL!HS-bp2-001,日野下花帆,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-bp2-002,村野さやか,MEMBER,base,<青> 4,"{""blue"": 4}",{},"{""blue"": 4}",1,0
+PL!HS-bp2-002,村野さやか,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-bp2-003,乙宗梢,MEMBER,base,<緑> 2 <青> 1,"{""blue"": 1, ""green"": 2}",{},"{""blue"": 1, ""green"": 2}",1,0
+PL!HS-bp2-004,夕霧綴理,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-bp2-004,夕霧綴理,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-bp2-005,大沢瑠璃乃,MEMBER,base,<桃> 4,"{""pink"": 4}",{},"{""pink"": 4}",1,0
+PL!HS-bp2-006,藤島慈,MEMBER,base,<桃> 4 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""pink"": 4}",{},"{""blue"": 1, ""green"": 1, ""pink"": 4}",1,0
+PL!HS-bp2-006,藤島慈,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!HS-bp2-007,百生吟子,MEMBER,base,<緑> 3,"{""green"": 3}",{},"{""green"": 3}",1,0
+PL!HS-bp2-008,徒町小鈴,MEMBER,base,<青> 2,"{""blue"": 2}",{},"{""blue"": 2}",1,0
+PL!HS-bp2-009,安養寺姫芽,MEMBER,base,<桃> 3 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""pink"": 3}",{},"{""blue"": 1, ""green"": 1, ""pink"": 3}",1,0
+PL!HS-bp2-009,安養寺姫芽,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!HS-bp2-010,日野下花帆,MEMBER,base,<桃> 1 <緑> 2,"{""green"": 2, ""pink"": 1}",{},"{""green"": 2, ""pink"": 1}",1,0
+PL!HS-bp2-011,村野さやか,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-bp2-011,村野さやか,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-bp2-012,乙宗梢,MEMBER,base,<緑> 2,"{""green"": 2}",{},"{""green"": 2}",1,0
+PL!HS-bp2-013,夕霧綴理,MEMBER,base,<青> 2,"{""blue"": 2}",{},"{""blue"": 2}",1,0
+PL!HS-bp2-014,大沢瑠璃乃,MEMBER,base,<桃> 1 <青> 1,"{""blue"": 1, ""pink"": 1}",{},"{""blue"": 1, ""pink"": 1}",1,0
+PL!HS-bp2-014,大沢瑠璃乃,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!HS-bp2-015,藤島慈,MEMBER,base,<桃> 2,"{""pink"": 2}",{},"{""pink"": 2}",1,0
+PL!HS-bp2-016,百生吟子,MEMBER,base,<緑> 2,"{""green"": 2}",{},"{""green"": 2}",1,0
+PL!HS-bp2-016,百生吟子,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-bp2-017,徒町小鈴,MEMBER,base,<緑> 1 <青> 2,"{""blue"": 2, ""green"": 1}",{},"{""blue"": 2, ""green"": 1}",1,0
+PL!HS-bp2-018,安養寺姫芽,MEMBER,base,<桃> 2 <青> 1,"{""blue"": 1, ""pink"": 2}",{},"{""blue"": 1, ""pink"": 2}",1,0
+PL!HS-bp2-019,"Bloom the smile, Bloom the dream!",LIVE,required,<桃> 1 <緑> 1 <青> 1 <任意> 1 (合計4),"{""any"": 1, ""blue"": 1, ""green"": 1, ""pink"": 1}",{},"{""any"": 1, ""blue"": 1, ""green"": 1, ""pink"": 1}",1,0
+PL!HS-bp2-019,"Bloom the smile, Bloom the dream!",LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!HS-bp2-020,Link to the FUTURE,LIVE,required,<桃> 2 <緑> 2 <青> 2 <任意> 8 (合計14),"{""any"": 8, ""blue"": 2, ""green"": 2, ""pink"": 2}",{},"{""any"": 8, ""blue"": 2, ""green"": 2, ""pink"": 2}",1,0
+PL!HS-bp2-020,Link to the FUTURE,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-bp2-020,Link to the FUTURE,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-bp2-021,眩耀夜行,LIVE,required,<緑> 7 <任意> 5 (合計12),"{""any"": 5, ""green"": 7}",{},"{""any"": 5, ""green"": 7}",1,0
+PL!HS-bp2-021,眩耀夜行,LIVE,blade_heart,<緑> <ドロー+1>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-bp2-021,眩耀夜行,LIVE,blade_heart_tags,<緑> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!HS-bp2-022,アオクハルカ,LIVE,required,<緑> 4 <任意> 1 (合計5),"{""any"": 1, ""green"": 4}",{},"{""any"": 1, ""green"": 4}",1,0
+PL!HS-bp2-022,アオクハルカ,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-bp2-022,アオクハルカ,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-bp2-023,Mirage Voyage,LIVE,required,<青> 4 <任意> 1 (合計5),"{""any"": 1, ""blue"": 4}",{},"{""any"": 1, ""blue"": 4}",1,0
+PL!HS-bp2-023,Mirage Voyage,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-bp2-023,Mirage Voyage,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-bp2-024,レディバグ,LIVE,required,<青> 6 <任意> 5 (合計11),"{""any"": 5, ""blue"": 6}",{},"{""any"": 5, ""blue"": 6}",1,0
+PL!HS-bp2-024,レディバグ,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-bp2-024,レディバグ,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-bp2-025,ココン東西,LIVE,required,<桃> 5 <任意> 2 (合計7),"{""any"": 2, ""pink"": 5}",{},"{""any"": 2, ""pink"": 5}",1,0
+PL!HS-bp2-025,ココン東西,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-bp2-025,ココン東西,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-bp2-026,みらくりえーしょん,LIVE,required,<桃> 7 <任意> 7 (合計14),"{""any"": 7, ""pink"": 7}",{},"{""any"": 7, ""pink"": 7}",1,0
+PL!HS-bp2-026,みらくりえーしょん,LIVE,blade_heart,<桃> <ドロー+1>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!HS-bp2-026,みらくりえーしょん,LIVE,blade_heart_tags,<桃> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!HS-bp5-001,日野下花帆,MEMBER,base,<桃> 1 <緑> 2 <青> 1,"{""blue"": 1, ""green"": 2, ""pink"": 1}",{},"{""blue"": 1, ""green"": 2, ""pink"": 1}",1,0
+PL!HS-bp5-001,日野下花帆,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-bp5-002,村野さやか,MEMBER,base,<桃> 1 <緑> 1 <青> 3 <紫> 1,"{""blue"": 3, ""green"": 1, ""pink"": 1, ""purple"": 1}",{},"{""blue"": 3, ""green"": 1, ""pink"": 1, ""purple"": 1}",1,0
+PL!HS-bp5-002,村野さやか,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-bp5-003,大沢瑠璃乃,MEMBER,base,<桃> 1,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!HS-bp5-003,大沢瑠璃乃,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!HS-bp5-004,百生吟子,MEMBER,base,<桃> 2 <黄> 1 <緑> 2 <青> 2,"{""blue"": 2, ""green"": 2, ""pink"": 2, ""yellow"": 1}",{},"{""blue"": 2, ""green"": 2, ""pink"": 2, ""yellow"": 1}",1,0
+PL!HS-bp5-004,百生吟子,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-bp5-005,徒町小鈴,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-bp5-005,徒町小鈴,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-bp5-006,安養寺姫芽,MEMBER,base,<桃> 1 <赤> 1 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""pink"": 1, ""red"": 1}",{},"{""blue"": 1, ""green"": 1, ""pink"": 1, ""red"": 1}",1,0
+PL!HS-bp5-006,安養寺姫芽,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!HS-bp5-007,セラス 柳田 リリエンフェルト,MEMBER,base,<桃> 1 <緑> 1 <青> 1 <紫> 2,"{""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 2}",{},"{""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 2}",1,0
+PL!HS-bp5-007,セラス 柳田 リリエンフェルト,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!HS-bp5-008,桂城泉,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!HS-bp5-008,桂城泉,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!HS-bp5-009,日野下花帆,MEMBER,base,<緑> 1 <紫> 1,"{""green"": 1, ""purple"": 1}",{},"{""green"": 1, ""purple"": 1}",1,0
+PL!HS-bp5-009,日野下花帆,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-bp5-010,村野さやか,MEMBER,base,<桃> 1 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""pink"": 1}",{},"{""blue"": 1, ""green"": 1, ""pink"": 1}",1,0
+PL!HS-bp5-011,大沢瑠璃乃,MEMBER,base,<桃> 2 <緑> 2 <青> 2,"{""blue"": 2, ""green"": 2, ""pink"": 2}",{},"{""blue"": 2, ""green"": 2, ""pink"": 2}",1,0
+PL!HS-bp5-011,大沢瑠璃乃,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!HS-bp5-012,百生吟子,MEMBER,base,<桃> 1 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""pink"": 1}",{},"{""blue"": 1, ""green"": 1, ""pink"": 1}",1,0
+PL!HS-bp5-013,徒町小鈴,MEMBER,base,<桃> 1 <緑> 1 <青> 2,"{""blue"": 2, ""green"": 1, ""pink"": 1}",{},"{""blue"": 2, ""green"": 1, ""pink"": 1}",1,0
+PL!HS-bp5-013,徒町小鈴,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-bp5-014,安養寺姫芽,MEMBER,base,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!HS-bp5-014,安養寺姫芽,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!HS-bp5-015,セラス 柳田 リリエンフェルト,MEMBER,base,<紫> 2,"{""purple"": 2}",{},"{""purple"": 2}",1,0
+PL!HS-bp5-015,セラス 柳田 リリエンフェルト,MEMBER,blade_heart,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!HS-bp5-016,桂城泉,MEMBER,base,<緑> 1 <青> 1 <紫> 2,"{""blue"": 1, ""green"": 1, ""purple"": 2}",{},"{""blue"": 1, ""green"": 1, ""purple"": 2}",1,0
+PL!HS-bp5-017,Dream Believers（104期Ver.）,LIVE,required,<任意> 8 (合計8),"{""any"": 8}",{},"{""any"": 8}",1,0
+PL!HS-bp5-017,Dream Believers（104期Ver.）,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-bp5-017,Dream Believers（104期Ver.）,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-bp5-018,AURORA FLOWER,LIVE,required,<桃> 3 <緑> 3 <青> 3 <任意> 7 (合計16),"{""any"": 7, ""blue"": 3, ""green"": 3, ""pink"": 3}",{},"{""any"": 7, ""blue"": 3, ""green"": 3, ""pink"": 3}",1,0
+PL!HS-bp5-018,AURORA FLOWER,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-bp5-018,AURORA FLOWER,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-bp5-019,ハナムスビ,LIVE,required,<緑> 9 <任意> 5 (合計14),"{""any"": 5, ""green"": 9}",{},"{""any"": 5, ""green"": 9}",1,0
+PL!HS-bp5-019,ハナムスビ,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-bp5-019,ハナムスビ,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-bp5-020,バアドケージ,LIVE,required,<青> 2 <任意> 1 (合計3),"{""any"": 1, ""blue"": 2}",{},"{""any"": 1, ""blue"": 2}",1,0
+PL!HS-bp5-020,バアドケージ,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!HS-bp5-021,ジョーショーキリュー,LIVE,required,<桃> 10 (合計10),"{""pink"": 10}",{},"{""pink"": 10}",1,0
+PL!HS-bp5-021,ジョーショーキリュー,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-bp5-021,ジョーショーキリュー,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-bp5-022,Retrofuture,LIVE,required,<桃> 1 <緑> 1 <青> 1 <紫> 5 <任意> 2 (合計10),"{""any"": 2, ""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 5}",{},"{""any"": 2, ""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 5}",1,0
+PL!HS-bp5-022,Retrofuture,LIVE,blade_heart,<紫> <ドロー+1>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!HS-bp5-022,Retrofuture,LIVE,blade_heart_tags,<紫> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!HS-bp6-001,日野下花帆,MEMBER,base,<緑> 1 <青> 1,"{""blue"": 1, ""green"": 1}",{},"{""blue"": 1, ""green"": 1}",1,0
+PL!HS-bp6-001,日野下花帆,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-bp6-002,村野さやか,MEMBER,base,<緑> 1 <青> 2 <紫> 1,"{""blue"": 2, ""green"": 1, ""purple"": 1}",{},"{""blue"": 2, ""green"": 1, ""purple"": 1}",1,0
+PL!HS-bp6-003,大沢瑠璃乃,MEMBER,base,<桃> 2 <青> 2,"{""blue"": 2, ""pink"": 2}",{},"{""blue"": 2, ""pink"": 2}",1,0
+PL!HS-bp6-003,大沢瑠璃乃,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-bp6-004,百生吟子,MEMBER,base,<緑> 2 <青> 2 <紫> 1,"{""blue"": 2, ""green"": 2, ""purple"": 1}",{},"{""blue"": 2, ""green"": 2, ""purple"": 1}",1,0
+PL!HS-bp6-004,百生吟子,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-bp6-005,徒町小鈴,MEMBER,base,<桃> 1 <緑> 1 <青> 1 <紫> 1,"{""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 1}",{},"{""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 1}",1,0
+PL!HS-bp6-006,安養寺姫芽,MEMBER,base,<桃> 6 <緑> 1 <紫> 1,"{""green"": 1, ""pink"": 6, ""purple"": 1}",{},"{""green"": 1, ""pink"": 6, ""purple"": 1}",1,0
+PL!HS-bp6-006,安養寺姫芽,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!HS-bp6-007,セラス 柳田 リリエンフェルト,MEMBER,base,<桃> 1 <緑> 1 <青> 1 <紫> 4,"{""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 4}",{},"{""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 4}",1,0
+PL!HS-bp6-008,桂城泉,MEMBER,base,<桃> 1 <緑> 1 <紫> 2,"{""green"": 1, ""pink"": 1, ""purple"": 2}",{},"{""green"": 1, ""pink"": 1, ""purple"": 2}",1,0
+PL!HS-bp6-008,桂城泉,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-bp6-009,日野下花帆,MEMBER,base,<緑> 1 <紫> 1,"{""green"": 1, ""purple"": 1}",{},"{""green"": 1, ""purple"": 1}",1,0
+PL!HS-bp6-010,村野さやか,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-bp6-010,村野さやか,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-bp6-011,大沢瑠璃乃,MEMBER,base,<緑> 1,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-bp6-011,大沢瑠璃乃,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-bp6-012,百生吟子,MEMBER,base,<緑> 1,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-bp6-012,百生吟子,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-bp6-013,徒町小鈴,MEMBER,base,<桃> 1 <青> 2 <紫> 2,"{""blue"": 2, ""pink"": 1, ""purple"": 2}",{},"{""blue"": 2, ""pink"": 1, ""purple"": 2}",1,0
+PL!HS-bp6-013,徒町小鈴,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!HS-bp6-014,安養寺姫芽,MEMBER,base,<桃> 1,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!HS-bp6-015,セラス 柳田 リリエンフェルト,MEMBER,base,<紫> 2,"{""purple"": 2}",{},"{""purple"": 2}",1,0
+PL!HS-bp6-016,桂城泉,MEMBER,base,<桃> 1 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""pink"": 1}",{},"{""blue"": 1, ""green"": 1, ""pink"": 1}",1,0
+PL!HS-bp6-017,日野下花帆,MEMBER,base,<桃> 1 <緑> 1 <青> 1 <紫> 1,"{""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 1}",{},"{""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 1}",1,0
+PL!HS-bp6-017,日野下花帆,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-bp6-018,村野さやか,MEMBER,base,<青> 1 <紫> 1,"{""blue"": 1, ""purple"": 1}",{},"{""blue"": 1, ""purple"": 1}",1,0
+PL!HS-bp6-019,大沢瑠璃乃,MEMBER,base,<桃> 2,"{""pink"": 2}",{},"{""pink"": 2}",1,0
+PL!HS-bp6-020,百生吟子,MEMBER,base,<緑> 1,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-bp6-020,百生吟子,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-bp6-021,徒町小鈴,MEMBER,base,<桃> 1 <緑> 1 <青> 1 <紫> 1,"{""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 1}",{},"{""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 1}",1,0
+PL!HS-bp6-022,安養寺姫芽,MEMBER,base,<桃> 2 <青> 1,"{""blue"": 1, ""pink"": 2}",{},"{""blue"": 1, ""pink"": 2}",1,0
+PL!HS-bp6-023,セラス 柳田 リリエンフェルト,MEMBER,base,<桃> 1 <青> 1 <紫> 1,"{""blue"": 1, ""pink"": 1, ""purple"": 1}",{},"{""blue"": 1, ""pink"": 1, ""purple"": 1}",1,0
+PL!HS-bp6-024,桂城泉,MEMBER,base,<桃> 1 <紫> 1,"{""pink"": 1, ""purple"": 1}",{},"{""pink"": 1, ""purple"": 1}",1,0
+PL!HS-bp6-024,桂城泉,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!HS-bp6-025,ツバサ・ラ・リベルテ,LIVE,required,<桃> 1 <緑> 1 <青> 4 <任意> 4 (合計10),"{""any"": 4, ""blue"": 4, ""green"": 1, ""pink"": 1}",{},"{""any"": 4, ""blue"": 4, ""green"": 1, ""pink"": 1}",1,0
+PL!HS-bp6-025,ツバサ・ラ・リベルテ,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-bp6-025,ツバサ・ラ・リベルテ,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-bp6-026,可惜夜花火,LIVE,required,<緑> 2 <紫> 2 <任意> 3 (合計7),"{""any"": 3, ""green"": 2, ""purple"": 2}",{},"{""any"": 3, ""green"": 2, ""purple"": 2}",1,0
+PL!HS-bp6-026,可惜夜花火,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-bp6-026,可惜夜花火,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-bp6-027,月夜見海月,LIVE,required,<緑> 4 <青> 1 <紫> 1 <任意> 6 (合計12),"{""any"": 6, ""blue"": 1, ""green"": 4, ""purple"": 1}",{},"{""any"": 6, ""blue"": 1, ""green"": 4, ""purple"": 1}",1,0
+PL!HS-bp6-027,月夜見海月,LIVE,blade_heart,<緑> <ドロー+1>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-bp6-027,月夜見海月,LIVE,blade_heart_tags,<緑> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!HS-bp6-028,ブルウモーメント,LIVE,required,<青> 2 <紫> 1 <任意> 2 (合計5),"{""any"": 2, ""blue"": 2, ""purple"": 1}",{},"{""any"": 2, ""blue"": 2, ""purple"": 1}",1,0
+PL!HS-bp6-028,ブルウモーメント,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-bp6-028,ブルウモーメント,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-bp6-029,Proof,LIVE,required,<緑> 1 <青> 4 <紫> 1 <任意> 6 (合計12),"{""any"": 6, ""blue"": 4, ""green"": 1, ""purple"": 1}",{},"{""any"": 6, ""blue"": 4, ""green"": 1, ""purple"": 1}",1,0
+PL!HS-bp6-029,Proof,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-bp6-029,Proof,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-bp6-030,Very! Very! COCO夏っ,LIVE,required,<桃> 1 <緑> 1 <任意> 1 (合計3),"{""any"": 1, ""green"": 1, ""pink"": 1}",{},"{""any"": 1, ""green"": 1, ""pink"": 1}",1,0
+PL!HS-bp6-030,Very! Very! COCO夏っ,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-bp6-030,Very! Very! COCO夏っ,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-bp6-031,ファンファーレ！！！,LIVE,required,<桃> 8 <緑> 1 <青> 1 <紫> 1 <任意> 7 (合計18),"{""any"": 7, ""blue"": 1, ""green"": 1, ""pink"": 8, ""purple"": 1}",{},"{""any"": 7, ""blue"": 1, ""green"": 1, ""pink"": 8, ""purple"": 1}",1,0
+PL!HS-bp6-031,ファンファーレ！！！,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!HS-bp6-032,フュージョンクラスト,LIVE,required,<緑> 1 <紫> 3 <任意> 1 (合計5),"{""any"": 1, ""green"": 1, ""purple"": 3}",{},"{""any"": 1, ""green"": 1, ""purple"": 3}",1,0
+PL!HS-bp6-032,フュージョンクラスト,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-bp6-032,フュージョンクラスト,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-cl1-001,日野下花帆,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-cl1-001,日野下花帆,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-cl1-002,村野さやか,MEMBER,base,<桃> 1 <青> 1,"{""blue"": 1, ""pink"": 1}",{},"{""blue"": 1, ""pink"": 1}",1,0
+PL!HS-cl1-003,大沢瑠璃乃,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-cl1-003,大沢瑠璃乃,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-cl1-004,百生吟子,MEMBER,base,<緑> 1 <紫> 2,"{""green"": 1, ""purple"": 2}",{},"{""green"": 1, ""purple"": 2}",1,0
+PL!HS-cl1-005,徒町小鈴,MEMBER,base,<青> 2,"{""blue"": 2}",{},"{""blue"": 2}",1,0
+PL!HS-cl1-005,徒町小鈴,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-cl1-006,安養寺姫芽,MEMBER,base,<桃> 1 <緑> 1 <青> 1 <紫> 1,"{""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 1}",{},"{""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 1}",1,0
+PL!HS-cl1-006,安養寺姫芽,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!HS-cl1-007,セラス 柳田 リリエンフェルト,MEMBER,base,<青> 1 <紫> 2,"{""blue"": 1, ""purple"": 2}",{},"{""blue"": 1, ""purple"": 2}",1,0
+PL!HS-cl1-008,桂城泉,MEMBER,base,<緑> 1,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-cl1-008,桂城泉,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-cl1-009,水彩世界,LIVE,required,<緑> 1 <青> 1 <任意> 1 (合計3),"{""any"": 1, ""blue"": 1, ""green"": 1}",{},"{""any"": 1, ""blue"": 1, ""green"": 1}",1,0
+PL!HS-cl1-009,水彩世界,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-cl1-009,水彩世界,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-cl1-010,AWOKE,LIVE,required,<青> 5 <任意> 3 (合計8),"{""any"": 3, ""blue"": 5}",{},"{""any"": 3, ""blue"": 5}",1,0
+PL!HS-cl1-010,AWOKE,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-cl1-010,AWOKE,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-cl1-011,ド！ド！ド！,LIVE,required,<桃> 4 <緑> 1 <紫> 1 <任意> 6 (合計12),"{""any"": 6, ""green"": 1, ""pink"": 4, ""purple"": 1}",{},"{""any"": 6, ""green"": 1, ""pink"": 4, ""purple"": 1}",1,0
+PL!HS-cl1-011,ド！ド！ド！,LIVE,blade_heart,<桃> <ドロー+1>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!HS-cl1-011,ド！ド！ド！,LIVE,blade_heart_tags,<桃> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!HS-cl1-012,Edelied,LIVE,required,<紫> 3 <任意> 2 (合計5),"{""any"": 2, ""purple"": 3}",{},"{""any"": 2, ""purple"": 3}",1,0
+PL!HS-cl1-012,Edelied,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-cl1-012,Edelied,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-pb1-001,日野下花帆,MEMBER,base,<緑> 3 <紫> 1,"{""green"": 3, ""purple"": 1}",{},"{""green"": 3, ""purple"": 1}",1,0
+PL!HS-pb1-001,日野下花帆,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-pb1-002,村野さやか,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-pb1-003,大沢瑠璃乃,MEMBER,base,<桃> 3 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""pink"": 3}",{},"{""blue"": 1, ""green"": 1, ""pink"": 3}",1,0
+PL!HS-pb1-004,百生吟子,MEMBER,base,<緑> 1 <青> 1,"{""blue"": 1, ""green"": 1}",{},"{""blue"": 1, ""green"": 1}",1,0
+PL!HS-pb1-004,百生吟子,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-pb1-005,徒町小鈴,MEMBER,base,<緑> 1 <青> 1 <紫> 1,"{""blue"": 1, ""green"": 1, ""purple"": 1}",{},"{""blue"": 1, ""green"": 1, ""purple"": 1}",1,0
+PL!HS-pb1-005,徒町小鈴,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-pb1-006,安養寺姫芽,MEMBER,base,<桃> 2 <緑> 1 <紫> 1,"{""green"": 1, ""pink"": 2, ""purple"": 1}",{},"{""green"": 1, ""pink"": 2, ""purple"": 1}",1,0
+PL!HS-pb1-006,安養寺姫芽,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!HS-pb1-007,セラス 柳田 リリエンフェルト,MEMBER,base,<桃> 1 <青> 1 <紫> 2,"{""blue"": 1, ""pink"": 1, ""purple"": 2}",{},"{""blue"": 1, ""pink"": 1, ""purple"": 2}",1,0
+PL!HS-pb1-007,セラス 柳田 リリエンフェルト,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!HS-pb1-008,桂城泉,MEMBER,base,<桃> 1 <緑> 1 <青> 1 <紫> 5,"{""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 5}",{},"{""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 5}",1,0
+PL!HS-pb1-009,日野下花帆,MEMBER,base,<桃> 1 <緑> 3 <紫> 1,"{""green"": 3, ""pink"": 1, ""purple"": 1}",{},"{""green"": 3, ""pink"": 1, ""purple"": 1}",1,0
+PL!HS-pb1-009,日野下花帆,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-pb1-010,村野さやか,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-pb1-011,大沢瑠璃乃,MEMBER,base,<桃> 2 <青> 1,"{""blue"": 1, ""pink"": 2}",{},"{""blue"": 1, ""pink"": 2}",1,0
+PL!HS-pb1-012,百生吟子,MEMBER,base,<桃> 2 <緑> 2 <青> 2,"{""blue"": 2, ""green"": 2, ""pink"": 2}",{},"{""blue"": 2, ""green"": 2, ""pink"": 2}",1,0
+PL!HS-pb1-013,徒町小鈴,MEMBER,base,<緑> 1 <青> 2,"{""blue"": 2, ""green"": 1}",{},"{""blue"": 2, ""green"": 1}",1,0
+PL!HS-pb1-014,安養寺姫芽,MEMBER,base,<桃> 2 <緑> 1,"{""green"": 1, ""pink"": 2}",{},"{""green"": 1, ""pink"": 2}",1,0
+PL!HS-pb1-015,セラス 柳田 リリエンフェルト,MEMBER,base,<青> 1 <紫> 2,"{""blue"": 1, ""purple"": 2}",{},"{""blue"": 1, ""purple"": 2}",1,0
+PL!HS-pb1-016,桂城泉,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!HS-pb1-016,桂城泉,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!HS-pb1-017,日野下花帆,MEMBER,base,<緑> 2 <紫> 1,"{""green"": 2, ""purple"": 1}",{},"{""green"": 2, ""purple"": 1}",1,0
+PL!HS-pb1-018,村野さやか,MEMBER,base,<青> 2,"{""blue"": 2}",{},"{""blue"": 2}",1,0
+PL!HS-pb1-018,村野さやか,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-pb1-020,百生吟子,MEMBER,base,<桃> 1 <緑> 1 <紫> 1,"{""green"": 1, ""pink"": 1, ""purple"": 1}",{},"{""green"": 1, ""pink"": 1, ""purple"": 1}",1,0
+PL!HS-pb1-021,徒町小鈴,MEMBER,base,<青> 2,"{""blue"": 2}",{},"{""blue"": 2}",1,0
+PL!HS-pb1-023,セラス 柳田 リリエンフェルト,MEMBER,base,<桃> 2 <青> 2 <紫> 2,"{""blue"": 2, ""pink"": 2, ""purple"": 2}",{},"{""blue"": 2, ""pink"": 2, ""purple"": 2}",1,0
+PL!HS-pb1-023,セラス 柳田 リリエンフェルト,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!HS-pb1-024,桂城泉,MEMBER,base,<紫> 2,"{""purple"": 2}",{},"{""purple"": 2}",1,0
+PL!HS-pb1-024,桂城泉,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!HS-pb1-025,抱きしめる花びら,LIVE,required,<桃> 1 <緑> 1 <青> 1 <紫> 1 <任意> 4 (合計8),"{""any"": 4, ""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 1}",{},"{""any"": 4, ""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 1}",1,0
+PL!HS-pb1-025,抱きしめる花びら,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-pb1-025,抱きしめる花びら,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-pb1-026,雪舞う空と二秒の永遠,LIVE,required,<任意> 11 (合計11),"{""any"": 11}",{},"{""any"": 11}",1,0
+PL!HS-pb1-026,雪舞う空と二秒の永遠,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-pb1-026,雪舞う空と二秒の永遠,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-pb1-027,ユメワズライ,LIVE,required,<緑> 2 <任意> 1 (合計3),"{""any"": 1, ""green"": 2}",{},"{""any"": 1, ""green"": 2}",1,0
+PL!HS-pb1-027,ユメワズライ,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!HS-pb1-028,COMPASS,LIVE,required,<桃> 1 <緑> 1 <青> 7 <任意> 7 (合計16),"{""any"": 7, ""blue"": 7, ""green"": 1, ""pink"": 1}",{},"{""any"": 7, ""blue"": 7, ""green"": 1, ""pink"": 1}",1,0
+PL!HS-pb1-028,COMPASS,LIVE,blade_heart,<青> <ドロー+1>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-pb1-028,COMPASS,LIVE,blade_heart_tags,<青> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!HS-pb1-029,全方位キュン♡,LIVE,required,<桃> 4 <緑> 1 <青> 1 <任意> 8 (合計14),"{""any"": 8, ""blue"": 1, ""green"": 1, ""pink"": 4}",{},"{""any"": 8, ""blue"": 1, ""green"": 1, ""pink"": 4}",1,0
+PL!HS-pb1-029,全方位キュン♡,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-pb1-029,全方位キュン♡,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-pb1-030,Edelied,LIVE,required,<紫> 9 <任意> 8 (合計17),"{""any"": 8, ""purple"": 9}",{},"{""any"": 8, ""purple"": 9}",1,0
+PL!HS-pb1-030,Edelied,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-pb1-030,Edelied,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-sd1-001,日野下花帆,MEMBER,base,<緑> 3,"{""green"": 3}",{},"{""green"": 3}",1,0
+PL!HS-sd1-002,村野さやか,MEMBER,base,<桃> 1 <緑> 1 <青> 4,"{""blue"": 4, ""green"": 1, ""pink"": 1}",{},"{""blue"": 4, ""green"": 1, ""pink"": 1}",1,0
+PL!HS-sd1-003,大沢瑠璃乃,MEMBER,base,<桃> 1 <青> 1,"{""blue"": 1, ""pink"": 1}",{},"{""blue"": 1, ""pink"": 1}",1,0
+PL!HS-sd1-004,百生吟子,MEMBER,base,<桃> 1 <緑> 1 <青> 1 <紫> 1,"{""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 1}",{},"{""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 1}",1,0
+PL!HS-sd1-004,百生吟子,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-sd1-005,徒町小鈴,MEMBER,base,<桃> 1 <緑> 1 <青> 2 <紫> 1,"{""blue"": 2, ""green"": 1, ""pink"": 1, ""purple"": 1}",{},"{""blue"": 2, ""green"": 1, ""pink"": 1, ""purple"": 1}",1,0
+PL!HS-sd1-005,徒町小鈴,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-sd1-006,安養寺姫芽,MEMBER,base,<桃> 2 <緑> 2 <青> 2 <紫> 1,"{""blue"": 2, ""green"": 2, ""pink"": 2, ""purple"": 1}",{},"{""blue"": 2, ""green"": 2, ""pink"": 2, ""purple"": 1}",1,0
+PL!HS-sd1-007,セラス 柳田 リリエンフェルト,MEMBER,base,<緑> 1 <紫> 1,"{""green"": 1, ""purple"": 1}",{},"{""green"": 1, ""purple"": 1}",1,0
+PL!HS-sd1-007,セラス 柳田 リリエンフェルト,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-sd1-008,桂城泉,MEMBER,base,<桃> 1 <緑> 1 <青> 1 <紫> 2,"{""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 2}",{},"{""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 2}",1,0
+PL!HS-sd1-008,桂城泉,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!HS-sd1-009,日野下花帆,MEMBER,base,<緑> 1,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-sd1-009,日野下花帆,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-sd1-010,村野さやか,MEMBER,base,<青> 1 <紫> 1,"{""blue"": 1, ""purple"": 1}",{},"{""blue"": 1, ""purple"": 1}",1,0
+PL!HS-sd1-010,村野さやか,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-sd1-011,大沢瑠璃乃,MEMBER,base,<桃> 1 <紫> 1,"{""pink"": 1, ""purple"": 1}",{},"{""pink"": 1, ""purple"": 1}",1,0
+PL!HS-sd1-011,大沢瑠璃乃,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!HS-sd1-012,百生吟子,MEMBER,base,<緑> 2,"{""green"": 2}",{},"{""green"": 2}",1,0
+PL!HS-sd1-012,百生吟子,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!HS-sd1-013,徒町小鈴,MEMBER,base,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-sd1-013,徒町小鈴,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!HS-sd1-014,安養寺姫芽,MEMBER,base,<桃> 1 <緑> 1 <青> 1 <紫> 1,"{""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 1}",{},"{""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 1}",1,0
+PL!HS-sd1-015,セラス 柳田 リリエンフェルト,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!HS-sd1-015,セラス 柳田 リリエンフェルト,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!HS-sd1-016,桂城泉,MEMBER,base,<桃> 1 <緑> 1 <紫> 2,"{""green"": 1, ""pink"": 1, ""purple"": 2}",{},"{""green"": 1, ""pink"": 1, ""purple"": 2}",1,0
+PL!HS-sd1-017,夏めきペイン,LIVE,required,<桃> 1 <緑> 1 <青> 1 <任意> 2 (合計5),"{""any"": 2, ""blue"": 1, ""green"": 1, ""pink"": 1}",{},"{""any"": 2, ""blue"": 1, ""green"": 1, ""pink"": 1}",1,0
+PL!HS-sd1-017,夏めきペイン,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-sd1-017,夏めきペイン,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-sd1-018,Dream Believers（105期Ver.）,LIVE,required,<桃> 1 <緑> 1 <青> 1 <紫> 1 <任意> 4 (合計8),"{""any"": 4, ""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 1}",{},"{""any"": 4, ""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 1}",1,0
+PL!HS-sd1-018,Dream Believers（105期Ver.）,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!HS-sd1-018,Dream Believers（105期Ver.）,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!HS-sd1-019,アイドゥーミー！,LIVE,required,<桃> 1 <緑> 1 <青> 1 <紫> 1 <任意> 8 (合計12),"{""any"": 8, ""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 1}",{},"{""any"": 8, ""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 1}",1,0
+PL!HS-sd1-019,アイドゥーミー！,LIVE,blade_heart,<桃> <ドロー+1>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!HS-sd1-019,アイドゥーミー！,LIVE,blade_heart_tags,<桃> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!HS-sd1-020,Link to the FUTURE（104期Ver.）,LIVE,required,<桃> 2 <緑> 2 <青> 2 <任意> 8 (合計14),"{""any"": 8, ""blue"": 2, ""green"": 2, ""pink"": 2}",{},"{""any"": 8, ""blue"": 2, ""green"": 2, ""pink"": 2}",1,0
+PL!HS-sd1-020,Link to the FUTURE（104期Ver.）,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!N-PR-003,上原歩夢,MEMBER,base,<桃> 1 <緑> 1 <紫> 1,"{""green"": 1, ""pink"": 1, ""purple"": 1}",{},"{""green"": 1, ""pink"": 1, ""purple"": 1}",1,0
+PL!N-PR-004,中須かすみ,MEMBER,base,<黄> 1 <緑> 1,"{""green"": 1, ""yellow"": 1}",{},"{""green"": 1, ""yellow"": 1}",1,0
+PL!N-PR-005,桜坂しずく,MEMBER,base,<赤> 2 <青> 2 <紫> 2,"{""blue"": 2, ""purple"": 2, ""red"": 2}",{},"{""blue"": 2, ""purple"": 2, ""red"": 2}",1,0
+PL!N-PR-006,朝香果林,MEMBER,base,<青> 1 <紫> 1,"{""blue"": 1, ""purple"": 1}",{},"{""blue"": 1, ""purple"": 1}",1,0
+PL!N-PR-007,宮下愛,MEMBER,base,<赤> 2 <青> 2 <紫> 2,"{""blue"": 2, ""purple"": 2, ""red"": 2}",{},"{""blue"": 2, ""purple"": 2, ""red"": 2}",1,0
+PL!N-PR-008,近江彼方,MEMBER,base,<桃> 1 <緑> 1 <紫> 1,"{""green"": 1, ""pink"": 1, ""purple"": 1}",{},"{""green"": 1, ""pink"": 1, ""purple"": 1}",1,0
+PL!N-PR-009,優木せつ菜,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!N-PR-009,優木せつ菜,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!N-PR-010,エマ・ヴェルデ,MEMBER,base,<桃> 1 <緑> 1 <紫> 1,"{""green"": 1, ""pink"": 1, ""purple"": 1}",{},"{""green"": 1, ""pink"": 1, ""purple"": 1}",1,0
+PL!N-PR-011,天王寺璃奈,MEMBER,base,<赤> 2 <青> 2 <紫> 2,"{""blue"": 2, ""purple"": 2, ""red"": 2}",{},"{""blue"": 2, ""purple"": 2, ""red"": 2}",1,0
+PL!N-PR-012,三船栞子,MEMBER,base,<緑> 1,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!N-PR-012,三船栞子,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!N-PR-013,ミア・テイラー,MEMBER,base,<桃> 1 <赤> 1,"{""pink"": 1, ""red"": 1}",{},"{""pink"": 1, ""red"": 1}",1,0
+PL!N-PR-014,鐘嵐珠,MEMBER,base,<桃> 1,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!N-PR-014,鐘嵐珠,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!N-PR-019,中須かすみ,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!N-PR-019,中須かすみ,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!N-PR-020,エマ・ヴェルデ,MEMBER,base,<緑> 2 <青> 2,"{""blue"": 2, ""green"": 2}",{},"{""blue"": 2, ""green"": 2}",1,0
+PL!N-PR-020,エマ・ヴェルデ,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-PR-021,鐘嵐珠,MEMBER,base,<黄> 1 <紫> 1,"{""purple"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""yellow"": 1}",1,0
+PL!N-PR-022,エマ・ヴェルデ,MEMBER,base,<緑> 1,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!N-PR-023,上原歩夢,MEMBER,base,<桃> 1 <赤> 1 <緑> 1,"{""green"": 1, ""pink"": 1, ""red"": 1}",{},"{""green"": 1, ""pink"": 1, ""red"": 1}",1,0
+PL!N-PR-024,桜坂しずく,MEMBER,base,<赤> 2 <青> 2,"{""blue"": 2, ""red"": 2}",{},"{""blue"": 2, ""red"": 2}",1,0
+PL!N-PR-024,桜坂しずく,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!N-PR-025,優木せつ菜,MEMBER,base,<赤> 2 <緑> 1 <青> 2,"{""blue"": 2, ""green"": 1, ""red"": 2}",{},"{""blue"": 2, ""green"": 1, ""red"": 2}",1,0
+PL!N-PR-025,優木せつ菜,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!N-PR-026,天王寺璃奈,MEMBER,base,<桃> 2 <黄> 2 <青> 1 <紫> 1,"{""blue"": 1, ""pink"": 2, ""purple"": 1, ""yellow"": 2}",{},"{""blue"": 1, ""pink"": 2, ""purple"": 1, ""yellow"": 2}",1,0
+PL!N-PR-026,天王寺璃奈,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!N-PR-027,朝香果林,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!N-PR-028,宮下愛,MEMBER,base,<桃> 1 <赤> 1 <緑> 1,"{""green"": 1, ""pink"": 1, ""red"": 1}",{},"{""green"": 1, ""pink"": 1, ""red"": 1}",1,0
+PL!N-PR-028,宮下愛,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!N-bp1-001,上原歩夢,MEMBER,base,<桃> 3,"{""pink"": 3}",{},"{""pink"": 3}",1,0
+PL!N-bp1-002,中須かすみ,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!N-bp1-003,桜坂しずく,MEMBER,base,<緑> 1 <青> 3,"{""blue"": 3, ""green"": 1}",{},"{""blue"": 3, ""green"": 1}",1,0
+PL!N-bp1-003,桜坂しずく,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-bp1-004,朝香果林,MEMBER,base,<青> 1 <紫> 1,"{""blue"": 1, ""purple"": 1}",{},"{""blue"": 1, ""purple"": 1}",1,0
+PL!N-bp1-005,宮下愛,MEMBER,base,<桃> 1 <赤> 1,"{""pink"": 1, ""red"": 1}",{},"{""pink"": 1, ""red"": 1}",1,0
+PL!N-bp1-006,近江彼方,MEMBER,base,<黄> 1 <青> 1 <紫> 3,"{""blue"": 1, ""purple"": 3, ""yellow"": 1}",{},"{""blue"": 1, ""purple"": 3, ""yellow"": 1}",1,0
+PL!N-bp1-006,近江彼方,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!N-bp1-007,優木せつ菜,MEMBER,base,<赤> 1 <黄> 1,"{""red"": 1, ""yellow"": 1}",{},"{""red"": 1, ""yellow"": 1}",1,0
+PL!N-bp1-008,エマ・ヴェルデ,MEMBER,base,<黄> 1 <緑> 2 <青> 1,"{""blue"": 1, ""green"": 2, ""yellow"": 1}",{},"{""blue"": 1, ""green"": 2, ""yellow"": 1}",1,0
+PL!N-bp1-009,天王寺璃奈,MEMBER,base,<桃> 1 <赤> 1 <紫> 2,"{""pink"": 1, ""purple"": 2, ""red"": 1}",{},"{""pink"": 1, ""purple"": 2, ""red"": 1}",1,0
+PL!N-bp1-010,三船栞子,MEMBER,base,<桃> 1 <緑> 1,"{""green"": 1, ""pink"": 1}",{},"{""green"": 1, ""pink"": 1}",1,0
+PL!N-bp1-011,ミア・テイラー,MEMBER,base,<桃> 1 <赤> 1 <紫> 1,"{""pink"": 1, ""purple"": 1, ""red"": 1}",{},"{""pink"": 1, ""purple"": 1, ""red"": 1}",1,0
+PL!N-bp1-012,鐘嵐珠,MEMBER,base,<桃> 3 <緑> 2 <紫> 1,"{""green"": 2, ""pink"": 3, ""purple"": 1}",{},"{""green"": 2, ""pink"": 3, ""purple"": 1}",1,0
+PL!N-bp1-012,鐘嵐珠,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!N-bp1-013,上原歩夢,MEMBER,base,<桃> 1 <赤> 1,"{""pink"": 1, ""red"": 1}",{},"{""pink"": 1, ""red"": 1}",1,0
+PL!N-bp1-013,上原歩夢,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!N-bp1-014,中須かすみ,MEMBER,base,<黄> 2,"{""yellow"": 2}",{},"{""yellow"": 2}",1,0
+PL!N-bp1-015,桜坂しずく,MEMBER,base,<青> 2,"{""blue"": 2}",{},"{""blue"": 2}",1,0
+PL!N-bp1-016,朝香果林,MEMBER,base,<黄> 1 <青> 1,"{""blue"": 1, ""yellow"": 1}",{},"{""blue"": 1, ""yellow"": 1}",1,0
+PL!N-bp1-016,朝香果林,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-bp1-017,宮下愛,MEMBER,base,<赤> 1 <青> 1,"{""blue"": 1, ""red"": 1}",{},"{""blue"": 1, ""red"": 1}",1,0
+PL!N-bp1-017,宮下愛,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!N-bp1-018,近江彼方,MEMBER,base,<黄> 1 <青> 1 <紫> 2,"{""blue"": 1, ""purple"": 2, ""yellow"": 1}",{},"{""blue"": 1, ""purple"": 2, ""yellow"": 1}",1,0
+PL!N-bp1-019,優木せつ菜,MEMBER,base,<赤> 2,"{""red"": 2}",{},"{""red"": 2}",1,0
+PL!N-bp1-020,エマ・ヴェルデ,MEMBER,base,<緑> 2 <青> 1 <紫> 1,"{""blue"": 1, ""green"": 2, ""purple"": 1}",{},"{""blue"": 1, ""green"": 2, ""purple"": 1}",1,0
+PL!N-bp1-021,天王寺璃奈,MEMBER,base,<青> 1 <紫> 1,"{""blue"": 1, ""purple"": 1}",{},"{""blue"": 1, ""purple"": 1}",1,0
+PL!N-bp1-021,天王寺璃奈,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!N-bp1-022,三船栞子,MEMBER,base,<緑> 1 <青> 1,"{""blue"": 1, ""green"": 1}",{},"{""blue"": 1, ""green"": 1}",1,0
+PL!N-bp1-022,三船栞子,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!N-bp1-023,ミア・テイラー,MEMBER,base,<桃> 1 <黄> 2 <緑> 1,"{""green"": 1, ""pink"": 1, ""yellow"": 2}",{},"{""green"": 1, ""pink"": 1, ""yellow"": 2}",1,0
+PL!N-bp1-024,鐘嵐珠,MEMBER,base,<桃> 1 <黄> 1,"{""pink"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""yellow"": 1}",1,0
+PL!N-bp1-024,鐘嵐珠,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!N-bp1-025,虹色Passions！,LIVE,required,<緑> 1 <青> 1 <任意> 3 (合計5),"{""any"": 3, ""blue"": 1, ""green"": 1}",{},"{""any"": 3, ""blue"": 1, ""green"": 1}",1,0
+PL!N-bp1-025,虹色Passions！,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!N-bp1-025,虹色Passions！,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!N-bp1-026,Poppin' Up!,LIVE,required,<黄> 1 <任意> 2 (合計3),"{""any"": 2, ""yellow"": 1}",{},"{""any"": 2, ""yellow"": 1}",1,0
+PL!N-bp1-026,Poppin' Up!,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!N-bp1-026,Poppin' Up!,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!N-bp1-027,Solitude Rain,LIVE,required,<青> 5 <任意> 7 (合計12),"{""any"": 7, ""blue"": 5}",{},"{""any"": 7, ""blue"": 5}",1,0
+PL!N-bp1-027,Solitude Rain,LIVE,blade_heart,<青> <ドロー+1>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-bp1-027,Solitude Rain,LIVE,blade_heart_tags,<青> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!N-bp1-028,Butterfly,LIVE,required,<紫> 5 <任意> 7 (合計12),"{""any"": 7, ""purple"": 5}",{},"{""any"": 7, ""purple"": 5}",1,0
+PL!N-bp1-028,Butterfly,LIVE,blade_heart,<紫> <ドロー+1>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!N-bp1-028,Butterfly,LIVE,blade_heart_tags,<紫> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!N-bp1-029,Eutopia,LIVE,required,<桃> 5 <任意> 7 (合計12),"{""any"": 7, ""pink"": 5}",{},"{""any"": 7, ""pink"": 5}",1,0
+PL!N-bp1-029,Eutopia,LIVE,blade_heart,<桃> <ドロー+1>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!N-bp1-029,Eutopia,LIVE,blade_heart_tags,<桃> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!N-bp3-001,上原歩夢,MEMBER,base,<桃> 2 <赤> 2 <黄> 2,"{""pink"": 2, ""red"": 2, ""yellow"": 2}",{},"{""pink"": 2, ""red"": 2, ""yellow"": 2}",1,0
+PL!N-bp3-001,上原歩夢,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!N-bp3-002,中須かすみ,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!N-bp3-003,桜坂しずく,MEMBER,base,<桃> 1 <黄> 1 <青> 1 <紫> 1,"{""blue"": 1, ""pink"": 1, ""purple"": 1, ""yellow"": 1}",{},"{""blue"": 1, ""pink"": 1, ""purple"": 1, ""yellow"": 1}",1,0
+PL!N-bp3-004,朝香果林,MEMBER,base,<桃> 1 <黄> 1 <緑> 1 <青> 2,"{""blue"": 2, ""green"": 1, ""pink"": 1, ""yellow"": 1}",{},"{""blue"": 2, ""green"": 1, ""pink"": 1, ""yellow"": 1}",1,0
+PL!N-bp3-004,朝香果林,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-bp3-005,宮下愛,MEMBER,base,<赤> 2 <緑> 2 <青> 2,"{""blue"": 2, ""green"": 2, ""red"": 2}",{},"{""blue"": 2, ""green"": 2, ""red"": 2}",1,0
+PL!N-bp3-006,近江彼方,MEMBER,base,<赤> 1 <黄> 2 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""red"": 1, ""yellow"": 2}",{},"{""blue"": 1, ""green"": 1, ""red"": 1, ""yellow"": 2}",1,0
+PL!N-bp3-007,優木せつ菜,MEMBER,base,<桃> 1 <赤> 1 <青> 1,"{""blue"": 1, ""pink"": 1, ""red"": 1}",{},"{""blue"": 1, ""pink"": 1, ""red"": 1}",1,0
+PL!N-bp3-008,エマ・ヴェルデ,MEMBER,base,<赤> 1 <黄> 2 <緑> 2,"{""green"": 2, ""red"": 1, ""yellow"": 2}",{},"{""green"": 2, ""red"": 1, ""yellow"": 2}",1,0
+PL!N-bp3-008,エマ・ヴェルデ,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!N-bp3-009,天王寺璃奈,MEMBER,base,<黄> 1 <青> 1 <紫> 2,"{""blue"": 1, ""purple"": 2, ""yellow"": 1}",{},"{""blue"": 1, ""purple"": 2, ""yellow"": 1}",1,0
+PL!N-bp3-010,三船栞子,MEMBER,base,<桃> 1 <黄> 1 <緑> 2,"{""green"": 2, ""pink"": 1, ""yellow"": 1}",{},"{""green"": 2, ""pink"": 1, ""yellow"": 1}",1,0
+PL!N-bp3-011,ミア・テイラー,MEMBER,base,<黄> 2 <紫> 1,"{""purple"": 1, ""yellow"": 2}",{},"{""purple"": 1, ""yellow"": 2}",1,0
+PL!N-bp3-012,鐘嵐珠,MEMBER,base,<桃> 1 <青> 1,"{""blue"": 1, ""pink"": 1}",{},"{""blue"": 1, ""pink"": 1}",1,0
+PL!N-bp3-013,上原歩夢,MEMBER,base,<桃> 1 <赤> 1 <黄> 1,"{""pink"": 1, ""red"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!N-bp3-014,中須かすみ,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!N-bp3-014,中須かすみ,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!N-bp3-015,桜坂しずく,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-bp3-015,桜坂しずく,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-bp3-016,朝香果林,MEMBER,base,<黄> 1 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""yellow"": 1}",{},"{""blue"": 1, ""green"": 1, ""yellow"": 1}",1,0
+PL!N-bp3-017,宮下愛,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!N-bp3-018,近江彼方,MEMBER,base,<桃> 1 <紫> 1,"{""pink"": 1, ""purple"": 1}",{},"{""pink"": 1, ""purple"": 1}",1,0
+PL!N-bp3-018,近江彼方,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!N-bp3-019,優木せつ菜,MEMBER,base,<赤> 2 <黄> 1 <青> 2 <紫> 1,"{""blue"": 2, ""purple"": 1, ""red"": 2, ""yellow"": 1}",{},"{""blue"": 2, ""purple"": 1, ""red"": 2, ""yellow"": 1}",1,0
+PL!N-bp3-019,優木せつ菜,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!N-bp3-020,エマ・ヴェルデ,MEMBER,base,<桃> 1 <赤> 1 <黄> 2 <緑> 1,"{""green"": 1, ""pink"": 1, ""red"": 1, ""yellow"": 2}",{},"{""green"": 1, ""pink"": 1, ""red"": 1, ""yellow"": 2}",1,0
+PL!N-bp3-020,エマ・ヴェルデ,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!N-bp3-021,天王寺璃奈,MEMBER,base,<桃> 1 <赤> 1 <紫> 1,"{""pink"": 1, ""purple"": 1, ""red"": 1}",{},"{""pink"": 1, ""purple"": 1, ""red"": 1}",1,0
+PL!N-bp3-022,三船栞子,MEMBER,base,<緑> 1,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!N-bp3-022,三船栞子,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!N-bp3-023,ミア・テイラー,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!N-bp3-024,鐘嵐珠,MEMBER,base,<桃> 1 <黄> 1 <緑> 1,"{""green"": 1, ""pink"": 1, ""yellow"": 1}",{},"{""green"": 1, ""pink"": 1, ""yellow"": 1}",1,0
+PL!N-bp3-025,Awakening Promise,LIVE,required,<桃> 1 <赤> 5 <黄> 3 <任意> 4 (合計13),"{""any"": 4, ""pink"": 1, ""red"": 5, ""yellow"": 3}",{},"{""any"": 4, ""pink"": 1, ""red"": 5, ""yellow"": 3}",1,0
+PL!N-bp3-025,Awakening Promise,LIVE,blade_heart,<赤> <ドロー+1>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!N-bp3-025,Awakening Promise,LIVE,blade_heart_tags,<赤> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!N-bp3-026,サイコーハート,LIVE,required,<赤> 3 <青> 1 <任意> 5 (合計9),"{""any"": 5, ""blue"": 1, ""red"": 3}",{},"{""any"": 5, ""blue"": 1, ""red"": 3}",1,0
+PL!N-bp3-026,サイコーハート,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!N-bp3-026,サイコーハート,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!N-bp3-027,La Bella Patria,LIVE,required,<黄> 2 <緑> 2 <任意> 1 (合計5),"{""any"": 1, ""green"": 2, ""yellow"": 2}",{},"{""any"": 1, ""green"": 2, ""yellow"": 2}",1,0
+PL!N-bp3-027,La Bella Patria,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!N-bp3-027,La Bella Patria,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!N-bp3-028,ツナガルコネクト,LIVE,required,<黄> 1 <青> 1 <紫> 1 <任意> 1 (合計4),"{""any"": 1, ""blue"": 1, ""purple"": 1, ""yellow"": 1}",{},"{""any"": 1, ""blue"": 1, ""purple"": 1, ""yellow"": 1}",1,0
+PL!N-bp3-028,ツナガルコネクト,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!N-bp3-029,未来ハーモニー,LIVE,required,<黄> 1 <緑> 1 <青> 1 <任意> 4 (合計7),"{""any"": 4, ""blue"": 1, ""green"": 1, ""yellow"": 1}",{},"{""any"": 4, ""blue"": 1, ""green"": 1, ""yellow"": 1}",1,0
+PL!N-bp3-029,未来ハーモニー,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!N-bp3-029,未来ハーモニー,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!N-bp3-030,Love U my friends,LIVE,required,<桃> 1 <赤> 1 <黄> 1 <緑> 1 <青> 1 <紫> 1 (合計6),"{""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 1, ""red"": 1, ""yellow"": 1}",{},"{""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!N-bp3-030,Love U my friends,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!N-bp3-030,Love U my friends,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!N-bp3-031,MONSTER GIRLS,LIVE,required,<桃> 1 <黄> 2 <緑> 5 <任意> 6 (合計14),"{""any"": 6, ""green"": 5, ""pink"": 1, ""yellow"": 2}",{},"{""any"": 6, ""green"": 5, ""pink"": 1, ""yellow"": 2}",1,0
+PL!N-bp3-031,MONSTER GIRLS,LIVE,blade_heart,<緑> <ドロー+1>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!N-bp3-031,MONSTER GIRLS,LIVE,blade_heart_tags,<緑> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!N-bp3-032,THE SECRET NiGHT,LIVE,required,<青> 1 <紫> 1 <任意> 3 (合計5),"{""any"": 3, ""blue"": 1, ""purple"": 1}",{},"{""any"": 3, ""blue"": 1, ""purple"": 1}",1,0
+PL!N-bp3-032,THE SECRET NiGHT,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!N-bp3-032,THE SECRET NiGHT,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!N-bp4-001,上原歩夢,MEMBER,base,<桃> 1,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!N-bp4-002,中須かすみ,MEMBER,base,<黄> 1 <青> 1 <紫> 1,"{""blue"": 1, ""purple"": 1, ""yellow"": 1}",{},"{""blue"": 1, ""purple"": 1, ""yellow"": 1}",1,0
+PL!N-bp4-003,桜坂しずく,MEMBER,base,<青> 2,"{""blue"": 2}",{},"{""blue"": 2}",1,0
+PL!N-bp4-003,桜坂しずく,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-bp4-004,朝香果林,MEMBER,base,<緑> 1 <青> 3 <紫> 2,"{""blue"": 3, ""green"": 1, ""purple"": 2}",{},"{""blue"": 3, ""green"": 1, ""purple"": 2}",1,0
+PL!N-bp4-004,朝香果林,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-bp4-005,宮下愛,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!N-bp4-006,近江彼方,MEMBER,base,<桃> 1 <青> 1 <紫> 1,"{""blue"": 1, ""pink"": 1, ""purple"": 1}",{},"{""blue"": 1, ""pink"": 1, ""purple"": 1}",1,0
+PL!N-bp4-006,近江彼方,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!N-bp4-007,優木せつ菜,MEMBER,base,<赤> 2 <青> 2 <紫> 2,"{""blue"": 2, ""purple"": 2, ""red"": 2}",{},"{""blue"": 2, ""purple"": 2, ""red"": 2}",1,0
+PL!N-bp4-008,エマ・ヴェルデ,MEMBER,base,<赤> 1 <黄> 1 <緑> 1,"{""green"": 1, ""red"": 1, ""yellow"": 1}",{},"{""green"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!N-bp4-009,天王寺璃奈,MEMBER,base,<黄> 1 <青> 2 <紫> 3,"{""blue"": 2, ""purple"": 3, ""yellow"": 1}",{},"{""blue"": 2, ""purple"": 3, ""yellow"": 1}",1,0
+PL!N-bp4-009,天王寺璃奈,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!N-bp4-010,三船栞子,MEMBER,base,<緑> 1 <青> 1,"{""blue"": 1, ""green"": 1}",{},"{""blue"": 1, ""green"": 1}",1,0
+PL!N-bp4-011,ミア・テイラー,MEMBER,base,<桃> 1 <黄> 1 <紫> 1,"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""purple"": 1, ""yellow"": 1}",1,0
+PL!N-bp4-012,鐘嵐珠,MEMBER,base,<桃> 2 <緑> 1 <青> 1 <紫> 1,"{""blue"": 1, ""green"": 1, ""pink"": 2, ""purple"": 1}",{},"{""blue"": 1, ""green"": 1, ""pink"": 2, ""purple"": 1}",1,0
+PL!N-bp4-013,上原歩夢,MEMBER,base,<桃> 1 <赤> 1,"{""pink"": 1, ""red"": 1}",{},"{""pink"": 1, ""red"": 1}",1,0
+PL!N-bp4-013,上原歩夢,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!N-bp4-014,中須かすみ,MEMBER,base,<黄> 1 <紫> 1,"{""purple"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""yellow"": 1}",1,0
+PL!N-bp4-014,中須かすみ,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!N-bp4-015,桜坂しずく,MEMBER,base,<桃> 1 <緑> 1 <紫> 1,"{""green"": 1, ""pink"": 1, ""purple"": 1}",{},"{""green"": 1, ""pink"": 1, ""purple"": 1}",1,0
+PL!N-bp4-016,朝香果林,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-bp4-016,朝香果林,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-bp4-017,宮下愛,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-bp4-017,宮下愛,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-bp4-018,近江彼方,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!N-bp4-018,近江彼方,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!N-bp4-019,優木せつ菜,MEMBER,base,<桃> 1 <赤> 2 <黄> 1 <紫> 1,"{""pink"": 1, ""purple"": 1, ""red"": 2, ""yellow"": 1}",{},"{""pink"": 1, ""purple"": 1, ""red"": 2, ""yellow"": 1}",1,0
+PL!N-bp4-019,優木せつ菜,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!N-bp4-020,エマ・ヴェルデ,MEMBER,base,<緑> 1,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!N-bp4-020,エマ・ヴェルデ,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!N-bp4-021,天王寺璃奈,MEMBER,base,<黄> 1 <青> 1 <紫> 1,"{""blue"": 1, ""purple"": 1, ""yellow"": 1}",{},"{""blue"": 1, ""purple"": 1, ""yellow"": 1}",1,0
+PL!N-bp4-022,三船栞子,MEMBER,base,<桃> 1 <黄> 1 <緑> 2 <青> 2,"{""blue"": 2, ""green"": 2, ""pink"": 1, ""yellow"": 1}",{},"{""blue"": 2, ""green"": 2, ""pink"": 1, ""yellow"": 1}",1,0
+PL!N-bp4-022,三船栞子,MEMBER,blade_heart,<緑> 1,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!N-bp4-023,ミア・テイラー,MEMBER,base,<桃> 1 <黄> 1,"{""pink"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""yellow"": 1}",1,0
+PL!N-bp4-024,鐘嵐珠,MEMBER,base,<桃> 1 <青> 1 <紫> 1,"{""blue"": 1, ""pink"": 1, ""purple"": 1}",{},"{""blue"": 1, ""pink"": 1, ""purple"": 1}",1,0
+PL!N-bp4-025,VIVID WORLD,LIVE,required,<青> 8 <紫> 2 <任意> 4 (合計14),"{""any"": 4, ""blue"": 8, ""purple"": 2}",{},"{""any"": 4, ""blue"": 8, ""purple"": 2}",1,0
+PL!N-bp4-025,VIVID WORLD,LIVE,blade_heart,<青> <ドロー+1>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-bp4-025,VIVID WORLD,LIVE,blade_heart_tags,<青> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!N-bp4-026,DIVE!,LIVE,required,<赤> 4 <青> 3 <任意> 5 (合計12),"{""any"": 5, ""blue"": 3, ""red"": 4}",{},"{""any"": 5, ""blue"": 3, ""red"": 4}",1,0
+PL!N-bp4-026,DIVE!,LIVE,blade_heart,<赤> <ドロー+1>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!N-bp4-026,DIVE!,LIVE,blade_heart_tags,<赤> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!N-bp4-027,EMOTION,LIVE,required,<緑> 2 <青> 1 <任意> 2 (合計5),"{""any"": 2, ""blue"": 1, ""green"": 2}",{},"{""any"": 2, ""blue"": 1, ""green"": 2}",1,0
+PL!N-bp4-027,EMOTION,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!N-bp4-027,EMOTION,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!N-bp4-028,stars we chase,LIVE,required,<桃> 2 <黄> 2 <任意> 1 (合計5),"{""any"": 1, ""pink"": 2, ""yellow"": 2}",{},"{""any"": 1, ""pink"": 2, ""yellow"": 2}",1,0
+PL!N-bp4-028,stars we chase,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!N-bp4-028,stars we chase,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!N-bp4-029,Rise Up High!,LIVE,required,<青> 2 <任意> 1 (合計3),"{""any"": 1, ""blue"": 2}",{},"{""any"": 1, ""blue"": 2}",1,0
+PL!N-bp4-029,Rise Up High!,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!N-bp4-029,Rise Up High!,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!N-bp4-030,Daydream Mermaid,LIVE,required,<青> 1 <紫> 3 <任意> 4 (合計8),"{""any"": 4, ""blue"": 1, ""purple"": 3}",{},"{""any"": 4, ""blue"": 1, ""purple"": 3}",1,0
+PL!N-bp4-030,Daydream Mermaid,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!N-bp4-030,Daydream Mermaid,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!N-bp4-031,"NEO SKY, NEO MAP!",LIVE,required,<桃> 1 <赤> 1 <黄> 1 <緑> 1 <青> 1 <紫> 1 <任意> 12 (合計18),"{""any"": 12, ""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 1, ""red"": 1, ""yellow"": 1}",{},"{""any"": 12, ""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!N-bp4-031,"NEO SKY, NEO MAP!",LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!N-bp4-032,Blue!,LIVE,required,<桃> 1 <赤> 1 <青> 1 <任意> 4 (合計7),"{""any"": 4, ""blue"": 1, ""pink"": 1, ""red"": 1}",{},"{""any"": 4, ""blue"": 1, ""pink"": 1, ""red"": 1}",1,0
+PL!N-bp4-032,Blue!,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!N-bp4-032,Blue!,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!N-bp5-002,中須かすみ,MEMBER,base,<黄> 3 <緑> 1 <青> 1 <紫> 1,"{""blue"": 1, ""green"": 1, ""purple"": 1, ""yellow"": 3}",{},"{""blue"": 1, ""green"": 1, ""purple"": 1, ""yellow"": 3}",1,0
+PL!N-bp5-002,中須かすみ,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!N-bp5-003,桜坂しずく,MEMBER,base,<桃> 1 <赤> 1 <黄> 1 <青> 1,"{""blue"": 1, ""pink"": 1, ""red"": 1, ""yellow"": 1}",{},"{""blue"": 1, ""pink"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!N-bp5-003,桜坂しずく,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-bp5-004,朝香果林,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-bp5-005,宮下愛,MEMBER,base,<赤> 1 <青> 1,"{""blue"": 1, ""red"": 1}",{},"{""blue"": 1, ""red"": 1}",1,0
+PL!N-bp5-006,近江彼方,MEMBER,base,<桃> 1 <黄> 2 <青> 1 <紫> 3,"{""blue"": 1, ""pink"": 1, ""purple"": 3, ""yellow"": 2}",{},"{""blue"": 1, ""pink"": 1, ""purple"": 3, ""yellow"": 2}",1,0
+PL!N-bp5-006,近江彼方,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!N-bp5-007,優木せつ菜,MEMBER,base,<赤> 2,"{""red"": 2}",{},"{""red"": 2}",1,0
+PL!N-bp5-008,エマ・ヴェルデ,MEMBER,base,<桃> 1 <黄> 1 <緑> 2,"{""green"": 2, ""pink"": 1, ""yellow"": 1}",{},"{""green"": 2, ""pink"": 1, ""yellow"": 1}",1,0
+PL!N-bp5-009,天王寺璃奈,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!N-bp5-009,天王寺璃奈,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!N-bp5-010,三船栞子,MEMBER,base,<緑> 3 <青> 1 <紫> 2,"{""blue"": 1, ""green"": 3, ""purple"": 2}",{},"{""blue"": 1, ""green"": 3, ""purple"": 2}",1,0
+PL!N-bp5-010,三船栞子,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!N-bp5-011,ミア・テイラー,MEMBER,base,<桃> 2 <黄> 2 <緑> 1,"{""green"": 1, ""pink"": 2, ""yellow"": 2}",{},"{""green"": 1, ""pink"": 2, ""yellow"": 2}",1,0
+PL!N-bp5-011,ミア・テイラー,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!N-bp5-012,鐘嵐珠,MEMBER,base,<桃> 2 <赤> 2 <紫> 1,"{""pink"": 2, ""purple"": 1, ""red"": 2}",{},"{""pink"": 2, ""purple"": 1, ""red"": 2}",1,0
+PL!N-bp5-012,鐘嵐珠,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!N-bp5-013,上原歩夢,MEMBER,base,<桃> 1,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!N-bp5-013,上原歩夢,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!N-bp5-014,中須かすみ,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!N-bp5-014,中須かすみ,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!N-bp5-015,桜坂しずく,MEMBER,base,<赤> 1 <青> 1,"{""blue"": 1, ""red"": 1}",{},"{""blue"": 1, ""red"": 1}",1,0
+PL!N-bp5-015,桜坂しずく,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-bp5-016,朝香果林,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-bp5-016,朝香果林,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-bp5-017,宮下愛,MEMBER,base,<緑> 1 <青> 1,"{""blue"": 1, ""green"": 1}",{},"{""blue"": 1, ""green"": 1}",1,0
+PL!N-bp5-017,宮下愛,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-bp5-018,近江彼方,MEMBER,base,<黄> 1 <青> 1,"{""blue"": 1, ""yellow"": 1}",{},"{""blue"": 1, ""yellow"": 1}",1,0
+PL!N-bp5-018,近江彼方,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!N-bp5-019,優木せつ菜,MEMBER,base,<赤> 1 <黄> 1 <青> 1,"{""blue"": 1, ""red"": 1, ""yellow"": 1}",{},"{""blue"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!N-bp5-020,エマ・ヴェルデ,MEMBER,base,<桃> 1 <緑> 1,"{""green"": 1, ""pink"": 1}",{},"{""green"": 1, ""pink"": 1}",1,0
+PL!N-bp5-020,エマ・ヴェルデ,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!N-bp5-021,天王寺璃奈,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!N-bp5-021,天王寺璃奈,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!N-bp5-022,三船栞子,MEMBER,base,<桃> 1 <緑> 1 <紫> 1,"{""green"": 1, ""pink"": 1, ""purple"": 1}",{},"{""green"": 1, ""pink"": 1, ""purple"": 1}",1,0
+PL!N-bp5-023,ミア・テイラー,MEMBER,base,<桃> 1,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!N-bp5-023,ミア・テイラー,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!N-bp5-024,鐘嵐珠,MEMBER,base,<桃> 1 <黄> 1 <青> 1,"{""blue"": 1, ""pink"": 1, ""yellow"": 1}",{},"{""blue"": 1, ""pink"": 1, ""yellow"": 1}",1,0
+PL!N-bp5-025,"SINGING, DREAMING, NOW!",LIVE,required,<桃> 1 <赤> 1 <黄> 1 <任意> 4 (合計7),"{""any"": 4, ""pink"": 1, ""red"": 1, ""yellow"": 1}",{},"{""any"": 4, ""pink"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!N-bp5-025,"SINGING, DREAMING, NOW!",LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!N-bp5-025,"SINGING, DREAMING, NOW!",LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!N-bp5-026,TOKIMEKI Runners,LIVE,required,<黄> 2 <任意> 4 (合計6),"{""any"": 4, ""yellow"": 2}",{},"{""any"": 4, ""yellow"": 2}",1,0
+PL!N-bp5-026,TOKIMEKI Runners,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!N-bp5-026,TOKIMEKI Runners,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!N-bp5-027,ミラクル STAY TUNE！,LIVE,required,<黄> 2 <青> 2 <紫> 1 <任意> 7 (合計12),"{""any"": 7, ""blue"": 2, ""purple"": 1, ""yellow"": 2}",{},"{""any"": 7, ""blue"": 2, ""purple"": 1, ""yellow"": 2}",1,0
+PL!N-bp5-027,ミラクル STAY TUNE！,LIVE,blade_heart,<青> <ドロー+1>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-bp5-027,ミラクル STAY TUNE！,LIVE,blade_heart_tags,<青> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!N-bp5-028,CHASE!,LIVE,required,<赤> 2 <青> 1 (合計3),"{""blue"": 1, ""red"": 2}",{},"{""blue"": 1, ""red"": 2}",1,0
+PL!N-bp5-028,CHASE!,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!N-bp5-029,無敵級＊ビリーバー,LIVE,required,<黄> 4 <緑> 1 <青> 1 <紫> 1 <任意> 10 (合計17),"{""any"": 10, ""blue"": 1, ""green"": 1, ""purple"": 1, ""yellow"": 4}",{},"{""any"": 10, ""blue"": 1, ""green"": 1, ""purple"": 1, ""yellow"": 4}",1,0
+PL!N-bp5-029,無敵級＊ビリーバー,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!N-bp5-030,繚乱！ビクトリーロード,LIVE,required,<桃> 1 <赤> 1 <黄> 1 <緑> 1 <青> 1 <紫> 1 <任意> 7 (合計13),"{""any"": 7, ""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 1, ""red"": 1, ""yellow"": 1}",{},"{""any"": 7, ""blue"": 1, ""green"": 1, ""pink"": 1, ""purple"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!N-bp5-030,繚乱！ビクトリーロード,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!N-bp5-030,繚乱！ビクトリーロード,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!N-pb1-001,上原歩夢,MEMBER,base,<桃> 2 <赤> 1 <紫> 1,"{""pink"": 2, ""purple"": 1, ""red"": 1}",{},"{""pink"": 2, ""purple"": 1, ""red"": 1}",1,0
+PL!N-pb1-001,上原歩夢,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!N-pb1-002,中須かすみ,MEMBER,base,<黄> 2 <緑> 2 <青> 1,"{""blue"": 1, ""green"": 2, ""yellow"": 2}",{},"{""blue"": 1, ""green"": 2, ""yellow"": 2}",1,0
+PL!N-pb1-002,中須かすみ,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!N-pb1-003,桜坂しずく,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-pb1-003,桜坂しずく,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-pb1-004,朝香果林,MEMBER,base,<緑> 2 <青> 2 <紫> 1,"{""blue"": 2, ""green"": 2, ""purple"": 1}",{},"{""blue"": 2, ""green"": 2, ""purple"": 1}",1,0
+PL!N-pb1-004,朝香果林,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!N-pb1-005,宮下愛,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-pb1-005,宮下愛,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-pb1-006,近江彼方,MEMBER,base,<緑> 1 <青> 1 <紫> 1,"{""blue"": 1, ""green"": 1, ""purple"": 1}",{},"{""blue"": 1, ""green"": 1, ""purple"": 1}",1,0
+PL!N-pb1-006,近江彼方,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!N-pb1-007,優木せつ菜,MEMBER,base,<桃> 2 <赤> 2 <青> 1,"{""blue"": 1, ""pink"": 2, ""red"": 2}",{},"{""blue"": 1, ""pink"": 2, ""red"": 2}",1,0
+PL!N-pb1-007,優木せつ菜,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!N-pb1-008,エマ・ヴェルデ,MEMBER,base,<赤> 1 <黄> 1 <緑> 4 <青> 1,"{""blue"": 1, ""green"": 4, ""red"": 1, ""yellow"": 1}",{},"{""blue"": 1, ""green"": 4, ""red"": 1, ""yellow"": 1}",1,0
+PL!N-pb1-008,エマ・ヴェルデ,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!N-pb1-009,天王寺璃奈,MEMBER,base,<黄> 2 <青> 2 <紫> 2,"{""blue"": 2, ""purple"": 2, ""yellow"": 2}",{},"{""blue"": 2, ""purple"": 2, ""yellow"": 2}",1,0
+PL!N-pb1-010,三船栞子,MEMBER,base,<桃> 1 <緑> 2 <青> 1,"{""blue"": 1, ""green"": 2, ""pink"": 1}",{},"{""blue"": 1, ""green"": 2, ""pink"": 1}",1,0
+PL!N-pb1-011,ミア・テイラー,MEMBER,base,<桃> 2 <黄> 2 <青> 2,"{""blue"": 2, ""pink"": 2, ""yellow"": 2}",{},"{""blue"": 2, ""pink"": 2, ""yellow"": 2}",1,0
+PL!N-pb1-011,ミア・テイラー,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!N-pb1-012,鐘嵐珠,MEMBER,base,<桃> 3 <赤> 1 <紫> 1,"{""pink"": 3, ""purple"": 1, ""red"": 1}",{},"{""pink"": 3, ""purple"": 1, ""red"": 1}",1,0
+PL!N-pb1-013,上原歩夢,MEMBER,base,<桃> 1,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!N-pb1-014,中須かすみ,MEMBER,base,<黄> 2 <紫> 2,"{""purple"": 2, ""yellow"": 2}",{},"{""purple"": 2, ""yellow"": 2}",1,0
+PL!N-pb1-014,中須かすみ,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!N-pb1-015,桜坂しずく,MEMBER,base,<桃> 1 <赤> 2 <黄> 1 <青> 2,"{""blue"": 2, ""pink"": 1, ""red"": 2, ""yellow"": 1}",{},"{""blue"": 2, ""pink"": 1, ""red"": 2, ""yellow"": 1}",1,0
+PL!N-pb1-015,桜坂しずく,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-pb1-016,朝香果林,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-pb1-016,朝香果林,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-pb1-017,宮下愛,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!N-pb1-018,近江彼方,MEMBER,base,<青> 1 <紫> 1,"{""blue"": 1, ""purple"": 1}",{},"{""blue"": 1, ""purple"": 1}",1,0
+PL!N-pb1-018,近江彼方,MEMBER,blade_heart,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!N-pb1-019,優木せつ菜,MEMBER,base,<赤> 2 <緑> 1,"{""green"": 1, ""red"": 2}",{},"{""green"": 1, ""red"": 2}",1,0
+PL!N-pb1-020,エマ・ヴェルデ,MEMBER,base,<黄> 1 <緑> 2,"{""green"": 2, ""yellow"": 1}",{},"{""green"": 2, ""yellow"": 1}",1,0
+PL!N-pb1-021,天王寺璃奈,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!N-pb1-021,天王寺璃奈,MEMBER,blade_heart,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!N-pb1-022,三船栞子,MEMBER,base,<桃> 2 <緑> 2,"{""green"": 2, ""pink"": 2}",{},"{""green"": 2, ""pink"": 2}",1,0
+PL!N-pb1-022,三船栞子,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!N-pb1-023,ミア・テイラー,MEMBER,base,<桃> 2 <黄> 2 <緑> 1 <紫> 1,"{""green"": 1, ""pink"": 2, ""purple"": 1, ""yellow"": 2}",{},"{""green"": 1, ""pink"": 2, ""purple"": 1, ""yellow"": 2}",1,0
+PL!N-pb1-023,ミア・テイラー,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!N-pb1-024,鐘嵐珠,MEMBER,base,<桃> 1 <紫> 1,"{""pink"": 1, ""purple"": 1}",{},"{""pink"": 1, ""purple"": 1}",1,0
+PL!N-pb1-024,鐘嵐珠,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!N-pb1-025,上原歩夢,MEMBER,base,<桃> 1 <青> 1,"{""blue"": 1, ""pink"": 1}",{},"{""blue"": 1, ""pink"": 1}",1,0
+PL!N-pb1-025,上原歩夢,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!N-pb1-026,中須かすみ,MEMBER,base,<黄> 1 <緑> 1,"{""green"": 1, ""yellow"": 1}",{},"{""green"": 1, ""yellow"": 1}",1,0
+PL!N-pb1-026,中須かすみ,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!N-pb1-027,桜坂しずく,MEMBER,base,<青> 1 <紫> 1,"{""blue"": 1, ""purple"": 1}",{},"{""blue"": 1, ""purple"": 1}",1,0
+PL!N-pb1-027,桜坂しずく,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-pb1-028,朝香果林,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-pb1-028,朝香果林,MEMBER,blade_heart,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-pb1-029,宮下愛,MEMBER,base,<赤> 1 <青> 1 <紫> 1,"{""blue"": 1, ""purple"": 1, ""red"": 1}",{},"{""blue"": 1, ""purple"": 1, ""red"": 1}",1,0
+PL!N-pb1-030,近江彼方,MEMBER,base,<桃> 1 <黄> 1 <緑> 1,"{""green"": 1, ""pink"": 1, ""yellow"": 1}",{},"{""green"": 1, ""pink"": 1, ""yellow"": 1}",1,0
+PL!N-pb1-031,優木せつ菜,MEMBER,base,<桃> 1 <赤> 1,"{""pink"": 1, ""red"": 1}",{},"{""pink"": 1, ""red"": 1}",1,0
+PL!N-pb1-031,優木せつ菜,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!N-pb1-032,エマ・ヴェルデ,MEMBER,base,<赤> 1 <緑> 1,"{""green"": 1, ""red"": 1}",{},"{""green"": 1, ""red"": 1}",1,0
+PL!N-pb1-032,エマ・ヴェルデ,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!N-pb1-033,天王寺璃奈,MEMBER,base,<黄> 1 <紫> 1,"{""purple"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""yellow"": 1}",1,0
+PL!N-pb1-033,天王寺璃奈,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!N-pb1-034,三船栞子,MEMBER,base,<緑> 1,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!N-pb1-034,三船栞子,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!N-pb1-035,ミア・テイラー,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!N-pb1-035,ミア・テイラー,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!N-pb1-036,鐘嵐珠,MEMBER,base,<桃> 1,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!N-pb1-036,鐘嵐珠,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!N-pb1-037,Cara Tesoro,LIVE,required,<緑> 6 <任意> 6 (合計12),"{""any"": 6, ""green"": 6}",{},"{""any"": 6, ""green"": 6}",1,0
+PL!N-pb1-037,Cara Tesoro,LIVE,blade_heart,<緑> <ドロー+1>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!N-pb1-037,Cara Tesoro,LIVE,blade_heart_tags,<緑> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!N-pb1-038,PHOENIX,LIVE,required,<桃> 3 <赤> 1 <紫> 1 <任意> 2 (合計7),"{""any"": 2, ""pink"": 3, ""purple"": 1, ""red"": 1}",{},"{""any"": 2, ""pink"": 3, ""purple"": 1, ""red"": 1}",1,0
+PL!N-pb1-038,PHOENIX,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!N-pb1-038,PHOENIX,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!N-pb1-039,Stellar Stream,LIVE,required,<桃> 4 <紫> 4 <任意> 6 (合計14),"{""any"": 6, ""pink"": 4, ""purple"": 4}",{},"{""any"": 6, ""pink"": 4, ""purple"": 4}",1,0
+PL!N-pb1-039,Stellar Stream,LIVE,blade_heart,<桃> <ドロー+1>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!N-pb1-039,Stellar Stream,LIVE,blade_heart_tags,<桃> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!N-pb1-040,どこにいても君は君,LIVE,required,<黄> 1 <青> 1 <任意> 1 (合計3),"{""any"": 1, ""blue"": 1, ""yellow"": 1}",{},"{""any"": 1, ""blue"": 1, ""yellow"": 1}",1,0
+PL!N-pb1-040,どこにいても君は君,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!N-pb1-041,PASTEL,LIVE,required,<黄> 1 <緑> 1 <青> 1 <紫> 1 <任意> 5 (合計9),"{""any"": 5, ""blue"": 1, ""green"": 1, ""purple"": 1, ""yellow"": 1}",{},"{""any"": 5, ""blue"": 1, ""green"": 1, ""purple"": 1, ""yellow"": 1}",1,0
+PL!N-pb1-041,PASTEL,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!N-pb1-041,PASTEL,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!N-pb1-042,Eternalize Love!!,LIVE,required,<任意> 12 (合計12),"{""any"": 12}",{},"{""any"": 12}",1,0
+PL!N-pb1-042,Eternalize Love!!,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!N-pb1-042,Eternalize Love!!,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!N-sd1-001,上原歩夢,MEMBER,base,<桃> 3 <赤> 1 <緑> 1,"{""green"": 1, ""pink"": 3, ""red"": 1}",{},"{""green"": 1, ""pink"": 3, ""red"": 1}",1,0
+PL!N-sd1-001,上原歩夢,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!N-sd1-002,中須かすみ,MEMBER,base,<黄> 2 <緑> 1,"{""green"": 1, ""yellow"": 2}",{},"{""green"": 1, ""yellow"": 2}",1,0
+PL!N-sd1-003,桜坂しずく,MEMBER,base,<桃> 1 <青> 2,"{""blue"": 2, ""pink"": 1}",{},"{""blue"": 2, ""pink"": 1}",1,0
+PL!N-sd1-004,朝香果林,MEMBER,base,<桃> 1 <赤> 1 <青> 2,"{""blue"": 2, ""pink"": 1, ""red"": 1}",{},"{""blue"": 2, ""pink"": 1, ""red"": 1}",1,0
+PL!N-sd1-004,朝香果林,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-sd1-005,宮下愛,MEMBER,base,<桃> 1 <赤> 3 <緑> 1,"{""green"": 1, ""pink"": 1, ""red"": 3}",{},"{""green"": 1, ""pink"": 1, ""red"": 3}",1,0
+PL!N-sd1-006,近江彼方,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!N-sd1-006,近江彼方,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!N-sd1-007,優木せつ菜,MEMBER,base,<桃> 1 <赤> 3 <緑> 1,"{""green"": 1, ""pink"": 1, ""red"": 3}",{},"{""green"": 1, ""pink"": 1, ""red"": 3}",1,0
+PL!N-sd1-007,優木せつ菜,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!N-sd1-008,エマ・ヴェルデ,MEMBER,base,<緑> 1,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!N-sd1-009,天王寺璃奈,MEMBER,base,<桃> 1 <赤> 1 <紫> 1,"{""pink"": 1, ""purple"": 1, ""red"": 1}",{},"{""pink"": 1, ""purple"": 1, ""red"": 1}",1,0
+PL!N-sd1-010,三船栞子,MEMBER,base,<桃> 3 <黄> 1 <緑> 2,"{""green"": 2, ""pink"": 3, ""yellow"": 1}",{},"{""green"": 2, ""pink"": 3, ""yellow"": 1}",1,0
+PL!N-sd1-011,ミア・テイラー,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!N-sd1-011,ミア・テイラー,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!N-sd1-012,鐘嵐珠,MEMBER,base,<桃> 2 <赤> 1 <黄> 1,"{""pink"": 2, ""red"": 1, ""yellow"": 1}",{},"{""pink"": 2, ""red"": 1, ""yellow"": 1}",1,0
+PL!N-sd1-013,上原歩夢,MEMBER,base,<桃> 2,"{""pink"": 2}",{},"{""pink"": 2}",1,0
+PL!N-sd1-014,中須かすみ,MEMBER,base,<桃> 1 <赤> 1 <黄> 2,"{""pink"": 1, ""red"": 1, ""yellow"": 2}",{},"{""pink"": 1, ""red"": 1, ""yellow"": 2}",1,0
+PL!N-sd1-015,桜坂しずく,MEMBER,base,<赤> 1 <青> 1,"{""blue"": 1, ""red"": 1}",{},"{""blue"": 1, ""red"": 1}",1,0
+PL!N-sd1-015,桜坂しずく,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!N-sd1-016,朝香果林,MEMBER,base,<桃> 1 <赤> 1 <青> 2,"{""blue"": 2, ""pink"": 1, ""red"": 1}",{},"{""blue"": 2, ""pink"": 1, ""red"": 1}",1,0
+PL!N-sd1-017,宮下愛,MEMBER,base,<赤> 1 <黄> 1,"{""red"": 1, ""yellow"": 1}",{},"{""red"": 1, ""yellow"": 1}",1,0
+PL!N-sd1-017,宮下愛,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!N-sd1-018,近江彼方,MEMBER,base,<桃> 1 <赤> 1 <紫> 2,"{""pink"": 1, ""purple"": 2, ""red"": 1}",{},"{""pink"": 1, ""purple"": 2, ""red"": 1}",1,0
+PL!N-sd1-019,優木せつ菜,MEMBER,base,<赤> 1 <紫> 1,"{""purple"": 1, ""red"": 1}",{},"{""purple"": 1, ""red"": 1}",1,0
+PL!N-sd1-019,優木せつ菜,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!N-sd1-020,エマ・ヴェルデ,MEMBER,base,<緑> 1 <紫> 1,"{""green"": 1, ""purple"": 1}",{},"{""green"": 1, ""purple"": 1}",1,0
+PL!N-sd1-020,エマ・ヴェルデ,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!N-sd1-021,天王寺璃奈,MEMBER,base,<紫> 2,"{""purple"": 2}",{},"{""purple"": 2}",1,0
+PL!N-sd1-022,三船栞子,MEMBER,base,<緑> 2,"{""green"": 2}",{},"{""green"": 2}",1,0
+PL!N-sd1-023,ミア・テイラー,MEMBER,base,<桃> 1 <黄> 1,"{""pink"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""yellow"": 1}",1,0
+PL!N-sd1-023,ミア・テイラー,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!N-sd1-024,鐘嵐珠,MEMBER,base,<桃> 1 <緑> 1,"{""green"": 1, ""pink"": 1}",{},"{""green"": 1, ""pink"": 1}",1,0
+PL!N-sd1-024,鐘嵐珠,MEMBER,blade_heart,<桃>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!N-sd1-025,Colorful Dreams! Colorful Smiles!,LIVE,required,<任意> 4 (合計4),"{""any"": 4}",{},"{""any"": 4}",1,0
+PL!N-sd1-025,Colorful Dreams! Colorful Smiles!,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!N-sd1-026,夢が僕らの太陽さ,LIVE,required,<桃> 1 <赤> 1 <任意> 3 (合計5),"{""any"": 3, ""pink"": 1, ""red"": 1}",{},"{""any"": 3, ""pink"": 1, ""red"": 1}",1,0
+PL!N-sd1-026,夢が僕らの太陽さ,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!N-sd1-026,夢が僕らの太陽さ,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!N-sd1-027,Just Believe!!!,LIVE,required,<桃> 1 <赤> 1 <緑> 1 <任意> 4 (合計7),"{""any"": 4, ""green"": 1, ""pink"": 1, ""red"": 1}",{},"{""any"": 4, ""green"": 1, ""pink"": 1, ""red"": 1}",1,0
+PL!N-sd1-027,Just Believe!!!,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!N-sd1-027,Just Believe!!!,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!N-sd1-028,Dream with You,LIVE,required,<桃> 4 <任意> 7 (合計11),"{""any"": 7, ""pink"": 4}",{},"{""any"": 7, ""pink"": 4}",1,0
+PL!N-sd1-028,Dream with You,LIVE,blade_heart,<桃> <ドロー+1>,"{""pink"": 1}",{},"{""pink"": 1}",1,0
+PL!N-sd1-028,Dream with You,LIVE,blade_heart_tags,<桃> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!S-PR-013,高海千歌,MEMBER,base,<赤> 2 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""red"": 2}",{},"{""blue"": 1, ""green"": 1, ""red"": 2}",1,0
+PL!S-PR-014,桜内梨子,MEMBER,base,<赤> 2 <緑> 2 <青> 2,"{""blue"": 2, ""green"": 2, ""red"": 2}",{},"{""blue"": 2, ""green"": 2, ""red"": 2}",1,0
+PL!S-PR-014,桜内梨子,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-PR-015,松浦果南,MEMBER,base,<赤> 1 <緑> 1,"{""green"": 1, ""red"": 1}",{},"{""green"": 1, ""red"": 1}",1,0
+PL!S-PR-015,松浦果南,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-PR-016,黒澤ダイヤ,MEMBER,base,<赤> 1 <緑> 2,"{""green"": 2, ""red"": 1}",{},"{""green"": 2, ""red"": 1}",1,0
+PL!S-PR-017,渡辺曜,MEMBER,base,<赤> 1 <青> 1,"{""blue"": 1, ""red"": 1}",{},"{""blue"": 1, ""red"": 1}",1,0
+PL!S-PR-017,渡辺曜,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-PR-018,津島善子,MEMBER,base,<緑> 1 <青> 1,"{""blue"": 1, ""green"": 1}",{},"{""blue"": 1, ""green"": 1}",1,0
+PL!S-PR-018,津島善子,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-PR-019,国木田花丸,MEMBER,base,<赤> 1 <緑> 2 <青> 1,"{""blue"": 1, ""green"": 2, ""red"": 1}",{},"{""blue"": 1, ""green"": 2, ""red"": 1}",1,0
+PL!S-PR-020,小原鞠莉,MEMBER,base,<緑> 1 <青> 2,"{""blue"": 2, ""green"": 1}",{},"{""blue"": 2, ""green"": 1}",1,0
+PL!S-PR-021,黒澤ルビィ,MEMBER,base,<赤> 2 <青> 1,"{""blue"": 1, ""red"": 2}",{},"{""blue"": 1, ""red"": 2}",1,0
+PL!S-PR-022,HAPPY PARTY TRAIN,LIVE,required,<赤> 1 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""red"": 1}",{},"{""blue"": 1, ""green"": 1, ""red"": 1}",1,0
+PL!S-PR-022,HAPPY PARTY TRAIN,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!S-PR-022,HAPPY PARTY TRAIN,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!S-PR-023,恋になりたいAQUARIUM,LIVE,required,<赤> 2 <緑> 2 <青> 2 <任意> 1,"{""any"": 1, ""blue"": 2, ""green"": 2, ""red"": 2}",{},"{""any"": 1, ""blue"": 2, ""green"": 2, ""red"": 2}",1,0
+PL!S-PR-023,恋になりたいAQUARIUM,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!S-PR-023,恋になりたいAQUARIUM,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!S-PR-024,勇気はどこに?君の胸に!,LIVE,required,<赤> 3 <緑> 3 <青> 3 <任意> 3,"{""any"": 3, ""blue"": 3, ""green"": 3, ""red"": 3}",{},"{""any"": 3, ""blue"": 3, ""green"": 3, ""red"": 3}",1,0
+PL!S-PR-024,勇気はどこに?君の胸に!,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!S-PR-024,勇気はどこに?君の胸に!,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!S-PR-025,高海千歌,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-PR-025,高海千歌,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-PR-026,桜内梨子,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-PR-026,桜内梨子,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-PR-027,松浦果南,MEMBER,base,<緑> 1,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-PR-027,松浦果南,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-PR-028,黒澤ダイヤ,MEMBER,base,<赤> 1 <緑> 1,"{""green"": 1, ""red"": 1}",{},"{""green"": 1, ""red"": 1}",1,0
+PL!S-PR-029,渡辺曜,MEMBER,base,<赤> 1 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""red"": 1}",{},"{""blue"": 1, ""green"": 1, ""red"": 1}",1,0
+PL!S-PR-030,津島善子,MEMBER,base,<赤> 1 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""red"": 1}",{},"{""blue"": 1, ""green"": 1, ""red"": 1}",1,0
+PL!S-PR-031,国木田花丸,MEMBER,base,<赤> 1 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""red"": 1}",{},"{""blue"": 1, ""green"": 1, ""red"": 1}",1,0
+PL!S-PR-032,小原鞠莉,MEMBER,base,<緑> 1 <青> 1,"{""blue"": 1, ""green"": 1}",{},"{""blue"": 1, ""green"": 1}",1,0
+PL!S-PR-033,黒澤ルビィ,MEMBER,base,<赤> 1 <青> 1,"{""blue"": 1, ""red"": 1}",{},"{""blue"": 1, ""red"": 1}",1,0
+PL!S-PR-037,松浦果南,MEMBER,base,<緑> 2 <青> 2,"{""blue"": 2, ""green"": 2}",{},"{""blue"": 2, ""green"": 2}",1,0
+PL!S-PR-037,松浦果南,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-PR-038,黒澤ダイヤ,MEMBER,base,<緑> 1,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-PR-038,黒澤ダイヤ,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-PR-039,渡辺曜,MEMBER,base,<赤> 2 <青> 2,"{""blue"": 2, ""red"": 2}",{},"{""blue"": 2, ""red"": 2}",1,0
+PL!S-PR-039,渡辺曜,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-PR-040,国木田花丸,MEMBER,base,<桃> 1 <赤> 1 <緑> 1,"{""green"": 1, ""pink"": 1, ""red"": 1}",{},"{""green"": 1, ""pink"": 1, ""red"": 1}",1,0
+PL!S-PR-041,黒澤ルビィ,MEMBER,base,<赤> 2 <緑> 2 <青> 2,"{""blue"": 2, ""green"": 2, ""red"": 2}",{},"{""blue"": 2, ""green"": 2, ""red"": 2}",1,0
+PL!S-PR-041,黒澤ルビィ,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-PR-042,小原鞠莉,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-bp2-001,高海千歌,MEMBER,base,<赤> 1 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""red"": 1}",{},"{""blue"": 1, ""green"": 1, ""red"": 1}",1,0
+PL!S-bp2-002,桜内梨子,MEMBER,base,<青> 2,"{""blue"": 2}",{},"{""blue"": 2}",1,0
+PL!S-bp2-003,松浦果南,MEMBER,base,<赤> 1 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""red"": 1}",{},"{""blue"": 1, ""green"": 1, ""red"": 1}",1,0
+PL!S-bp2-004,黒澤ダイヤ,MEMBER,base,<赤> 2 <緑> 2 <青> 1,"{""blue"": 1, ""green"": 2, ""red"": 2}",{},"{""blue"": 1, ""green"": 2, ""red"": 2}",1,0
+PL!S-bp2-005,渡辺曜,MEMBER,base,<赤> 2 <緑> 2 <青> 2,"{""blue"": 2, ""green"": 2, ""red"": 2}",{},"{""blue"": 2, ""green"": 2, ""red"": 2}",1,0
+PL!S-bp2-005,渡辺曜,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-bp2-006,津島善子,MEMBER,base,<赤> 1 <緑> 1 <青> 2,"{""blue"": 2, ""green"": 1, ""red"": 1}",{},"{""blue"": 2, ""green"": 1, ""red"": 1}",1,0
+PL!S-bp2-006,津島善子,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-bp2-007,国木田花丸,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-bp2-008,小原鞠莉,MEMBER,base,<赤> 2 <緑> 2 <青> 2,"{""blue"": 2, ""green"": 2, ""red"": 2}",{},"{""blue"": 2, ""green"": 2, ""red"": 2}",1,0
+PL!S-bp2-009,黒澤ルビィ,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-bp2-009,黒澤ルビィ,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-bp2-010,高海千歌,MEMBER,base,<赤> 2 <緑> 1 <青> 2,"{""blue"": 2, ""green"": 1, ""red"": 2}",{},"{""blue"": 2, ""green"": 1, ""red"": 2}",1,0
+PL!S-bp2-010,高海千歌,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-bp2-011,桜内梨子,MEMBER,base,<赤> 1 <緑> 2 <青> 2,"{""blue"": 2, ""green"": 2, ""red"": 1}",{},"{""blue"": 2, ""green"": 2, ""red"": 1}",1,0
+PL!S-bp2-011,桜内梨子,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-bp2-012,松浦果南,MEMBER,base,<赤> 1 <緑> 1,"{""green"": 1, ""red"": 1}",{},"{""green"": 1, ""red"": 1}",1,0
+PL!S-bp2-012,松浦果南,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-bp2-013,黒澤ダイヤ,MEMBER,base,<赤> 1 <緑> 1 <青> 2,"{""blue"": 2, ""green"": 1, ""red"": 1}",{},"{""blue"": 2, ""green"": 1, ""red"": 1}",1,0
+PL!S-bp2-014,渡辺曜,MEMBER,base,<赤> 1 <青> 1,"{""blue"": 1, ""red"": 1}",{},"{""blue"": 1, ""red"": 1}",1,0
+PL!S-bp2-014,渡辺曜,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-bp2-015,津島善子,MEMBER,base,<緑> 1 <青> 1,"{""blue"": 1, ""green"": 1}",{},"{""blue"": 1, ""green"": 1}",1,0
+PL!S-bp2-015,津島善子,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-bp2-016,国木田花丸,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-bp2-016,国木田花丸,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-bp2-017,小原鞠莉,MEMBER,base,<赤> 2 <緑> 2 <青> 2,"{""blue"": 2, ""green"": 2, ""red"": 2}",{},"{""blue"": 2, ""green"": 2, ""red"": 2}",1,0
+PL!S-bp2-017,小原鞠莉,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-bp2-018,黒澤ルビィ,MEMBER,base,<赤> 2 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""red"": 2}",{},"{""blue"": 1, ""green"": 1, ""red"": 2}",1,0
+PL!S-bp2-019,WATER BLUE NEW WORLD,LIVE,required,<赤> 3 <緑> 3 <青> 3 <任意> 7 (合計16),"{""any"": 7, ""blue"": 3, ""green"": 3, ""red"": 3}",{},"{""any"": 7, ""blue"": 3, ""green"": 3, ""red"": 3}",1,0
+PL!S-bp2-019,WATER BLUE NEW WORLD,LIVE,blade_heart,<緑> <ドロー+1>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-bp2-019,WATER BLUE NEW WORLD,LIVE,blade_heart_tags,<緑> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!S-bp2-020,DREAMY COLOR,LIVE,required,<緑> 2 <任意> 3 (合計5),"{""any"": 3, ""green"": 2}",{},"{""any"": 3, ""green"": 2}",1,0
+PL!S-bp2-020,DREAMY COLOR,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!S-bp2-020,DREAMY COLOR,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!S-bp2-021,未体験HORIZON,LIVE,required,<赤> 3 <緑> 3 <青> 3 <任意> 2 (合計11),"{""any"": 2, ""blue"": 3, ""green"": 3, ""red"": 3}",{},"{""any"": 2, ""blue"": 3, ""green"": 3, ""red"": 3}",1,0
+PL!S-bp2-021,未体験HORIZON,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!S-bp2-021,未体験HORIZON,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!S-bp2-022,未熟DREAMER,LIVE,required,<赤> 2 <緑> 2 <青> 2 <任意> 8 (合計14),"{""any"": 8, ""blue"": 2, ""green"": 2, ""red"": 2}",{},"{""any"": 8, ""blue"": 2, ""green"": 2, ""red"": 2}",1,0
+PL!S-bp2-022,未熟DREAMER,LIVE,blade_heart,<赤> <ドロー+1>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-bp2-022,未熟DREAMER,LIVE,blade_heart_tags,<赤> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!S-bp2-023,MY舞☆TONIGHT,LIVE,required,<赤> 4 <任意> 4 (合計8),"{""any"": 4, ""red"": 4}",{},"{""any"": 4, ""red"": 4}",1,0
+PL!S-bp2-023,MY舞☆TONIGHT,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!S-bp2-023,MY舞☆TONIGHT,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!S-bp2-024,君のこころは輝いてるかい？,LIVE,required,<青> 1 <任意> 1 (合計2),"{""any"": 1, ""blue"": 1}",{},"{""any"": 1, ""blue"": 1}",1,0
+PL!S-bp2-024,君のこころは輝いてるかい？,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!S-bp2-025,青空Jumping Heart,LIVE,required,<赤> 1 <緑> 1 <青> 1 <任意> 1 (合計4),"{""any"": 1, ""blue"": 1, ""green"": 1, ""red"": 1}",{},"{""any"": 1, ""blue"": 1, ""green"": 1, ""red"": 1}",1,0
+PL!S-bp2-025,青空Jumping Heart,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!S-bp2-026,ユメ語るよりユメ歌おう,LIVE,required,<緑> 6 <任意> 3 (合計9),"{""any"": 3, ""green"": 6}",{},"{""any"": 3, ""green"": 6}",1,0
+PL!S-bp2-026,ユメ語るよりユメ歌おう,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!S-bp2-026,ユメ語るよりユメ歌おう,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!S-bp3-001,高海千歌,MEMBER,base,<赤> 3 <緑> 2 <青> 2,"{""blue"": 2, ""green"": 2, ""red"": 3}",{},"{""blue"": 2, ""green"": 2, ""red"": 3}",1,0
+PL!S-bp3-001,高海千歌,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-bp3-002,桜内梨子,MEMBER,base,<赤> 1 <緑> 1 <青> 2,"{""blue"": 2, ""green"": 1, ""red"": 1}",{},"{""blue"": 2, ""green"": 1, ""red"": 1}",1,0
+PL!S-bp3-003,松浦果南,MEMBER,base,<赤> 1 <緑> 2 <青> 2,"{""blue"": 2, ""green"": 2, ""red"": 1}",{},"{""blue"": 2, ""green"": 2, ""red"": 1}",1,0
+PL!S-bp3-004,黒澤ダイヤ,MEMBER,base,<赤> 1 <青> 1,"{""blue"": 1, ""red"": 1}",{},"{""blue"": 1, ""red"": 1}",1,0
+PL!S-bp3-005,渡辺曜,MEMBER,base,<赤> 1 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""red"": 1}",{},"{""blue"": 1, ""green"": 1, ""red"": 1}",1,0
+PL!S-bp3-006,津島善子,MEMBER,base,<赤> 2 <緑> 1 <青> 2,"{""blue"": 2, ""green"": 1, ""red"": 2}",{},"{""blue"": 2, ""green"": 1, ""red"": 2}",1,0
+PL!S-bp3-006,津島善子,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-bp3-007,国木田花丸,MEMBER,base,<赤> 1 <緑> 2 <青> 1,"{""blue"": 1, ""green"": 2, ""red"": 1}",{},"{""blue"": 1, ""green"": 2, ""red"": 1}",1,0
+PL!S-bp3-008,小原鞠莉,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-bp3-009,黒澤ルビィ,MEMBER,base,<赤> 2 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""red"": 2}",{},"{""blue"": 1, ""green"": 1, ""red"": 2}",1,0
+PL!S-bp3-010,高海千歌,MEMBER,base,<赤> 1 <青> 1,"{""blue"": 1, ""red"": 1}",{},"{""blue"": 1, ""red"": 1}",1,0
+PL!S-bp3-010,高海千歌,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-bp3-011,桜内梨子,MEMBER,base,<緑> 1 <青> 1,"{""blue"": 1, ""green"": 1}",{},"{""blue"": 1, ""green"": 1}",1,0
+PL!S-bp3-011,桜内梨子,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-bp3-012,松浦果南,MEMBER,base,<緑> 1,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-bp3-013,黒澤ダイヤ,MEMBER,base,<赤> 1 <緑> 2,"{""green"": 2, ""red"": 1}",{},"{""green"": 2, ""red"": 1}",1,0
+PL!S-bp3-014,渡辺曜,MEMBER,base,<赤> 1 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""red"": 1}",{},"{""blue"": 1, ""green"": 1, ""red"": 1}",1,0
+PL!S-bp3-015,津島善子,MEMBER,base,<赤> 1 <緑> 2 <青> 1,"{""blue"": 1, ""green"": 2, ""red"": 1}",{},"{""blue"": 1, ""green"": 2, ""red"": 1}",1,0
+PL!S-bp3-016,国木田花丸,MEMBER,base,<赤> 1 <緑> 1,"{""green"": 1, ""red"": 1}",{},"{""green"": 1, ""red"": 1}",1,0
+PL!S-bp3-017,小原鞠莉,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-bp3-018,黒澤ルビィ,MEMBER,base,<赤> 2 <緑> 1 <青> 2,"{""blue"": 2, ""green"": 1, ""red"": 2}",{},"{""blue"": 2, ""green"": 1, ""red"": 2}",1,0
+PL!S-bp3-018,黒澤ルビィ,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-bp3-019,MIRACLE WAVE,LIVE,required,<赤> 4 <緑> 4 <青> 4 (合計12),"{""blue"": 4, ""green"": 4, ""red"": 4}",{},"{""blue"": 4, ""green"": 4, ""red"": 4}",1,0
+PL!S-bp3-019,MIRACLE WAVE,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!S-bp3-019,MIRACLE WAVE,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!S-bp3-020,ダイスキだったらダイジョウブ！,LIVE,required,<赤> 1 <緑> 1 <青> 1 (合計3),"{""blue"": 1, ""green"": 1, ""red"": 1}",{},"{""blue"": 1, ""green"": 1, ""red"": 1}",1,0
+PL!S-bp3-020,ダイスキだったらダイジョウブ！,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!S-bp3-021,想いよひとつになれ,LIVE,required,<赤> 3 <緑> 3 <青> 3 <任意> 1 (合計10),"{""any"": 1, ""blue"": 3, ""green"": 3, ""red"": 3}",{},"{""any"": 1, ""blue"": 3, ""green"": 3, ""red"": 3}",1,0
+PL!S-bp3-021,想いよひとつになれ,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!S-bp3-021,想いよひとつになれ,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!S-bp3-022,Fantastic Departure!,LIVE,required,<赤> 3 <青> 3 <任意> 6 (合計12),"{""any"": 6, ""blue"": 3, ""red"": 3}",{},"{""any"": 6, ""blue"": 3, ""red"": 3}",1,0
+PL!S-bp3-022,Fantastic Departure!,LIVE,blade_heart,<青> <ドロー+1>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-bp3-022,Fantastic Departure!,LIVE,blade_heart_tags,<青> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!S-bp3-023,KOKORO Magic “A to Z”,LIVE,required,<赤> 1 <青> 1 <任意> 3,"{""any"": 3, ""blue"": 1, ""red"": 1}",{},"{""any"": 3, ""blue"": 1, ""red"": 1}",1,0
+PL!S-bp3-023,KOKORO Magic “A to Z”,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!S-bp3-023,KOKORO Magic “A to Z”,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!S-bp3-024,Deep Resonance,LIVE,required,<緑> 1 <青> 3 <任意> 2,"{""any"": 2, ""blue"": 3, ""green"": 1}",{},"{""any"": 2, ""blue"": 3, ""green"": 1}",1,0
+PL!S-bp3-024,Deep Resonance,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!S-bp3-024,Deep Resonance,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!S-bp3-025,"SUKI for you, DREAM for you!",LIVE,required,<赤> 4 <緑> 2 <任意> 6,"{""any"": 6, ""green"": 2, ""red"": 4}",{},"{""any"": 6, ""green"": 2, ""red"": 4}",1,0
+PL!S-bp3-025,"SUKI for you, DREAM for you!",LIVE,blade_heart,<赤> <ドロー+1>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-bp3-025,"SUKI for you, DREAM for you!",LIVE,blade_heart_tags,<赤> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!S-bp5-001,高海千歌,MEMBER,base,<赤> 4,"{""red"": 4}",{},"{""red"": 4}",1,0
+PL!S-bp5-002,桜内梨子,MEMBER,base,<赤> 2 <緑> 2 <青> 2,"{""blue"": 2, ""green"": 2, ""red"": 2}",{},"{""blue"": 2, ""green"": 2, ""red"": 2}",1,0
+PL!S-bp5-003,松浦果南,MEMBER,base,<赤> 2 <緑> 2 <青> 2,"{""blue"": 2, ""green"": 2, ""red"": 2}",{},"{""blue"": 2, ""green"": 2, ""red"": 2}",1,0
+PL!S-bp5-003,松浦果南,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-bp5-004,黒澤ダイヤ,MEMBER,base,<緑> 1,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-bp5-004,黒澤ダイヤ,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-bp5-005,渡辺曜,MEMBER,base,<黄> 1 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""yellow"": 1}",{},"{""blue"": 1, ""green"": 1, ""yellow"": 1}",1,0
+PL!S-bp5-006,津島善子,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-bp5-006,津島善子,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-bp5-007,国木田花丸,MEMBER,base,<緑> 5,"{""green"": 5}",{},"{""green"": 5}",1,0
+PL!S-bp5-007,国木田花丸,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-bp5-008,小原鞠莉,MEMBER,base,<青> 4,"{""blue"": 4}",{},"{""blue"": 4}",1,0
+PL!S-bp5-009,黒澤ルビィ,MEMBER,base,<赤> 2 <緑> 2 <青> 1 <紫> 1,"{""blue"": 1, ""green"": 2, ""purple"": 1, ""red"": 2}",{},"{""blue"": 1, ""green"": 2, ""purple"": 1, ""red"": 2}",1,0
+PL!S-bp5-009,黒澤ルビィ,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!S-bp5-010,高海千歌,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-bp5-010,高海千歌,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-bp5-011,桜内梨子,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-bp5-011,桜内梨子,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-bp5-012,松浦果南,MEMBER,base,<緑> 1 <青> 1,"{""blue"": 1, ""green"": 1}",{},"{""blue"": 1, ""green"": 1}",1,0
+PL!S-bp5-012,松浦果南,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-bp5-013,黒澤ダイヤ,MEMBER,base,<緑> 1,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-bp5-013,黒澤ダイヤ,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-bp5-014,渡辺曜,MEMBER,base,<緑> 1,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-bp5-014,渡辺曜,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-bp5-015,津島善子,MEMBER,base,<赤> 1 <青> 1 <紫> 1,"{""blue"": 1, ""purple"": 1, ""red"": 1}",{},"{""blue"": 1, ""purple"": 1, ""red"": 1}",1,0
+PL!S-bp5-016,国木田花丸,MEMBER,base,<緑> 1 <青> 1 <紫> 1,"{""blue"": 1, ""green"": 1, ""purple"": 1}",{},"{""blue"": 1, ""green"": 1, ""purple"": 1}",1,0
+PL!S-bp5-017,小原鞠莉,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-bp5-017,小原鞠莉,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-bp5-018,黒澤ルビィ,MEMBER,base,<赤> 1 <紫> 1,"{""purple"": 1, ""red"": 1}",{},"{""purple"": 1, ""red"": 1}",1,0
+PL!S-bp5-018,黒澤ルビィ,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-bp5-019,not ALONE not HITORI,LIVE,required,<緑> 2 <青> 4 <任意> 6 (合計12),"{""any"": 6, ""blue"": 4, ""green"": 2}",{},"{""any"": 6, ""blue"": 4, ""green"": 2}",1,0
+PL!S-bp5-019,not ALONE not HITORI,LIVE,blade_heart,<青> <ドロー+1>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-bp5-019,not ALONE not HITORI,LIVE,blade_heart_tags,<青> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!S-bp5-020,Landing action Yeah!!,LIVE,required,<緑> 1 <任意> 2 (合計3),"{""any"": 2, ""green"": 1}",{},"{""any"": 2, ""green"": 1}",1,0
+PL!S-bp5-020,Landing action Yeah!!,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!S-bp5-020,Landing action Yeah!!,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!S-bp5-021,夢で夜空を照らしたい,LIVE,required,<赤> 1 <緑> 1 <青> 1 <任意> 4 (合計7),"{""any"": 4, ""blue"": 1, ""green"": 1, ""red"": 1}",{},"{""any"": 4, ""blue"": 1, ""green"": 1, ""red"": 1}",1,0
+PL!S-bp5-021,夢で夜空を照らしたい,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!S-bp5-021,夢で夜空を照らしたい,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!S-bp5-022,SELF CONTROL!!,LIVE,required,<青> 2 <紫> 2 <任意> 5 (合計9),"{""any"": 5, ""blue"": 2, ""purple"": 2}",{},"{""any"": 5, ""blue"": 2, ""purple"": 2}",1,0
+PL!S-bp5-022,SELF CONTROL!!,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!S-bp5-022,SELF CONTROL!!,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!S-bp5-023,Awaken the power,LIVE,required,<赤> 3 <緑> 3 <青> 3 <紫> 2 <任意> 5 (合計16),"{""any"": 5, ""blue"": 3, ""green"": 3, ""purple"": 2, ""red"": 3}",{},"{""any"": 5, ""blue"": 3, ""green"": 3, ""purple"": 2, ""red"": 3}",1,0
+PL!S-bp5-023,Awaken the power,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!S-bp5-111,鹿角聖良,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!S-bp5-111,鹿角聖良,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!S-bp5-222,鹿角理亞,MEMBER,base,<青> 2 <紫> 2,"{""blue"": 2, ""purple"": 2}",{},"{""blue"": 2, ""purple"": 2}",1,0
+PL!S-bp5-222,鹿角理亞,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!S-bp6-001,高海千歌,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-bp6-002,桜内梨子,MEMBER,base,<赤> 2 <緑> 2 <青> 2,"{""blue"": 2, ""green"": 2, ""red"": 2}",{},"{""blue"": 2, ""green"": 2, ""red"": 2}",1,0
+PL!S-bp6-002,桜内梨子,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-bp6-003,松浦果南,MEMBER,base,<赤> 1 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""red"": 1}",{},"{""blue"": 1, ""green"": 1, ""red"": 1}",1,0
+PL!S-bp6-004,黒澤ダイヤ,MEMBER,base,<赤> 2 <緑> 2,"{""green"": 2, ""red"": 2}",{},"{""green"": 2, ""red"": 2}",1,0
+PL!S-bp6-004,黒澤ダイヤ,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-bp6-005,渡辺曜,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-bp6-006,津島善子,MEMBER,base,<赤> 2 <緑> 2 <青> 3,"{""blue"": 3, ""green"": 2, ""red"": 2}",{},"{""blue"": 3, ""green"": 2, ""red"": 2}",1,0
+PL!S-bp6-007,国木田花丸,MEMBER,base,<赤> 1 <緑> 2 <青> 1,"{""blue"": 1, ""green"": 2, ""red"": 1}",{},"{""blue"": 1, ""green"": 2, ""red"": 1}",1,0
+PL!S-bp6-007,国木田花丸,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-bp6-008,小原鞠莉,MEMBER,base,<赤> 2 <緑> 2 <青> 2,"{""blue"": 2, ""green"": 2, ""red"": 2}",{},"{""blue"": 2, ""green"": 2, ""red"": 2}",1,0
+PL!S-bp6-008,小原鞠莉,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-bp6-009,黒澤ルビィ,MEMBER,base,<赤> 1 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""red"": 1}",{},"{""blue"": 1, ""green"": 1, ""red"": 1}",1,0
+PL!S-bp6-010,高海千歌,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-bp6-010,高海千歌,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-bp6-011,桜内梨子,MEMBER,base,<赤> 1 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""red"": 1}",{},"{""blue"": 1, ""green"": 1, ""red"": 1}",1,0
+PL!S-bp6-011,桜内梨子,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-bp6-012,松浦果南,MEMBER,base,<緑> 1,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-bp6-012,松浦果南,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-bp6-013,黒澤ダイヤ,MEMBER,base,<赤> 1 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""red"": 1}",{},"{""blue"": 1, ""green"": 1, ""red"": 1}",1,0
+PL!S-bp6-014,渡辺曜,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-bp6-014,渡辺曜,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-bp6-015,津島善子,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-bp6-015,津島善子,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-bp6-016,国木田花丸,MEMBER,base,<緑> 1,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-bp6-016,国木田花丸,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-bp6-017,小原鞠莉,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-bp6-017,小原鞠莉,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-bp6-018,黒澤ルビィ,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-bp6-018,黒澤ルビィ,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-bp6-019,Step! ZERO to ONE,LIVE,required,<赤> 1 <緑> 1 <任意> 1 (合計3),"{""any"": 1, ""green"": 1, ""red"": 1}",{},"{""any"": 1, ""green"": 1, ""red"": 1}",1,0
+PL!S-bp6-019,Step! ZERO to ONE,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!S-bp6-019,Step! ZERO to ONE,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!S-bp6-020,"冒険Type A, B, C!!",LIVE,required,<赤> 2 <緑> 2 <青> 2 <任意> 4 (合計10),"{""any"": 4, ""blue"": 2, ""green"": 2, ""red"": 2}",{},"{""any"": 4, ""blue"": 2, ""green"": 2, ""red"": 2}",1,0
+PL!S-bp6-020,"冒険Type A, B, C!!",LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!S-bp6-020,"冒険Type A, B, C!!",LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!S-bp6-021,MIRAI TICKET,LIVE,required,<赤> 5 <緑> 4 <青> 4 <任意> 4 (合計17),"{""any"": 4, ""blue"": 4, ""green"": 4, ""red"": 5}",{},"{""any"": 4, ""blue"": 4, ""green"": 4, ""red"": 5}",1,0
+PL!S-bp6-021,MIRAI TICKET,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!S-bp6-022,近未来ハッピーエンド,LIVE,required,<赤> 5 <緑> 2 <青> 2 <任意> 7 (合計16),"{""any"": 7, ""blue"": 2, ""green"": 2, ""red"": 5}",{},"{""any"": 7, ""blue"": 2, ""green"": 2, ""red"": 5}",1,0
+PL!S-bp6-022,近未来ハッピーエンド,LIVE,blade_heart,<赤> <ドロー+1>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-bp6-022,近未来ハッピーエンド,LIVE,blade_heart_tags,<赤> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!S-bp6-023,GALAXY HidE and SeeK,LIVE,required,<赤> 1 <緑> 5 <青> 1 <任意> 3 (合計10),"{""any"": 3, ""blue"": 1, ""green"": 5, ""red"": 1}",{},"{""any"": 3, ""blue"": 1, ""green"": 5, ""red"": 1}",1,0
+PL!S-bp6-023,GALAXY HidE and SeeK,LIVE,blade_heart,<緑> <ドロー+1>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-bp6-023,GALAXY HidE and SeeK,LIVE,blade_heart_tags,<緑> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!S-bp6-024,コワレヤスキ,LIVE,required,<赤> 2 <緑> 2 <青> 4 <任意> 3 (合計11),"{""any"": 3, ""blue"": 4, ""green"": 2, ""red"": 2}",{},"{""any"": 3, ""blue"": 4, ""green"": 2, ""red"": 2}",1,0
+PL!S-bp6-024,コワレヤスキ,LIVE,blade_heart,<青> <ドロー+1>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-bp6-024,コワレヤスキ,LIVE,blade_heart_tags,<青> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!S-pb1-001,高海千歌,MEMBER,base,<赤> 3 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""red"": 3}",{},"{""blue"": 1, ""green"": 1, ""red"": 3}",1,0
+PL!S-pb1-001,高海千歌,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-pb1-002,桜内梨子,MEMBER,base,<赤> 4 <緑> 1 <青>,"{""blue"": 1, ""green"": 1, ""red"": 4}",{},"{""blue"": 1, ""green"": 1, ""red"": 4}",1,0
+PL!S-pb1-003,松浦果南,MEMBER,base,<赤> 1 <緑> 4 <青> 1,"{""blue"": 1, ""green"": 4, ""red"": 1}",{},"{""blue"": 1, ""green"": 4, ""red"": 1}",1,0
+PL!S-pb1-003,松浦果南,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-pb1-004,黒澤ダイヤ,MEMBER,base,<緑> 1,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-pb1-004,黒澤ダイヤ,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-pb1-005,渡辺曜,MEMBER,base,<赤> 4 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""red"": 4}",{},"{""blue"": 1, ""green"": 1, ""red"": 4}",1,0
+PL!S-pb1-005,渡辺曜,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-pb1-006,津島善子,MEMBER,base,<青> 4,"{""blue"": 4}",{},"{""blue"": 4}",1,0
+PL!S-pb1-007,国木田花丸,MEMBER,base,<緑> 4,"{""green"": 4}",{},"{""green"": 4}",1,0
+PL!S-pb1-008,小原鞠莉,MEMBER,base,<青> 4,"{""blue"": 4}",{},"{""blue"": 4}",1,0
+PL!S-pb1-008,小原鞠莉,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-pb1-009,黒澤ルビィ,MEMBER,base,<赤> 4,"{""red"": 4}",{},"{""red"": 4}",1,0
+PL!S-pb1-009,黒澤ルビィ,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-pb1-010,高海千歌,MEMBER,base,<赤> 3,"{""red"": 3}",{},"{""red"": 3}",1,0
+PL!S-pb1-011,桜内梨子,MEMBER,base,<青> 3,"{""blue"": 3}",{},"{""blue"": 3}",1,0
+PL!S-pb1-012,松浦果南,MEMBER,base,<緑> 3,"{""green"": 3}",{},"{""green"": 3}",1,0
+PL!S-pb1-013,黒澤ダイヤ,MEMBER,base,<緑> 1,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-pb1-014,渡辺曜,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-pb1-015,津島善子,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-pb1-016,国木田花丸,MEMBER,base,<緑> 2,"{""green"": 2}",{},"{""green"": 2}",1,0
+PL!S-pb1-016,国木田花丸,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-pb1-017,小原鞠莉,MEMBER,base,<青> 2,"{""blue"": 2}",{},"{""blue"": 2}",1,0
+PL!S-pb1-017,小原鞠莉,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-pb1-018,黒澤ルビィ,MEMBER,base,<赤> 2,"{""red"": 2}",{},"{""red"": 2}",1,0
+PL!S-pb1-018,黒澤ルビィ,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-pb1-019,元気全開DAY！DAY！DAY！,LIVE,required,<赤> 4 <任意> 2 (合計6),"{""any"": 2, ""red"": 4}",{},"{""any"": 2, ""red"": 4}",1,0
+PL!S-pb1-019,元気全開DAY！DAY！DAY！,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!S-pb1-019,元気全開DAY！DAY！DAY！,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!S-pb1-020,トリコリコPLEASE!!,LIVE,required,<緑> 8 <任意> 6 (合計14),"{""any"": 6, ""green"": 8}",{},"{""any"": 6, ""green"": 8}",1,0
+PL!S-pb1-020,トリコリコPLEASE!!,LIVE,blade_heart,<緑> <ドロー+1>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-pb1-020,トリコリコPLEASE!!,LIVE,blade_heart_tags,<緑> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!S-pb1-021,Strawberry Trapper,LIVE,required,<青> 2 <任意> 2 (合計4),"{""any"": 2, ""blue"": 2}",{},"{""any"": 2, ""blue"": 2}",1,0
+PL!S-pb1-021,Strawberry Trapper,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!S-pb1-022,逃走迷走メビウスループ,LIVE,required,<緑> 3 <任意> 3 (合計6),"{""any"": 3, ""green"": 3}",{},"{""any"": 3, ""green"": 3}",1,0
+PL!S-pb1-022,逃走迷走メビウスループ,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!S-pb1-022,逃走迷走メビウスループ,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!S-pb1-023,Next SPARKLING!!,LIVE,required,<赤> 6 <緑> 6 <青> 6 <任意> 3 (合計21),"{""any"": 3, ""blue"": 6, ""green"": 6, ""red"": 6}",{},"{""any"": 3, ""blue"": 6, ""green"": 6, ""red"": 6}",1,0
+PL!S-pb1-023,Next SPARKLING!!,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!S-pb1-023,Next SPARKLING!!,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!S-pb1-024,僕らの走ってきた道は…,LIVE,required,<青> 4 <任意> 3 (合計7),"{""any"": 3, ""blue"": 4}",{},"{""any"": 3, ""blue"": 4}",1,0
+PL!S-pb1-024,僕らの走ってきた道は…,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!S-pb1-024,僕らの走ってきた道は…,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!S-sd1-001,高海千歌,MEMBER,base,<赤> 3 <緑> 2 <青> 2,"{""blue"": 2, ""green"": 2, ""red"": 3}",{},"{""blue"": 2, ""green"": 2, ""red"": 3}",1,0
+PL!S-sd1-002,桜内梨子,MEMBER,base,<赤> 2 <緑> 2 <青> 1,"{""blue"": 1, ""green"": 2, ""red"": 2}",{},"{""blue"": 1, ""green"": 2, ""red"": 2}",1,0
+PL!S-sd1-002,桜内梨子,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-sd1-003,松浦果南,MEMBER,base,<赤> 1 <緑> 2 <青> 1,"{""blue"": 1, ""green"": 2, ""red"": 1}",{},"{""blue"": 1, ""green"": 2, ""red"": 1}",1,0
+PL!S-sd1-003,松浦果南,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-sd1-004,黒澤ダイヤ,MEMBER,base,<赤> 2 <緑> 2 <青> 2,"{""blue"": 2, ""green"": 2, ""red"": 2}",{},"{""blue"": 2, ""green"": 2, ""red"": 2}",1,0
+PL!S-sd1-004,黒澤ダイヤ,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-sd1-005,渡辺曜,MEMBER,base,<赤> 1 <緑> 1,"{""green"": 1, ""red"": 1}",{},"{""green"": 1, ""red"": 1}",1,0
+PL!S-sd1-006,津島善子,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-sd1-007,国木田花丸,MEMBER,base,<赤> 1 <緑> 1 <青> 2,"{""blue"": 2, ""green"": 1, ""red"": 1}",{},"{""blue"": 2, ""green"": 1, ""red"": 1}",1,0
+PL!S-sd1-007,国木田花丸,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-sd1-008,小原鞠莉,MEMBER,base,<緑> 1,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-sd1-008,小原鞠莉,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-sd1-009,黒澤ルビィ,MEMBER,base,<赤> 1 <緑> 1 <青> 1,"{""blue"": 1, ""green"": 1, ""red"": 1}",{},"{""blue"": 1, ""green"": 1, ""red"": 1}",1,0
+PL!S-sd1-010,高海千歌,MEMBER,base,<赤> 2,"{""red"": 2}",{},"{""red"": 2}",1,0
+PL!S-sd1-010,高海千歌,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-sd1-011,桜内梨子,MEMBER,base,<青> 2,"{""blue"": 2}",{},"{""blue"": 2}",1,0
+PL!S-sd1-011,桜内梨子,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-sd1-012,松浦果南,MEMBER,base,<赤> 1 <緑> 2 <青> 1,"{""blue"": 1, ""green"": 2, ""red"": 1}",{},"{""blue"": 1, ""green"": 2, ""red"": 1}",1,0
+PL!S-sd1-013,黒澤ダイヤ,MEMBER,base,<緑> 1,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-sd1-013,黒澤ダイヤ,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-sd1-014,渡辺曜,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-sd1-014,渡辺曜,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-sd1-015,津島善子,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-sd1-015,津島善子,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-sd1-016,国木田花丸,MEMBER,base,<緑> 2,"{""green"": 2}",{},"{""green"": 2}",1,0
+PL!S-sd1-016,国木田花丸,MEMBER,blade_heart,<緑>,"{""green"": 1}",{},"{""green"": 1}",1,0
+PL!S-sd1-017,小原鞠莉,MEMBER,base,<青> 1,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-sd1-017,小原鞠莉,MEMBER,blade_heart,<青>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-sd1-018,黒澤ルビィ,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-sd1-018,黒澤ルビィ,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!S-sd1-019,未来の僕らは知ってるよ,LIVE,required,<赤> 1 <緑> 1 <青> 1 (合計3),"{""blue"": 1, ""green"": 1, ""red"": 1}",{},"{""blue"": 1, ""green"": 1, ""red"": 1}",1,0
+PL!S-sd1-019,未来の僕らは知ってるよ,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!S-sd1-020,JIMO-AI Dash!,LIVE,required,<赤> 1 <緑> 1 <青> 1 <任意> 3 (合計6),"{""any"": 3, ""blue"": 1, ""green"": 1, ""red"": 1}",{},"{""any"": 3, ""blue"": 1, ""green"": 1, ""red"": 1}",1,0
+PL!S-sd1-020,JIMO-AI Dash!,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!S-sd1-020,JIMO-AI Dash!,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!S-sd1-021,永久hours,LIVE,required,<赤> 2 <緑> 2 <青> 2 <任意> 4 (合計10),"{""any"": 4, ""blue"": 2, ""green"": 2, ""red"": 2}",{},"{""any"": 4, ""blue"": 2, ""green"": 2, ""red"": 2}",1,0
+PL!S-sd1-021,永久hours,LIVE,blade_heart,<青> <ドロー+1>,"{""blue"": 1}",{},"{""blue"": 1}",1,0
+PL!S-sd1-021,永久hours,LIVE,blade_heart_tags,<青> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!S-sd1-022,Jump up HIGH!!,LIVE,required,<赤> 2 <緑> 2 <青> 2 <任意> 9 (合計15),"{""any"": 9, ""blue"": 2, ""green"": 2, ""red"": 2}",{},"{""any"": 9, ""blue"": 2, ""green"": 2, ""red"": 2}",1,0
+PL!S-sd1-022,Jump up HIGH!!,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!SP-PR-003,澁谷かのん,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-PR-003,澁谷かのん,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-PR-004,唐可可,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-PR-005,嵐千砂都,MEMBER,base,<黄> 3,"{""yellow"": 3}",{},"{""yellow"": 3}",1,0
+PL!SP-PR-006,平安名すみれ,MEMBER,base,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-PR-007,葉月恋,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-PR-007,葉月恋,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-PR-008,桜小路きな子,MEMBER,base,<黄> 3,"{""yellow"": 3}",{},"{""yellow"": 3}",1,0
+PL!SP-PR-009,米女メイ,MEMBER,base,<赤> 2 <黄> 1 <紫> 1,"{""purple"": 1, ""red"": 2, ""yellow"": 1}",{},"{""purple"": 1, ""red"": 2, ""yellow"": 1}",1,0
+PL!SP-PR-010,若菜四季,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-PR-010,若菜四季,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-PR-011,鬼塚夏美,MEMBER,base,<赤> 2 <黄> 1 <紫> 1,"{""purple"": 1, ""red"": 2, ""yellow"": 1}",{},"{""purple"": 1, ""red"": 2, ""yellow"": 1}",1,0
+PL!SP-PR-012,ウィーン・マルガレーテ,MEMBER,base,<赤> 2 <黄> 1 <紫> 1,"{""purple"": 1, ""red"": 2, ""yellow"": 1}",{},"{""purple"": 1, ""red"": 2, ""yellow"": 1}",1,0
+PL!SP-PR-013,鬼塚冬毬,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-PR-016,嵐千砂都,MEMBER,base,<黄> 1 <紫> 1,"{""purple"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""yellow"": 1}",1,0
+PL!SP-PR-017,ウィーン・マルガレーテ,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-PR-017,ウィーン・マルガレーテ,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-PR-018,澁谷かのん,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-PR-020,桜小路きな子,MEMBER,base,<黄> 3 <紫> 3,"{""purple"": 3, ""yellow"": 3}",{},"{""purple"": 3, ""yellow"": 3}",1,0
+PL!SP-PR-020,桜小路きな子,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-PR-021,澁谷かのん,MEMBER,base,<赤> 1 <紫> 1,"{""purple"": 1, ""red"": 1}",{},"{""purple"": 1, ""red"": 1}",1,0
+PL!SP-PR-022,若菜四季,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-PR-024,平安名すみれ,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-bp1-001,澁谷かのん,MEMBER,base,<nolink(赤)> 1 <nolink(黄)> 1 <紫> 3,"{""purple"": 3}",{},"{""purple"": 3}",1,0
+PL!SP-bp1-002,唐可可,MEMBER,base,<赤> 1 <黄> 1,"{""red"": 1, ""yellow"": 1}",{},"{""red"": 1, ""yellow"": 1}",1,0
+PL!SP-bp1-003,嵐千砂都,MEMBER,base,<赤> 1 <黄> 1 <紫> 2,"{""purple"": 2, ""red"": 1, ""yellow"": 1}",{},"{""purple"": 2, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-bp1-004,平安名すみれ,MEMBER,base,<赤> 2 <黄> 2 <紫> 2,"{""purple"": 2, ""red"": 2, ""yellow"": 2}",{},"{""purple"": 2, ""red"": 2, ""yellow"": 2}",1,0
+PL!SP-bp1-004,平安名すみれ,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp1-005,葉月恋,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp1-005,葉月恋,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp1-006,桜小路きな子,MEMBER,base,<赤> 1 <黄> 2 <紫> 1,"{""purple"": 1, ""red"": 1, ""yellow"": 2}",{},"{""purple"": 1, ""red"": 1, ""yellow"": 2}",1,0
+PL!SP-bp1-007,米女メイ,MEMBER,base,<赤> 2 <黄> 2 <紫> 2,"{""purple"": 2, ""red"": 2, ""yellow"": 2}",{},"{""purple"": 2, ""red"": 2, ""yellow"": 2}",1,0
+PL!SP-bp1-007,米女メイ,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp1-008,若菜四季,MEMBER,base,<赤> 2 <黄> 1 <紫> 2,"{""purple"": 2, ""red"": 2, ""yellow"": 1}",{},"{""purple"": 2, ""red"": 2, ""yellow"": 1}",1,0
+PL!SP-bp1-008,若菜四季,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-bp1-009,鬼塚夏美,MEMBER,base,<赤> 1 <黄> 1 <紫> 1,"{""purple"": 1, ""red"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-bp1-010,ウィーン・マルガレーテ,MEMBER,base,<赤> 1 <黄> 2 <紫> 2,"{""purple"": 2, ""red"": 1, ""yellow"": 2}",{},"{""purple"": 2, ""red"": 1, ""yellow"": 2}",1,0
+PL!SP-bp1-011,鬼塚冬毬,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp1-011,鬼塚冬毬,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp1-012,澁谷かのん,MEMBER,base,<黄> 2,"{""yellow"": 2}",{},"{""yellow"": 2}",1,0
+PL!SP-bp1-013,唐可可,MEMBER,base,<赤> 1 <黄> 2 <紫> 1,"{""purple"": 1, ""red"": 1, ""yellow"": 2}",{},"{""purple"": 1, ""red"": 1, ""yellow"": 2}",1,0
+PL!SP-bp1-014,嵐千砂都,MEMBER,base,<黄> 1 <紫> 1,"{""purple"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""yellow"": 1}",1,0
+PL!SP-bp1-014,嵐千砂都,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp1-015,平安名すみれ,MEMBER,base,<赤> 1 <紫> 1,"{""purple"": 1, ""red"": 1}",{},"{""purple"": 1, ""red"": 1}",1,0
+PL!SP-bp1-015,平安名すみれ,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-bp1-016,葉月恋,MEMBER,base,<赤> 1 <黄> 1,"{""red"": 1, ""yellow"": 1}",{},"{""red"": 1, ""yellow"": 1}",1,0
+PL!SP-bp1-016,葉月恋,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-bp1-017,桜小路きな子,MEMBER,base,<赤> 2 <黄> 2 <紫> 1,"{""purple"": 1, ""red"": 2, ""yellow"": 2}",{},"{""purple"": 1, ""red"": 2, ""yellow"": 2}",1,0
+PL!SP-bp1-017,桜小路きな子,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp1-018,米女メイ,MEMBER,base,<黄> 2 <紫> 2,"{""purple"": 2, ""yellow"": 2}",{},"{""purple"": 2, ""yellow"": 2}",1,0
+PL!SP-bp1-019,若菜四季,MEMBER,base,<赤> 2 <黄> 1 <紫> 2,"{""purple"": 2, ""red"": 2, ""yellow"": 1}",{},"{""purple"": 2, ""red"": 2, ""yellow"": 1}",1,0
+PL!SP-bp1-019,若菜四季,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-bp1-020,鬼塚夏美,MEMBER,base,<黄> 2,"{""yellow"": 2}",{},"{""yellow"": 2}",1,0
+PL!SP-bp1-020,鬼塚夏美,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp1-021,ウィーン・マルガレーテ,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp1-022,鬼塚冬毬,MEMBER,base,<赤> 2 <黄> 2 <紫> 2,"{""purple"": 2, ""red"": 2, ""yellow"": 2}",{},"{""purple"": 2, ""red"": 2, ""yellow"": 2}",1,0
+PL!SP-bp1-022,鬼塚冬毬,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-bp1-023,START!! True dreams,LIVE,required,<赤> 1 <黄> 1 <紫> 1 <任意> 1 (合計4),"{""any"": 1, ""purple"": 1, ""red"": 1, ""yellow"": 1}",{},"{""any"": 1, ""purple"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-bp1-023,START!! True dreams,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!SP-bp1-024,Tiny Stars,LIVE,required,<桃> 1 <青> 1 <任意> 6 (合計8),"{""any"": 6, ""blue"": 1, ""pink"": 1}",{},"{""any"": 6, ""blue"": 1, ""pink"": 1}",1,0
+PL!SP-bp1-024,Tiny Stars,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!SP-bp1-024,Tiny Stars,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!SP-bp1-025,Starlight Prologue,LIVE,required,<黄> 1 <紫> 1 <任意> 3 (合計5),"{""any"": 3, ""purple"": 1, ""yellow"": 1}",{},"{""any"": 3, ""purple"": 1, ""yellow"": 1}",1,0
+PL!SP-bp1-025,Starlight Prologue,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!SP-bp1-025,Starlight Prologue,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!SP-bp1-026,未来予報ハレルヤ！,LIVE,required,<赤> 2 <黄> 2 <紫> 2 <任意> 2 (合計8),"{""any"": 2, ""purple"": 2, ""red"": 2, ""yellow"": 2}",{},"{""any"": 2, ""purple"": 2, ""red"": 2, ""yellow"": 2}",1,0
+PL!SP-bp1-026,未来予報ハレルヤ！,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!SP-bp1-026,未来予報ハレルヤ！,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!SP-bp1-027,Sing！Shine！Smile！,LIVE,required,<赤> 3 <黄> 3 <紫> 3 <任意> 5 (合計14),"{""any"": 5, ""purple"": 3, ""red"": 3, ""yellow"": 3}",{},"{""any"": 5, ""purple"": 3, ""red"": 3, ""yellow"": 3}",1,0
+PL!SP-bp1-027,Sing！Shine！Smile！,LIVE,blade_heart,<黄> <ドロー+1>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp1-027,Sing！Shine！Smile！,LIVE,blade_heart_tags,<黄> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!SP-bp2-001,澁谷かのん,MEMBER,base,<赤> 2 <黄> 2 <紫> 2,"{""purple"": 2, ""red"": 2, ""yellow"": 2}",{},"{""purple"": 2, ""red"": 2, ""yellow"": 2}",1,0
+PL!SP-bp2-001,澁谷かのん,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-bp2-002,唐可可,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-bp2-002,唐可可,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-bp2-003,嵐千砂都,MEMBER,base,<赤> 1 <紫> 1,"{""purple"": 1, ""red"": 1}",{},"{""purple"": 1, ""red"": 1}",1,0
+PL!SP-bp2-004,平安名すみれ,MEMBER,base,<赤> 1 <黄> 2 <紫> 1,"{""purple"": 1, ""red"": 1, ""yellow"": 2}",{},"{""purple"": 1, ""red"": 1, ""yellow"": 2}",1,0
+PL!SP-bp2-005,葉月恋,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp2-005,葉月恋,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp2-006,桜小路きな子,MEMBER,base,<赤> 1 <黄> 2 <紫> 1,"{""purple"": 1, ""red"": 1, ""yellow"": 2}",{},"{""purple"": 1, ""red"": 1, ""yellow"": 2}",1,0
+PL!SP-bp2-007,米女メイ,MEMBER,base,<赤> 1 <黄> 1,"{""red"": 1, ""yellow"": 1}",{},"{""red"": 1, ""yellow"": 1}",1,0
+PL!SP-bp2-008,若菜四季,MEMBER,base,<赤> 1 <黄> 2 <紫> 1,"{""purple"": 1, ""red"": 1, ""yellow"": 2}",{},"{""purple"": 1, ""red"": 1, ""yellow"": 2}",1,0
+PL!SP-bp2-009,鬼塚夏美,MEMBER,base,<赤> 1 <黄> 3 <紫> 2,"{""purple"": 2, ""red"": 1, ""yellow"": 3}",{},"{""purple"": 2, ""red"": 1, ""yellow"": 3}",1,0
+PL!SP-bp2-009,鬼塚夏美,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp2-010,ウィーン・マルガレーテ,MEMBER,base,<赤> 3 <黄> 2 <紫> 3,"{""purple"": 3, ""red"": 3, ""yellow"": 2}",{},"{""purple"": 3, ""red"": 3, ""yellow"": 2}",1,0
+PL!SP-bp2-011,鬼塚冬毬,MEMBER,base,<赤> 2 <黄> 2 <紫> 1,"{""purple"": 1, ""red"": 2, ""yellow"": 2}",{},"{""purple"": 1, ""red"": 2, ""yellow"": 2}",1,0
+PL!SP-bp2-011,鬼塚冬毬,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp2-012,澁谷かのん,MEMBER,base,<赤> 2,"{""red"": 2}",{},"{""red"": 2}",1,0
+PL!SP-bp2-012,澁谷かのん,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-bp2-013,唐可可,MEMBER,base,<赤> 1 <黄> 1 <紫> 2,"{""purple"": 2, ""red"": 1, ""yellow"": 1}",{},"{""purple"": 2, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-bp2-014,嵐千砂都,MEMBER,base,<赤> 1 <黄> 2 <紫> 1,"{""purple"": 1, ""red"": 1, ""yellow"": 2}",{},"{""purple"": 1, ""red"": 1, ""yellow"": 2}",1,0
+PL!SP-bp2-015,平安名すみれ,MEMBER,base,<赤> 1 <黄> 1,"{""red"": 1, ""yellow"": 1}",{},"{""red"": 1, ""yellow"": 1}",1,0
+PL!SP-bp2-016,葉月恋,MEMBER,base,<紫> 2,"{""purple"": 2}",{},"{""purple"": 2}",1,0
+PL!SP-bp2-016,葉月恋,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-bp2-017,桜小路きな子,MEMBER,base,<黄> 2,"{""yellow"": 2}",{},"{""yellow"": 2}",1,0
+PL!SP-bp2-017,桜小路きな子,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp2-018,米女メイ,MEMBER,base,<赤> 2 <黄> 1 <紫> 1,"{""purple"": 1, ""red"": 2, ""yellow"": 1}",{},"{""purple"": 1, ""red"": 2, ""yellow"": 1}",1,0
+PL!SP-bp2-019,若菜四季,MEMBER,base,<黄> 1 <紫> 1,"{""purple"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""yellow"": 1}",1,0
+PL!SP-bp2-019,若菜四季,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp2-020,鬼塚夏美,MEMBER,base,<黄> 1 <紫> 1,"{""purple"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""yellow"": 1}",1,0
+PL!SP-bp2-021,ウィーン・マルガレーテ,MEMBER,base,<赤> 1 <紫> 1,"{""purple"": 1, ""red"": 1}",{},"{""purple"": 1, ""red"": 1}",1,0
+PL!SP-bp2-022,鬼塚冬毬,MEMBER,base,<赤> 1 <黄> 1,"{""red"": 1, ""yellow"": 1}",{},"{""red"": 1, ""yellow"": 1}",1,0
+PL!SP-bp2-022,鬼塚冬毬,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-bp2-023,Go!! リスタート,LIVE,required,<赤> 1 <黄> 1 <紫> 1 <任意> 1 (合計4),"{""any"": 1, ""purple"": 1, ""red"": 1, ""yellow"": 1}",{},"{""any"": 1, ""purple"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-bp2-023,Go!! リスタート,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!SP-bp2-024,ビタミンSUMMER！,LIVE,required,<赤> 1 <黄> 4 <紫> 1 <任意> 6 (合計12),"{""any"": 6, ""purple"": 1, ""red"": 1, ""yellow"": 4}",{},"{""any"": 6, ""purple"": 1, ""red"": 1, ""yellow"": 4}",1,0
+PL!SP-bp2-024,ビタミンSUMMER！,LIVE,blade_heart,<黄> <ドロー+1>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp2-024,ビタミンSUMMER！,LIVE,blade_heart_tags,<黄> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!SP-bp2-025,Bubble Rise,LIVE,required,<赤> 2 <黄> 2 <紫> 2 <任意> 4 (合計10),"{""any"": 4, ""purple"": 2, ""red"": 2, ""yellow"": 2}",{},"{""any"": 4, ""purple"": 2, ""red"": 2, ""yellow"": 2}",1,0
+PL!SP-bp2-025,Bubble Rise,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!SP-bp2-025,Bubble Rise,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!SP-bp2-026,笑顔のPromise,LIVE,required,<黄> 6 <任意> 3 (合計9),"{""any"": 3, ""yellow"": 6}",{},"{""any"": 3, ""yellow"": 6}",1,0
+PL!SP-bp2-026,笑顔のPromise,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!SP-bp2-026,笑顔のPromise,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!SP-bp2-027,UNIVERSE!!,LIVE,required,<赤> 3 <黄> 3 <紫> 3 <任意> 7 (合計16),"{""any"": 7, ""purple"": 3, ""red"": 3, ""yellow"": 3}",{},"{""any"": 7, ""purple"": 3, ""red"": 3, ""yellow"": 3}",1,0
+PL!SP-bp2-027,UNIVERSE!!,LIVE,blade_heart,<赤> <ドロー+1>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-bp2-027,UNIVERSE!!,LIVE,blade_heart_tags,<赤> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!SP-bp4-001,澁谷かのん,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp4-001,澁谷かのん,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp4-002,唐可可,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-bp4-002,唐可可,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-bp4-003,嵐千砂都,MEMBER,base,<赤> 1 <黄> 1 <紫> 1,"{""purple"": 1, ""red"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-bp4-004,平安名すみれ,MEMBER,base,<赤> 3 <黄> 3 <紫> 2,"{""purple"": 2, ""red"": 3, ""yellow"": 3}",{},"{""purple"": 2, ""red"": 3, ""yellow"": 3}",1,0
+PL!SP-bp4-005,葉月恋,MEMBER,base,<赤> 1 <黄> 2 <紫> 3,"{""purple"": 3, ""red"": 1, ""yellow"": 2}",{},"{""purple"": 3, ""red"": 1, ""yellow"": 2}",1,0
+PL!SP-bp4-005,葉月恋,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-bp4-006,桜小路きな子,MEMBER,base,<赤> 1 <黄> 2 <紫> 1,"{""purple"": 1, ""red"": 1, ""yellow"": 2}",{},"{""purple"": 1, ""red"": 1, ""yellow"": 2}",1,0
+PL!SP-bp4-006,桜小路きな子,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp4-007,米女メイ,MEMBER,base,<赤> 3 <黄> 2 <紫> 1,"{""purple"": 1, ""red"": 3, ""yellow"": 2}",{},"{""purple"": 1, ""red"": 3, ""yellow"": 2}",1,0
+PL!SP-bp4-007,米女メイ,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-bp4-008,若菜四季,MEMBER,base,<赤> 2 <黄> 2 <紫> 2,"{""purple"": 2, ""red"": 2, ""yellow"": 2}",{},"{""purple"": 2, ""red"": 2, ""yellow"": 2}",1,0
+PL!SP-bp4-008,若菜四季,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp4-009,鬼塚夏美,MEMBER,base,<赤> 1 <黄> 1 <紫> 1,"{""purple"": 1, ""red"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-bp4-010,ウィーン・マルガレーテ,MEMBER,base,<黄> 2 <紫> 1,"{""purple"": 1, ""yellow"": 2}",{},"{""purple"": 1, ""yellow"": 2}",1,0
+PL!SP-bp4-011,鬼塚冬毬,MEMBER,base,<赤> 1 <黄> 1 <紫> 1,"{""purple"": 1, ""red"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-bp4-012,澁谷かのん,MEMBER,base,<赤> 2,"{""red"": 2}",{},"{""red"": 2}",1,0
+PL!SP-bp4-012,澁谷かのん,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-bp4-013,唐可可,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-bp4-013,唐可可,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-bp4-014,嵐千砂都,MEMBER,base,<赤> 2 <黄> 2,"{""red"": 2, ""yellow"": 2}",{},"{""red"": 2, ""yellow"": 2}",1,0
+PL!SP-bp4-015,平安名すみれ,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-bp4-015,平安名すみれ,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-bp4-016,葉月恋,MEMBER,base,<赤> 1 <黄> 1 <紫> 1,"{""purple"": 1, ""red"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-bp4-017,桜小路きな子,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp4-018,米女メイ,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-bp4-018,米女メイ,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-bp4-019,若菜四季,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp4-019,若菜四季,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp4-020,鬼塚夏美,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp4-021,ウィーン・マルガレーテ,MEMBER,base,<赤> 1 <黄> 1 <紫> 2,"{""purple"": 2, ""red"": 1, ""yellow"": 1}",{},"{""purple"": 2, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-bp4-021,ウィーン・マルガレーテ,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-bp4-022,鬼塚冬毬,MEMBER,base,<赤> 2 <黄> 2 <紫> 1,"{""purple"": 1, ""red"": 2, ""yellow"": 2}",{},"{""purple"": 1, ""red"": 2, ""yellow"": 2}",1,0
+PL!SP-bp4-023,Dazzling Game,LIVE,required,<紫> 11 <任意> 8 (合計19),"{""any"": 8, ""purple"": 11}",{},"{""any"": 8, ""purple"": 11}",1,0
+PL!SP-bp4-023,Dazzling Game,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!SP-bp4-024,ノンフィクション!!,LIVE,required,<赤> 3 <黄> 5 <任意> 7 (合計15),"{""any"": 7, ""red"": 3, ""yellow"": 5}",{},"{""any"": 7, ""red"": 3, ""yellow"": 5}",1,0
+PL!SP-bp4-024,ノンフィクション!!,LIVE,blade_heart,<黄> <ドロー+1>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp4-024,ノンフィクション!!,LIVE,blade_heart_tags,<黄> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!SP-bp4-025,Special Color,LIVE,required,<任意> 7 (合計7),"{""any"": 7}",{},"{""any"": 7}",1,0
+PL!SP-bp4-025,Special Color,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!SP-bp4-025,Special Color,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!SP-bp4-026,Wish Song,LIVE,required,<赤> 1 <黄> 1 <紫> 3 <任意> 6 (合計11),"{""any"": 6, ""purple"": 3, ""red"": 1, ""yellow"": 1}",{},"{""any"": 6, ""purple"": 3, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-bp4-026,Wish Song,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!SP-bp4-026,Wish Song,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!SP-bp4-027,"Chance Day, Chance Way!",LIVE,required,<赤> 1 <任意> 2 (合計3),"{""any"": 2, ""red"": 1}",{},"{""any"": 2, ""red"": 1}",1,0
+PL!SP-bp4-027,"Chance Day, Chance Way!",LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!SP-bp4-027,"Chance Day, Chance Way!",LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!SP-bp4-028,DAISUKI FULL POWER,LIVE,required,<赤> 3 <黄> 3 <任意> 7 (合計13),"{""any"": 7, ""red"": 3, ""yellow"": 3}",{},"{""any"": 7, ""red"": 3, ""yellow"": 3}",1,0
+PL!SP-bp4-028,DAISUKI FULL POWER,LIVE,blade_heart,<赤> <ドロー+1>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-bp4-028,DAISUKI FULL POWER,LIVE,blade_heart_tags,<赤> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!SP-bp4-029,追いかける夢の先で,LIVE,required,<黄> 3 <紫> 3 <任意> 4 (合計10),"{""any"": 4, ""purple"": 3, ""yellow"": 3}",{},"{""any"": 4, ""purple"": 3, ""yellow"": 3}",1,0
+PL!SP-bp4-029,追いかける夢の先で,LIVE,blade_heart,<紫> <ドロー+1>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-bp4-029,追いかける夢の先で,LIVE,blade_heart_tags,<紫> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!SP-bp4-030,Second Sparkle,LIVE,required,<黄> 2 <任意> 3 (合計5),"{""any"": 3, ""yellow"": 2}",{},"{""any"": 3, ""yellow"": 2}",1,0
+PL!SP-bp4-030,Second Sparkle,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!SP-bp4-030,Second Sparkle,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!SP-bp5-001,澁谷かのん,MEMBER,base,<桃> 1 <赤> 2 <黄> 1 <紫> 1,"{""pink"": 1, ""purple"": 1, ""red"": 2, ""yellow"": 1}",{},"{""pink"": 1, ""purple"": 1, ""red"": 2, ""yellow"": 1}",1,0
+PL!SP-bp5-002,唐可可,MEMBER,base,<黄> 2 <緑> 2 <紫> 2,"{""green"": 2, ""purple"": 2, ""yellow"": 2}",{},"{""green"": 2, ""purple"": 2, ""yellow"": 2}",1,0
+PL!SP-bp5-002,唐可可,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-bp5-003,嵐千砂都,MEMBER,base,<赤> 2 <黄> 2 <紫> 2,"{""purple"": 2, ""red"": 2, ""yellow"": 2}",{},"{""purple"": 2, ""red"": 2, ""yellow"": 2}",1,0
+PL!SP-bp5-003,嵐千砂都,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp5-004,平安名すみれ,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-bp5-005,葉月恋,MEMBER,base,<赤> 1 <黄> 2 <紫> 2,"{""purple"": 2, ""red"": 1, ""yellow"": 2}",{},"{""purple"": 2, ""red"": 1, ""yellow"": 2}",1,0
+PL!SP-bp5-005,葉月恋,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-bp5-006,桜小路きな子,MEMBER,base,<桃> 1 <赤> 1 <黄> 1 <紫> 1,"{""pink"": 1, ""purple"": 1, ""red"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""purple"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-bp5-006,桜小路きな子,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-bp5-007,米女メイ,MEMBER,base,<桃> 1 <赤> 2 <黄> 2 <紫> 1,"{""pink"": 1, ""purple"": 1, ""red"": 2, ""yellow"": 2}",{},"{""pink"": 1, ""purple"": 1, ""red"": 2, ""yellow"": 2}",1,0
+PL!SP-bp5-007,米女メイ,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-bp5-008,若菜四季,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-bp5-008,若菜四季,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-bp5-009,鬼塚夏美,MEMBER,base,<赤> 2 <黄> 3 <紫> 2,"{""purple"": 2, ""red"": 2, ""yellow"": 3}",{},"{""purple"": 2, ""red"": 2, ""yellow"": 3}",1,0
+PL!SP-bp5-009,鬼塚夏美,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp5-010,ウィーン・マルガレーテ,MEMBER,base,<桃> 1 <赤> 2 <黄> 1 <紫> 2,"{""pink"": 1, ""purple"": 2, ""red"": 2, ""yellow"": 1}",{},"{""pink"": 1, ""purple"": 2, ""red"": 2, ""yellow"": 1}",1,0
+PL!SP-bp5-010,ウィーン・マルガレーテ,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-bp5-012,澁谷かのん,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp5-012,澁谷かのん,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp5-013,唐可可,MEMBER,base,<桃> 1 <紫> 1,"{""pink"": 1, ""purple"": 1}",{},"{""pink"": 1, ""purple"": 1}",1,0
+PL!SP-bp5-013,唐可可,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-bp5-014,嵐千砂都,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp5-014,嵐千砂都,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp5-015,平安名すみれ,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-bp5-015,平安名すみれ,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-bp5-016,葉月恋,MEMBER,base,<赤> 1 <黄> 1 <紫> 1,"{""purple"": 1, ""red"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-bp5-017,桜小路きな子,MEMBER,base,<赤> 1 <黄> 1 <紫> 1,"{""purple"": 1, ""red"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-bp5-018,米女メイ,MEMBER,base,<赤> 1 <黄> 1,"{""red"": 1, ""yellow"": 1}",{},"{""red"": 1, ""yellow"": 1}",1,0
+PL!SP-bp5-018,米女メイ,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp5-019,若菜四季,MEMBER,base,<桃> 1 <赤> 1 <黄> 1 <紫> 1,"{""pink"": 1, ""purple"": 1, ""red"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""purple"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-bp5-020,鬼塚夏美,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp5-020,鬼塚夏美,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-bp5-021,ウィーン・マルガレーテ,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-bp5-021,ウィーン・マルガレーテ,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-bp5-022,鬼塚冬毬,MEMBER,base,<黄> 1 <紫> 1,"{""purple"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""yellow"": 1}",1,0
+PL!SP-bp5-022,鬼塚冬毬,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-bp5-023,Shooting Voice!!,LIVE,required,<赤> 2 <黄> 2 <紫> 2 <任意> 7 (合計13),"{""any"": 7, ""purple"": 2, ""red"": 2, ""yellow"": 2}",{},"{""any"": 7, ""purple"": 2, ""red"": 2, ""yellow"": 2}",1,0
+PL!SP-bp5-023,Shooting Voice!!,LIVE,blade_heart,<紫> <ドロー+1>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-bp5-023,Shooting Voice!!,LIVE,blade_heart_tags,<紫> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!SP-bp5-024,MIRACLE NEW STORY,LIVE,required,<桃> 2 <赤> 4 <紫> 4 <任意> 5 (合計13),"{""any"": 5, ""pink"": 2, ""purple"": 4, ""red"": 4}",{},"{""any"": 5, ""pink"": 2, ""purple"": 4, ""red"": 4}",1,0
+PL!SP-bp5-024,MIRACLE NEW STORY,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!SP-bp5-025,常夏☆サンシャイン,LIVE,required,<赤> 2 <黄> 2 <紫> 2 <任意> 8 (合計14),"{""any"": 8, ""purple"": 2, ""red"": 2, ""yellow"": 2}",{},"{""any"": 8, ""purple"": 2, ""red"": 2, ""yellow"": 2}",1,0
+PL!SP-bp5-025,常夏☆サンシャイン,LIVE,blade_heart,<赤> <ドロー+1>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-bp5-025,常夏☆サンシャイン,LIVE,blade_heart_tags,<赤> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!SP-bp5-026,Let's be ONE,LIVE,required,<赤> 1 <黄> 1 <紫> 1 (合計3),"{""purple"": 1, ""red"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-bp5-026,Let's be ONE,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!SP-bp5-027,HOT PASSION!!,LIVE,required,<桃> 2 <赤> 2 <黄> 1 <紫> 1 <任意> 2 (合計8),"{""any"": 2, ""pink"": 2, ""purple"": 1, ""red"": 2, ""yellow"": 1}",{},"{""any"": 2, ""pink"": 2, ""purple"": 1, ""red"": 2, ""yellow"": 1}",1,0
+PL!SP-bp5-027,HOT PASSION!!,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!SP-bp5-027,HOT PASSION!!,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!SP-bp5-111,柊摩央,MEMBER,base,<桃> 1 <赤> 1 <紫> 1,"{""pink"": 1, ""purple"": 1, ""red"": 1}",{},"{""pink"": 1, ""purple"": 1, ""red"": 1}",1,0
+PL!SP-bp5-222,聖澤悠奈,MEMBER,base,<桃> 1 <赤> 1 <黄> 1,"{""pink"": 1, ""red"": 1, ""yellow"": 1}",{},"{""pink"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-pb1-001,澁谷かのん,MEMBER,base,<赤> 4 <黄> 1 <紫> 1,"{""purple"": 1, ""red"": 4, ""yellow"": 1}",{},"{""purple"": 1, ""red"": 4, ""yellow"": 1}",1,0
+PL!SP-pb1-001,澁谷かのん,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-pb1-002,唐可可,MEMBER,base,<赤> 1 <黄> 1 <紫> 4,"{""purple"": 4, ""red"": 1, ""yellow"": 1}",{},"{""purple"": 4, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-pb1-002,唐可可,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-pb1-003,嵐千砂都,MEMBER,base,<赤> 2 <紫> 2,"{""purple"": 2, ""red"": 2}",{},"{""purple"": 2, ""red"": 2}",1,0
+PL!SP-pb1-004,平安名すみれ,MEMBER,base,<赤> 2 <黄> 1 <紫> 1,"{""purple"": 1, ""red"": 2, ""yellow"": 1}",{},"{""purple"": 1, ""red"": 2, ""yellow"": 1}",1,0
+PL!SP-pb1-005,葉月恋,MEMBER,base,<赤> 1 <黄> 1 <紫> 3,"{""purple"": 3, ""red"": 1, ""yellow"": 1}",{},"{""purple"": 3, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-pb1-005,葉月恋,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-pb1-006,桜小路きな子,MEMBER,base,<赤> 2 <黄> 1 <紫> 1,"{""purple"": 1, ""red"": 2, ""yellow"": 1}",{},"{""purple"": 1, ""red"": 2, ""yellow"": 1}",1,0
+PL!SP-pb1-007,米女メイ,MEMBER,base,<赤> 2,"{""red"": 2}",{},"{""red"": 2}",1,0
+PL!SP-pb1-008,若菜四季,MEMBER,base,<赤> 3 <紫> 3,"{""purple"": 3, ""red"": 3}",{},"{""purple"": 3, ""red"": 3}",1,0
+PL!SP-pb1-008,若菜四季,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-pb1-009,鬼塚夏美,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-pb1-010,ウィーン・マルガレーテ,MEMBER,base,<紫> 2,"{""purple"": 2}",{},"{""purple"": 2}",1,0
+PL!SP-pb1-011,鬼塚冬毬,MEMBER,base,<赤> 2 <黄> 2 <紫> 2,"{""purple"": 2, ""red"": 2, ""yellow"": 2}",{},"{""purple"": 2, ""red"": 2, ""yellow"": 2}",1,0
+PL!SP-pb1-011,鬼塚冬毬,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-pb1-012,澁谷かのん,MEMBER,base,<赤> 3,"{""red"": 3}",{},"{""red"": 3}",1,0
+PL!SP-pb1-013,唐可可,MEMBER,base,<紫> 3,"{""purple"": 3}",{},"{""purple"": 3}",1,0
+PL!SP-pb1-014,嵐千砂都,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-pb1-014,嵐千砂都,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-pb1-015,平安名すみれ,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-pb1-016,葉月恋,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-pb1-017,桜小路きな子,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-pb1-018,米女メイ,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-pb1-018,米女メイ,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-pb1-019,若菜四季,MEMBER,base,<赤> 1 <紫> 1,"{""purple"": 1, ""red"": 1}",{},"{""purple"": 1, ""red"": 1}",1,0
+PL!SP-pb1-019,若菜四季,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-pb1-020,鬼塚夏美,MEMBER,base,<赤> 1 <紫> 1,"{""purple"": 1, ""red"": 1}",{},"{""purple"": 1, ""red"": 1}",1,0
+PL!SP-pb1-021,ウィーン・マルガレーテ,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-pb1-021,ウィーン・マルガレーテ,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-pb1-022,鬼塚冬毬,MEMBER,base,<赤> 2 <紫> 1,"{""purple"": 1, ""red"": 2}",{},"{""purple"": 1, ""red"": 2}",1,0
+PL!SP-pb1-023,ディストーション,LIVE,required,<赤> 4 <任意> 4 (合計8),"{""any"": 4, ""red"": 4}",{},"{""any"": 4, ""red"": 4}",1,0
+PL!SP-pb1-023,ディストーション,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!SP-pb1-023,ディストーション,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!SP-pb1-024,ニュートラル,LIVE,required,<紫> 8 <任意> 7 (合計15),"{""any"": 7, ""purple"": 8}",{},"{""any"": 7, ""purple"": 8}",1,0
+PL!SP-pb1-024,ニュートラル,LIVE,blade_heart,<紫> <ドロー+1>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-pb1-024,ニュートラル,LIVE,blade_heart_tags,<紫> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!SP-pb1-025,Jellyfish,LIVE,required,<赤> 4 <紫> 4 <任意> 6 (合計14),"{""any"": 6, ""purple"": 4, ""red"": 4}",{},"{""any"": 6, ""purple"": 4, ""red"": 4}",1,0
+PL!SP-pb1-025,Jellyfish,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!SP-pb1-025,Jellyfish,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!SP-pb1-026,Jump Into the New World,LIVE,required,<赤> 3 <紫> 3 <任意> 4 (合計10),"{""any"": 4, ""purple"": 3, ""red"": 3}",{},"{""any"": 4, ""purple"": 3, ""red"": 3}",1,0
+PL!SP-pb1-026,Jump Into the New World,LIVE,blade_heart,<紫> <ドロー+1>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-pb1-026,Jump Into the New World,LIVE,blade_heart_tags,<紫> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!SP-pb2-000,嵐千砂都＆鬼塚夏美,MEMBER,base,<赤> 2 <黄> 1 <紫> 2,"{""purple"": 2, ""red"": 2, ""yellow"": 1}",{},"{""purple"": 2, ""red"": 2, ""yellow"": 1}",1,0
+PL!SP-pb2-000,嵐千砂都＆鬼塚夏美,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-pb2-001,澁谷かのん,MEMBER,base,<赤> 3 <黄> 2 <紫> 2,"{""purple"": 2, ""red"": 3, ""yellow"": 2}",{},"{""purple"": 2, ""red"": 3, ""yellow"": 2}",1,0
+PL!SP-pb2-002,唐可可,MEMBER,base,<赤> 2 <黄> 1 <紫> 2,"{""purple"": 2, ""red"": 2, ""yellow"": 1}",{},"{""purple"": 2, ""red"": 2, ""yellow"": 1}",1,0
+PL!SP-pb2-002,唐可可,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-pb2-003,嵐千砂都,MEMBER,base,<赤> 2 <黄> 2 <紫> 2,"{""purple"": 2, ""red"": 2, ""yellow"": 2}",{},"{""purple"": 2, ""red"": 2, ""yellow"": 2}",1,0
+PL!SP-pb2-003,嵐千砂都,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-pb2-004,平安名すみれ,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-pb2-004,平安名すみれ,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-pb2-005,葉月恋,MEMBER,base,<赤> 3 <黄> 3 <紫> 3,"{""purple"": 3, ""red"": 3, ""yellow"": 3}",{},"{""purple"": 3, ""red"": 3, ""yellow"": 3}",1,0
+PL!SP-pb2-005,葉月恋,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-pb2-006,桜小路きな子,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-pb2-006,桜小路きな子,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-pb2-007,米女メイ,MEMBER,base,<赤> 1 <黄> 1 <紫> 1,"{""purple"": 1, ""red"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-pb2-007,米女メイ,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-pb2-008,若菜四季,MEMBER,base,<赤> 2 <黄> 3 <紫> 2,"{""purple"": 2, ""red"": 2, ""yellow"": 3}",{},"{""purple"": 2, ""red"": 2, ""yellow"": 3}",1,0
+PL!SP-pb2-009,鬼塚夏美,MEMBER,base,<赤> 2 <黄> 2 <紫> 2,"{""purple"": 2, ""red"": 2, ""yellow"": 2}",{},"{""purple"": 2, ""red"": 2, ""yellow"": 2}",1,0
+PL!SP-pb2-009,鬼塚夏美,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-pb2-010,ウィーン・マルガレーテ,MEMBER,base,<赤> 1 <黄> 1 <紫> 1,"{""purple"": 1, ""red"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-pb2-010,ウィーン・マルガレーテ,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-pb2-011,鬼塚冬毬,MEMBER,base,<赤> 2 <黄> 2 <紫> 2,"{""purple"": 2, ""red"": 2, ""yellow"": 2}",{},"{""purple"": 2, ""red"": 2, ""yellow"": 2}",1,0
+PL!SP-pb2-012,澁谷かのん,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-pb2-012,澁谷かのん,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-pb2-013,唐可可,MEMBER,base,<赤> 1 <黄> 1 <紫> 1,"{""purple"": 1, ""red"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-pb2-014,嵐千砂都,MEMBER,base,<赤> 2 <黄> 1 <紫> 1,"{""purple"": 1, ""red"": 2, ""yellow"": 1}",{},"{""purple"": 1, ""red"": 2, ""yellow"": 1}",1,0
+PL!SP-pb2-014,嵐千砂都,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-pb2-015,平安名すみれ,MEMBER,base,<赤> 3 <黄> 1 <紫> 1,"{""purple"": 1, ""red"": 3, ""yellow"": 1}",{},"{""purple"": 1, ""red"": 3, ""yellow"": 1}",1,0
+PL!SP-pb2-015,平安名すみれ,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-pb2-016,葉月恋,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-pb2-016,葉月恋,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-pb2-017,桜小路きな子,MEMBER,base,<赤> 1 <黄> 1 <紫> 1,"{""purple"": 1, ""red"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-pb2-018,米女メイ,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-pb2-018,米女メイ,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-pb2-019,若菜四季,MEMBER,base,<赤> 2 <黄> 1 <紫> 2,"{""purple"": 2, ""red"": 2, ""yellow"": 1}",{},"{""purple"": 2, ""red"": 2, ""yellow"": 1}",1,0
+PL!SP-pb2-019,若菜四季,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-pb2-020,鬼塚夏美,MEMBER,base,<赤> 2 <黄> 1 <紫> 2,"{""purple"": 2, ""red"": 2, ""yellow"": 1}",{},"{""purple"": 2, ""red"": 2, ""yellow"": 1}",1,0
+PL!SP-pb2-020,鬼塚夏美,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-pb2-021,ウィーン・マルガレーテ,MEMBER,base,<赤> 1 <黄> 1 <紫> 3,"{""purple"": 3, ""red"": 1, ""yellow"": 1}",{},"{""purple"": 3, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-pb2-021,ウィーン・マルガレーテ,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-pb2-022,鬼塚冬毬,MEMBER,base,<赤> 1 <黄> 2 <紫> 2,"{""purple"": 2, ""red"": 1, ""yellow"": 2}",{},"{""purple"": 2, ""red"": 1, ""yellow"": 2}",1,0
+PL!SP-pb2-022,鬼塚冬毬,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-pb2-023,澁谷かのん,MEMBER,base,<赤> 2,"{""red"": 2}",{},"{""red"": 2}",1,0
+PL!SP-pb2-023,澁谷かのん,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-pb2-040,米女メイ,MEMBER,base,<赤> 1 <紫> 1,"{""purple"": 1, ""red"": 1}",{},"{""purple"": 1, ""red"": 1}",1,0
+PL!SP-pb2-040,米女メイ,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-sd1-001,澁谷かのん,MEMBER,base,<赤> 2 <紫> 2,"{""purple"": 2, ""red"": 2}",{},"{""purple"": 2, ""red"": 2}",1,0
+PL!SP-sd1-001,澁谷かのん,MEMBER,blade_heart,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-sd1-002,唐可可,MEMBER,base,<赤> 1 <紫> 2,"{""purple"": 2, ""red"": 1}",{},"{""purple"": 2, ""red"": 1}",1,0
+PL!SP-sd1-003,嵐千砂都,MEMBER,base,<赤> 3 <紫> 3,"{""purple"": 3, ""red"": 3}",{},"{""purple"": 3, ""red"": 3}",1,0
+PL!SP-sd1-003,嵐千砂都,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-sd1-004,平安名すみれ,MEMBER,base,<赤> 2 <紫> 2,"{""purple"": 2, ""red"": 2}",{},"{""purple"": 2, ""red"": 2}",1,0
+PL!SP-sd1-005,葉月恋,MEMBER,base,<赤> 2 <紫> 2,"{""purple"": 2, ""red"": 2}",{},"{""purple"": 2, ""red"": 2}",1,0
+PL!SP-sd1-006,桜小路きな子,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-sd1-006,桜小路きな子,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-sd1-007,米女メイ,MEMBER,base,<赤> 1 <紫> 2,"{""purple"": 2, ""red"": 1}",{},"{""purple"": 2, ""red"": 1}",1,0
+PL!SP-sd1-008,若菜四季,MEMBER,base,<紫> 2,"{""purple"": 2}",{},"{""purple"": 2}",1,0
+PL!SP-sd1-009,鬼塚夏美,MEMBER,base,<赤> 2 <紫> 3,"{""purple"": 3, ""red"": 2}",{},"{""purple"": 3, ""red"": 2}",1,0
+PL!SP-sd1-009,鬼塚夏美,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-sd1-010,ウィーン・マルガレーテ,MEMBER,base,<赤> 3 <紫> 3,"{""purple"": 3, ""red"": 3}",{},"{""purple"": 3, ""red"": 3}",1,0
+PL!SP-sd1-010,ウィーン・マルガレーテ,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-sd1-011,鬼塚冬毬,MEMBER,base,<赤> 2 <紫> 1,"{""purple"": 1, ""red"": 2}",{},"{""purple"": 1, ""red"": 2}",1,0
+PL!SP-sd1-012,澁谷かのん,MEMBER,base,<赤> 2 <紫> 2,"{""purple"": 2, ""red"": 2}",{},"{""purple"": 2, ""red"": 2}",1,0
+PL!SP-sd1-013,唐可可,MEMBER,base,<紫> 2,"{""purple"": 2}",{},"{""purple"": 2}",1,0
+PL!SP-sd1-013,唐可可,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-sd1-014,嵐千砂都,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-sd1-015,平安名すみれ,MEMBER,base,<赤> 2,"{""red"": 2}",{},"{""red"": 2}",1,0
+PL!SP-sd1-015,平安名すみれ,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-sd1-016,葉月恋,MEMBER,base,<(赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-sd1-017,桜小路きな子,MEMBER,base,<赤> 2,"{""red"": 2}",{},"{""red"": 2}",1,0
+PL!SP-sd1-018,米女メイ,MEMBER,base,<赤> 1 <紫> 1,"{""purple"": 1, ""red"": 1}",{},"{""purple"": 1, ""red"": 1}",1,0
+PL!SP-sd1-018,米女メイ,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-sd1-019,若菜四季,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-sd1-019,若菜四季,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-sd1-020,鬼塚夏美,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-sd1-020,鬼塚夏美,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-sd1-021,ウィーン・マルガレーテ,MEMBER,base,<赤> 2 <紫> 2,"{""purple"": 2, ""red"": 2}",{},"{""purple"": 2, ""red"": 2}",1,0
+PL!SP-sd1-022,鬼塚冬毬,MEMBER,base,<赤> 2 <紫> 2,"{""purple"": 2, ""red"": 2}",{},"{""purple"": 2, ""red"": 2}",1,0
+PL!SP-sd1-023,WE WILL!!,LIVE,required,<赤> 1 <紫> 1 <任意> 1 (合計3),"{""any"": 1, ""purple"": 1, ""red"": 1}",{},"{""any"": 1, ""purple"": 1, ""red"": 1}",1,0
+PL!SP-sd1-023,WE WILL!!,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!SP-sd1-024,シェキラ☆☆☆,LIVE,required,<赤> 1 <紫> 1 <任意> 3 (合計5),"{""any"": 3, ""purple"": 1, ""red"": 1}",{},"{""any"": 3, ""purple"": 1, ""red"": 1}",1,0
+PL!SP-sd1-024,シェキラ☆☆☆,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!SP-sd1-024,シェキラ☆☆☆,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!SP-sd1-025,未来は風のように,LIVE,required,<赤> 2 <紫> 2 <任意> 3 (合計7),"{""any"": 3, ""purple"": 2, ""red"": 2}",{},"{""any"": 3, ""purple"": 2, ""red"": 2}",1,0
+PL!SP-sd1-025,未来は風のように,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!SP-sd1-025,未来は風のように,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!SP-sd1-026,私のSymphony ～澁谷かのんVer.～,LIVE,required,<赤> 4 <紫> 4 <任意> 3 (合計11),"{""any"": 3, ""purple"": 4, ""red"": 4}",{},"{""any"": 3, ""purple"": 4, ""red"": 4}",1,0
+PL!SP-sd1-026,私のSymphony ～澁谷かのんVer.～,LIVE,blade_heart,<赤> <ドロー+1>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-sd1-026,私のSymphony ～澁谷かのんVer.～,LIVE,blade_heart_tags,<赤> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
+PL!SP-sd2-001,澁谷かのん,MEMBER,base,<赤> 3 <黄> 2 <紫> 2,"{""purple"": 2, ""red"": 3, ""yellow"": 2}",{},"{""purple"": 2, ""red"": 3, ""yellow"": 2}",1,0
+PL!SP-sd2-002,唐可可,MEMBER,base,<赤> 2 <黄> 2 <紫> 2,"{""purple"": 2, ""red"": 2, ""yellow"": 2}",{},"{""purple"": 2, ""red"": 2, ""yellow"": 2}",1,0
+PL!SP-sd2-002,唐可可,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-sd2-003,嵐千砂都,MEMBER,base,<赤> 1 <黄> 2 <紫> 2,"{""purple"": 2, ""red"": 1, ""yellow"": 2}",{},"{""purple"": 2, ""red"": 1, ""yellow"": 2}",1,0
+PL!SP-sd2-003,嵐千砂都,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-sd2-004,平安名すみれ,MEMBER,base,<赤> 1 <黄> 1 <紫> 1,"{""purple"": 1, ""red"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-sd2-004,平安名すみれ,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-sd2-005,葉月恋,MEMBER,base,<黄> 1 <紫> 1,"{""purple"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""yellow"": 1}",1,0
+PL!SP-sd2-006,桜小路きな子,MEMBER,base,<赤> 1 <黄> 1 <紫> 1,"{""purple"": 1, ""red"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-sd2-007,米女メイ,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-sd2-007,米女メイ,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-sd2-008,若菜四季,MEMBER,base,<赤> 1 <紫> 1,"{""purple"": 1, ""red"": 1}",{},"{""purple"": 1, ""red"": 1}",1,0
+PL!SP-sd2-009,鬼塚夏美,MEMBER,base,<黄> 2 <紫> 2,"{""purple"": 2, ""yellow"": 2}",{},"{""purple"": 2, ""yellow"": 2}",1,0
+PL!SP-sd2-009,鬼塚夏美,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-sd2-010,ウィーン・マルガレーテ,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-sd2-010,ウィーン・マルガレーテ,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-sd2-011,鬼塚冬毬,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-sd2-011,鬼塚冬毬,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-sd2-012,澁谷かのん,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-sd2-012,澁谷かのん,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-sd2-013,唐可可,MEMBER,base,<紫> 1,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-sd2-013,唐可可,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-sd2-014,嵐千砂都,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-sd2-014,嵐千砂都,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-sd2-015,平安名すみれ,MEMBER,base,<赤> 1 <黄> 1 <紫> 1,"{""purple"": 1, ""red"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-sd2-016,葉月恋,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-sd2-016,葉月恋,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-sd2-017,桜小路きな子,MEMBER,base,<赤> 1,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-sd2-017,桜小路きな子,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-sd2-018,米女メイ,MEMBER,base,<赤> 3 <黄> 3,"{""red"": 3, ""yellow"": 3}",{},"{""red"": 3, ""yellow"": 3}",1,0
+PL!SP-sd2-018,米女メイ,MEMBER,blade_heart,<赤>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-sd2-019,若菜四季,MEMBER,base,<赤> 1 <黄> 2 <紫> 2,"{""purple"": 2, ""red"": 1, ""yellow"": 2}",{},"{""purple"": 2, ""red"": 1, ""yellow"": 2}",1,0
+PL!SP-sd2-019,若菜四季,MEMBER,blade_heart,<紫>,"{""purple"": 1}",{},"{""purple"": 1}",1,0
+PL!SP-sd2-020,鬼塚夏美,MEMBER,base,<赤> 1 <黄> 1 <紫> 1,"{""purple"": 1, ""red"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-sd2-021,ウィーン・マルガレーテ,MEMBER,base,<赤> 1 <黄> 1 <紫> 1,"{""purple"": 1, ""red"": 1, ""yellow"": 1}",{},"{""purple"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-sd2-022,鬼塚冬毬,MEMBER,base,<黄> 1,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-sd2-022,鬼塚冬毬,MEMBER,blade_heart,<黄>,"{""yellow"": 1}",{},"{""yellow"": 1}",1,0
+PL!SP-sd2-023,始まりは君の空,LIVE,required,<黄> 1 <任意> 2 (合計3),"{""any"": 2, ""yellow"": 1}",{},"{""any"": 2, ""yellow"": 1}",1,0
+PL!SP-sd2-023,始まりは君の空,LIVE,blade_heart_tags,<スコア+1>,"[""(スコア+1)""]",[],"[""(スコア+1)""]",1,0
+PL!SP-sd2-024,アイコトバ！,LIVE,required,<赤> 1 <黄> 1 <紫> 1 <任意> 4 (合計7),"{""any"": 4, ""purple"": 1, ""red"": 1, ""yellow"": 1}",{},"{""any"": 4, ""purple"": 1, ""red"": 1, ""yellow"": 1}",1,0
+PL!SP-sd2-024,アイコトバ！,LIVE,blade_heart,<ALL>,"{""all"": 1}",{},"{""all"": 1}",1,0
+PL!SP-sd2-024,アイコトバ！,LIVE,blade_heart_tags,<ALL>,"[""(ALL)""]",[],"[""(ALL)""]",1,0
+PL!SP-sd2-025,Aspire,LIVE,required,<赤> 2 <黄> 1 <紫> 1 <任意> 7 (合計11),"{""any"": 7, ""purple"": 1, ""red"": 2, ""yellow"": 1}",{},"{""any"": 7, ""purple"": 1, ""red"": 2, ""yellow"": 1}",1,0
+PL!SP-sd2-025,Aspire,LIVE,blade_heart,<赤> <ドロー+1>,"{""red"": 1}",{},"{""red"": 1}",1,0
+PL!SP-sd2-025,Aspire,LIVE,blade_heart_tags,<赤> <ドロー+1>,"[""(ドロー+1)""]",[],"[""(ドロー+1)""]",1,0
