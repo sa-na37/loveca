@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_start_empty_cost_icon_spacing_20260605b
+# BUILD_TAG: miracle_wave_success_score_set_20260605a
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -5235,6 +5235,20 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
                 'effect_text': _auto_trigger_effect_text(trig or {}),
             })
         return
+    if kind in ('set_live_success_score_if_no_revealed_no_bladeheart_or_excess_at_least',):
+        cn_live = str((trig or {}).get('source_cn', '') or '')
+        need_excess = int((trig or {}).get('condition_excess_count', 0) or 0)
+        target = int((trig or {}).get('target_score', 0) or 0)
+        no_bh_n = int(_count_yell_revealed_no_bladeheart_cards(gs, cards_db, member_only=False) or 0)
+        excess_n = int(_last_attempt_excess_heart_total(gs) or 0)
+        met_no_bh = (no_bh_n == 0)
+        met_excess = (excess_n >= need_excess)
+        if met_no_bh or met_excess:
+            reason = f"revealed no-bladeheart cards={no_bh_n}, excess hearts={excess_n}/{need_excess}"
+            _set_live_success_score_to(gs, cards_db, cn_live, target, detail=reason)
+        else:
+            gs.log.append(f"[SKIP] LIVE: {cn_live}[ライブ成功時] unresolved (revealed no-bladeheart cards={no_bh_n} != 0 and excess hearts={excess_n} < {need_excess})")
+        return
     if kind in ('add_live_success_score_bonus_if_revealed_card_tag_count_at_least',):
         cn_live = str((trig or {}).get('source_cn', '') or '')
         tag = str((trig or {}).get('condition_tag', '') or '')
@@ -5369,6 +5383,29 @@ def _last_attempt_excess_color_count(gs: GameState, color_key: str) -> int:
     except Exception:
         pool = {}
     return int(pool.get(str(color_key or ''), 0) or 0)
+
+def _last_attempt_excess_heart_total(gs: GameState) -> int:
+    """Return total excess heart icons after the last LIVE_ATTEMPT allocation.
+
+    This intentionally counts all remaining colored hearts and ALL hearts because
+    effects that say just 「余剰ハート」 do not restrict the color.
+    """
+    try:
+        pool = dict(getattr(gs, 'last_attempt_excess_hearts', {}) or {})
+    except Exception:
+        pool = {}
+    total = 0
+    for k, v in (pool or {}).items():
+        try:
+            n = int(v or 0)
+        except Exception:
+            n = 0
+        if n <= 0:
+            continue
+        key = str(k or '').lower().strip()
+        if key in {'pink', 'red', 'yellow', 'green', 'blue', 'purple', 'all', 'any'}:
+            total += n
+    return int(total)
 
 def _count_stage_group_members(gs: GameState, cards_db: Dict[str, CardInfo], group_name: str) -> int:
     n = 0
@@ -6028,6 +6065,21 @@ def _build_live_success_trigger_from_effect(gs: GameState, cards_db: Dict[str, C
                 'ctx': dict(ctx or {}),
                 'label': str(label or ''),
             }
+
+    # Generalized from MIRACLE WAVE.
+    # 「スコアはNになる」 is not a +bonus; it is applied as a delta to the
+    # last attempt score at live-success resolution.
+    m = re.match(r'^このターン、エールにより公開された自分のカードの中にブレードハートを持たないカードが0枚の場合か、または自分の余剰ハートを(?P<excess>\d+)つ以上持っている場合、このカードのスコアは(?P<score>\d+)になる。?$', eff_norm)
+    if m:
+        return {
+            'kind': 'set_live_success_score_if_no_revealed_no_bladeheart_or_excess_at_least',
+            'condition_excess_count': int(m.group('excess') or 0),
+            'target_score': int(m.group('score') or 0),
+            'source_cn': str(source_cn or ''),
+            'pos': str(pos or ''),
+            'ctx': dict(ctx or {}),
+            'label': str(label or ''),
+        }
 
     # Generalized from VIVID WORLD.
     # DB text may or may not include Japanese comma separators between the six icons.
@@ -7019,6 +7071,46 @@ def _add_last_attempt_live_score_bonus(gs: GameState, cn_live, bonus: int) -> No
             bonuses[i] = int(bonuses[i] or 0) + int(bonus or 0)
             gs.last_attempt_score_bonus = bonuses
             return
+
+def _last_attempt_live_attempt_score(gs: GameState, cn_live: str, cards_db: Dict[str, CardInfo]) -> int:
+    canon = _canon_cardno(cn_live)
+    lives = list(getattr(gs, 'last_attempt_lives', []) or [])
+    rows = list(getattr(gs, 'last_attempt_score_rows', []) or [])
+    for i, x in enumerate(lives):
+        if _canon_cardno(x) == canon:
+            try:
+                row = rows[i] if i < len(rows) else {}
+                return int((row or {}).get('score', 0) or 0)
+            except Exception:
+                break
+    ci = _get_card(cards_db, cn_live)
+    try:
+        return int(getattr(ci, 'score', 0) or 0) if ci else 0
+    except Exception:
+        return 0
+
+def _set_live_success_score_to(gs: GameState, cards_db: Dict[str, CardInfo], cn_live: str, target_score: int, detail: str = '') -> None:
+    """Apply a live-success score set as a delta against the current attempt score.
+
+    last_attempt_score_bonus stores deltas, so a 「スコアはNになる」 effect is
+    represented as target - (attempt score + already resolved success deltas).
+    This supports negative deltas such as MIRACLE WAVE's 7 -> 4 change.
+    """
+    try:
+        target = int(target_score or 0)
+    except Exception:
+        target = 0
+    attempt_score = int(_last_attempt_live_attempt_score(gs, cn_live, cards_db) or 0)
+    current_delta = int(_get_last_attempt_live_score_bonus(gs, cn_live) or 0)
+    current_score = int(attempt_score + current_delta)
+    delta = int(target - current_score)
+    if delta != 0:
+        _add_last_attempt_live_score_bonus(gs, cn_live, delta)
+    prefix = f"[AUTO] LIVE: {cn_live}[ライブ成功時]"
+    if detail:
+        gs.log.append(f"{prefix}: {detail} -> score becomes {target} ({current_score}->{target})")
+    else:
+        gs.log.append(f"{prefix}: score becomes {target} ({current_score}->{target})")
 
 def _add_live_success_score_bonus(gs: GameState, cn_live: str, bonus: int, detail: str = '') -> None:
     try:
@@ -10330,7 +10422,7 @@ def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], i
                 _changed = bool(any(int(x or 0) != 0 for x in _bon))
                 for _cn, _base, _delta, _eff in _rows:
                     if _delta:
-                        gs.log.append(f"  success-score: {_cn} = {_eff} ({_base}+{_delta})")
+                        gs.log.append(f"  success-score: {_cn} = {_eff} ({_base}{'+' if int(_delta) >= 0 else ''}{_delta})")
                 if _stage_bonus:
                     gs.log.append(f"  success-score: stage always bonus = +{_stage_bonus}")
                 gs.log.append(f"[COMPARE] final_score_after_success_effects={_total}")
