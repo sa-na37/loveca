@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: server_choose_player_green_bottom_labels_20260605a
+# BUILD_TAG: server_choose_player_deck_top_action_20260605a
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1657,8 +1657,12 @@ HTML = r'''<!doctype html>
   .choiceRow{display:inline-flex;gap:8px;align-items:flex-start;overflow-x:auto;overflow-y:hidden;max-width:min(72vw, 1060px);padding:6px 2px 10px 2px;}
   .choiceBtn{border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);border-radius:12px;padding:0;cursor:pointer;position:relative;flex:0 0 auto;box-shadow:0 6px 16px rgba(0,0,0,.35);}
   .choiceBtn:hover{outline:3px solid rgba(255,255,255,.22);outline-offset:-3px;}
+  .choiceBtn.orderedSelected{outline:5px solid #ffe066;outline-offset:-5px;box-shadow:0 0 0 3px rgba(0,0,0,.65),0 0 22px rgba(255,224,102,.95),0 8px 20px rgba(0,0,0,.45);}
   .choiceBtn img{width:100%;height:100%;object-fit:cover;display:block;border-radius:12px;}
   .choiceCap{position:absolute;left:0;right:0;bottom:0;font-size:11px;padding:4px 6px;background:linear-gradient(to top, rgba(0,0,0,.65), rgba(0,0,0,.05));color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6);border-bottom-left-radius:12px;border-bottom-right-radius:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .choiceBtn.orderedSelected .choiceCap{font-size:13px;font-weight:900;background:linear-gradient(to top, rgba(0,0,0,.92), rgba(0,0,0,.35));color:#ffe066;text-shadow:0 2px 3px rgba(0,0,0,.95);}
+  .orderBadge{position:absolute;left:6px;top:6px;display:none;align-items:center;justify-content:center;min-width:28px;height:28px;padding:0 6px;border-radius:999px;background:#ffe066;color:#111;font-size:17px;font-weight:900;line-height:1;border:2px solid #111;box-shadow:0 0 0 2px rgba(255,255,255,.92),0 3px 9px rgba(0,0,0,.72);z-index:4;pointer-events:none;}
+  .choiceBtn.orderedSelected .orderBadge{display:flex;}
   .choiceTile{display:flex;flex-direction:column;align-items:stretch;gap:6px;flex:0 0 auto;max-width:240px;}
   /* effect-mode choices: text choices, not card-list tiles */
   .effectChoiceList{display:flex;flex-direction:column;gap:8px;max-width:min(76vw, 920px);padding:4px 2px 8px 2px;}
@@ -1970,6 +1974,8 @@ HTML = r'''<!doctype html>
     if(low === 'no_draw') return '置かなかった / 引かない';
     if(low === 'top') return 'デッキの一番上';
     if(low === 'bottom') return 'デッキの一番下';
+    if(low === 'green' || low === 'waiting') return '控え室に置く';
+    if(low === 'keep') return 'デッキ上に残す';
     return s;
   }
   function cardChoiceCaption(cn, nth, tot){
@@ -1987,8 +1993,9 @@ HTML = r'''<!doctype html>
     if(kind === 'position_change') return '移動先を選択';
     if(kind === 'choose_from_topk' || kind === 'choose_top_keep_one' || kind === 'topdeck_from_green' || kind === 'bottomdeck_from_green' || kind === 'hand_to_deck_bottom' || kind === 'hand_to_deck_top_or_bottom') return 'カードを選択';
     if(kind === 'choose_deck_top_or_bottom_for_hand_card') return '置く場所を選択';
-    if(kind === 'choose_player_for_green_bottom') return 'プレイヤーを選択';
-    if(kind === 'manual_opponent_green_bottom_notify') return '相手への効果';
+    if(kind === 'choose_player_for_green_bottom' || kind === 'choose_player_for_deck_top_action') return 'プレイヤーを選択';
+    if(kind === 'manual_opponent_green_bottom_notify' || kind === 'manual_opponent_deck_top_action_notify') return '相手への効果';
+    if(kind === 'self_top1_to_green_or_keep') return 'デッキ上を確認';
     if(kind === 'choose_member_from_green_multi_up_to') return 'カードを選択';
     if(kind === 'auto_order') return '解決順を選択';
     return '効果の選択';
@@ -2017,8 +2024,9 @@ HTML = r'''<!doctype html>
     if(kind === 'auto_order') return '解決順を選んでください。';
     if(kind === 'position_change') return '移動先のエリアを選んでください。';
     if(kind === 'choose_deck_top_or_bottom_for_hand_card') return 'デッキの一番上か一番下を選んでください。';
-    if(kind === 'choose_player_for_green_bottom') return '自分か相手を選んでください。';
-    if(kind === 'manual_opponent_green_bottom_notify') return '相手側の処理を手動で行ってから選択してください。';
+    if(kind === 'choose_player_for_green_bottom' || kind === 'choose_player_for_deck_top_action') return '自分か相手を選んでください。';
+    if(kind === 'manual_opponent_green_bottom_notify' || kind === 'manual_opponent_deck_top_action_notify') return '相手側の処理を手動で行ってから選択してください。';
+    if(kind === 'self_top1_to_green_or_keep') return '公開されたデッキ上カードを控え室に置くか、デッキ上に残すか選んでください。';
     return pendingSourceCn(p) ? '効果を解決するため、対象または選択肢を選んでください。' : '';
   }
   const TEXTICON_BASE = '/llocg_db_out_full/card_images/texticons/';
@@ -3896,6 +3904,10 @@ inner.appendChild(card);
 
         appendChoiceCardImage(b, cn, 'portrait');
 
+        const badge = document.createElement('div');
+        badge.className = 'orderBadge';
+        b.appendChild(badge);
+
         const cap = document.createElement('div');
         cap.className = 'choiceCap';
         dupSeen[cn] = (dupSeen[cn]||0) + 1;
@@ -3944,6 +3956,8 @@ inner.appendChild(card);
       const maxPicks = (p && p.max_picks != null) ? parseInt(p.max_picks) : ((p && p.maxPicks != null) ? parseInt(p.maxPicks) : 0);
       const minPicks = (p && p.min_picks != null) ? parseInt(p.min_picks) : 0;
       const exactOrZero = !!(p && p.exact_or_zero);
+      const ordered = !!(p && p.ordered);
+      const orderHint = String((p && p.order_hint) ? p.order_hint : '');
       const sourceZone = String((p && p.source_zone) ? p.source_zone : 'green').toLowerCase();
       const opts = (p && Array.isArray(p.options)) ? p.options : [];
       const defaultTitle = sourceZone === 'hand' ? `手札から${exactOrZero ? '0枚または' + maxPicks + '枚' : '0〜' + maxPicks + '枚'}選択` : `控え室から0〜${maxPicks}枚選択`;
@@ -3973,7 +3987,13 @@ inner.appendChild(card);
 
       function updateCounter(){
         const n = selected.length;
-        counter.textContent = exactOrZero ? `選択: ${n} / 0 または ${maxPicks}` : `選択: ${n} / 0〜${maxPicks}`;
+        if(ordered && orderHint === 'deck_bottom_top_to_bottom'){
+          counter.textContent = `選択: ${n} / 0〜${maxPicks} （クリック順：1枚目=上側、最後=一番下）`;
+        } else if(ordered){
+          counter.textContent = `選択: ${n} / 0〜${maxPicks} （クリック順 = 解決順）`;
+        } else {
+          counter.textContent = exactOrZero ? `選択: ${n} / 0 または ${maxPicks}` : `選択: ${n} / 0〜${maxPicks}`;
+        }
         doneBtn.textContent = `確定 (${n}/${maxPicks})`;
         doneBtn.disabled = exactOrZero ? !(n === 0 || n === maxPicks) : (n < minPicks || n > maxPicks);
         doneBtn.style.opacity = doneBtn.disabled ? '0.5' : '1';
@@ -3982,15 +4002,33 @@ inner.appendChild(card);
           const b = btnMap[i];
           if(!b) return;
           const k = String(cn).trim();
+          const orderIdx = selected.indexOf(i);
           const timesThisIdx = selected.filter(x => x === i).length;
+          const badge = b.querySelector('.orderBadge');
           if(timesThisIdx > 0){
-            b.style.outline = `3px solid #ffe066`;
-            b.style.outlineOffset = '-3px';
-            const cap = b.querySelector('.choiceCap');
-            if(cap) cap.textContent = k + (timesThisIdx > 1 ? ` ×${timesThisIdx}` : ' ✓');
-          } else {
+            b.classList.add('orderedSelected');
             b.style.outline = '';
             b.style.outlineOffset = '';
+            if(badge){
+              badge.textContent = ordered ? String(orderIdx + 1) : '✓';
+              badge.style.display = 'flex';
+            }
+            const cap = b.querySelector('.choiceCap');
+            if(cap){
+              if(ordered){
+                cap.textContent = `${orderIdx+1}番目：${k}`;
+              } else {
+                cap.textContent = k + (timesThisIdx > 1 ? ` ×${timesThisIdx}` : ' ✓');
+              }
+            }
+          } else {
+            b.classList.remove('orderedSelected');
+            b.style.outline = '';
+            b.style.outlineOffset = '';
+            if(badge){
+              badge.textContent = '';
+              badge.style.display = 'none';
+            }
             const dup = opts.filter(x => String(x).trim() === k).length;
             const nth = opts.slice(0, i).filter(x => String(x).trim() === k).length + 1;
             const cap = b.querySelector('.choiceCap');
@@ -4007,6 +4045,10 @@ inner.appendChild(card);
         b.style.height = dimsP.h + 'px';
 
         appendChoiceCardImage(b, cn, 'portrait');
+
+        const badge = document.createElement('div');
+        badge.className = 'orderBadge';
+        b.appendChild(badge);
 
         const cap = document.createElement('div');
         cap.className = 'choiceCap';
@@ -4254,6 +4296,55 @@ inner.appendChild(card);
       });
       elModalActions.appendChild(bSkip);
 
+      elMask.style.display = 'block';
+      return;
+    }
+
+    if(kind === 'self_top1_to_green_or_keep'){
+      const cn = String((p && p.top_cn) ? p.top_cn : '').trim();
+      popup = {type:'pending', closable:false};
+      elModalTitle.textContent = 'デッキ上を確認';
+      setRichText(elModalText, pendText || 'このカードを控え室に置くか、デッキ上に残すか選んでください。');
+      elModalActions.innerHTML = '';
+      elModalCards.innerHTML = '';
+      if(cn && looksLikeCardNo(cn)){
+        const row = document.createElement('div');
+        row.className = 'choiceRow';
+        const dimsP = standardSize('portrait');
+        const dimsL = standardSize('landscape');
+        const intr = intrinsicOrient(cn);
+        const d = (intr==='landscape') ? dimsL : dimsP;
+        const b = document.createElement('button');
+        b.className = 'choiceBtn';
+        b.style.width = d.w + 'px';
+        b.style.height = d.h + 'px';
+        const img = document.createElement('img');
+        img.src = imgUrl(cn); img.alt = cn;
+        const cap = document.createElement('div');
+        cap.className = 'choiceCap';
+        cap.textContent = cardNameFor(cn);
+        b.appendChild(img); b.appendChild(cap);
+        row.appendChild(b);
+        elModalCards.appendChild(row);
+      }
+      const bGreen = document.createElement('button');
+      bGreen.className = 'miniBtn';
+      bGreen.textContent = '控え室に置く';
+      bGreen.addEventListener('click', async ev=>{
+        ev.stopPropagation();
+        st = await apiCmd('resolve_pending', {idx:0, choice:'green'});
+        selHand=[]; updateTop(); render();
+      });
+      const bKeep = document.createElement('button');
+      bKeep.className = 'miniBtn';
+      bKeep.textContent = 'デッキ上に残す';
+      bKeep.addEventListener('click', async ev=>{
+        ev.stopPropagation();
+        st = await apiCmd('resolve_pending', {idx:0, choice:'keep'});
+        selHand=[]; updateTop(); render();
+      });
+      elModalActions.appendChild(bGreen);
+      elModalActions.appendChild(bKeep);
       elMask.style.display = 'block';
       return;
     }

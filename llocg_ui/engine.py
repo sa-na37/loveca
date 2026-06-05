@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: choose_player_green_bottom_family_20260605a
+# BUILD_TAG: choose_player_deck_top_action_family_20260605a
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -49,6 +49,8 @@ _EFFECT_RULES = [
     {"id": "bottomdeck_green_kind_upto_n", "pattern": r"^自分の控え室から(?:(?P<kind>ライブ|メンバー)カード|カード)を(?P<n>\d+)枚までデッキの一番下に置く。$", "op": "bottomdeck_from_green", "allow_less": True},
     {"id": "choose_self_or_opponent_green_member_upto_bottom", "pattern": r"^自分か相手を選ぶ。自分は、そのプレイヤーの控え室にあるメンバーカードを(?P<n>\d+)枚まで、好きな順番でデッキの一番下に置く。$", "op": "choose_player_green_to_bottom", "card_kind": "MEMBER", "allow_less": True},
     {"id": "choose_self_or_opponent_green_live_bottom_draw", "pattern": r"^自分か相手を選ぶ。自分は、そのプレイヤーの控え室にあるライブカードを(?P<n>\d+)枚、そのプレイヤーのデッキの一番下に置く。そうした場合、自分はカードを(?P<draw_n>\d+)枚引く。$", "op": "choose_player_green_to_bottom", "card_kind": "LIVE", "allow_less": False, "draw_if_moved": True},
+    {"id": "choose_self_or_opponent_top1_mill_optional", "pattern": r"^自分か相手を選ぶ。自分は、そのプレイヤーのデッキの一番上のカードを見る。自分はそのカードを控え室に置いてもよい。$", "op": "choose_player_deck_top_action", "action": "top1_optional_green"},
+    {"id": "choose_self_or_opponent_topk_reorder_keep_any", "pattern": r"^自分か相手を選ぶ。自分は、そのプレイヤーのデッキの上からカードを(?P<k>\d+)枚見る。その中から好きな枚数を好きな順番でデッキの上に置き、残りを控え室に置く。$", "op": "choose_player_deck_top_action", "action": "topk_reorder_keep_any"},
     {"id": "draw_then_hand_bottom", "pattern": r"^カードを(?P<draw_n>\d+)枚引き、手札を(?P<bottom_n>\d+)枚デッキの一番下に置く。$", "op": "draw_then_hand_to_deck_bottom"},
     {"id": "draw_then_hand_top_or_bottom", "pattern": r"^カードを(?P<draw_n>\d+)枚引き、手札からカードを(?P<n>\d+)枚デッキの一番上か一番下に置く。$", "op": "draw_then_hand_to_deck_top_or_bottom"},
     {"id": "score_draw_then_hand_top_or_bottom_if_all_stage_group", "pattern": r"^自分のステージにいるメンバーがすべて『(?P<group>[^』]+)』の場合、このカードのスコアを\+(?P<score_n>\d+)し、カードを(?P<draw_n>\d+)枚引き、手札からカードを(?P<n>\d+)枚デッキの一番上か一番下に置く。$", "op": "score_draw_then_hand_top_or_bottom_if_all_stage_group"},
@@ -936,6 +938,32 @@ def _enqueue_choose_player_green_to_bottom(gs: 'GameState', cards_db: Dict[str, 
         'source_cn': str(source_cn or ''),
     })
     gs.log.append(f'[PENDING] choose self/opponent green -> deck bottom: kind={kind} n={n} allow_less={allow_less} draw_after={int(draw_after_n or 0)}')
+def _enqueue_choose_player_deck_top_action(gs: 'GameState', action: str, k: int = 1, source_cn: str = '') -> None:
+    """Choose self/opponent, then apply a deck-top look/reorder action.
+
+    Own deck actions are concrete in this single-player runtime. Opponent deck
+    actions are represented as manual-resolution prompts because opponent deck
+    state is not modeled.
+    """
+    action = str(action or '').strip()
+    k = max(1, int(k or 1))
+    if action == 'top1_optional_green':
+        desc = 'そのプレイヤーのデッキの一番上のカードを見る。控え室に置いてもよい'
+    elif action == 'topk_reorder_keep_any':
+        desc = f'そのプレイヤーのデッキ上から{k}枚を見る。好きな枚数を好きな順番でデッキ上に置き、残りを控え室に置く'
+    else:
+        gs.log.append(f'[WARN] choose_player_deck_top_action: unsupported action={action}')
+        return
+    gs.pending.append({
+        'kind': 'choose_player_for_deck_top_action',
+        'text': f'自分か相手を選ぶ。選んだプレイヤーの{desc}。',
+        'options': ['self', 'opponent'],
+        'action': action,
+        'k': k,
+        'source_cn': str(source_cn or ''),
+    })
+    gs.log.append(f'[PENDING] choose self/opponent deck-top action: action={action} k={k}')
+
 def _enqueue_hand_to_deck_top_or_bottom(gs: 'GameState', cards_db: Dict[str, CardInfo], kind: str = 'ANY', n: int = 1, group: str = '', after_gain_blade: int = 0, source_cn: str = '') -> None:
     kind = str(kind or 'ANY').upper()
     n = int(n or 0)
@@ -1278,6 +1306,11 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
             draw_after_n=draw_n,
             source_cn=str((ctx or {}).get('source_cn', '') or ''),
         )
+        return
+    if op == 'choose_player_deck_top_action':
+        action = str(rule.get('action', '') or '')
+        k = int(gd.get('k', 1) or 1)
+        _enqueue_choose_player_deck_top_action(gs, action=action, k=k, source_cn=str((ctx or {}).get('source_cn', '') or ''))
         return
     if op == 'draw_then_hand_to_deck_bottom':
         draw_n = int(gd.get('draw_n', 0) or 0)
@@ -8407,6 +8440,29 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         src_cn = str(p.get('source_cn', '') or '')
         if choice_low in ('self', 'me', 'own', 'you', '自分'):
             gs.log.append(f'[ACT] choose player: self -> bottomdeck own {kind_need} x{n}')
+            # For effects that say "好きな順番でデッキの一番下に置く", use the
+            # ordered multi-select template rather than one-card-at-a-time prompts.
+            # The resolver for choose_member_from_green_multi_up_to preserves the
+            # comma-separated click order, and action=deck_bottom appends in that order
+            # (first choice is the upper card among the returned bottom stack).
+            if kind_need == 'MEMBER' and n > 1 and allow_less and draw_after_n <= 0:
+                cands = _green_candidates_for_kind(gs, cards_db, kind=kind_need, group='')
+                if not cands:
+                    gs.log.append('[INFO] choose_player_green_bottom: no own MEMBER candidates in waiting room')
+                    return
+                gs.pending.append({
+                    'kind': 'choose_member_from_green_multi_up_to',
+                    'text': f'控え室のメンバーカードを{n}枚まで、好きな順番でデッキの一番下に置く（クリック順：1枚目=上側、最後=一番下）',
+                    'options': list(cands),
+                    'max_picks': n,
+                    'min_picks': 0,
+                    'action': 'deck_bottom',
+                    'source_zone': 'green',
+                    'ordered': True,
+                    'order_hint': 'deck_bottom_top_to_bottom',
+                })
+                gs.log.append(f'[PENDING] choose player self -> ordered bottomdeck own MEMBER up to {n} (cands={len(cands)})')
+                return
             _enqueue_bottomdeck_from_green(gs, cards_db, kind=kind_need, n=n, allow_less=allow_less, after_draw_n=draw_after_n, source_cn=src_cn)
             return
         if choice_low in ('opponent', 'opp', 'other', '相手'):
@@ -8427,6 +8483,71 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             gs.log.append(f'[MANUAL] opponent green -> deck bottom: kind={kind_need} n={n} draw_after={draw_after_n}')
             return
         gs.log.append(f'[ERR] choose_player_for_green_bottom: invalid choice {choice_str}')
+        return
+    if kind == 'choose_player_for_deck_top_action':
+        choice_low = str(choice_str or '').strip().lower()
+        action = str(p.get('action', '') or '')
+        k = max(1, int(p.get('k', 1) or 1))
+        src_cn = str(p.get('source_cn', '') or '')
+        if choice_low in ('self', 'me', 'own', 'you', '自分'):
+            if action == 'top1_optional_green':
+                if not gs.deck:
+                    gs.log.append('[INFO] choose_player deck-top: own deck empty')
+                    return
+                top_cn = gs.deck[0]
+                gs.pending.append({
+                    'kind': 'self_top1_to_green_or_keep',
+                    'text': '自分のデッキの一番上のカードを確認。控え室に置くか、デッキ上に残すか選んでください。',
+                    'options': ['green', 'keep'],
+                    'top_cn': top_cn,
+                    'source_cn': src_cn,
+                })
+                gs.log.append(f'[PENDING] choose player self -> view top1 {top_cn}; choose green/keep')
+                return
+            if action == 'topk_reorder_keep_any':
+                gs.log.append(f'[ACT] choose player: self -> reorder own top {k} keep-any')
+                _enqueue_reorder_from_topk_keep_any(gs, k, rng)
+                return
+            gs.log.append(f'[ERR] choose_player deck-top: unsupported action {action}')
+            return
+        if choice_low in ('opponent', 'opp', 'other', '相手'):
+            if action == 'top1_optional_green':
+                text2 = '【相手への効果】相手のデッキの一番上のカードを見ます。そのカードを控え室に置いてもよいです。'
+            elif action == 'topk_reorder_keep_any':
+                text2 = f'【相手への効果】相手のデッキの上からカードを{k}枚見ます。その中から好きな枚数を好きな順番でデッキの上に置き、残りを控え室に置きます。'
+            else:
+                text2 = f'【相手への効果】未対応のデッキ上処理です: {action}'
+            gs.pending.append({
+                'kind': 'manual_opponent_deck_top_action_notify',
+                'text': text2,
+                'options': ['ok'],
+                'source_cn': src_cn,
+            })
+            gs.log.append(f'[MANUAL] opponent deck-top action: action={action} k={k}')
+            return
+        gs.log.append(f'[ERR] choose_player_for_deck_top_action: invalid choice {choice_str}')
+        return
+    if kind == 'self_top1_to_green_or_keep':
+        low = str(choice_str or '').strip().lower()
+        top_cn = _canon_cardno(str(p.get('top_cn', '') or ''))
+        if not gs.deck:
+            gs.log.append('[ERR] self_top1_to_green_or_keep: deck empty')
+            return
+        actual = _canon_cardno(gs.deck[0])
+        if top_cn and actual != top_cn:
+            gs.log.append(f'[WARN] self_top1_to_green_or_keep: top changed expected={top_cn} actual={actual}')
+        if low in ('green', 'waiting', 'wait', '控え室'):
+            moved = gs.deck.pop(0)
+            gs.green_room.append(moved)
+            gs.log.append(f'[ACT] viewed own deck top -> waiting room {moved}')
+            return
+        if low in ('keep', 'top', 'deck', '残す', 'デッキ上'):
+            gs.log.append(f'[ACT] viewed own deck top -> kept on top {gs.deck[0]}')
+            return
+        gs.log.append(f'[ERR] self_top1_to_green_or_keep: invalid choice {choice_str}')
+        return
+    if kind == 'manual_opponent_deck_top_action_notify':
+        gs.log.append('[MANUAL] opponent deck-top action notification closed')
         return
     if kind == 'manual_opponent_green_bottom_notify':
         low = str(choice_str or '').strip().lower()

@@ -1,0 +1,6 @@
+cardnumber,cardname,card_type,status,text
+PL!N-bp3-010,三船栞子,MEMBER,implemented_other_family_green_member_bottom,自分か相手を選ぶ。自分は、そのプレイヤーの控え室にあるメンバーカードを2枚まで、好きな順番でデッキの一番下に置く。
+PL!N-bp4-002,中須かすみ,MEMBER,implemented_top1_optional_green,自分か相手を選ぶ。自分は、そのプレイヤーのデッキの一番上のカードを見る。自分はそのカードを控え室に置いてもよい。
+PL!S-PR-041,黒澤ルビィ,MEMBER,implemented_other_family_green_live_bottom_draw,自分か相手を選ぶ。自分は、そのプレイヤーの控え室にあるライブカードを1枚、そのプレイヤーのデッキの一番下に置く。そうした場合、自分はカードを1枚引く。
+PL!S-bp3-007,国木田花丸,MEMBER,implemented_other_family_green_live_bottom_draw,<(E)>：自分か相手を選ぶ。自分は、そのプレイヤーの控え室にあるライブカードを1枚、そのプレイヤーのデッキの一番下に置く。そうした場合、自分はカードを1枚引く。
+PL!S-pb1-008,小原鞠莉,MEMBER,implemented_topk_reorder_keep_any,自分か相手を選ぶ。自分は、そのプレイヤーのデッキの上からカードを2枚見る。その中から好きな枚数を好きな順番でデッキの上に置き、残りを控え室に置く。
