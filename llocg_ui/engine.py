@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: choose_player_deck_top_action_family_20260605a
+# BUILD_TAG: mass_green_bottom_auto_ack_counts_20260605b
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -51,6 +51,8 @@ _EFFECT_RULES = [
     {"id": "choose_self_or_opponent_green_live_bottom_draw", "pattern": r"^自分か相手を選ぶ。自分は、そのプレイヤーの控え室にあるライブカードを(?P<n>\d+)枚、そのプレイヤーのデッキの一番下に置く。そうした場合、自分はカードを(?P<draw_n>\d+)枚引く。$", "op": "choose_player_green_to_bottom", "card_kind": "LIVE", "allow_less": False, "draw_if_moved": True},
     {"id": "choose_self_or_opponent_top1_mill_optional", "pattern": r"^自分か相手を選ぶ。自分は、そのプレイヤーのデッキの一番上のカードを見る。自分はそのカードを控え室に置いてもよい。$", "op": "choose_player_deck_top_action", "action": "top1_optional_green"},
     {"id": "choose_self_or_opponent_topk_reorder_keep_any", "pattern": r"^自分か相手を選ぶ。自分は、そのプレイヤーのデッキの上からカードを(?P<k>\d+)枚見る。その中から好きな枚数を好きな順番でデッキの上に置き、残りを控え室に置く。$", "op": "choose_player_deck_top_action", "action": "topk_reorder_keep_any"},
+    {"id": "bottom_all_green_members_optional_group_threshold_stage_named_blade", "pattern": r"^自分の控え室にあるすべてのメンバーカードをシャッフルし、デッキの下に置いてもよい。これにより『(?P<threshold_group>[^』]+)』のカードを(?P<threshold_n>\d+)枚以上デッキの下に置いた場合、ライブ終了時まで、自分のステージにいる「(?P<target_name>[^」]+)」1人は(?P<blades>(?:<\(ブレード\)>)+)を得る。$", "op": "bottom_all_green_members_optional_group_threshold_stage_named_blade"},
+    {"id": "both_players_bottom_all_green_members_threshold_retrieve_live_gain_blade", "pattern": r"^自分と相手はそれぞれ、自身の控え室にあるすべてのメンバーカードをシャッフルし、自身のデッキの下に置く。これにより自分と相手のカードが合計(?P<threshold_n>\d+)枚以上デッキの下に置かれた場合、自分の控え室からライブカードを(?P<retrieve_n>\d+)枚手札に加え、ライブ終了時まで、(?P<blades>(?:<\(ブレード\)>)+)を得る。$", "op": "both_players_bottom_all_green_members_threshold_retrieve_live_gain_blade"},
     {"id": "draw_then_hand_bottom", "pattern": r"^カードを(?P<draw_n>\d+)枚引き、手札を(?P<bottom_n>\d+)枚デッキの一番下に置く。$", "op": "draw_then_hand_to_deck_bottom"},
     {"id": "draw_then_hand_top_or_bottom", "pattern": r"^カードを(?P<draw_n>\d+)枚引き、手札からカードを(?P<n>\d+)枚デッキの一番上か一番下に置く。$", "op": "draw_then_hand_to_deck_top_or_bottom"},
     {"id": "score_draw_then_hand_top_or_bottom_if_all_stage_group", "pattern": r"^自分のステージにいるメンバーがすべて『(?P<group>[^』]+)』の場合、このカードのスコアを\+(?P<score_n>\d+)し、カードを(?P<draw_n>\d+)枚引き、手札からカードを(?P<n>\d+)枚デッキの一番上か一番下に置く。$", "op": "score_draw_then_hand_top_or_bottom_if_all_stage_group"},
@@ -608,6 +610,100 @@ def _cost_hand_group_card_optional_reveal(cost_text: str) -> Dict[str, Any]:
     if not m:
         return {}
     return {'kind': 'ANY', 'group': m.group('group'), 'count': int(m.group('n') or 1)}
+
+def _move_all_green_members_to_deck_bottom_shuffled(gs: 'GameState', cards_db: Dict[str, CardInfo], rng: Optional[random.Random] = None) -> List[str]:
+    """Move all own waiting-room MEMBER cards to deck bottom after shuffling.
+
+    Returns the moved cardnumbers in the actual order appended to the deck.
+    """
+    members: List[str] = []
+    rest: List[str] = []
+    for cn in list(getattr(gs, 'green_room', []) or []):
+        ci = _get_card(cards_db, cn)
+        if ci and _is_member_ci(ci):
+            members.append(cn)
+        else:
+            rest.append(cn)
+    moved = list(members)
+    try:
+        (rng or random).shuffle(moved)
+    except Exception:
+        random.shuffle(moved)
+    gs.green_room = rest
+    try:
+        gs.deck.extend(moved)
+    except Exception:
+        gs.deck = list(getattr(gs, 'deck', []) or []) + list(moved)
+    return moved
+
+def _stage_positions_by_member_name(gs: 'GameState', cards_db: Dict[str, CardInfo], name: str) -> List[str]:
+    want = str(name or '').strip()
+    out: List[str] = []
+    if not want:
+        return out
+    for pos in ('L', 'C', 'R'):
+        slot = (getattr(gs, 'stage', {}) or {}).get(pos)
+        if not slot:
+            continue
+        ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+        if not ci or not _is_member_ci(ci):
+            continue
+        nm = str(getattr(ci, 'name', '') or getattr(ci, 'cardname', '') or '')
+        if want in nm:
+            out.append(pos)
+    return out
+
+def _grant_stage_member_temp_blade(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: str, blade_n: int, source_cn: str = '') -> bool:
+    pos = str(pos or '').upper()
+    slot = (getattr(gs, 'stage', {}) or {}).get(pos)
+    if not slot:
+        return False
+    try:
+        slot.temp_blade = int(getattr(slot, 'temp_blade', 0) or 0) + int(blade_n or 0)
+        slot.temp_until = 'end_of_live'
+    except Exception:
+        return False
+    gs.log.append(f'[AUTO] {source_cn}: stage {pos} temp blade +{int(blade_n or 0)} until end of live')
+    return True
+
+def _resolve_mass_green_member_threshold_stage_blade(gs: 'GameState', cards_db: Dict[str, CardInfo], moved: List[str], threshold_group: str, threshold_n: int, target_name: str, blade_n: int, source_cn: str = '') -> None:
+    group_n = 0
+    for cn in list(moved or []):
+        ci = _get_card(cards_db, cn)
+        if ci and _ci_matches_group_or_unit(ci, threshold_group):
+            group_n += 1
+    if group_n < int(threshold_n or 0):
+        gs.log.append(f'[AUTO] {source_cn}: mass bottom threshold not met ({threshold_group} {group_n}/{threshold_n})')
+        return
+    cands = _stage_positions_by_member_name(gs, cards_db, target_name)
+    if not cands:
+        gs.log.append(f'[AUTO] {source_cn}: threshold met but no stage member named {target_name}')
+        return
+    if len(cands) == 1:
+        _grant_stage_member_temp_blade(gs, cards_db, cands[0], blade_n, source_cn=source_cn)
+        return
+    gs.pending.append({
+        'kind': 'choose_stage_member_to_gain_blade',
+        'text': f'「{target_name}」1人を選んで、ライブ終了時まで<(ブレード)>を{blade_n}つ得ます。',
+        'options': list(cands),
+        'candidates': list(cands),
+        'blade_n': int(blade_n or 0),
+        'source_cn': source_cn,
+    })
+    gs.log.append(f'[PENDING] {source_cn}: choose {target_name} to gain blade +{blade_n}')
+
+def _apply_mass_bottom_threshold_followup(gs: 'GameState', cards_db: Dict[str, CardInfo], source_pos: str, source_cn: str, retrieve_n: int, blade_n: int) -> None:
+    pos = str(source_pos or '').upper()
+    if pos in ('L', 'C', 'R') and (getattr(gs, 'stage', {}) or {}).get(pos):
+        _grant_stage_member_temp_blade(gs, cards_db, pos, blade_n, source_cn=source_cn)
+    else:
+        gs.log.append(f'[WARN] {source_cn}: threshold met but source stage position missing; blade +{blade_n} skipped')
+    if int(retrieve_n or 0) > 0:
+        cands = _green_candidates(gs, cards_db, 'LIVE')
+        if cands:
+            _enqueue_choose_from_green(gs, cards_db, kind='LIVE', n=int(retrieve_n or 1))
+        else:
+            gs.log.append(f'[INFO] {source_cn}: threshold met but no LIVE in waiting room to retrieve')
 
 def _is_revealed_card_to_top_or_bottom_blade_effect(effect_text: str) -> bool:
     t = _normalize_icon_token_text(str(effect_text or '').strip()).replace('\n', '')
@@ -1311,6 +1407,62 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         action = str(rule.get('action', '') or '')
         k = int(gd.get('k', 1) or 1)
         _enqueue_choose_player_deck_top_action(gs, action=action, k=k, source_cn=str((ctx or {}).get('source_cn', '') or ''))
+        return
+    if op == 'bottom_all_green_members_optional_group_threshold_stage_named_blade':
+        source_cn = str((ctx or {}).get('source_cn', '') or '')
+        gs.pending.append({
+            'kind': 'confirm_mass_green_members_to_bottom',
+            'text': '自分の控え室にあるすべてのメンバーカードをシャッフルし、デッキの下に置きますか？',
+            'options': ['apply', 'skip'],
+            'threshold_group': str(gd.get('threshold_group', '') or ''),
+            'threshold_n': int(gd.get('threshold_n', 0) or 0),
+            'target_name': str(gd.get('target_name', '') or ''),
+            'blade_n': _count_blade_icons_from_tagblob(str(gd.get('blades', '') or '')),
+            'source_cn': source_cn,
+        })
+        gs.log.append(f'[PENDING] {source_cn}: optional mass bottom all own MEMBER cards')
+        return
+    if op == 'both_players_bottom_all_green_members_threshold_retrieve_live_gain_blade':
+        source_cn = str((ctx or {}).get('source_cn', '') or '')
+        source_pos = str((ctx or {}).get('pos', '') or '').upper()
+        moved = _move_all_green_members_to_deck_bottom_shuffled(gs, cards_db, rng)
+        own_n = len(moved)
+        threshold_n = int(gd.get('threshold_n', 0) or 0)
+        retrieve_n = int(gd.get('retrieve_n', 1) or 1)
+        blade_n = _count_blade_icons_from_tagblob(str(gd.get('blades', '') or ''))
+        gs.log.append(f'[AUTO] {source_cn}: own waiting-room MEMBER all -> deck bottom shuffled ({own_n}); opponent does same manually')
+        if own_n >= threshold_n:
+            gs.pending.append({
+                'kind': 'mass_bottom_auto_ack',
+                'text': (
+                    f'{source_cn} の自動効果を確認してください。\n'
+                    f'自分の控え室からメンバーカード{own_n}枚をシャッフルしてデッキ下に戻しました。\n'
+                    f'相手も同様に自身の控え室のメンバーカードをデッキ下に戻します。\n'
+                    f'自分側だけで合計{threshold_n}枚以上の条件を満たしています。確認後、ライブカード回収とブレード+{blade_n}を処理します。'
+                ),
+                'options': ['ok'],
+                'own_moved_n': own_n,
+                'threshold_n': threshold_n,
+                'retrieve_n': retrieve_n,
+                'blade_n': blade_n,
+                'source_pos': source_pos,
+                'source_cn': source_cn,
+            })
+            gs.log.append(f'[PENDING] {source_cn}: mass bottom auto confirmation own={own_n}/{threshold_n}')
+        else:
+            need_opponent = max(0, int(threshold_n or 0) - int(own_n or 0))
+            gs.pending.append({
+                'kind': 'manual_opponent_mass_bottom_threshold',
+                'text': f'【相手への効果】自分は控え室のメンバーカード{own_n}枚をシャッフルしてデッキ下に戻しました。相手も自身の控え室にあるすべてのメンバーカードをシャッフルし、相手のデッキの下に置きます。合計{threshold_n}枚以上、つまり相手側で少なくとも{need_opponent}枚以上戻った場合は「条件達成」を押してください。',
+                'options': ['threshold_met', 'threshold_not_met'],
+                'own_moved_n': own_n,
+                'threshold_n': threshold_n,
+                'retrieve_n': retrieve_n,
+                'blade_n': blade_n,
+                'source_pos': source_pos,
+                'source_cn': source_cn,
+            })
+            gs.log.append(f'[PENDING] {source_cn}: manual opponent mass bottom threshold check own={own_n}/{threshold_n}')
         return
     if op == 'draw_then_hand_to_deck_bottom':
         draw_n = int(gd.get('draw_n', 0) or 0)
@@ -9062,6 +9214,77 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         ok = _resolve_choose_top_keep_one(gs, p, choice_str, cards_db)
         if not ok:
             return
+        return
+    if kind == 'confirm_mass_green_members_to_bottom':
+        low = str(choice_str or '').strip().lower()
+        src = str(p.get('source_cn', '') or '')
+        if low in ('skip', '__skip__', 'no', 'n', '0', 'false', 'cancel', '使わない', 'いいえ', 'スキップ'):
+            gs.log.append(f'[SKIP] {src}: optional mass bottom skipped')
+            return
+        if low not in ('apply', 'yes', 'y', '1', 'true', 'use', 'do', 'go', 'ok', 'confirm', '使う', 'はい'):
+            gs.log.append(f'[ERR] confirm_mass_green_members_to_bottom: invalid choice {choice_str}')
+            gs.pending.append(p)
+            return
+        try:
+            rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
+        except Exception:
+            rng2 = random.Random()
+        moved = _move_all_green_members_to_deck_bottom_shuffled(gs, cards_db, rng2)
+        gs.log.append(f'[ACT] {src}: waiting-room MEMBER all -> deck bottom shuffled ({len(moved)})')
+        _resolve_mass_green_member_threshold_stage_blade(
+            gs, cards_db, moved,
+            str(p.get('threshold_group', '') or ''),
+            int(p.get('threshold_n', 0) or 0),
+            str(p.get('target_name', '') or ''),
+            int(p.get('blade_n', 0) or 0),
+            source_cn=src,
+        )
+        return
+    if kind == 'mass_bottom_auto_ack':
+        low = str(choice_str or '').strip().lower()
+        src = str(p.get('source_cn', '') or '')
+        if low not in ('ok', 'confirm', 'apply', 'yes', 'y', '1', 'true', '確認', 'はい'):
+            gs.log.append(f'[ERR] mass_bottom_auto_ack: invalid choice {choice_str}')
+            gs.pending.append(p)
+            return
+        _apply_mass_bottom_threshold_followup(
+            gs, cards_db,
+            str(p.get('source_pos', '') or '').upper(),
+            src,
+            int(p.get('retrieve_n', 1) or 1),
+            int(p.get('blade_n', 0) or 0),
+        )
+        gs.log.append(f'[ACK] {src}: mass bottom auto confirmed own={int(p.get("own_moved_n", 0) or 0)}/{int(p.get("threshold_n", 0) or 0)} -> followup')
+        return
+    if kind == 'manual_opponent_mass_bottom_threshold':
+        low = str(choice_str or '').strip().lower()
+        src = str(p.get('source_cn', '') or '')
+        if low in ('threshold_met', 'met', 'yes', 'y', '1', 'true', '達成', '条件達成'):
+            _apply_mass_bottom_threshold_followup(
+                gs, cards_db,
+                str(p.get('source_pos', '') or '').upper(),
+                src,
+                int(p.get('retrieve_n', 1) or 1),
+                int(p.get('blade_n', 0) or 0),
+            )
+            gs.log.append(f'[MANUAL] {src}: opponent mass bottom threshold met own={int(p.get("own_moved_n", 0) or 0)}/{int(p.get("threshold_n", 0) or 0)} -> followup')
+            return
+        if low in ('threshold_not_met', 'not_met', 'no', 'n', '0', 'false', '未達', '条件未達'):
+            gs.log.append(f'[MANUAL] {src}: opponent mass bottom threshold not met own={int(p.get("own_moved_n", 0) or 0)}/{int(p.get("threshold_n", 0) or 0)} -> no followup')
+            return
+        gs.log.append(f'[ERR] manual_opponent_mass_bottom_threshold: invalid choice {choice_str}')
+        gs.pending.append(p)
+        return
+    if kind == 'choose_stage_member_to_gain_blade':
+        pos2 = str(choice_str or '').strip().upper()
+        cand = [str(x).upper() for x in list(p.get('candidates', []) or []) if str(x).upper() in ('L','C','R')]
+        if pos2 not in ('L','C','R') or (cand and pos2 not in cand):
+            gs.log.append(f'[ERR] choose_stage_member_to_gain_blade: invalid target {choice_str}')
+            gs.pending.append(p)
+            return
+        ok = _grant_stage_member_temp_blade(gs, cards_db, pos2, int(p.get('blade_n', 0) or 0), source_cn=str(p.get('source_cn', '') or ''))
+        if not ok:
+            gs.log.append(f'[ERR] choose_stage_member_to_gain_blade: failed target {pos2}')
         return
     if kind == 'choose_stage_member_to_wait':
         raw = str(choice_str or '').strip()

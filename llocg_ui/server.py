@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: server_choose_player_deck_top_action_20260605a
+# BUILD_TAG: server_mass_bottom_auto_ack_counts_20260605b
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1972,6 +1972,8 @@ HTML = r'''<!doctype html>
     if(low === 'opponent') return '相手';
     if(low === 'draw') return '置いたのでカードを引く';
     if(low === 'no_draw') return '置かなかった / 引かない';
+    if(low === 'threshold_met') return '条件達成';
+    if(low === 'threshold_not_met') return '条件未達';
     if(low === 'top') return 'デッキの一番上';
     if(low === 'bottom') return 'デッキの一番下';
     if(low === 'green' || low === 'waiting') return '控え室に置く';
@@ -1987,14 +1989,16 @@ HTML = r'''<!doctype html>
     const kind = String((p && p.kind) || '').trim();
     if(kind === 'pay_or_skip' || kind === 'confirm_effect') return '効果を使いますか？';
     if(kind === 'choose_effects') return '効果を選択';
-    if(kind === 'choose_stage_member_to_activate') return '対象メンバーを選択';
+    if(kind === 'choose_stage_member_to_activate' || kind === 'choose_stage_member_to_gain_blade') return '対象メンバーを選択';
     if(kind === 'choose_heart_color' || kind === 'choose_heart_color_for_other') return 'ハートの色を選択';
     if(kind === 'discard_from_hand' || kind === 'discard_named_cards_from_hand') return '手札から選択';
     if(kind === 'position_change') return '移動先を選択';
     if(kind === 'choose_from_topk' || kind === 'choose_top_keep_one' || kind === 'topdeck_from_green' || kind === 'bottomdeck_from_green' || kind === 'hand_to_deck_bottom' || kind === 'hand_to_deck_top_or_bottom') return 'カードを選択';
     if(kind === 'choose_deck_top_or_bottom_for_hand_card') return '置く場所を選択';
     if(kind === 'choose_player_for_green_bottom' || kind === 'choose_player_for_deck_top_action') return 'プレイヤーを選択';
-    if(kind === 'manual_opponent_green_bottom_notify' || kind === 'manual_opponent_deck_top_action_notify') return '相手への効果';
+    if(kind === 'manual_opponent_green_bottom_notify' || kind === 'manual_opponent_deck_top_action_notify' || kind === 'manual_opponent_mass_bottom_threshold') return '相手への効果';
+    if(kind === 'mass_bottom_auto_ack') return '自動効果確認';
+    if(kind === 'confirm_mass_green_members_to_bottom') return '効果を使いますか？';
     if(kind === 'self_top1_to_green_or_keep') return 'デッキ上を確認';
     if(kind === 'choose_member_from_green_multi_up_to') return 'カードを選択';
     if(kind === 'auto_order') return '解決順を選択';
@@ -2018,6 +2022,7 @@ HTML = r'''<!doctype html>
     if(kind === 'pay_or_skip' || kind === 'confirm_effect') return 'この効果を使うか、スキップするかを選んでください。';
     if(kind === 'choose_member_from_green_multi_up_to') return '控え室または手札からカードを0〜指定枚数まで選び、確定を押してください。';
     if(kind === 'choose_stage_member_to_activate') return '対象にするメンバーを選んでください。';
+    if(kind === 'choose_stage_member_to_gain_blade') return 'ブレードを得るメンバーを選んでください。';
     if(kind === 'choose_heart_color' || kind === 'choose_heart_color_for_other') return '付与するハートの色を選んでください。';
     if(kind === 'discard_from_hand' || kind === 'discard_named_cards_from_hand') return '手札から選ぶカードを選択してください。';
     if(kind === 'choose_effects') return '解決する効果を選んでください。';
@@ -2025,7 +2030,9 @@ HTML = r'''<!doctype html>
     if(kind === 'position_change') return '移動先のエリアを選んでください。';
     if(kind === 'choose_deck_top_or_bottom_for_hand_card') return 'デッキの一番上か一番下を選んでください。';
     if(kind === 'choose_player_for_green_bottom' || kind === 'choose_player_for_deck_top_action') return '自分か相手を選んでください。';
-    if(kind === 'manual_opponent_green_bottom_notify' || kind === 'manual_opponent_deck_top_action_notify') return '相手側の処理を手動で行ってから選択してください。';
+    if(kind === 'manual_opponent_green_bottom_notify' || kind === 'manual_opponent_deck_top_action_notify' || kind === 'manual_opponent_mass_bottom_threshold') return '相手側の処理を手動で行い、条件達成/未達を選んでください。';
+    if(kind === 'mass_bottom_auto_ack') return '自動効果を確認してから、後続処理へ進みます。';
+    if(kind === 'confirm_mass_green_members_to_bottom') return '自分の控え室のメンバーカードをすべてデッキ下へ置くか選んでください。';
     if(kind === 'self_top1_to_green_or_keep') return '公開されたデッキ上カードを控え室に置くか、デッキ上に残すか選んでください。';
     return pendingSourceCn(p) ? '効果を解決するため、対象または選択肢を選んでください。' : '';
   }
