@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: topk_complex_filters_20260604a
+# BUILD_TAG: deck_bottom_family_20260604a
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -44,6 +44,10 @@ _EFFECT_RULES = [
     {"id": "topdeck_green_any_upto1", "pattern": r"^自分の控え室からカードを1枚までデッキの一番上に置く。$", "op": "topdeck_from_green", "card_kind": "ANY", "allow_less": True},
     {"id": "topdeck_green_member_n", "pattern": r"^自分の控え室にあるメンバーカード(?P<n>\d+)枚を好きな順番でデッキの一番上に置く。$", "op": "topdeck_from_green", "card_kind": "MEMBER", "allow_less": False},
     {"id": "topdeck_green_live_group_upto_n", "pattern": r"^自分の控え室にある『(?P<group>[^』]+)』のライブカードを(?P<n>\d+)枚まで好きな順番でデッキの上に置く。$", "op": "topdeck_from_green", "card_kind": "LIVE", "allow_less": True},
+    # Put cards on the bottom of the deck. These use the same card-list UI
+    # as other zone picks, but route to deck bottom instead of hand/topdeck.
+    {"id": "bottomdeck_green_kind_upto_n", "pattern": r"^自分の控え室から(?:(?P<kind>ライブ|メンバー)カード|カード)を(?P<n>\d+)枚までデッキの一番下に置く。$", "op": "bottomdeck_from_green", "allow_less": True},
+    {"id": "draw_then_hand_bottom", "pattern": r"^カードを(?P<draw_n>\d+)枚引き、手札を(?P<bottom_n>\d+)枚デッキの一番下に置く。$", "op": "draw_then_hand_to_deck_bottom"},
     {"id": "energy_put_wait_n", "pattern": r"^自分のエネルギーデッキから、エネルギーカードを(?P<n>\d+)枚ウェイト状態で置く。$", "op": "energy_put_wait"},
     {"id": "energy_put_wait_under_plus_one_self", "pattern": r"^(?:自分の)?エネルギーデッキから、このメンバーの下にあるエネルギーカードの枚数に1を足した枚数のエネルギーカードをウェイト状態で置く。$", "op": "energy_put_wait_under_plus_one_self"},
     {"id": "energy_activate_n", "pattern": r"^エネルギーを(?P<n>\d+)枚アクティブにする。$", "op": "energy_activate"},
@@ -561,6 +565,101 @@ def _cost_named_cards_to_deck_bottom(cost_text: str) -> Dict[str, Any]:
     m = re.search(r'合計\s*(\d+)\s*枚', _norm_digits_jp(t))
     total = int(m.group(1)) if m else len(names)
     return {'names': names, 'total': total}
+def _cost_green_members_to_deck_bottom_costsum(cost_text: str) -> Dict[str, Any]:
+    """Parse optional cost: 控え室にあるメンバーカードN枚を好きな順番でデッキの一番下に置いてもよい.
+
+    This is used by cards whose result depends on the total cost of the moved cards.
+    Returns {'count': N} or {}.
+    """
+    t = _norm_digits_jp(cost_text or '')
+    if '控え室' not in t or 'メンバーカード' not in t:
+        return {}
+    if 'デッキの一番下' not in t:
+        return {}
+    if '置いてもよい' not in t:
+        return {}
+    m = re.search(r'メンバーカード\s*(\d+)\s*枚', t)
+    if not m:
+        return {}
+    return {'count': int(m.group(1))}
+
+def _cost_hand_live_to_deck_bottom(cost_text: str) -> Dict[str, Any]:
+    """Parse optional cost: 手札のライブカードをN枚公開し、デッキの一番下に置いてもよい."""
+    t = _norm_digits_jp(cost_text or '')
+    if '手札' not in t or 'デッキの一番下' not in t or '置いてもよい' not in t:
+        return {}
+    if 'ライブカード' not in t:
+        return {}
+    m = re.search(r'ライブカードを\s*(\d+)\s*枚', t)
+    return {'kind': 'LIVE', 'count': int(m.group(1)) if m else 1}
+
+def _hand_candidates_by_kind(gs: 'GameState', cards_db: Dict[str, 'CardInfo'], kind: str = 'ANY', group: str = '') -> List[str]:
+    kind = str(kind or 'ANY').upper()
+    out: List[str] = []
+    for cn in list(getattr(gs, 'hand', []) or []):
+        ci = _get_card(cards_db, cn)
+        if not ci:
+            continue
+        if kind == 'LIVE' and not _is_live_ci(ci):
+            continue
+        if kind == 'MEMBER' and not _is_member_ci(ci):
+            continue
+        if group and group not in str(getattr(ci, 'group', '') or ''):
+            continue
+        out.append(cn)
+    return out
+
+def _green_candidates_for_kind(gs: 'GameState', cards_db: Dict[str, 'CardInfo'], kind: str = 'ANY', group: str = '') -> List[str]:
+    kind = str(kind or 'ANY').upper()
+    out: List[str] = []
+    for cn in list(getattr(gs, 'green_room', []) or []):
+        ci = _get_card(cards_db, cn)
+        if not ci:
+            continue
+        if kind == 'LIVE' and not _is_live_ci(ci):
+            continue
+        if kind == 'MEMBER' and not _is_member_ci(ci):
+            continue
+        if group and group not in str(getattr(ci, 'group', '') or ''):
+            continue
+        out.append(cn)
+    return out
+
+def _apply_bottom_costsum_result(gs: 'GameState', cards_db: Dict[str, 'CardInfo'], pos: str, source_cn: str, picked: List[str]) -> None:
+    """Apply PL!N-bp3-009 style result after moving two green members to deck bottom."""
+    pos = str(pos or '').upper()
+    slot = gs.stage.get(pos) if pos in ('L', 'C', 'R') else None
+    total = 0
+    for cn in list(picked or []):
+        ci = _get_card(cards_db, cn)
+        try:
+            total += int(getattr(ci, 'cost', 0) or 0) if ci else 0
+        except Exception:
+            pass
+    if not picked:
+        gs.log.append(f'[SKIP] {source_cn}: green member bottom cost skipped')
+        return
+    if total == 6:
+        got = draw(gs, 1, random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0)))
+        gs.log.append(f'[AUTO] {source_cn}: bottom cost total=6 -> draw {got}')
+    elif total == 8:
+        if slot:
+            _grant_temp_heart(slot, 'all', 1)
+            gs.log.append(f'[AUTO] {source_cn}: bottom cost total=8 -> {pos} gains <ALL> until end of live')
+        else:
+            gs.log.append(f'[WARN] {source_cn}: total=8 but source slot missing')
+    elif total == 25:
+        if slot:
+            try:
+                slot.temp_score = int(getattr(slot, 'temp_score', 0) or 0) + 1
+                slot.temp_until = 'end_of_live'
+            except Exception:
+                pass
+            gs.log.append(f'[AUTO] {source_cn}: bottom cost total=25 -> {pos} gains live total score +1 until end of live')
+        else:
+            gs.log.append(f'[WARN] {source_cn}: total=25 but source slot missing')
+    else:
+        gs.log.append(f'[AUTO] {source_cn}: bottom cost total={total} -> no matching result')
 def can_activate_in_state(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: str) -> bool:
     pos = str(pos or '').upper()
     if pos not in ('L','C','R'):
@@ -773,6 +872,49 @@ def _enqueue_topdeck_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo], 
         'allow_less': bool(allow_less),
     })
     gs.log.append(f'[PENDING] topdeck_from_green: kind={kind} n={n} allow_less={allow_less} (cands={len(cands)})')
+def _enqueue_bottomdeck_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo], kind: str, n: int, group: str = '', allow_less: bool = True) -> None:
+    kind = str(kind or 'ANY').upper()
+    n = int(n or 0)
+    if n <= 0:
+        return
+    cands = _green_candidates_for_kind(gs, cards_db, kind=kind, group=group)
+    if not cands:
+        gs.log.append(f'[INFO] bottomdeck_from_green: no {kind} candidates in waiting room')
+        return
+    gs.pending.append({
+        'kind': 'bottomdeck_from_green',
+        'text': f'控え室の{kind}カードを{n}枚までデッキの一番下に置く',
+        'options': (['skip'] + list(cands)) if allow_less else list(cands),
+        'remaining': n,
+        'picked': [],
+        'want_kind': kind,
+        'want_group': group,
+        'allow_less': bool(allow_less),
+        'allow_skip': bool(allow_less),
+    })
+    gs.log.append(f'[PENDING] bottomdeck_from_green: kind={kind} n={n} cands={len(cands)} allow_less={allow_less}')
+def _enqueue_hand_to_deck_bottom(gs: 'GameState', cards_db: Dict[str, CardInfo], kind: str, n: int, group: str = '', after_effect_template: str = '', after_ctx: Optional[Dict[str, Any]] = None, after_source_cn: str = '') -> None:
+    kind = str(kind or 'ANY').upper()
+    n = int(n or 0)
+    if n <= 0:
+        return
+    cands = _hand_candidates_by_kind(gs, cards_db, kind=kind, group=group)
+    if len(cands) < n:
+        gs.log.append(f'[ERR] hand_to_deck_bottom: not enough {kind} cards in hand (need {n}, have {len(cands)})')
+        return
+    gs.pending.append({
+        'kind': 'hand_to_deck_bottom',
+        'text': f'手札の{kind}カードを{n}枚デッキの一番下に置く',
+        'options': list(cands),
+        'remaining': n,
+        'picked': [],
+        'want_kind': kind,
+        'want_group': group,
+        'after_effect_template': after_effect_template,
+        'after_ctx': dict(after_ctx or {}),
+        'after_source_cn': after_source_cn,
+    })
+    gs.log.append(f'[PENDING] hand_to_deck_bottom: kind={kind} n={n} cands={len(cands)}')
 def _enqueue_choose_from_topk(gs: 'GameState', k: int, rng: Optional[random.Random] = None) -> None:
     k = int(k or 0)
     if k <= 0:
@@ -1053,6 +1195,20 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
             gs.log.append('[WARN] topdeck: unsupported kind')
             return
         _enqueue_topdeck_from_green(gs, cards_db, kind=kind, n=n, group=group, allow_less=allow_less)
+        return
+    if op == 'bottomdeck_from_green':
+        kind_jp = str(gd.get('kind', '') or '')
+        kind = {'ライブ': 'LIVE', 'メンバー': 'MEMBER'}.get(kind_jp, str(rule.get('card_kind', '') or '').upper() or 'ANY')
+        n = int(gd.get('n', 1) or 1)
+        group = str(gd.get('group', '') or '')
+        _enqueue_bottomdeck_from_green(gs, cards_db, kind=kind, n=n, group=group, allow_less=bool(rule.get('allow_less', True)))
+        return
+    if op == 'draw_then_hand_to_deck_bottom':
+        draw_n = int(gd.get('draw_n', 0) or 0)
+        bottom_n = int(gd.get('bottom_n', 1) or 1)
+        got = draw(gs, draw_n, rng)
+        gs.log.append(f'[AUTO] draw_then_hand_to_deck_bottom: drew {got}; choose {bottom_n} from hand -> deck bottom')
+        _enqueue_hand_to_deck_bottom(gs, cards_db, kind='ANY', n=bottom_n, after_source_cn=str((ctx or {}).get('source_cn', '') or ''))
         return
     if op == 'look_top_choose':
         k = int(gd.get('k', 0) or 0)
@@ -3429,6 +3585,42 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                             }
                             _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
                             continue
+                    # Optional green-room member cost to deck bottom; result depends on moved cards' cost total.
+                    bottom_costsum = _cost_green_members_to_deck_bottom_costsum(cost)
+                    if bottom_costsum and ('それらのカードのコストの合計' in eff):
+                        cands = _green_candidates_for_kind(gs, cards_db, kind='MEMBER')
+                        count_need = int(bottom_costsum.get('count') or 0)
+                        pr = {
+                            'kind': 'choose_member_from_green_multi_up_to',
+                            'source_zone': 'green',
+                            'action': 'deck_bottom_costsum',
+                            'min_picks': 0,
+                            'max_picks': count_need,
+                            'exact_or_zero': True,
+                            'text': f'{ci.cardnumber}: 控え室のメンバーカードを0枚または{count_need}枚選び、クリック順でデッキの一番下へ置く',
+                            'options': list(cands),
+                            'source_cn': ci.cardnumber,
+                            'pos': pos,
+                        }
+                        _append_prompt(pr, f'{pos}: {ci.cardnumber} ライブ開始時')
+                        continue
+                    # Optional hand live-card cost to deck bottom.
+                    bottom_hand_live = _cost_hand_live_to_deck_bottom(cost)
+                    if bottom_hand_live and _match_effect_template(eff):
+                        cost_n = int(bottom_hand_live.get('count') or 1)
+                        pr = {
+                            'kind': 'live_start_pay_effect',
+                            'pos': pos,
+                            'cn': ci.cardnumber,
+                            'need_e': 0,
+                            'cost_kind': 'hand_live_to_deck_bottom',
+                            'cost_n': cost_n,
+                            'effect': eff,
+                            'text': _pretty_optional_effect_prompt_text('ライブ開始時', ci.cardnumber, cost, eff),
+                            'options': ['pay', 'skip'],
+                        }
+                        _append_prompt(pr, f'{pos}: {ci.cardnumber} ライブ開始時')
+                        continue
                     # Optional hand-discard cost（「手札をN枚控え室に置いてもよい」「手札のXを1枚控え室に置いてもよい」）
                     if '控え室に置いてもよい' in cost and (_match_effect_template(eff) or _is_named_hand_cost_result_effect(eff)):
                         # 手札のライブカード / 任意カード / 指定名カードを捨てる optional cost.
@@ -7806,6 +7998,14 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                 return
             picked.append(found_cn)
             green_copy.pop(found_idx)
+        action = str(p.get('action', '') or '')
+        if action in ('deck_bottom', 'deck_bottom_costsum'):
+            gs.green_room = green_copy
+            gs.deck.extend(picked)
+            gs.log.append(f"[ACT] choose_member_from_green_multi_up_to: picked={picked} -> deck bottom")
+            if action == 'deck_bottom_costsum':
+                _apply_bottom_costsum_result(gs, cards_db, str(p.get('pos', '') or ''), str(p.get('source_cn', '') or ''), picked)
+            return
         gs.green_room = green_copy
         gs.hand.extend(picked)
         gs.log.append(f"[ACT] choose_member_from_green_multi_up_to: picked={picked} -> hand")
@@ -7937,6 +8137,94 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         _r = p.get('_resume') if isinstance(p, dict) else None
         if _r:
             gs.pending.append(_r)
+        return
+    if kind == 'hand_to_deck_bottom':
+        rem = int(p.get('remaining', 0) or 0)
+        if rem <= 0:
+            return
+        cn = _canon_cardno(choice_str)
+        pick_i = None
+        for i, hcn in enumerate(list(gs.hand)):
+            if _canon_cardno(hcn) == cn:
+                pick_i = i
+                break
+        if pick_i is None:
+            gs.log.append(f'[ERR] hand_to_deck_bottom: chosen not in hand {cn}')
+            return
+        moved = gs.hand.pop(pick_i)
+        gs.deck.append(moved)
+        picked = list(p.get('picked', []) or []) + [moved]
+        rem -= 1
+        gs.log.append(f'[ACT] hand_to_deck_bottom: {moved} -> deck bottom (remaining={rem})')
+        if rem > 0:
+            kind_need = str(p.get('want_kind', 'ANY') or 'ANY')
+            group_need = str(p.get('want_group', '') or '')
+            cands = _hand_candidates_by_kind(gs, cards_db, kind=kind_need, group=group_need)
+            gs.pending.append({
+                'kind': 'hand_to_deck_bottom',
+                'text': str(p.get('text', '') or f'手札からデッキの一番下に置くカードを選ぶ（残り{rem}）'),
+                'options': list(cands),
+                'remaining': rem,
+                'picked': picked,
+                'want_kind': kind_need,
+                'want_group': group_need,
+                'after_effect_template': str(p.get('after_effect_template', '') or ''),
+                'after_ctx': dict(p.get('after_ctx', {}) or {}),
+                'after_source_cn': str(p.get('after_source_cn', '') or ''),
+            })
+            return
+        after_eff = str(p.get('after_effect_template', '') or '').strip()
+        after_ctx = dict(p.get('after_ctx', {}) or {})
+        after_src = str(p.get('after_source_cn', '') or '')
+        after_ctx['bottomed_cns'] = list(picked)
+        after_ctx['bottomed_count'] = len(picked)
+        if after_eff:
+            rng2 = random.Random(getattr(gs, 'seed', 1) or 1)
+            ok = try_apply_effect_template(gs, rng2, cards_db, after_eff, after_ctx)
+            gs.log.append(f"[ACT] {after_src}: after bottom cost -> {'applied' if ok else 'no_match'} {after_eff}")
+        return
+    if kind == 'bottomdeck_from_green':
+        low = str(choice_str or '').strip().lower()
+        allow_less = bool(p.get('allow_less', False) or p.get('allow_skip', False))
+        if allow_less and low in ('skip', '__skip__', 'no', 'n', '0', 'false', 'スキップ'):
+            gs.log.append('[SKIP] bottomdeck_from_green: done')
+            return
+        rem = int(p.get('remaining', 0) or 0)
+        cn = _canon_cardno(choice_str)
+        opts = [_canon_cardno(x) for x in list(p.get('options', []) or [])]
+        if opts and cn not in opts:
+            gs.log.append(f'[ERR] bottomdeck_from_green: invalid choice {choice_str}')
+            return
+        pick_i = None
+        for i, gcn in enumerate(list(gs.green_room)):
+            if _canon_cardno(gcn) == cn:
+                pick_i = i
+                break
+        if pick_i is None:
+            gs.log.append(f'[ERR] bottomdeck_from_green: chosen not in waiting room {cn}')
+            return
+        moved = gs.green_room.pop(pick_i)
+        gs.deck.append(moved)
+        picked = list(p.get('picked', []) or []) + [moved]
+        rem -= 1
+        gs.log.append(f'[ACT] bottomdeck_from_green: {moved} -> deck bottom (remaining={rem})')
+        if rem > 0:
+            kind_need = str(p.get('want_kind', 'ANY') or 'ANY')
+            group_need = str(p.get('want_group', '') or '')
+            cands = _green_candidates_for_kind(gs, cards_db, kind=kind_need, group=group_need)
+            if cands:
+                gs.pending.append({
+                    'kind': 'bottomdeck_from_green',
+                    'text': str(p.get('text', '') or f'控え室からデッキの一番下に置くカードを選ぶ（残り{rem}）'),
+                    'options': (['skip'] + list(cands)) if allow_less else list(cands),
+                    'remaining': rem,
+                    'picked': picked,
+                    'want_kind': kind_need,
+                    'want_group': group_need,
+                    'allow_less': allow_less,
+                    'allow_skip': allow_less,
+                })
+            return
         return
     if kind == 'view_topk_no_match':
         # User confirmed viewing the pool; send all to green room
@@ -8571,6 +8859,10 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                     return
             src_cn = str(p.get("cn", "") or "")
             after_ctx = {"pos": pos, "source_cn": src_cn}
+            # 手札のライブカードをデッキ下に置くコスト → ユーザーに選ばせる
+            if cost_kind == 'hand_live_to_deck_bottom' and cost_n > 0:
+                _enqueue_hand_to_deck_bottom(gs, cards_db, kind='LIVE', n=cost_n, after_effect_template=eff, after_ctx=after_ctx, after_source_cn=src_cn)
+                return
             # 手札のライブカードを捨てるコスト → ユーザーに選ばせる
             if cost_kind == 'discard_live_from_hand' and cost_n > 0:
                 live_in_hand = [c for c in list(gs.hand) if _is_live(_get_card(cards_db, c))]
