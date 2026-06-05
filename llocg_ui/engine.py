@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: mass_green_bottom_result_ack_inline_counts_20260605d
+# BUILD_TAG: live_start_empty_cost_icon_spacing_20260605b
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -56,6 +56,7 @@ _EFFECT_RULES = [
     {"id": "draw_then_hand_bottom", "pattern": r"^カードを(?P<draw_n>\d+)枚引き、手札を(?P<bottom_n>\d+)枚デッキの一番下に置く。$", "op": "draw_then_hand_to_deck_bottom"},
     {"id": "draw_then_hand_top_or_bottom", "pattern": r"^カードを(?P<draw_n>\d+)枚引き、手札からカードを(?P<n>\d+)枚デッキの一番上か一番下に置く。$", "op": "draw_then_hand_to_deck_top_or_bottom"},
     {"id": "score_draw_then_hand_top_or_bottom_if_all_stage_group", "pattern": r"^自分のステージにいるメンバーがすべて『(?P<group>[^』]+)』の場合、このカードのスコアを\+(?P<score_n>\d+)し、カードを(?P<draw_n>\d+)枚引き、手札からカードを(?P<n>\d+)枚デッキの一番上か一番下に置く。$", "op": "score_draw_then_hand_top_or_bottom_if_all_stage_group"},
+    {"id": "live_zone_group_only_required_color_sum_gain_all", "pattern": r"^自分のライブカード置き場にあるカードが『(?P<group>[^』]+)』のみで、かつそれらの必要ハートに含まれる(?P<icons>(?:<\([^)]+\)>と?)+)の合計が(?P<threshold>\d+)以上の場合、ライブ終了時まで、(?P<all_icons>(?:<\(ALL\)>)+)を得る。$", "op": "live_zone_group_only_required_color_sum_gain_all"},
     {"id": "energy_put_wait_n", "pattern": r"^自分のエネルギーデッキから、エネルギーカードを(?P<n>\d+)枚ウェイト状態で置く。$", "op": "energy_put_wait"},
     {"id": "energy_put_wait_under_plus_one_self", "pattern": r"^(?:自分の)?エネルギーデッキから、このメンバーの下にあるエネルギーカードの枚数に1を足した枚数のエネルギーカードをウェイト状態で置く。$", "op": "energy_put_wait_under_plus_one_self"},
     {"id": "energy_activate_n", "pattern": r"^エネルギーを(?P<n>\d+)枚アクティブにする。$", "op": "energy_activate"},
@@ -1494,6 +1495,29 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         got = draw(gs, draw_n, rng)
         gs.log.append(f'[AUTO] {src_cn}: drew {got}; choose {n} hand card -> deck top/bottom')
         _enqueue_hand_to_deck_top_or_bottom(gs, cards_db, kind='ANY', n=n, source_cn=src_cn)
+        return
+    if op == 'live_zone_group_only_required_color_sum_gain_all':
+        group = str(gd.get('group', '') or '')
+        color_icons = str(gd.get('icons', '') or '')
+        colors = _heart_icons_to_colors(color_icons)
+        threshold = int(gd.get('threshold', 0) or 0)
+        all_n = len(re.findall(r'<\(ALL\)>', str(gd.get('all_icons', '') or '')))
+        pos = str((ctx or {}).get('pos', '') or '').upper()
+        slot = gs.stage.get(pos) if pos in ('L', 'C', 'R') else None
+        ok_group, total, live_n = _live_zone_group_only_required_color_sum(gs, cards_db, group, colors)
+        src_cn = str((ctx or {}).get('source_cn', '') or '')
+        if not ok_group:
+            gs.log.append(f'[SKIP] {src_cn}: live storage group-only condition not met ({group}, LIVE={live_n})')
+            return
+        if total < threshold:
+            gs.log.append(f'[SKIP] {src_cn}: live storage required hearts {total}/{threshold} for {colors}')
+            return
+        if not slot:
+            gs.log.append(f'[WARN] {src_cn}: live storage required-heart bonus skipped (source slot not found)')
+            return
+        if all_n > 0:
+            _grant_temp_heart(slot, 'all', all_n)
+        gs.log.append(f'[AUTO] {src_cn}: live storage all {group}, required hearts {total}/{threshold} -> {pos} gains <ALL> x{all_n}')
         return
     if op == 'look_top_choose':
         k = int(gd.get('k', 0) or 0)
@@ -3829,8 +3853,13 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                 if not isinstance(cl, dict):
                     continue
                 raw = str(cl.get("raw", "") or "")
-                cost = str(cl.get("cost_template", "") or raw)
-                eff = str(cl.get("effect_template", "") or raw)
+                # Cost and effect must stay separated. For no-cost clauses, falling
+                # back to raw as cost can misroute a free live-start effect into the
+                # generic [E]1 route when raw/effect icon spacing differs.
+                cost_t = str(cl.get("cost_template", "") or "")
+                eff_t = str(cl.get("effect_template", "") or "")
+                cost = cost_t
+                eff = eff_t if eff_t else raw
                 if "<(E)>" not in cost and "[E]" not in cost and "Ｅ" not in cost and "E" not in cost:
                     blob = str(eff or "")
                     if (not str(getattr(gs, 'success_zone_heart_color', '') or '').strip()) and (
@@ -5401,6 +5430,31 @@ def _live_zone_group_card_count(gs: GameState, cards_db: Dict[str, CardInfo], gr
         if g in str(getattr(ci, 'group', '') or ''):
             total += 1
     return int(total)
+
+def _live_zone_group_only_required_color_sum(gs: GameState, cards_db: Dict[str, CardInfo], group_name: str, colors: List[str]) -> Tuple[bool, int, int]:
+    """Return (condition_ok, required_color_sum, live_count) for live-card storage.
+
+    Used by PL!S-bp6-002 style effects. The live card storage must contain
+    at least one LIVE card and every LIVE there must belong to the requested
+    group; then we sum required hearts in the requested colors.
+    """
+    g = str(group_name or '').strip()
+    cols = [str(c or '').strip().lower() for c in list(colors or []) if str(c or '').strip().lower() in {'pink','red','yellow','green','blue','purple'}]
+    lives = []
+    for cn in list(getattr(gs, 'set_zone', []) or []):
+        ci = _get_card(cards_db, cn)
+        if not ci or not _is_live_ci(ci):
+            continue
+        lives.append(ci)
+    if not lives or not g or not cols:
+        return (False, 0, len(lives))
+    total = 0
+    for ci in lives:
+        if g not in str(getattr(ci, 'group', '') or ''):
+            return (False, total, len(lives))
+        for col in cols:
+            total += int(_ci_live_required_heart_count(ci, col) or 0)
+    return (True, int(total), len(lives))
 
 def _green_live_group_count(gs: GameState, cards_db: Dict[str, CardInfo], group_name: str) -> int:
     total = 0
@@ -8457,6 +8511,77 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         if _r:
             gs.pending.append(_r)
         return
+    if kind == 'live_storage_to_deck_top_or_bottom':
+        raw = str(choice_str or '').strip()
+        low = raw.lower()
+        if low in ('skip', '__skip__', 'no', 'n', '0', 'false', '使わない', 'いいえ', 'スキップ'):
+            try:
+                key0 = str(p.get('trigger_key', '') or '')
+                if key0:
+                    used = set(getattr(gs, 'once_used', set()) or set())
+                    used.add(key0)
+                    gs.once_used = used
+            except Exception:
+                pass
+            gs.log.append('[SKIP] live_storage_to_deck_top_or_bottom: skipped')
+            return
+        cn = _canon_cardno(raw)
+        cands = [_canon_cardno(x) for x in list(p.get('candidate_lives', []) or [])]
+        if cn not in cands:
+            gs.log.append(f'[ERR] live_storage_to_deck_top_or_bottom: invalid live {cn}')
+            gs.pending.insert(0, p)
+            return
+        pick_cn = None
+        for x in list(getattr(gs, 'set_zone', []) or []):
+            if _canon_cardno(x) == cn:
+                pick_cn = x
+                break
+        if not pick_cn:
+            gs.log.append(f'[ERR] live_storage_to_deck_top_or_bottom: not in live storage {cn}')
+            gs.pending.insert(0, p)
+            return
+        gs.pending.append({
+            'kind': 'choose_deck_top_or_bottom_for_live_storage_card',
+            'text': f'{pick_cn}: デッキの一番上か一番下に置く',
+            'options': ['top', 'bottom'],
+            'selected_cn': pick_cn,
+            'source_cn': str(p.get('source_cn', '') or ''),
+            'trigger_key': str(p.get('trigger_key', '') or ''),
+        })
+        gs.log.append(f'[PENDING] live_storage_to_deck_top_or_bottom: selected {pick_cn}; choose top/bottom')
+        return
+    if kind == 'choose_deck_top_or_bottom_for_live_storage_card':
+        cn = _canon_cardno(str(p.get('selected_cn', '') or ''))
+        dest = str(choice_str or '').strip().lower()
+        if dest not in ('top', 'bottom'):
+            gs.log.append(f'[ERR] live_storage top/bottom: invalid destination {choice_str}')
+            return
+        pick_cn = None
+        for x in list(getattr(gs, 'set_zone', []) or []):
+            if _canon_cardno(x) == cn:
+                pick_cn = x
+                break
+        if not pick_cn:
+            gs.log.append(f'[ERR] live_storage top/bottom: selected card not in live storage {cn}')
+            return
+        try:
+            gs.set_zone.remove(pick_cn)
+        except Exception:
+            pass
+        if dest == 'top':
+            gs.deck.insert(0, pick_cn)
+        else:
+            gs.deck.append(pick_cn)
+        try:
+            key0 = str(p.get('trigger_key', '') or '')
+            if key0:
+                used = set(getattr(gs, 'once_used', set()) or set())
+                used.add(key0)
+                gs.once_used = used
+        except Exception:
+            pass
+        gs.log.append(f'[ACT] live_storage_to_deck_top_or_bottom: {pick_cn} -> deck {dest} instead of waiting room')
+        return
     if kind == 'hand_to_deck_top_or_bottom':
         rem = int(p.get('remaining', 0) or 0)
         if rem <= 0:
@@ -10054,6 +10179,62 @@ def cmd_end_turn(gs: GameState, rng: random.Random) -> None:
 def _advance_to_next_turn(gs: GameState, rng: random.Random) -> None:
     gs.turn += 1
     begin_turn(gs, rng)
+def _collect_live_storage_cleanup_topbottom_triggers(gs: GameState, cards_db: Dict[str, CardInfo], live_cns: List[str]) -> List[Dict[str, Any]]:
+    """Build pending prompts for BODY triggers when LIVE cards leave live storage to waiting room.
+
+    Current target family: PL!S-bp6-002 style.
+    Text: 『G』のライブカードが自分のライブカード置き場から控え室に置かれたとき、
+          そのライブカードをデッキの一番上か一番下に置いてもよい。
+    """
+    prompts: List[Dict[str, Any]] = []
+    live_list = [str(x or '') for x in list(live_cns or []) if str(x or '').strip()]
+    if not live_list:
+        return prompts
+    for pos in ('L', 'C', 'R'):
+        slot = (gs.stage or {}).get(pos)
+        if not slot or not getattr(slot, 'cardnumber', ''):
+            continue
+        ci_src = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+        if not ci_src or not getattr(ci_src, 'abilities', None):
+            continue
+        for ab in (getattr(ci_src, 'abilities', None) or []):
+            if not isinstance(ab, dict):
+                continue
+            for cl in (ab.get('clauses', []) or []):
+                if not isinstance(cl, dict):
+                    continue
+                eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+                eff_norm = _normalize_icon_token_text(eff).replace('\n', '')
+                m = re.match(r'^『(?P<group>[^』]+)』のライブカードが自分のライブカード置き場から控え室に置かれたとき、そのライブカードをデッキの一番上か一番下に置いてもよい。$', eff_norm)
+                if not m:
+                    continue
+                group = str(m.group('group') or '').strip()
+                trigger_key = f'live_storage_to_green_topbottom:{pos}:{getattr(slot, "cardnumber", "")}:{eff_norm}:turn{int(getattr(gs, "turn", 0) or 0)}'
+                try:
+                    used = set(getattr(gs, 'once_used', set()) or set())
+                except Exception:
+                    used = set()
+                if 'ターン1回' in str(ab.get('conditions', '') or '') and trigger_key in used:
+                    continue
+                cands = []
+                for lcn in live_list:
+                    ci_live = _get_card(cards_db, lcn)
+                    if ci_live and _is_live_ci(ci_live) and (not group or group in str(getattr(ci_live, 'group', '') or '')):
+                        cands.append(lcn)
+                if not cands:
+                    continue
+                prompts.append({
+                    'kind': 'live_storage_to_deck_top_or_bottom',
+                    'text': f'{getattr(slot, "cardnumber", "")} の自動効果：控え室に置かれる『{group}』のライブカードを1枚、デッキの一番上か一番下に置いてもよい。',
+                    'options': ['skip'] + list(cands),
+                    'candidate_lives': list(cands),
+                    'group': group,
+                    'source_pos': pos,
+                    'source_cn': getattr(slot, 'cardnumber', ''),
+                    'trigger_key': trigger_key,
+                })
+    return prompts
+
 def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], indices: Optional[List[int]] = None) -> None:
     """Automatic progression for the current phase.
     The intended flow is:
@@ -10186,6 +10367,17 @@ def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], i
         except Exception:
             _remain_live = []
         if _remain_live:
+            # Before the default 8.4.8 waiting-room move, enqueue optional
+            # BODY triggers such as PL!S-bp6-002.  The cards remain in set_zone
+            # until those prompts are resolved, then normal cleanup continues on NEXT.
+            try:
+                _prompts = _collect_live_storage_cleanup_topbottom_triggers(gs, cards_db, _remain_live)
+            except Exception:
+                _prompts = []
+            if _prompts:
+                gs.pending.extend(_prompts)
+                gs.log.append(f'[PENDING] live storage cleanup top/bottom triggers={len(_prompts)}')
+                return
             try:
                 gs.green_room.extend(_remain_live)
             except Exception:
