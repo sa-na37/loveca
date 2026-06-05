@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: mass_green_bottom_auto_ack_counts_20260605b
+# BUILD_TAG: mass_green_bottom_result_ack_inline_counts_20260605d
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -1438,7 +1438,8 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
                     f'{source_cn} の自動効果を確認してください。\n'
                     f'自分の控え室からメンバーカード{own_n}枚をシャッフルしてデッキ下に戻しました。\n'
                     f'相手も同様に自身の控え室のメンバーカードをデッキ下に戻します。\n'
-                    f'自分側だけで合計{threshold_n}枚以上の条件を満たしています。確認後、ライブカード回収とブレード+{blade_n}を処理します。'
+                    f'条件確認：自分側 {own_n}枚 / 必要 {threshold_n}枚。\n'
+                    f'自分側だけで条件を満たしています。確認後、ライブカード回収とブレード+{blade_n}を処理します。'
                 ),
                 'options': ['ok'],
                 'own_moved_n': own_n,
@@ -9230,15 +9231,52 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         except Exception:
             rng2 = random.Random()
         moved = _move_all_green_members_to_deck_bottom_shuffled(gs, cards_db, rng2)
-        gs.log.append(f'[ACT] {src}: waiting-room MEMBER all -> deck bottom shuffled ({len(moved)})')
+        threshold_group = str(p.get('threshold_group', '') or '')
+        threshold_n = int(p.get('threshold_n', 0) or 0)
+        target_name = str(p.get('target_name', '') or '')
+        blade_n = int(p.get('blade_n', 0) or 0)
+        group_n = 0
+        for _cn in list(moved or []):
+            _ci = _get_card(cards_db, _cn)
+            if _ci and _ci_matches_group_or_unit(_ci, threshold_group):
+                group_n += 1
+        gs.log.append(f'[ACT] {src}: waiting-room MEMBER all -> deck bottom shuffled ({len(moved)}); {threshold_group}={group_n}/{threshold_n}')
+        gs.pending.append({
+            'kind': 'mass_bottom_optional_result_ack',
+            'text': (
+                f'{src} の効果処理結果を確認してください。\n'
+                f'自分の控え室からメンバーカード{len(moved)}枚をシャッフルしてデッキ下に戻しました。\n'
+                f'そのうち『{threshold_group}』のカード：{group_n}枚 / 必要 {threshold_n}枚です。\n'
+                f'条件{"達成" if group_n >= threshold_n else "未達"}です。'
+            ),
+            'options': ['ok'],
+            'moved_cns': list(moved or []),
+            'moved_n': len(moved),
+            'group_moved_n': int(group_n),
+            'threshold_group': threshold_group,
+            'threshold_n': threshold_n,
+            'target_name': target_name,
+            'blade_n': blade_n,
+            'source_cn': src,
+        })
+        gs.log.append(f'[PENDING] {src}: mass bottom optional result confirmation moved={len(moved)} group={group_n}/{threshold_n}')
+        return
+    if kind == 'mass_bottom_optional_result_ack':
+        low = str(choice_str or '').strip().lower()
+        src = str(p.get('source_cn', '') or '')
+        if low not in ('ok', 'confirm', 'apply', 'yes', 'y', '1', 'true', '確認', 'はい'):
+            gs.log.append(f'[ERR] mass_bottom_optional_result_ack: invalid choice {choice_str}')
+            gs.pending.append(p)
+            return
         _resolve_mass_green_member_threshold_stage_blade(
-            gs, cards_db, moved,
+            gs, cards_db, list(p.get('moved_cns', []) or []),
             str(p.get('threshold_group', '') or ''),
             int(p.get('threshold_n', 0) or 0),
             str(p.get('target_name', '') or ''),
             int(p.get('blade_n', 0) or 0),
             source_cn=src,
         )
+        gs.log.append(f'[ACK] {src}: mass bottom optional result confirmed moved={int(p.get("moved_n", 0) or 0)} group={int(p.get("group_moved_n", 0) or 0)}/{int(p.get("threshold_n", 0) or 0)} -> followup')
         return
     if kind == 'mass_bottom_auto_ack':
         low = str(choice_str or '').strip().lower()

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: server_mass_bottom_auto_ack_counts_20260605b
+# BUILD_TAG: server_mass_bottom_inline_count_highlight_20260605d
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1671,6 +1671,7 @@ HTML = r'''<!doctype html>
   .effectChoiceBullet{display:inline-flex;align-items:center;justify-content:center;width:1.8em;height:1.8em;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-weight:800;font-size:12px;line-height:1;margin-top:0.05em;}
   .effectChoiceText{white-space:pre-wrap;line-height:1.55;font-size:13px;color:#f1f1f1;}
   .effectChoiceMeta{margin-top:6px;color:#aaa;font-size:11px;line-height:1.3;}
+  .massInlineCount{display:inline-block;padding:0 4px;margin:0 1px;border-radius:5px;background:rgba(255,224,102,.15);color:#ffe68a;font-weight:800;box-shadow:inset 0 -1px 0 rgba(255,224,102,.38);}
   /* reorder drag-and-drop */
   .reorderHint{font-size:12px;color:#aaa;margin-bottom:6px;display:flex;align-items:center;gap:6px;}
   .reorderHint .arrow{font-size:16px;color:#f9a;}
@@ -1998,6 +1999,7 @@ HTML = r'''<!doctype html>
     if(kind === 'choose_player_for_green_bottom' || kind === 'choose_player_for_deck_top_action') return 'プレイヤーを選択';
     if(kind === 'manual_opponent_green_bottom_notify' || kind === 'manual_opponent_deck_top_action_notify' || kind === 'manual_opponent_mass_bottom_threshold') return '相手への効果';
     if(kind === 'mass_bottom_auto_ack') return '自動効果確認';
+    if(kind === 'mass_bottom_optional_result_ack') return '効果処理結果';
     if(kind === 'confirm_mass_green_members_to_bottom') return '効果を使いますか？';
     if(kind === 'self_top1_to_green_or_keep') return 'デッキ上を確認';
     if(kind === 'choose_member_from_green_multi_up_to') return 'カードを選択';
@@ -2032,6 +2034,7 @@ HTML = r'''<!doctype html>
     if(kind === 'choose_player_for_green_bottom' || kind === 'choose_player_for_deck_top_action') return '自分か相手を選んでください。';
     if(kind === 'manual_opponent_green_bottom_notify' || kind === 'manual_opponent_deck_top_action_notify' || kind === 'manual_opponent_mass_bottom_threshold') return '相手側の処理を手動で行い、条件達成/未達を選んでください。';
     if(kind === 'mass_bottom_auto_ack') return '自動効果を確認してから、後続処理へ進みます。';
+    if(kind === 'mass_bottom_optional_result_ack') return '控え室から戻した枚数と条件達成状況を確認してください。';
     if(kind === 'confirm_mass_green_members_to_bottom') return '自分の控え室のメンバーカードをすべてデッキ下へ置くか選んでください。';
     if(kind === 'self_top1_to_green_or_keep') return '公開されたデッキ上カードを控え室に置くか、デッキ上に残すか選んでください。';
     return pendingSourceCn(p) ? '効果を解決するため、対象または選択肢を選んでください。' : '';
@@ -2094,9 +2097,8 @@ HTML = r'''<!doctype html>
     };
     return img;
   }
-  function setRichText(el, raw){
+  function appendRichText(el, raw){
     const s = String(raw || '');
-    el.innerHTML = '';
     if(!s) return;
     let last = 0;
     let m;
@@ -2111,6 +2113,27 @@ HTML = r'''<!doctype html>
     if(last < s.length){
       el.appendChild(document.createTextNode(s.slice(last)));
     }
+  }
+  function setRichText(el, raw){
+    el.innerHTML = '';
+    appendRichText(el, raw);
+  }
+  function setRichTextWithMassCounts(el, raw){
+    const s = String(raw || '');
+    el.innerHTML = '';
+    if(!s) return;
+    const re = /([0-9０-９]+)\s*枚/g;
+    let last = 0;
+    let m;
+    while((m = re.exec(s)) !== null){
+      appendRichText(el, s.slice(last, m.index));
+      const sp = document.createElement('span');
+      sp.className = 'massInlineCount';
+      sp.textContent = m[0];
+      el.appendChild(sp);
+      last = re.lastIndex;
+    }
+    appendRichText(el, s.slice(last));
   }
   function makeTextIconStack(iconSpecs, titleAll, iconPx=16, stepPx=10){
     const n = iconSpecs.length;
@@ -4238,12 +4261,34 @@ inner.appendChild(card);
     popup = {type:'pending', closable:false};
     elModalTitle.textContent = pendingTitleFor(p);
     const pendText = pendingTextFor(p);
-    setRichText(elModalText, pendText);
+    if(kind === 'mass_bottom_auto_ack' || kind === 'mass_bottom_optional_result_ack') setRichTextWithMassCounts(elModalText, pendText);
+    else setRichText(elModalText, pendText);
     const allowSkip = !!((p && (p.allow_less || p.allow_skip)) || /Skip可/i.test(pendText) || /\bskip\b/i.test(pendText) || (kind && /pick/i.test(kind)));
     elModalActions.innerHTML = '';
     elModalCards.innerHTML = '';
 
     const opts = (p && (Array.isArray(p.options)?p.options: (Array.isArray(p.candidates)?p.candidates:(Array.isArray(p.cards)?p.cards:(Array.isArray(p.shown)?p.shown:[]))))) || [];
+
+
+    if(kind === 'mass_bottom_auto_ack' || kind === 'mass_bottom_optional_result_ack'){
+      // 結果本文は上部の既存 effect processing text に集約する。
+      // 重複を避けるため下部には追加説明を出さず、可変枚数だけ軽く強調する。
+      elModalCards.innerHTML = '';
+      elModalActions.innerHTML = '';
+      const bOk = document.createElement('button');
+      bOk.className = 'miniBtn';
+      bOk.textContent = '確認';
+      bOk.addEventListener('click', async (ev)=>{
+        ev.stopPropagation();
+        st = await apiCmd('resolve_pending', {idx:0, choice:'ok'});
+        selHand = [];
+        updateTop();
+        render();
+      });
+      elModalActions.appendChild(bOk);
+      elMask.style.display = 'block';
+      return;
+    }
 
     // Special: 成功ライブカード置き場へ置くカード選択（Skip可）
     if(kind === 'pick_success_to_store'){
