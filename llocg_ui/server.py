@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: server_named_hand_cost_exact_zero_20260604a
+# BUILD_TAG: server_deck_top_bottom_choice_labels_20260605a
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1964,6 +1964,8 @@ HTML = r'''<!doctype html>
     if(low === 'pay' || low === 'yes' || low === 'y' || low === '1' || low === 'true' || low === 'apply' || low === 'use') return '使う';
     if(low === 'no' || low === 'n' || low === '0' || low === 'false') return '使わない';
     if(low === 'ok') return '確認';
+    if(low === 'top') return 'デッキの一番上';
+    if(low === 'bottom') return 'デッキの一番下';
     return s;
   }
   function cardChoiceCaption(cn, nth, tot){
@@ -1979,7 +1981,8 @@ HTML = r'''<!doctype html>
     if(kind === 'choose_heart_color' || kind === 'choose_heart_color_for_other') return 'ハートの色を選択';
     if(kind === 'discard_from_hand' || kind === 'discard_named_cards_from_hand') return '手札から選択';
     if(kind === 'position_change') return '移動先を選択';
-    if(kind === 'choose_from_topk' || kind === 'choose_top_keep_one' || kind === 'topdeck_from_green') return 'カードを選択';
+    if(kind === 'choose_from_topk' || kind === 'choose_top_keep_one' || kind === 'topdeck_from_green' || kind === 'bottomdeck_from_green' || kind === 'hand_to_deck_bottom' || kind === 'hand_to_deck_top_or_bottom') return 'カードを選択';
+    if(kind === 'choose_deck_top_or_bottom_for_hand_card') return '置く場所を選択';
     if(kind === 'choose_member_from_green_multi_up_to') return 'カードを選択';
     if(kind === 'auto_order') return '解決順を選択';
     return '効果の選択';
@@ -2000,13 +2003,14 @@ HTML = r'''<!doctype html>
     if(explicit) return explicit;
     const kind = String((p && p.kind) || '').trim();
     if(kind === 'pay_or_skip' || kind === 'confirm_effect') return 'この効果を使うか、スキップするかを選んでください。';
-    if(kind === 'choose_member_from_green_multi_up_to') return '控え室からカードを0〜指定枚数まで選び、確定を押してください。';
+    if(kind === 'choose_member_from_green_multi_up_to') return '控え室または手札からカードを0〜指定枚数まで選び、確定を押してください。';
     if(kind === 'choose_stage_member_to_activate') return '対象にするメンバーを選んでください。';
     if(kind === 'choose_heart_color' || kind === 'choose_heart_color_for_other') return '付与するハートの色を選んでください。';
     if(kind === 'discard_from_hand' || kind === 'discard_named_cards_from_hand') return '手札から選ぶカードを選択してください。';
     if(kind === 'choose_effects') return '解決する効果を選んでください。';
     if(kind === 'auto_order') return '解決順を選んでください。';
     if(kind === 'position_change') return '移動先のエリアを選んでください。';
+    if(kind === 'choose_deck_top_or_bottom_for_hand_card') return 'デッキの一番上か一番下を選んでください。';
     return pendingSourceCn(p) ? '効果を解決するため、対象または選択肢を選んでください。' : '';
   }
   const TEXTICON_BASE = '/llocg_db_out_full/card_images/texticons/';
@@ -4631,8 +4635,8 @@ inner.appendChild(card);
       return;
     }
 
-    // topdeck_from_green: card images + optional Skip button
-    if(kind === 'topdeck_from_green'){
+    // topdeck_from_green / bottomdeck_from_green / hand_to_deck_bottom: card images + optional Skip button
+    if(kind === 'topdeck_from_green' || kind === 'bottomdeck_from_green' || kind === 'hand_to_deck_bottom' || kind === 'hand_to_deck_top_or_bottom'){
       const cardOpts = opts.filter(o => looksLikeCardNo(String(o)));
       const hasSkip  = opts.some(o => String(o).toLowerCase() === 'skip');
       const row = document.createElement('div');

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: deck_bottom_family_20260604a
+# BUILD_TAG: deck_top_bottom_choice_family_20260605a
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -48,6 +48,8 @@ _EFFECT_RULES = [
     # as other zone picks, but route to deck bottom instead of hand/topdeck.
     {"id": "bottomdeck_green_kind_upto_n", "pattern": r"^自分の控え室から(?:(?P<kind>ライブ|メンバー)カード|カード)を(?P<n>\d+)枚までデッキの一番下に置く。$", "op": "bottomdeck_from_green", "allow_less": True},
     {"id": "draw_then_hand_bottom", "pattern": r"^カードを(?P<draw_n>\d+)枚引き、手札を(?P<bottom_n>\d+)枚デッキの一番下に置く。$", "op": "draw_then_hand_to_deck_bottom"},
+    {"id": "draw_then_hand_top_or_bottom", "pattern": r"^カードを(?P<draw_n>\d+)枚引き、手札からカードを(?P<n>\d+)枚デッキの一番上か一番下に置く。$", "op": "draw_then_hand_to_deck_top_or_bottom"},
+    {"id": "score_draw_then_hand_top_or_bottom_if_all_stage_group", "pattern": r"^自分のステージにいるメンバーがすべて『(?P<group>[^』]+)』の場合、このカードのスコアを\+(?P<score_n>\d+)し、カードを(?P<draw_n>\d+)枚引き、手札からカードを(?P<n>\d+)枚デッキの一番上か一番下に置く。$", "op": "score_draw_then_hand_top_or_bottom_if_all_stage_group"},
     {"id": "energy_put_wait_n", "pattern": r"^自分のエネルギーデッキから、エネルギーカードを(?P<n>\d+)枚ウェイト状態で置く。$", "op": "energy_put_wait"},
     {"id": "energy_put_wait_under_plus_one_self", "pattern": r"^(?:自分の)?エネルギーデッキから、このメンバーの下にあるエネルギーカードの枚数に1を足した枚数のエネルギーカードをウェイト状態で置く。$", "op": "energy_put_wait_under_plus_one_self"},
     {"id": "energy_activate_n", "pattern": r"^エネルギーを(?P<n>\d+)枚アクティブにする。$", "op": "energy_activate"},
@@ -593,6 +595,20 @@ def _cost_hand_live_to_deck_bottom(cost_text: str) -> Dict[str, Any]:
     m = re.search(r'ライブカードを\s*(\d+)\s*枚', t)
     return {'kind': 'LIVE', 'count': int(m.group(1)) if m else 1}
 
+def _cost_hand_group_card_optional_reveal(cost_text: str) -> Dict[str, Any]:
+    """Parse optional cost: 手札の『G』のカードを1枚公開してもよい."""
+    t = _norm_digits_jp(str(cost_text or '').strip())
+    if '手札' not in t or '公開してもよい' not in t:
+        return {}
+    m = re.search(r"手札の『(?P<group>[^』]+)』のカードを(?P<n>\d+)?枚公開してもよい", t)
+    if not m:
+        return {}
+    return {'kind': 'ANY', 'group': m.group('group'), 'count': int(m.group('n') or 1)}
+
+def _is_revealed_card_to_top_or_bottom_blade_effect(effect_text: str) -> bool:
+    t = _normalize_icon_token_text(str(effect_text or '').strip()).replace('\n', '')
+    return bool(re.match(r'^これにより公開したカードをデッキの一番上か一番下に置き、ライブ終了時まで、(?:<\(ブレード\)>)+を得る。$', t))
+
 def _hand_candidates_by_kind(gs: 'GameState', cards_db: Dict[str, 'CardInfo'], kind: str = 'ANY', group: str = '') -> List[str]:
     kind = str(kind or 'ANY').upper()
     out: List[str] = []
@@ -893,6 +909,28 @@ def _enqueue_bottomdeck_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo
         'allow_skip': bool(allow_less),
     })
     gs.log.append(f'[PENDING] bottomdeck_from_green: kind={kind} n={n} cands={len(cands)} allow_less={allow_less}')
+def _enqueue_hand_to_deck_top_or_bottom(gs: 'GameState', cards_db: Dict[str, CardInfo], kind: str = 'ANY', n: int = 1, group: str = '', after_gain_blade: int = 0, source_cn: str = '') -> None:
+    kind = str(kind or 'ANY').upper()
+    n = int(n or 0)
+    if n <= 0:
+        return
+    cands = _hand_candidates_by_kind(gs, cards_db, kind=kind, group=group)
+    if len(cands) < n:
+        gs.log.append(f'[ERR] hand_to_deck_top_or_bottom: not enough {kind} cards in hand (need {n}, have {len(cands)})')
+        return
+    gs.pending.append({
+        'kind': 'hand_to_deck_top_or_bottom',
+        'text': f'手札の{kind}カードを{n}枚、デッキの一番上か一番下に置く',
+        'options': list(cands),
+        'remaining': n,
+        'picked': [],
+        'want_kind': kind,
+        'want_group': group,
+        'after_gain_blade': int(after_gain_blade or 0),
+        'source_cn': str(source_cn or ''),
+    })
+    gs.log.append(f'[PENDING] hand_to_deck_top_or_bottom: kind={kind} group={group} n={n} cands={len(cands)}')
+
 def _enqueue_hand_to_deck_bottom(gs: 'GameState', cards_db: Dict[str, CardInfo], kind: str, n: int, group: str = '', after_effect_template: str = '', after_ctx: Optional[Dict[str, Any]] = None, after_source_cn: str = '') -> None:
     kind = str(kind or 'ANY').upper()
     n = int(n or 0)
@@ -1209,6 +1247,29 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         got = draw(gs, draw_n, rng)
         gs.log.append(f'[AUTO] draw_then_hand_to_deck_bottom: drew {got}; choose {bottom_n} from hand -> deck bottom')
         _enqueue_hand_to_deck_bottom(gs, cards_db, kind='ANY', n=bottom_n, after_source_cn=str((ctx or {}).get('source_cn', '') or ''))
+        return
+    if op == 'draw_then_hand_to_deck_top_or_bottom':
+        draw_n = int(gd.get('draw_n', 0) or 0)
+        n = int(gd.get('n', 1) or 1)
+        got = draw(gs, draw_n, rng)
+        gs.log.append(f'[AUTO] draw_then_hand_to_deck_top_or_bottom: drew {got}; choose {n} from hand -> deck top/bottom')
+        _enqueue_hand_to_deck_top_or_bottom(gs, cards_db, kind='ANY', n=n, source_cn=str((ctx or {}).get('source_cn', '') or ''))
+        return
+    if op == 'score_draw_then_hand_top_or_bottom_if_all_stage_group':
+        group = str(gd.get('group', '') or '')
+        if not _stage_all_members_are_group(gs, cards_db, group):
+            gs.log.append(f'[AUTO] score/draw/top-or-bottom: condition not met (all stage members are {group})')
+            return
+        score_n = int(gd.get('score_n', 0) or 0)
+        src_cn = str((ctx or {}).get('source_cn', '') or '')
+        if score_n:
+            _add_live_start_score_bonus(gs, score_n, source_cn=src_cn)
+            gs.log.append(f'[AUTO] {src_cn}: all stage {group} -> live score +{score_n}')
+        draw_n = int(gd.get('draw_n', 0) or 0)
+        n = int(gd.get('n', 1) or 1)
+        got = draw(gs, draw_n, rng)
+        gs.log.append(f'[AUTO] {src_cn}: drew {got}; choose {n} hand card -> deck top/bottom')
+        _enqueue_hand_to_deck_top_or_bottom(gs, cards_db, kind='ANY', n=n, source_cn=src_cn)
         return
     if op == 'look_top_choose':
         k = int(gd.get('k', 0) or 0)
@@ -3604,6 +3665,23 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                         }
                         _append_prompt(pr, f'{pos}: {ci.cardnumber} ライブ開始時')
                         continue
+                    # Optional hand group-card reveal cost -> put the revealed card on top or bottom, then gain blade.
+                    top_bottom_group_cost = _cost_hand_group_card_optional_reveal(cost)
+                    if top_bottom_group_cost and _is_revealed_card_to_top_or_bottom_blade_effect(eff):
+                        pr = {
+                            'kind': 'live_start_pay_effect',
+                            'pos': pos,
+                            'cn': ci.cardnumber,
+                            'need_e': 0,
+                            'cost_kind': 'hand_group_to_deck_top_or_bottom',
+                            'cost_n': int(top_bottom_group_cost.get('count') or 1),
+                            'cost_group': str(top_bottom_group_cost.get('group') or ''),
+                            'effect': eff,
+                            'text': _pretty_optional_effect_prompt_text('ライブ開始時', ci.cardnumber, cost, eff),
+                            'options': ['pay', 'skip'],
+                        }
+                        _append_prompt(pr, f'{pos}: {ci.cardnumber} ライブ開始時')
+                        continue
                     # Optional hand live-card cost to deck bottom.
                     bottom_hand_live = _cost_hand_live_to_deck_bottom(cost)
                     if bottom_hand_live and _match_effect_template(eff):
@@ -5051,6 +5129,23 @@ def _count_stage_group_members(gs: GameState, cards_db: Dict[str, CardInfo], gro
         if str(group_name or '') and str(group_name or '') in str(getattr(ci, 'group', '') or ''):
             n += 1
     return n
+
+def _stage_all_members_are_group(gs: GameState, cards_db: Dict[str, CardInfo], group_name: str) -> bool:
+    group_name = str(group_name or '').strip()
+    if not group_name:
+        return False
+    any_member = False
+    for pos in ('L', 'C', 'R'):
+        slot = (gs.stage or {}).get(pos)
+        if not slot or not getattr(slot, 'cardnumber', ''):
+            continue
+        ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+        if not ci or not _is_member_ci(ci):
+            continue
+        any_member = True
+        if group_name not in str(getattr(ci, 'group', '') or ''):
+            return False
+    return any_member
 
 def _stage_all_group_cost_ready(gs: GameState, cards_db: Dict[str, CardInfo], group_name: str, min_cost: int) -> bool:
     total = 0
@@ -8138,6 +8233,88 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         if _r:
             gs.pending.append(_r)
         return
+    if kind == 'hand_to_deck_top_or_bottom':
+        rem = int(p.get('remaining', 0) or 0)
+        if rem <= 0:
+            return
+        cn = _canon_cardno(choice_str)
+        pick_i = None
+        for i, hcn in enumerate(list(gs.hand)):
+            if _canon_cardno(hcn) == cn:
+                pick_i = i
+                break
+        if pick_i is None:
+            gs.log.append(f'[ERR] hand_to_deck_top_or_bottom: chosen not in hand {cn}')
+            return
+        gs.pending.append({
+            'kind': 'choose_deck_top_or_bottom_for_hand_card',
+            'text': f'{cn}: デッキの一番上か一番下に置く',
+            'options': ['top', 'bottom'],
+            'selected_cn': cn,
+            'remaining': rem,
+            'picked': list(p.get('picked', []) or []),
+            'want_kind': str(p.get('want_kind', 'ANY') or 'ANY'),
+            'want_group': str(p.get('want_group', '') or ''),
+            'after_gain_blade': int(p.get('after_gain_blade', 0) or 0),
+            'source_cn': str(p.get('source_cn', '') or ''),
+        })
+        gs.log.append(f'[PENDING] hand_to_deck_top_or_bottom: selected {cn}; choose top/bottom')
+        return
+    if kind == 'choose_deck_top_or_bottom_for_hand_card':
+        cn = _canon_cardno(str(p.get('selected_cn', '') or ''))
+        dest = str(choice_str or '').strip().lower()
+        if dest not in ('top', 'bottom'):
+            gs.log.append(f'[ERR] choose_deck_top_or_bottom: invalid destination {choice_str}')
+            return
+        pick_i = None
+        for i, hcn in enumerate(list(gs.hand)):
+            if _canon_cardno(hcn) == cn:
+                pick_i = i
+                break
+        if pick_i is None:
+            gs.log.append(f'[ERR] choose_deck_top_or_bottom: selected card not in hand {cn}')
+            return
+        moved = gs.hand.pop(pick_i)
+        if dest == 'top':
+            gs.deck.insert(0, moved)
+        else:
+            gs.deck.append(moved)
+        picked = list(p.get('picked', []) or []) + [moved]
+        rem = int(p.get('remaining', 0) or 0) - 1
+        gs.log.append(f'[ACT] hand_to_deck_top_or_bottom: {moved} -> deck {dest} (remaining={rem})')
+        if rem > 0:
+            kind_need = str(p.get('want_kind', 'ANY') or 'ANY')
+            group_need = str(p.get('want_group', '') or '')
+            cands = _hand_candidates_by_kind(gs, cards_db, kind=kind_need, group=group_need)
+            gs.pending.append({
+                'kind': 'hand_to_deck_top_or_bottom',
+                'text': str(p.get('text', '') or f'手札からデッキの一番上か一番下に置くカードを選ぶ（残り{rem}）'),
+                'options': list(cands),
+                'remaining': rem,
+                'picked': picked,
+                'want_kind': kind_need,
+                'want_group': group_need,
+                'after_gain_blade': int(p.get('after_gain_blade', 0) or 0),
+                'source_cn': str(p.get('source_cn', '') or ''),
+            })
+            return
+        blade_gain = int(p.get('after_gain_blade', 0) or 0)
+        src_cn = str(p.get('source_cn', '') or '')
+        if blade_gain > 0:
+            pos = ''
+            for pp in ('L', 'C', 'R'):
+                slot0 = gs.stage.get(pp)
+                if slot0 and _canon_cardno(getattr(slot0, 'cardnumber', '') or '') == _canon_cardno(src_cn):
+                    pos = pp
+                    break
+            slot = gs.stage.get(pos) if pos else None
+            if slot:
+                slot.temp_blade += blade_gain
+                slot.temp_until = 'end_of_live'
+                gs.log.append(f'[AUTO] {src_cn}: after top/bottom cost -> {pos} temp blade +{blade_gain}')
+            else:
+                gs.log.append(f'[WARN] {src_cn}: after top/bottom cost blade +{blade_gain} skipped (source not on stage)')
+        return
     if kind == 'hand_to_deck_bottom':
         rem = int(p.get('remaining', 0) or 0)
         if rem <= 0:
@@ -8859,6 +9036,12 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                     return
             src_cn = str(p.get("cn", "") or "")
             after_ctx = {"pos": pos, "source_cn": src_cn}
+            # 手札の指定グループカードを公開し、デッキ上/下に置くコスト → ユーザーに選ばせる
+            if cost_kind == 'hand_group_to_deck_top_or_bottom' and cost_n > 0:
+                group_need = str(p.get('cost_group', '') or '')
+                blade_gain = _count_blade_icons_from_tagblob(eff)
+                _enqueue_hand_to_deck_top_or_bottom(gs, cards_db, kind='ANY', n=cost_n, group=group_need, after_gain_blade=blade_gain, source_cn=src_cn)
+                return
             # 手札のライブカードをデッキ下に置くコスト → ユーザーに選ばせる
             if cost_kind == 'hand_live_to_deck_bottom' and cost_n > 0:
                 _enqueue_hand_to_deck_bottom(gs, cards_db, kind='LIVE', n=cost_n, after_effect_template=eff, after_ctx=after_ctx, after_source_cn=src_cn)

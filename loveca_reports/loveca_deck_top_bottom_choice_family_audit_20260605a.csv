@@ -1,0 +1,5 @@
+cardnumber,cardname,card_type,ability_type,trigger,conditions,status,cost_template,effect_template,raw
+PL!S-bp6-002,桜内梨子,MEMBER,自動,BODY,ターン1回,needs_live_to_green_replacement_event,,『Aqours』のライブカードが自分のライブカード置き場から控え室に置かれたとき、そのライブカードをデッキの一番上か一番下に置いてもよい。,『Aqours』のライブカードが自分のライブカード置き場から控え室に置かれたとき、そのライブカードをデッキの一番上か一番下に置いてもよい。
+PL!S-bp6-019,Step! ZERO to ONE,LIVE,自動,ライブ開始時,,implemented_stage_group_score_draw_hand_top_or_bottom,,自分のステージにいるメンバーがすべて『Aqours』の場合、このカードのスコアを+1し、カードを1枚引き、手札からカードを1枚デッキの一番上か一番下に置く。,自分のステージにいるメンバーがすべて『Aqours』の場合、このカードのスコアを+1し、カードを1枚引き、手札からカードを1枚デッキの一番上か一番下に置く。
+PL!S-sd1-009,黒澤ルビィ,MEMBER,自動,ライブ開始時,,implemented_hand_group_cost_to_top_or_bottom_blade,手札の『Aqours』のカードを1枚公開してもよい,これにより公開したカードをデッキの一番上か一番下に置き、ライブ終了時まで、<(ブレード)>を得る。,"手札の『Aqours』のカードを1枚公開してもよい：これにより公開したカードをデッキの一番上か一番下に置き、ライブ終了時まで、<(ブレード)>
+を得る。"
