@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: server_deck_top_bottom_choice_labels_20260605a
+# BUILD_TAG: server_choose_player_green_bottom_labels_20260605a
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1964,6 +1964,10 @@ HTML = r'''<!doctype html>
     if(low === 'pay' || low === 'yes' || low === 'y' || low === '1' || low === 'true' || low === 'apply' || low === 'use') return '使う';
     if(low === 'no' || low === 'n' || low === '0' || low === 'false') return '使わない';
     if(low === 'ok') return '確認';
+    if(low === 'self') return '自分';
+    if(low === 'opponent') return '相手';
+    if(low === 'draw') return '置いたのでカードを引く';
+    if(low === 'no_draw') return '置かなかった / 引かない';
     if(low === 'top') return 'デッキの一番上';
     if(low === 'bottom') return 'デッキの一番下';
     return s;
@@ -1983,6 +1987,8 @@ HTML = r'''<!doctype html>
     if(kind === 'position_change') return '移動先を選択';
     if(kind === 'choose_from_topk' || kind === 'choose_top_keep_one' || kind === 'topdeck_from_green' || kind === 'bottomdeck_from_green' || kind === 'hand_to_deck_bottom' || kind === 'hand_to_deck_top_or_bottom') return 'カードを選択';
     if(kind === 'choose_deck_top_or_bottom_for_hand_card') return '置く場所を選択';
+    if(kind === 'choose_player_for_green_bottom') return 'プレイヤーを選択';
+    if(kind === 'manual_opponent_green_bottom_notify') return '相手への効果';
     if(kind === 'choose_member_from_green_multi_up_to') return 'カードを選択';
     if(kind === 'auto_order') return '解決順を選択';
     return '効果の選択';
@@ -2011,6 +2017,8 @@ HTML = r'''<!doctype html>
     if(kind === 'auto_order') return '解決順を選んでください。';
     if(kind === 'position_change') return '移動先のエリアを選んでください。';
     if(kind === 'choose_deck_top_or_bottom_for_hand_card') return 'デッキの一番上か一番下を選んでください。';
+    if(kind === 'choose_player_for_green_bottom') return '自分か相手を選んでください。';
+    if(kind === 'manual_opponent_green_bottom_notify') return '相手側の処理を手動で行ってから選択してください。';
     return pendingSourceCn(p) ? '効果を解決するため、対象または選択肢を選んでください。' : '';
   }
   const TEXTICON_BASE = '/llocg_db_out_full/card_images/texticons/';

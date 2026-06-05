@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: deck_top_bottom_choice_family_20260605a
+# BUILD_TAG: choose_player_green_bottom_family_20260605a
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -47,6 +47,8 @@ _EFFECT_RULES = [
     # Put cards on the bottom of the deck. These use the same card-list UI
     # as other zone picks, but route to deck bottom instead of hand/topdeck.
     {"id": "bottomdeck_green_kind_upto_n", "pattern": r"^自分の控え室から(?:(?P<kind>ライブ|メンバー)カード|カード)を(?P<n>\d+)枚までデッキの一番下に置く。$", "op": "bottomdeck_from_green", "allow_less": True},
+    {"id": "choose_self_or_opponent_green_member_upto_bottom", "pattern": r"^自分か相手を選ぶ。自分は、そのプレイヤーの控え室にあるメンバーカードを(?P<n>\d+)枚まで、好きな順番でデッキの一番下に置く。$", "op": "choose_player_green_to_bottom", "card_kind": "MEMBER", "allow_less": True},
+    {"id": "choose_self_or_opponent_green_live_bottom_draw", "pattern": r"^自分か相手を選ぶ。自分は、そのプレイヤーの控え室にあるライブカードを(?P<n>\d+)枚、そのプレイヤーのデッキの一番下に置く。そうした場合、自分はカードを(?P<draw_n>\d+)枚引く。$", "op": "choose_player_green_to_bottom", "card_kind": "LIVE", "allow_less": False, "draw_if_moved": True},
     {"id": "draw_then_hand_bottom", "pattern": r"^カードを(?P<draw_n>\d+)枚引き、手札を(?P<bottom_n>\d+)枚デッキの一番下に置く。$", "op": "draw_then_hand_to_deck_bottom"},
     {"id": "draw_then_hand_top_or_bottom", "pattern": r"^カードを(?P<draw_n>\d+)枚引き、手札からカードを(?P<n>\d+)枚デッキの一番上か一番下に置く。$", "op": "draw_then_hand_to_deck_top_or_bottom"},
     {"id": "score_draw_then_hand_top_or_bottom_if_all_stage_group", "pattern": r"^自分のステージにいるメンバーがすべて『(?P<group>[^』]+)』の場合、このカードのスコアを\+(?P<score_n>\d+)し、カードを(?P<draw_n>\d+)枚引き、手札からカードを(?P<n>\d+)枚デッキの一番上か一番下に置く。$", "op": "score_draw_then_hand_top_or_bottom_if_all_stage_group"},
@@ -888,7 +890,7 @@ def _enqueue_topdeck_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo], 
         'allow_less': bool(allow_less),
     })
     gs.log.append(f'[PENDING] topdeck_from_green: kind={kind} n={n} allow_less={allow_less} (cands={len(cands)})')
-def _enqueue_bottomdeck_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo], kind: str, n: int, group: str = '', allow_less: bool = True) -> None:
+def _enqueue_bottomdeck_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo], kind: str, n: int, group: str = '', allow_less: bool = True, after_draw_n: int = 0, source_cn: str = '') -> None:
     kind = str(kind or 'ANY').upper()
     n = int(n or 0)
     if n <= 0:
@@ -907,8 +909,33 @@ def _enqueue_bottomdeck_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo
         'want_group': group,
         'allow_less': bool(allow_less),
         'allow_skip': bool(allow_less),
+        'after_draw_n': int(after_draw_n or 0),
+        'source_cn': str(source_cn or ''),
     })
-    gs.log.append(f'[PENDING] bottomdeck_from_green: kind={kind} n={n} cands={len(cands)} allow_less={allow_less}')
+    gs.log.append(f'[PENDING] bottomdeck_from_green: kind={kind} n={n} cands={len(cands)} allow_less={allow_less} after_draw={int(after_draw_n or 0)}')
+def _enqueue_choose_player_green_to_bottom(gs: 'GameState', cards_db: Dict[str, CardInfo], kind: str, n: int, allow_less: bool = True, draw_after_n: int = 0, source_cn: str = '') -> None:
+    """Choose self/opponent, then move that player's waiting-room cards to deck bottom.
+
+    The current single-player simulator only has a concrete own waiting room/deck.
+    Opponent selection is therefore represented as a manual-resolution popup.
+    """
+    kind = str(kind or 'ANY').upper()
+    n = int(n or 0)
+    if n <= 0:
+        return
+    jp = {'LIVE': 'ライブ', 'MEMBER': 'メンバー', 'ANY': '任意'}.get(kind, kind)
+    draw_txt = f'。そうした場合、自分はカードを{int(draw_after_n or 0)}枚引く' if int(draw_after_n or 0) > 0 else ''
+    gs.pending.append({
+        'kind': 'choose_player_for_green_bottom',
+        'text': f'自分か相手を選ぶ。選んだプレイヤーの控え室にある{jp}カードを{n}枚' + ('まで' if allow_less else '') + f'デッキの一番下に置く{draw_txt}',
+        'options': ['self', 'opponent'],
+        'want_kind': kind,
+        'remaining': n,
+        'allow_less': bool(allow_less),
+        'draw_after_n': int(draw_after_n or 0),
+        'source_cn': str(source_cn or ''),
+    })
+    gs.log.append(f'[PENDING] choose self/opponent green -> deck bottom: kind={kind} n={n} allow_less={allow_less} draw_after={int(draw_after_n or 0)}')
 def _enqueue_hand_to_deck_top_or_bottom(gs: 'GameState', cards_db: Dict[str, CardInfo], kind: str = 'ANY', n: int = 1, group: str = '', after_gain_blade: int = 0, source_cn: str = '') -> None:
     kind = str(kind or 'ANY').upper()
     n = int(n or 0)
@@ -1240,6 +1267,17 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         n = int(gd.get('n', 1) or 1)
         group = str(gd.get('group', '') or '')
         _enqueue_bottomdeck_from_green(gs, cards_db, kind=kind, n=n, group=group, allow_less=bool(rule.get('allow_less', True)))
+        return
+    if op == 'choose_player_green_to_bottom':
+        kind = str(rule.get('card_kind', '') or '').upper() or 'ANY'
+        n = int(gd.get('n', 1) or 1)
+        draw_n = int(gd.get('draw_n', 0) or 0) if bool(rule.get('draw_if_moved', False)) else 0
+        _enqueue_choose_player_green_to_bottom(
+            gs, cards_db, kind=kind, n=n,
+            allow_less=bool(rule.get('allow_less', False)),
+            draw_after_n=draw_n,
+            source_cn=str((ctx or {}).get('source_cn', '') or ''),
+        )
         return
     if op == 'draw_then_hand_to_deck_bottom':
         draw_n = int(gd.get('draw_n', 0) or 0)
@@ -8360,6 +8398,49 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             ok = try_apply_effect_template(gs, rng2, cards_db, after_eff, after_ctx)
             gs.log.append(f"[ACT] {after_src}: after bottom cost -> {'applied' if ok else 'no_match'} {after_eff}")
         return
+    if kind == 'choose_player_for_green_bottom':
+        choice_low = str(choice_str or '').strip().lower()
+        kind_need = str(p.get('want_kind', 'ANY') or 'ANY').upper()
+        n = int(p.get('remaining', p.get('n', 1)) or 1)
+        allow_less = bool(p.get('allow_less', False) or p.get('allow_skip', False))
+        draw_after_n = int(p.get('draw_after_n', 0) or 0)
+        src_cn = str(p.get('source_cn', '') or '')
+        if choice_low in ('self', 'me', 'own', 'you', '自分'):
+            gs.log.append(f'[ACT] choose player: self -> bottomdeck own {kind_need} x{n}')
+            _enqueue_bottomdeck_from_green(gs, cards_db, kind=kind_need, n=n, allow_less=allow_less, after_draw_n=draw_after_n, source_cn=src_cn)
+            return
+        if choice_low in ('opponent', 'opp', 'other', '相手'):
+            jp = {'LIVE': 'ライブ', 'MEMBER': 'メンバー', 'ANY': 'カード'}.get(kind_need, kind_need)
+            if draw_after_n > 0:
+                opts = ['draw', 'no_draw']
+                text = f'【相手への効果】相手の控え室にある{jp}カードを{n}枚、相手のデッキの一番下に置く。置いた場合は「引く」を押してください。'
+            else:
+                opts = ['ok']
+                text = f'【相手への効果】相手の控え室にある{jp}カードを{n}枚' + ('まで' if allow_less else '') + '、相手のデッキの一番下に置く。'
+            gs.pending.append({
+                'kind': 'manual_opponent_green_bottom_notify',
+                'text': text,
+                'options': opts,
+                'draw_after_n': draw_after_n,
+                'source_cn': src_cn,
+            })
+            gs.log.append(f'[MANUAL] opponent green -> deck bottom: kind={kind_need} n={n} draw_after={draw_after_n}')
+            return
+        gs.log.append(f'[ERR] choose_player_for_green_bottom: invalid choice {choice_str}')
+        return
+    if kind == 'manual_opponent_green_bottom_notify':
+        low = str(choice_str or '').strip().lower()
+        draw_n = int(p.get('draw_after_n', 0) or 0)
+        if low == 'draw' and draw_n > 0:
+            try:
+                rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
+            except Exception:
+                rng2 = random.Random()
+            got = draw(gs, draw_n, rng2)
+            gs.log.append(f'[MANUAL] opponent bottomdeck resolved -> draw {draw_n} (drew {got})')
+            return
+        gs.log.append('[MANUAL] opponent bottomdeck notification closed')
+        return
     if kind == 'bottomdeck_from_green':
         low = str(choice_str or '').strip().lower()
         allow_less = bool(p.get('allow_less', False) or p.get('allow_skip', False))
@@ -8400,8 +8481,19 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                     'want_group': group_need,
                     'allow_less': allow_less,
                     'allow_skip': allow_less,
+                    'after_draw_n': int(p.get('after_draw_n', 0) or 0),
+                    'source_cn': str(p.get('source_cn', '') or ''),
                 })
             return
+        after_draw_n = int(p.get('after_draw_n', 0) or 0)
+        if after_draw_n > 0 and len(picked) > 0:
+            try:
+                rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
+            except Exception:
+                rng2 = random.Random()
+            got = draw(gs, after_draw_n, rng2)
+            src_cn = str(p.get('source_cn', '') or '')
+            gs.log.append(f'[AUTO] {src_cn}: bottomdeck_from_green moved {len(picked)} -> draw {after_draw_n} (drew {got})')
         return
     if kind == 'view_topk_no_match':
         # User confirmed viewing the pool; send all to green room
