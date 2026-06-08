@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: excess_success_landing_atleast_dbfix_20260608c
+# BUILD_TAG: success_storage_score_apply_and_yell_score_icon_20260608e
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -2810,6 +2810,68 @@ def _stage_has_other_higher_cost_member(gs: 'GameState', cards_db: Dict[str, Car
     except Exception:
         pass
     return False
+def _stage_distinct_member_name_count(gs: 'GameState', cards_db: Dict[str, CardInfo]) -> int:
+    """Count distinct member names currently on stage."""
+    names = set()
+    try:
+        for pos in ('L', 'C', 'R'):
+            slot = (gs.stage or {}).get(pos)
+            if not slot or not getattr(slot, 'cardnumber', ''):
+                continue
+            ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+            if not ci or _is_live_ci(ci):
+                continue
+            nm = str(getattr(ci, 'name', '') or getattr(ci, 'cardname', '') or '').strip()
+            if nm:
+                names.add(nm)
+    except Exception:
+        pass
+    return int(len(names))
+
+def _count_yell_revealed_live_cards_with_tag(gs: GameState, cards_db: Dict[str, CardInfo], tag_text: str) -> int:
+    tag = _normalize_tag_marker(tag_text)
+    if not tag:
+        return 0
+    n = 0
+    for cn in list(getattr(gs, '_yell_revealed_this_live', []) or []):
+        ci = _get_card(cards_db, cn)
+        if not ci or not _is_live_ci(ci):
+            continue
+        if _ci_blade_heart_has_tag(ci, tag):
+            n += 1
+    return int(n)
+
+def _ci_blade_heart_score_icon_bonus(ci: Optional[CardInfo]) -> int:
+    """Return the score bonus from score-up blade-heart icons on a revealed card.
+
+    Rule 8.4.2.1 adds +1 to live total score for each score icon revealed by YELL.
+    Official text may be stored as <スコア+1>, <(スコア+1)>, or split <(スコア)+1>.
+    """
+    try:
+        txt = _ci_blade_heart_raw_text(ci)
+        total = 0
+        for inner in re.findall(r'<\(([^)]+)\)>', txt):
+            key = str(inner or '').strip().replace('＋', '+').replace(' ', '')
+            m = re.match(r'^スコア([+\-]\d+)$', key)
+            if m:
+                total += int(m.group(1))
+        return int(total)
+    except Exception:
+        return 0
+
+def _yell_revealed_score_icon_bonus(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
+    """Total score icon bonus from this live's YELL-revealed cards."""
+    total = 0
+    try:
+        for cn in list(getattr(gs, '_yell_revealed_this_live', []) or []):
+            ci = _get_card(cards_db, cn)
+            if not ci:
+                continue
+            total += int(_ci_blade_heart_score_icon_bonus(ci) or 0)
+    except Exception:
+        pass
+    return int(total)
+
 def _stage_has_all_distinct_group_members(gs: 'GameState', cards_db: Dict[str, CardInfo], tag: str) -> bool:
     """Return True if all three stage areas are occupied by members matching tag (group or unit) with distinct names."""
     names = []
@@ -5057,6 +5119,63 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             'options': ['ok'],
         })
         return
+    if kind == 'live_start_score_if_either_success_count_and_distinct_stage_names_at_least':
+        src_cn = str((trig or {}).get('source_cn', '') or '')
+        need_success = int((trig or {}).get('condition_success_count', 0) or 0)
+        need_names = int((trig or {}).get('condition_distinct_names', 0) or 0)
+        delta = int((trig or {}).get('score_delta', 0) or 0)
+        own_n = len(list(getattr(gs, 'success_zone', []) or []))
+        name_n = int(_stage_distinct_member_name_count(gs, cards_db))
+        set_idx = (trig or {}).get('set_idx', None)
+        if name_n < need_names:
+            gs.pending.append({
+                'kind': 'message_ack',
+                'label': f'{src_cn} live-start success-count/name condition failed',
+                'text': f'【{src_cn}】ライブ開始時：名前の異なるメンバーは{name_n}/{need_names}人のため、スコア+{delta}は適用されません。',
+            })
+            gs.log.append(f'[PENDING] {src_cn}[ライブ開始時]: distinct stage names {name_n}/{need_names} -> no score bonus')
+            return
+        if own_n >= need_success:
+            gs.pending.append({
+                'kind': 'live_start_success_count_distinct_names_score_ack',
+                'source_cn': src_cn,
+                'set_idx': set_idx,
+                'score_delta': delta,
+                'own_success_count': own_n,
+                'condition_success_count': need_success,
+                'distinct_name_count': name_n,
+                'condition_distinct_names': need_names,
+                'text': f'【{src_cn}】ライブ開始時：自分の成功ライブカード置き場={own_n}/{need_success}枚、名前の異なるメンバー={name_n}/{need_names}人。条件達成のため、このカードのスコアを+{delta}します。',
+                'options': ['ok'],
+            })
+            gs.log.append(f'[PENDING] {src_cn}[ライブ開始時]: own success {own_n}/{need_success} and names {name_n}/{need_names} -> score +{delta}')
+            return
+        gs.pending.append({
+            'kind': 'confirm_effect',
+            'text': f'【{src_cn}】ライブ開始時：自分の成功ライブカード置き場は{own_n}/{need_success}枚、名前の異なるメンバーは{name_n}/{need_names}人です。相手の成功ライブカード置き場にカードが{need_success}枚以上ある場合、このカードのスコアを+{delta}します。条件を満たす場合は「使う」、満たさない場合は「スキップ」を選んでください。',
+            'options': ['使う', 'スキップ'],
+            'source_cn': src_cn,
+            'after_live_start_score_bonus': {'source_cn': src_cn, 'set_idx': set_idx, 'bonus': delta, 'detail': f'opponent success-zone cards >= {need_success}; distinct names={name_n}'},
+            'effect_text': _auto_trigger_effect_text(trig or {}),
+        })
+        gs.log.append(f'[PENDING] {src_cn}[ライブ開始時]: opponent success-count confirmation needed own={own_n}/{need_success}, names={name_n}/{need_names}')
+        return
+
+    if kind == 'live_start_score_if_own_success_count_less_than_opponent_manual':
+        src_cn = str((trig or {}).get('source_cn', '') or '')
+        delta = int((trig or {}).get('score_delta', 0) or 0)
+        own_n = len(list(getattr(gs, 'success_zone', []) or []))
+        gs.pending.append({
+            'kind': 'confirm_effect',
+            'text': f'【{src_cn}】ライブ開始時：自分の成功ライブカード置き場は{own_n}枚です。相手の成功ライブカード置き場のカード枚数が自分より多い場合、このカードのスコアを+{delta}します。条件を満たす場合は「使う」、満たさない場合は「スキップ」を選んでください。',
+            'options': ['使う', 'スキップ'],
+            'source_cn': src_cn,
+            'after_live_start_score_bonus': {'source_cn': src_cn, 'set_idx': (trig or {}).get('set_idx', None), 'bonus': delta, 'detail': f'opponent success-zone cards > own {own_n}'},
+            'effect_text': _auto_trigger_effect_text(trig or {}),
+        })
+        gs.log.append(f'[PENDING] {src_cn}[ライブ開始時]: opponent success-count greater confirmation own={own_n}')
+        return
+
     if kind == 'add_live_success_score_bonus_per_weight_member':
         cn_live = str((trig or {}).get('source_cn', '') or '')
         per = int((trig or {}).get('bonus_per', 0) or 0)
@@ -5373,6 +5492,30 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         else:
             gs.log.append(f"[SKIP] LIVE: {cn_live}[ライブ成功時] unresolved (excess hearts={excess_n} {skip_text})")
         return
+    if kind in ('add_live_success_score_bonus_if_either_success_count_and_revealed_score_tag_live_at_least',):
+        cn_live = str((trig or {}).get('source_cn', '') or '').strip()
+        need_success = int((trig or {}).get('condition_success_count', 0) or 0)
+        need_revealed = int((trig or {}).get('condition_revealed_count', 1) or 1)
+        bonus = int((trig or {}).get('bonus', 0) or 0)
+        own_n = len(list(getattr(gs, 'success_zone', []) or []))
+        got_revealed = int(_count_yell_revealed_live_cards_with_tag(gs, cards_db, '<(スコア+1)>'))
+        if got_revealed < need_revealed:
+            gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時]: revealed score+1 LIVE={got_revealed}/{need_revealed} -> no score bonus")
+            return
+        if own_n >= need_success:
+            _add_live_success_score_bonus(gs, cn_live, bonus, detail=f'own success-zone cards={own_n}/{need_success}; revealed score+1 LIVE={got_revealed}/{need_revealed}')
+            return
+        gs.pending.append({
+            'kind': 'confirm_effect',
+            'text': f'{cn_live}[ライブ成功時] 自分の成功ライブカード置き場は{own_n}/{need_success}枚、エール公開の<(スコア+1)>を持つライブカードは{got_revealed}/{need_revealed}枚です。相手の成功ライブカード置き場にカードが{need_success}枚以上ある場合、このカードのスコアを+{bonus}します。条件を満たす場合は「使う」、満たさない場合は「スキップ」を選んでください。',
+            'options': ['使う', 'スキップ'],
+            'source_cn': cn_live,
+            'after_live_success_score_bonus': {'cn_live': cn_live, 'bonus': bonus, 'detail': f'opponent success-zone cards >= {need_success}; revealed score+1 LIVE={got_revealed}'},
+            'effect_text': _auto_trigger_effect_text(trig or {}),
+        })
+        gs.log.append(f'[PENDING] LIVE: {cn_live}[ライブ成功時] opponent success-count confirmation own={own_n}/{need_success}, revealed score+1 LIVE={got_revealed}/{need_revealed}')
+        return
+
     if kind in ('add_live_success_score_bonus_if_revealed_card_tag_count_at_least',):
         cn_live = str((trig or {}).get('source_cn', '') or '')
         tag = str((trig or {}).get('condition_tag', '') or '')
@@ -6048,6 +6191,29 @@ def _build_live_start_trigger_from_effect(gs: GameState, cards_db: Dict[str, Car
             'score_delta_per': int(m.group('score') or 0),
             'required_any_increase_per': len(re.findall(r'<\(任意\)>', str(m.group('anys') or ''))),
         }
+    # Generalized success-zone count based score bonuses.
+    m = re.match(r'^自分か相手の成功ライブカード置き場にカードが(?P<count>\d+)枚以上あり、かつ自分のステージに名前の異なるメンバーが(?P<names>\d+)人以上いる場合、このカードのスコアを\+(?P<delta>\d+)する。$', eff_norm)
+    if m:
+        return {
+            'kind': 'live_start_score_if_either_success_count_and_distinct_stage_names_at_least',
+            'source_cn': str(source_cn or ''),
+            'set_idx': ctx.get('set_idx', None),
+            'label': str(label or ''),
+            'condition_success_count': int(m.group('count') or 0),
+            'condition_distinct_names': int(m.group('names') or 0),
+            'score_delta': int(m.group('delta') or 0),
+        }
+
+    m = re.match(r'^自分の成功ライブカード置き場のカード枚数が相手より少ない場合、このカードのスコアを\+(?P<delta>\d+)する。$', eff_norm)
+    if m:
+        return {
+            'kind': 'live_start_score_if_own_success_count_less_than_opponent_manual',
+            'source_cn': str(source_cn or ''),
+            'set_idx': ctx.get('set_idx', None),
+            'label': str(label or ''),
+            'score_delta': int(m.group('delta') or 0),
+        }
+
     return None
 
 def _live_success_excess_color_and_stage_group_met(gs: GameState, cards_db: Dict[str, CardInfo], color_jp: str, group_name: str) -> bool:
@@ -6190,6 +6356,20 @@ def _build_live_success_trigger_from_effect(gs: GameState, cards_db: Dict[str, C
                 'ctx': dict(ctx or {}),
                 'label': str(label or ''),
             }
+
+    # Generalized success-zone count + revealed score-tag LIVE condition.
+    m = re.match(r'^自分か相手の成功ライブカード置き場にカードが(?P<count>\d+)枚以上あり、かつエール(?:によって|により)公開された自分のカードの中に<\(スコア\+1\)>を持つライブカードが(?P<reveal_n>\d+)枚以上ある場合、このカードのスコアを\+(?P<delta>\d+)する。?$', eff_norm)
+    if m:
+        return {
+            'kind': 'add_live_success_score_bonus_if_either_success_count_and_revealed_score_tag_live_at_least',
+            'condition_success_count': int(m.group('count') or 0),
+            'condition_revealed_count': int(m.group('reveal_n') or 0),
+            'bonus': int(m.group('delta') or 0),
+            'source_cn': str(source_cn or ''),
+            'pos': str(pos or ''),
+            'ctx': dict(ctx or {}),
+            'label': str(label or ''),
+        }
 
     # Generalized from MIRACLE WAVE.
     # 「スコアはNになる」 is not a +bonus; it is stored as a direct score-set value.
@@ -6847,6 +7027,13 @@ def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[s
         return int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
     if _parse_live_start_top_keep_one_then_reveal_top_score_if_live_by_group_count(ci_live) is not None:
         return int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
+    # Generic fallback for live-start effects that are resolved through a confirmation/ack
+    # prompt and stored directly by set_idx/card number.  This covers families whose
+    # conditions are checked before score computation rather than recomputed here, such as
+    # success-storage-count based score bonuses.
+    _mapped_live_start_bonus = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live) or 0)
+    if _mapped_live_start_bonus:
+        return _mapped_live_start_bonus
     return 0
 
 def _compute_attempt_score_breakdown(lives, cards_db, gs_turn, gs=None, live_set_indices=None):
@@ -7515,7 +7702,7 @@ def _get_last_attempt_live_score_bonus(gs: GameState, cn_live) -> int:
             except Exception:
                 return 0
     return 0
-def _compute_final_compare_score_after_success(gs: GameState, cards_db: Dict[str, CardInfo]) -> tuple[int, list[tuple[str, int, int, int, Optional[int]]], int, int]:
+def _compute_final_compare_score_after_success(gs: GameState, cards_db: Dict[str, CardInfo]) -> tuple[int, list[tuple[str, int, int, int, Optional[int]]], int, int, int]:
     lives = list(getattr(gs, 'last_attempt_lives', []) or [])
     bonuses = list(getattr(gs, 'last_attempt_score_bonus', []) or [])
     sets = list(getattr(gs, 'last_attempt_score_set', []) or [])
@@ -7549,8 +7736,9 @@ def _compute_final_compare_score_after_success(gs: GameState, cards_db: Dict[str
     except Exception:
         stage_score_bonus = 0
     total_score_bonus = int(getattr(gs, 'last_attempt_total_score_bonus', 0) or 0)
-    total += int(stage_score_bonus) + int(total_score_bonus)
-    return int(total), rows, int(stage_score_bonus), int(total_score_bonus)
+    yell_score_icon_bonus = int(_yell_revealed_score_icon_bonus(gs, cards_db) or 0)
+    total += int(stage_score_bonus) + int(total_score_bonus) + int(yell_score_icon_bonus)
+    return int(total), rows, int(stage_score_bonus), int(total_score_bonus), int(yell_score_icon_bonus)
 def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
     if bool(getattr(gs, "cannot_live_until_end_of_live", False)):
         gs.log.append("[ATTEMPT] blocked: you cannot live until end of live")
@@ -7690,6 +7878,10 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
         if stage_score_bonus:
             gs.log.append(f"  score: stage always bonus = +{stage_score_bonus}")
             total_score += int(stage_score_bonus)
+        yell_score_icon_bonus = int(_yell_revealed_score_icon_bonus(gs, cards_db) or 0)
+        if yell_score_icon_bonus:
+            gs.log.append(f"  score: yell score icons = +{yell_score_icon_bonus}")
+            total_score += int(yell_score_icon_bonus)
         gs.log.append(f"[ATTEMPT] result=SUCCESS total_score={total_score}")
         gs.last_attempt_score_rows = [dict(r) for r in list(score_rows or [])]
         gs.last_attempt_attempt_score = int(total_score)
@@ -8191,6 +8383,17 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             _detail = str(score_bonus.get('detail', '') or '')
             _add_live_success_score_bonus(gs, _cn_bonus, _bonus_n, detail=_detail)
             applied = True
+        live_start_bonus = p.get('after_live_start_score_bonus') if isinstance(p, dict) else None
+        if isinstance(live_start_bonus, dict):
+            _src_bonus = str(live_start_bonus.get('source_cn', src) or src or '')
+            _bonus_n = int(live_start_bonus.get('bonus', 0) or 0)
+            _set_idx = live_start_bonus.get('set_idx', None)
+            try:
+                _mark_live_start_set_idx_resolved(gs, _set_idx)
+            except Exception:
+                pass
+            _add_live_start_score_bonus(gs, _bonus_n, set_idx=_set_idx, source_cn=_src_bonus)
+            applied = True
         gs.log.append(f"[AUTO] {src}: confirm_effect -> {'applied' if applied else 'no_match'} {after_eff}")
         _r = p.get('_resume') if isinstance(p, dict) else None
         if _r:
@@ -8377,6 +8580,24 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         if _r:
             gs.pending.append(_r)
         return
+    if kind == 'live_start_success_count_distinct_names_score_ack':
+        low = choice_str.lower()
+        if low not in ('ok', 'apply', 'yes', 'y', '1', 'true', 'use', 'go', 'confirm', 'はい', '使う'):
+            gs.log.append(f"[ERR] {kind}: invalid choice {choice_str}")
+            gs.pending.append(p)
+            return
+        src = str(p.get('source_cn', '') or '')
+        set_idx = p.get('set_idx', None)
+        delta = int(p.get('score_delta', 0) or 0)
+        _mark_live_start_set_idx_resolved(gs, set_idx)
+        if delta > 0:
+            _add_live_start_score_bonus(gs, delta, set_idx=set_idx, source_cn=src)
+        gs.log.append(f"[AUTO] {src}[ライブ開始時]: success-count/name condition -> score +{delta}")
+        _r = p.get('_resume') if isinstance(p, dict) else None
+        if _r:
+            gs.pending.append(_r)
+        return
+
     if kind == 'pay_or_skip':
         # Generic optional-cost prompt (e.g., "...してもよい：<effect>")
         cost_kind = str(p.get('cost_kind', '') or '')
@@ -10736,9 +10957,9 @@ def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], i
             _lvs = list(getattr(gs, 'last_attempt_lives', []) or [])
             _attempt_total = int(getattr(gs, 'last_attempt_attempt_score', 0) or 0)
             if _lvs:
-                _total, _rows, _stage_bonus, _total_bonus = _compute_final_compare_score_after_success(gs, cards_db)
+                _total, _rows, _stage_bonus, _total_bonus, _yell_score_icon_bonus = _compute_final_compare_score_after_success(gs, cards_db)
                 _sets = list(getattr(gs, 'last_attempt_score_set', []) or [])
-                _changed = bool(any(int(x or 0) != 0 for x in _bon)) or bool(any(x is not None for x in _sets)) or bool(int(_total_bonus or 0) != 0)
+                _changed = bool(any(int(x or 0) != 0 for x in _bon)) or bool(any(x is not None for x in _sets)) or bool(int(_total_bonus or 0) != 0) or bool(int(_yell_score_icon_bonus or 0) != 0)
                 for _cn, _base, _delta, _eff, _set_v in _rows:
                     if _set_v is not None and _delta:
                         gs.log.append(f"  success-score: {_cn} = {_eff} (set {_set_v}{'+' if int(_delta) >= 0 else ''}{_delta})")
@@ -10750,6 +10971,8 @@ def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], i
                     gs.log.append(f"  success-score: stage always bonus = +{_stage_bonus}")
                 if _total_bonus:
                     gs.log.append(f"  success-score: live total adjustment = {_total_bonus:+d}")
+                if _yell_score_icon_bonus:
+                    gs.log.append(f"  success-score: yell score icons = +{_yell_score_icon_bonus}")
                 gs.log.append(f"[COMPARE] final_score_after_success_effects={_total}")
                 gs.last_attempt_final_score = int(_total)
                 gs.banner_text = f"SUCCESS (Final Score {_total})"
