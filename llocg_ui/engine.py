@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: success_storage_score_apply_and_yell_score_icon_20260608e
+# BUILD_TAG: stage_heart_group_condition_family_20260608f
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -2828,6 +2828,91 @@ def _stage_distinct_member_name_count(gs: 'GameState', cards_db: Dict[str, CardI
         pass
     return int(len(names))
 
+
+def _stage_distinct_member_group_name_count(gs: 'GameState', cards_db: Dict[str, CardInfo]) -> int:
+    """Count distinct non-empty group names among members currently on stage."""
+    groups = set()
+    try:
+        for pos in ('L', 'C', 'R'):
+            slot = (gs.stage or {}).get(pos)
+            if not slot or not getattr(slot, 'cardnumber', ''):
+                continue
+            ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+            if not ci or _is_live_ci(ci):
+                continue
+            g = str(getattr(ci, 'group', '') or '').strip()
+            if g:
+                groups.add(g)
+    except Exception:
+        pass
+    return int(len(groups))
+
+def _stage_member_current_heart_color_counts(gs: 'GameState', cards_db: Dict[str, CardInfo]) -> Dict[str, int]:
+    """Return current colored heart counts held by stage members.
+
+    This is for card text of the form 「ステージにいるメンバーが持つハート」.
+    It includes base hearts, blade-heart hearts, always-on bonuses, and temporary
+    hearts granted until end of live.  <ALL> is deliberately not expanded into
+    six colors here; it remains a non-colored wildcard for live requirement
+    allocation, not a literal possession of all six named colored hearts.
+    """
+    out: Dict[str, int] = {}
+    colors = {'pink', 'red', 'yellow', 'green', 'blue', 'purple'}
+    try:
+        for pos in ('L', 'C', 'R'):
+            slot = (gs.stage or {}).get(pos)
+            if not slot or not getattr(slot, 'cardnumber', ''):
+                continue
+            ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+            if not ci or _is_live_ci(ci):
+                continue
+            replace_col = str(getattr(slot, 'heart_replace_color', '') or '').lower().strip()
+            if replace_col in colors:
+                total = 0
+                for mp in (getattr(ci, 'base_hearts', {}) or {}, getattr(ci, 'blade_hearts', {}) or {}):
+                    for _k, _v in (mp or {}).items():
+                        try:
+                            if str(_k).lower() in colors:
+                                total += int(_v or 0)
+                        except Exception:
+                            pass
+                if total > 0:
+                    out[replace_col] = int(out.get(replace_col, 0) or 0) + int(total)
+            else:
+                for mp in (getattr(ci, 'base_hearts', {}) or {}, getattr(ci, 'blade_hearts', {}) or {}):
+                    for k, v in (mp or {}).items():
+                        kk = str(k or '').lower().strip()
+                        if kk in colors:
+                            out[kk] = int(out.get(kk, 0) or 0) + int(v or 0)
+            try:
+                for k, v in (_slot_always_hearts_bonus(gs, cards_db, pos, slot) or {}).items():
+                    kk = str(k or '').lower().strip()
+                    if kk in colors:
+                        out[kk] = int(out.get(kk, 0) or 0) + int(v or 0)
+            except Exception:
+                pass
+            try:
+                for k, v in (getattr(slot, 'temp_hearts', {}) or {}).items():
+                    kk = str(k or '').lower().strip()
+                    if kk in colors:
+                        out[kk] = int(out.get(kk, 0) or 0) + int(v or 0)
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return {k: int(v) for k, v in out.items() if int(v or 0) > 0}
+
+def _stage_member_has_all_heart_colors(gs: 'GameState', cards_db: Dict[str, CardInfo], colors: List[str]) -> Tuple[bool, List[str], List[str]]:
+    need = [str(c or '').lower().strip() for c in list(colors or []) if str(c or '').lower().strip() in {'pink','red','yellow','green','blue','purple'}]
+    counts = _stage_member_current_heart_color_counts(gs, cards_db)
+    have = [c for c in need if int(counts.get(c, 0) or 0) > 0]
+    missing = [c for c in need if c not in have]
+    return (len(missing) == 0 and len(need) > 0, have, missing)
+
+def _heart_color_keys_to_jp(colors: List[str]) -> str:
+    mp = {'pink':'桃', 'red':'赤', 'yellow':'黄', 'green':'緑', 'blue':'青', 'purple':'紫'}
+    return '、'.join(mp.get(str(c), str(c)) for c in list(colors or []))
+
 def _count_yell_revealed_live_cards_with_tag(gs: GameState, cards_db: Dict[str, CardInfo], tag_text: str) -> int:
     tag = _normalize_tag_marker(tag_text)
     if not tag:
@@ -4104,6 +4189,12 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                     eff_norm = re.sub(r' (<\([^)]*\)>)', r'\1', eff_norm)
                     eff_norm = re.sub(r'(<\([^)]*\)>) ', r'\1', eff_norm)
                     if not cost.strip() or cost.strip() == eff.strip() or cost_norm == eff_norm:
+                        trig_free = _build_live_start_trigger_from_effect(
+                            gs, cards_db, eff, ci.cardnumber, f'{pos}: {ci.cardnumber} ライブ開始時', {'source_cn': ci.cardnumber, 'pos': pos.upper()}
+                        )
+                        if trig_free:
+                            triggers.append(trig_free)
+                            continue
                         m_free = _match_effect_template(eff)
                         if m_free:
                             r_free, gd_free = m_free
@@ -5176,6 +5267,65 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         gs.log.append(f'[PENDING] {src_cn}[ライブ開始時]: opponent success-count greater confirmation own={own_n}')
         return
 
+    if kind == 'live_start_center_member_gain_all_if_distinct_stage_groups_at_least':
+        src_cn = str((trig or {}).get('source_cn', '') or '')
+        need = int((trig or {}).get('condition_distinct_groups', 0) or 0)
+        all_n = int((trig or {}).get('all_n', 0) or 0)
+        got = int(_stage_distinct_member_group_name_count(gs, cards_db))
+        slot = (gs.stage or {}).get('C')
+        if got >= need and slot and getattr(slot, 'cardnumber', ''):
+            ci_c = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+            if ci_c and not _is_live_ci(ci_c):
+                if all_n > 0:
+                    _grant_temp_heart(slot, 'all', all_n)
+                gs.log.append(f'[AUTO] {src_cn}[ライブ開始時]: distinct stage groups {got}/{need} -> center gains <ALL> x{all_n}')
+                return
+        gs.pending.append({
+            'kind': 'message_ack',
+            'label': f'{src_cn} live-start distinct group condition failed',
+            'text': f'【{src_cn}】ライブ開始時：ステージの異なるグループ名は{got}/{need}種類のため、センターへの<ALL>付与は適用されません。',
+        })
+        gs.log.append(f'[SKIP] {src_cn}[ライブ開始時]: distinct stage groups {got}/{need} -> no <ALL>')
+        return
+
+    if kind == 'live_start_member_gain_blade_if_stage_has_heart_colors':
+        src_cn = str((trig or {}).get('source_cn', '') or '')
+        pos = str((trig or {}).get('pos', '') or '').upper()
+        colors = list((trig or {}).get('condition_colors', []) or [])
+        blade_n = int((trig or {}).get('blade_n', 0) or 0)
+        ok, have, missing = _stage_member_has_all_heart_colors(gs, cards_db, colors)
+        slot = (gs.stage or {}).get(pos) if pos in ('L', 'C', 'R') else None
+        if ok and slot and getattr(slot, 'cardnumber', '') and blade_n > 0:
+            slot.temp_blade = int(getattr(slot, 'temp_blade', 0) or 0) + int(blade_n)
+            slot.temp_until = 'end_of_live'
+            gs.log.append(f'[AUTO] {pos}: {src_cn}[ライブ開始時]: stage hearts {_heart_color_keys_to_jp(colors)} all present -> blade +{blade_n}')
+            return
+        gs.pending.append({
+            'kind': 'message_ack',
+            'label': f'{src_cn} live-start stage heart condition failed',
+            'text': f'【{src_cn}】ライブ開始時：必要なハート色={_heart_color_keys_to_jp(colors)} / 不足={_heart_color_keys_to_jp(missing)} のため、ブレード+{blade_n}は適用されません。',
+        })
+        gs.log.append(f'[SKIP] {pos}: {src_cn}[ライブ開始時]: missing stage heart colors={_heart_color_keys_to_jp(missing)}')
+        return
+
+    if kind == 'live_start_score_if_stage_has_heart_colors':
+        src_cn = str((trig or {}).get('source_cn', '') or '')
+        colors = list((trig or {}).get('condition_colors', []) or [])
+        delta = int((trig or {}).get('score_delta', 0) or 0)
+        set_idx = (trig or {}).get('set_idx', None)
+        ok, have, missing = _stage_member_has_all_heart_colors(gs, cards_db, colors)
+        if ok and delta:
+            _add_live_start_score_bonus(gs, delta, set_idx=set_idx, source_cn=src_cn)
+            gs.log.append(f'[AUTO] {src_cn}[ライブ開始時]: stage hearts {_heart_color_keys_to_jp(colors)} all present -> score +{delta}')
+            return
+        gs.pending.append({
+            'kind': 'message_ack',
+            'label': f'{src_cn} live-start stage heart condition failed',
+            'text': f'【{src_cn}】ライブ開始時：必要なハート色={_heart_color_keys_to_jp(colors)} / 不足={_heart_color_keys_to_jp(missing)} のため、スコア+{delta}は適用されません。',
+        })
+        gs.log.append(f'[SKIP] {src_cn}[ライブ開始時]: missing stage heart colors={_heart_color_keys_to_jp(missing)}')
+        return
+
     if kind == 'add_live_success_score_bonus_per_weight_member':
         cn_live = str((trig or {}).get('source_cn', '') or '')
         per = int((trig or {}).get('bonus_per', 0) or 0)
@@ -6213,6 +6363,43 @@ def _build_live_start_trigger_from_effect(gs: GameState, cards_db: Dict[str, Car
             'label': str(label or ''),
             'score_delta': int(m.group('delta') or 0),
         }
+
+    # Stage group-name and heart-color condition families.
+    m = re.match(r'^自分のステージにグループ名がそれぞれ異なるメンバーが(?P<count>\d+)人以上いる場合、ライブ終了時まで、自分のセンターエリアにいるメンバーは(?P<icons>(?:<\(ALL\)>)+)を得る。$', eff_norm)
+    if m:
+        return {
+            'kind': 'live_start_center_member_gain_all_if_distinct_stage_groups_at_least',
+            'source_cn': str(source_cn or ''),
+            'set_idx': ctx.get('set_idx', None),
+            'label': str(label or ''),
+            'condition_distinct_groups': int(m.group('count') or 0),
+            'all_n': len(re.findall(r'<\(ALL\)>', str(m.group('icons') or ''))),
+        }
+
+    m = re.match(r'^自分のステージにいるメンバーが持つハートの中に(?P<icons>(?:<\([^)]+\)>[、,]?)+)がすべてある場合、(?P<inner>.+)$', eff_norm)
+    if m:
+        colors = _heart_icons_to_colors(str(m.group('icons') or ''))
+        inner = str(m.group('inner') or '').strip()
+        m_score = re.match(r'^このカードのスコアを\+(?P<delta>\d+)する。$', inner)
+        if m_score:
+            return {
+                'kind': 'live_start_score_if_stage_has_heart_colors',
+                'source_cn': str(source_cn or ''),
+                'set_idx': ctx.get('set_idx', None),
+                'label': str(label or ''),
+                'condition_colors': list(colors),
+                'score_delta': int(m_score.group('delta') or 0),
+            }
+        m_blade = re.match(r'^ライブ終了時まで、(?P<blades>(?:<\(ブレード\)>)+)を得る。$', inner)
+        if m_blade:
+            return {
+                'kind': 'live_start_member_gain_blade_if_stage_has_heart_colors',
+                'source_cn': str(source_cn or ''),
+                'pos': str(ctx.get('pos', '') or '').upper(),
+                'label': str(label or ''),
+                'condition_colors': list(colors),
+                'blade_n': len(re.findall(r'<\(ブレード\)>', str(m_blade.group('blades') or ''))),
+            }
 
     return None
 

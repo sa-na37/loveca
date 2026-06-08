@@ -1,0 +1,4 @@
+cardnumber,cardname,trigger,status,effect
+LL-bp5-002,Bring the LOVE！,ライブ開始時,implemented_live_start_distinct_stage_groups_center_all,自分のステージにグループ名がそれぞれ異なるメンバーが3人以上いる場合、ライブ終了時まで、自分のセンターエリアにいるメンバーは<ALL>を得る。
+PL!N-bp5-015,桜坂しずく,ライブ開始時,implemented_live_start_stage_all_heart_colors_self_blade,自分のステージにいるメンバーが持つハートの中に<桃>、<赤>、<黄>、<緑>、<青>、<紫>がすべてある場合、ライブ終了時まで、<(ブレード)><(ブレード)>を得る。
+PL!N-bp5-026,TOKIMEKI Runners,ライブ開始時,implemented_live_start_stage_all_heart_colors_score,自分のステージにいるメンバーが持つハートの中に<桃><赤><黄><緑><青><紫>がすべてある場合、このカードのスコアを+1する。
