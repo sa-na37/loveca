@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "updated": "2026-06-08",
+  "purpose": "Manual card text corrections for known upstream/wiki typos. These overrides are applied by llocg_db_tool_v7.py during scrape/normalize so future DB refreshes do not reintroduce the typo.",
+  "cards": {
+    "PL!S-bp5-020": {
+      "cardname": "Landing action Yeah!!",
+      "reason": "wiki typo: the condition is '3つ以上', not '3つ'.",
+      "effect_text_raw": "<ライブ成功時>\n自分が余剰ハートを3つ以上持っている場合、それらをすべて失い、このカードのスコアを+1する。",
+      "effect_text_norm": "<ライブ成功時>\n自分が余剰ハートを3つ以上持っている場合、それらをすべて失い、このカードのスコアを+1する。"
+    }
+  }
+}

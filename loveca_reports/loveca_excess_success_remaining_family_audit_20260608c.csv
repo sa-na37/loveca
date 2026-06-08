@@ -1,0 +1,10 @@
+cardnumber,cardname,card_type,status,effect
+PL!-bp3-025,タカラモノズ,LIVE,implemented_excess_zero_live_score_bonus,<ライブ成功時> このターン、自分が余剰ハートを持たない場合、このカードのスコアを+1する。
+PL!-bp4-023,もぎゅっと”love”で接近中！,LIVE,implemented_excess_color_draw,<ライブ成功時> 自分が余剰ハートに<桃>を1つ以上持つ場合、カードを1枚引く。
+PL!HS-bp6-028,ブルウモーメント,LIVE,implemented_excess_total_topk_reorder,<ライブ成功時> このターン、自分が余剰ハートを1つ以上持っている場合、自分のデッキの上からカードを2枚見る。その中から好きな枚数を好きな順番でデッキの上に置き、残りを控え室に置く。
+PL!N-bp3-027,La Bella Patria,LIVE,implemented_excess_color_stage_group_energy_wait,<ライブ成功時> このターン、自分が余剰ハートに<緑>を1つ以上持っており、かつ自分のステージに『虹ヶ咲』のメンバーがいる場合、自分のエネルギーデッキから、エネルギーカードを1枚ウェイト状態で置く。
+PL!N-bp5-007,優木せつ菜,MEMBER,implemented_excess_total_draw_then_discard,<ライブ成功時> 自分が余剰ハートを1つ以上持っている場合、カードを2枚引き、手札を1枚控え室に置く。
+PL!N-bp5-010,三船栞子,MEMBER,implemented_self_excess_live_total_score_adjust,<ライブ成功時> 自分が余剰ハートを持たない場合、ライブの合計スコアを+1する。自分が余剰ハートを2つ以上持つ場合、ライブの合計スコアを-1する。この効果ではライブの合計スコアは0未満にならない。
+PL!S-bp3-019,MIRACLE WAVE,LIVE,implemented_direct_score_set_no_bladeheart_or_excess,<ライブ成功時> このターン、エールにより公開された自分のカードの中にブレードハートを持たないカードが0枚の場合か、または自分の余剰ハートを2つ以上持っている場合、このカードのスコアは4になる。
+PL!S-bp5-020,Landing action Yeah!!,LIVE,implemented_excess_atleast_loss_score_bonus_db_corrected,<ライブ成功時> 自分が余剰ハートを3つ以上持っている場合、それらをすべて失い、このカードのスコアを+1する。
+PL!S-bp6-024,コワレヤスキ,LIVE,implemented_opponent_excess_loss_manual_live_score_bonus,<ライブ成功時> ライブ終了時まで、相手は余剰ハートをすべて失う。これにより相手が余剰ハートを2つ以上失っている場合、このカードのスコアを+1する。

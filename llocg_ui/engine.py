@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: excess_success_manual_prompt_jp_20260608a
+# BUILD_TAG: excess_success_landing_atleast_dbfix_20260608c
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -5295,6 +5295,84 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         })
         gs.log.append(f"[PENDING] LIVE: {cn_live}[ライブ成功時] opponent excess-heart loss confirmation threshold={need}")
         return
+
+    if kind in ('add_live_success_score_bonus_if_excess_total_zero',):
+        cn_live = str((trig or {}).get('source_cn', '') or '').strip()
+        bonus = int((trig or {}).get('bonus', 0) or 0)
+        excess_n = int(_last_attempt_excess_heart_total(gs) or 0)
+        if excess_n <= 0:
+            _add_live_success_score_bonus(gs, cn_live, bonus, detail=f"excess hearts={excess_n} -> score +{bonus}")
+        else:
+            gs.log.append(f"[SKIP] LIVE: {cn_live}[ライブ成功時] unresolved (excess hearts={excess_n} > 0)")
+        return
+    if kind in ('apply_effect_template_if_excess_total_at_least_on_live_success',):
+        eff = str((trig or {}).get('effect', '') or '').strip()
+        src_cn = str((trig or {}).get('source_cn', '') or '').strip()
+        pos = str((trig or {}).get('pos', '') or '').upper()
+        ctx = dict((trig or {}).get('ctx', {}) or {})
+        need = int((trig or {}).get('condition_excess_count', 0) or 0)
+        excess_n = int(_last_attempt_excess_heart_total(gs) or 0)
+        if excess_n >= need and eff:
+            if src_cn and not ctx.get('source_cn'):
+                ctx['source_cn'] = src_cn
+            if pos:
+                ctx.setdefault('pos', pos)
+            try:
+                rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0) + 43)
+            except Exception:
+                rng2 = random.Random(43)
+            ok = bool(try_apply_effect_template(gs, rng2, cards_db, eff, ctx))
+            prefix = f"[AUTO] {pos}: {src_cn or '?'}[ライブ成功時]" if pos else f"[AUTO] LIVE: {src_cn or '?'}[ライブ成功時]"
+            gs.log.append(f"{prefix}: excess hearts={excess_n}/{need} -> {'applied' if ok else 'no_match'} {eff}")
+        else:
+            prefix = f"[SKIP] {pos}: {src_cn or '?'}[ライブ成功時]" if pos else f"[SKIP] LIVE: {src_cn or '?'}[ライブ成功時]"
+            gs.log.append(f"{prefix} unresolved (excess hearts={excess_n} < {need})")
+        return
+    if kind in ('apply_effect_template_if_excess_color_at_least_on_live_success',):
+        eff = str((trig or {}).get('effect', '') or '').strip()
+        src_cn = str((trig or {}).get('source_cn', '') or '').strip()
+        pos = str((trig or {}).get('pos', '') or '').upper()
+        ctx = dict((trig or {}).get('ctx', {}) or {})
+        color_jp = str((trig or {}).get('condition_color_jp', '') or '').strip()
+        color_key = str((trig or {}).get('condition_color_key', '') or '').strip().lower()
+        need = int((trig or {}).get('condition_count', 0) or 0)
+        got = int(_last_attempt_excess_color_count(gs, color_key) or 0)
+        if got >= need and eff:
+            if src_cn and not ctx.get('source_cn'):
+                ctx['source_cn'] = src_cn
+            if pos:
+                ctx.setdefault('pos', pos)
+            try:
+                rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0) + 44)
+            except Exception:
+                rng2 = random.Random(44)
+            ok = bool(try_apply_effect_template(gs, rng2, cards_db, eff, ctx))
+            prefix = f"[AUTO] {pos}: {src_cn or '?'}[ライブ成功時]" if pos else f"[AUTO] LIVE: {src_cn or '?'}[ライブ成功時]"
+            gs.log.append(f"{prefix}: excess {color_jp or color_key}={got}/{need} -> {'applied' if ok else 'no_match'} {eff}")
+        else:
+            prefix = f"[SKIP] {pos}: {src_cn or '?'}[ライブ成功時]" if pos else f"[SKIP] LIVE: {src_cn or '?'}[ライブ成功時]"
+            gs.log.append(f"{prefix} unresolved (excess {color_jp or color_key}={got} < {need})")
+        return
+    if kind in ('add_live_success_score_bonus_and_clear_if_excess_total_at_least', 'add_live_success_score_bonus_and_clear_if_excess_total_exact'):
+        cn_live = str((trig or {}).get('source_cn', '') or '').strip()
+        bonus = int((trig or {}).get('bonus', 0) or 0)
+        need = int((trig or {}).get('condition_excess_count', 0) or 0)
+        mode = str((trig or {}).get('condition_mode', '') or '').strip().lower()
+        at_least = (kind == 'add_live_success_score_bonus_and_clear_if_excess_total_at_least') or (mode == 'at_least')
+        excess_n = int(_last_attempt_excess_heart_total(gs) or 0)
+        ok = (excess_n >= need) if at_least else (excess_n == need)
+        cond_text = f">={need}" if at_least else f"/{need}"
+        skip_text = f"< {need}" if at_least else f"!= {need}"
+        if ok:
+            _add_live_success_score_bonus(gs, cn_live, bonus, detail=f"excess hearts={excess_n}{cond_text}; lost all excess hearts")
+            try:
+                gs.last_attempt_excess_hearts = {}
+            except Exception:
+                pass
+            gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時]: excess hearts lost -> 0")
+        else:
+            gs.log.append(f"[SKIP] LIVE: {cn_live}[ライブ成功時] unresolved (excess hearts={excess_n} {skip_text})")
+        return
     if kind in ('add_live_success_score_bonus_if_revealed_card_tag_count_at_least',):
         cn_live = str((trig or {}).get('source_cn', '') or '')
         tag = str((trig or {}).get('condition_tag', '') or '')
@@ -5870,6 +5948,7 @@ def _build_live_start_trigger_from_effect(gs: GameState, cards_db: Dict[str, Car
             'label': str(label or ''),
             'condition_group_name': group_name,
         }
+
     # Generalized from VIVID WORLD.
     m = re.match(r'^ライブ終了時まで、エールによって公開される自分のカードが持つ<\(桃\)>、<\(赤\)>、<\(黄\)>、<\(緑\)>、<\(紫\)>、<\(ALL\)>は、すべて<\((?P<target>[^)]+)\)>になる。$', eff_norm)
     if m:
@@ -6113,8 +6192,7 @@ def _build_live_success_trigger_from_effect(gs: GameState, cards_db: Dict[str, C
             }
 
     # Generalized from MIRACLE WAVE.
-    # 「スコアはNになる」 is not a +bonus; it is applied as a delta to the
-    # last attempt score at live-success resolution.
+    # 「スコアはNになる」 is not a +bonus; it is stored as a direct score-set value.
     m = re.match(r'^このターン、エールにより公開された自分のカードの中にブレードハートを持たないカードが0枚の場合か、または自分の余剰ハートを(?P<excess>\d+)つ以上持っている場合、このカードのスコアは(?P<score>\d+)になる。?$', eff_norm)
     if m:
         return {
@@ -6145,6 +6223,82 @@ def _build_live_success_trigger_from_effect(gs: GameState, cards_db: Dict[str, C
         return {
             'kind': 'opponent_loses_excess_hearts_then_live_score_bonus_manual',
             'lost_threshold': int(m.group('lost') or 0),
+            'bonus': int(m.group('delta') or 0),
+            'source_cn': str(source_cn or ''),
+            'pos': str(pos or ''),
+            'ctx': dict(ctx or {}),
+            'label': str(label or ''),
+        }
+
+    # Generalized live-success excess-heart conditions.
+    m = re.match(r'^このターン、自分が余剰ハートを持たない場合、このカードのスコアを\+(?P<delta>\d+)する。?$', eff_norm)
+    if m:
+        return {
+            'kind': 'add_live_success_score_bonus_if_excess_total_zero',
+            'bonus': int(m.group('delta') or 0),
+            'source_cn': str(source_cn or ''),
+            'pos': str(pos or ''),
+            'ctx': dict(ctx or {}),
+            'label': str(label or ''),
+        }
+
+    m = re.match(r'^このターン、自分が余剰ハートを(?P<count>\d+)つ以上持っている場合、(?P<inner>.+)$', eff_norm)
+    if m:
+        inner = str(m.group('inner') or '').strip()
+        if _match_effect_template(inner):
+            return {
+                'kind': 'apply_effect_template_if_excess_total_at_least_on_live_success',
+                'effect': inner,
+                'condition_excess_count': int(m.group('count') or 0),
+                'source_cn': str(source_cn or ''),
+                'pos': str(pos or ''),
+                'ctx': dict(ctx or {}),
+                'label': str(label or ''),
+            }
+
+    m = re.match(r'^自分が余剰ハートを(?P<count>\d+)つ以上持っている場合、(?P<inner>.+)$', eff_norm)
+    if m:
+        inner = str(m.group('inner') or '').strip()
+        if _match_effect_template(inner):
+            return {
+                'kind': 'apply_effect_template_if_excess_total_at_least_on_live_success',
+                'effect': inner,
+                'condition_excess_count': int(m.group('count') or 0),
+                'source_cn': str(source_cn or ''),
+                'pos': str(pos or ''),
+                'ctx': dict(ctx or {}),
+                'label': str(label or ''),
+            }
+
+    m = re.match(r'^自分が余剰ハートに<\((?P<color>[^)]+)\)>を(?P<count>\d+)つ以上持つ場合、(?P<inner>.+)$', eff_norm)
+    if m:
+        inner = str(m.group('inner') or '').strip()
+        color_jp = str(m.group('color') or '').strip()
+        color_key = _HEART_JP_MAP.get(color_jp, '')
+        if color_key and _match_effect_template(inner):
+            return {
+                'kind': 'apply_effect_template_if_excess_color_at_least_on_live_success',
+                'effect': inner,
+                'condition_color_jp': color_jp,
+                'condition_color_key': color_key,
+                'condition_count': int(m.group('count') or 0),
+                'source_cn': str(source_cn or ''),
+                'pos': str(pos or ''),
+                'ctx': dict(ctx or {}),
+                'label': str(label or ''),
+            }
+
+    m = re.match(r'^自分が余剰ハートを(?P<count>\d+)つ(?P<ge>以上)?持っている場合、それらをすべて失い、このカードのスコアを\+(?P<delta>\d+)する。?$', eff_norm)
+    if m:
+        # PL!S-bp5-020 Landing action Yeah!! was scraped from a wiki typo as「3つ」.
+        # Official/manual correction is「3つ以上」, so force the card to the at-least semantics
+        # even if an old uncorrected DB is accidentally loaded.
+        force_at_least = str(source_cn or '') == 'PL!S-bp5-020'
+        is_at_least = bool(m.group('ge')) or force_at_least
+        return {
+            'kind': 'add_live_success_score_bonus_and_clear_if_excess_total_at_least' if is_at_least else 'add_live_success_score_bonus_and_clear_if_excess_total_exact',
+            'condition_mode': 'at_least' if is_at_least else 'exact',
+            'condition_excess_count': int(m.group('count') or 0),
             'bonus': int(m.group('delta') or 0),
             'source_cn': str(source_cn or ''),
             'pos': str(pos or ''),

@@ -17,7 +17,7 @@ Deps:
 
 from __future__ import annotations
 
-BUILD_TAG = "db_tool_parse_official_icon_counts_20260604a"
+BUILD_TAG = "db_tool_manual_card_text_overrides_20260608c"
 
 import argparse
 import hashlib
@@ -45,7 +45,78 @@ CONFIG = {
     "max_fail": 500,
     "user_agent": "LL-OCG-DB-Build/1.0 (polite crawler; contact: your_email@example.com)",
     "normalize_suffix": "_tokv1",
+    "manual_overrides": "manual_overrides/loveca_card_text_overrides.json",
 }
+
+# Manual corrections for known upstream/wiki typos.
+# External JSON at CONFIG["manual_overrides"] can add/override entries.
+# This built-in entry intentionally prevents future wiki refreshes from reintroducing
+# the known PL!S-bp5-020 typo if the external file is missing.
+BUILTIN_CARD_TEXT_OVERRIDES: Dict[str, Dict[str, str]] = {
+    "PL!S-bp5-020": {
+        "cardname": "Landing action Yeah!!",
+        "reason": "wiki typo: effect says 3つ, official/manual correction is 3つ以上",
+        "effect_text_raw": "<ライブ成功時>\n自分が余剰ハートを3つ以上持っている場合、それらをすべて失い、このカードのスコアを+1する。",
+        "effect_text_norm": "<ライブ成功時>\n自分が余剰ハートを3つ以上持っている場合、それらをすべて失い、このカードのスコアを+1する。",
+    },
+}
+
+def load_card_text_overrides(path: Optional[Path]) -> Dict[str, Dict[str, str]]:
+    overrides: Dict[str, Dict[str, str]] = {k: dict(v) for k, v in BUILTIN_CARD_TEXT_OVERRIDES.items()}
+    if path and path.exists():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            cards = data.get("cards", data) if isinstance(data, dict) else {}
+            if isinstance(cards, dict):
+                for cn, obj in cards.items():
+                    if isinstance(cn, str) and isinstance(obj, dict):
+                        merged = dict(overrides.get(cn, {}))
+                        merged.update({str(k): str(v) for k, v in obj.items() if isinstance(v, (str, int, float))})
+                        overrides[cn] = merged
+        except Exception as e:
+            print(f"[WARN] failed to load manual card text overrides: {path} ({e})")
+    return overrides
+
+def _apply_card_text_override_to_record(rec: Dict[str, Any], overrides: Dict[str, Dict[str, str]]) -> bool:
+    if not isinstance(rec, dict):
+        return False
+    cn = str(rec.get("cardnumber", "") or "").strip()
+    if not cn or cn not in overrides:
+        return False
+    ov = overrides[cn]
+    changed = False
+    for key in ("effect_text_raw", "effect_text_norm"):
+        if key in ov and str(ov[key]) != str(rec.get(key, "") or ""):
+            rec[key] = str(ov[key])
+            changed = True
+    if changed:
+        raw = str(rec.get("effect_text_raw", "") or "")
+        norm = str(rec.get("effect_text_norm", "") or "") or normalize_effect_text(raw)
+        rec["effect_text_norm"] = norm
+        rec["effect_text_status"] = classify_effect_text_status(raw, norm)
+        rec["effect_text_is_no_ability"] = 1 if rec["effect_text_status"] == "NO_ABILITY" else 0
+        rec["effect_tokens_json"] = json.dumps(extract_effect_tokens(norm), ensure_ascii=False)
+        rec["manual_override_applied"] = 1
+        rec["manual_override_reason"] = str(ov.get("reason", ""))
+    return changed
+
+def apply_card_text_overrides_to_records(records: List[Dict[str, Any]], overrides: Dict[str, Dict[str, str]], label: str = "") -> int:
+    n = 0
+    for rec in records:
+        if _apply_card_text_override_to_record(rec, overrides):
+            n += 1
+    if n:
+        print(f"[OVERRIDE] applied manual card text overrides: {n}" + (f" ({label})" if label else ""))
+    return n
+
+def apply_card_text_overrides_to_dataframe(df: pd.DataFrame, overrides: Dict[str, Dict[str, str]], label: str = "") -> pd.DataFrame:
+    if df is None or df.empty or "cardnumber" not in df.columns:
+        return df
+    records = df.to_dict(orient="records")
+    n = apply_card_text_overrides_to_records(records, overrides, label=label)
+    if n:
+        return pd.DataFrame(records)
+    return df
 
 # Allow: PL!-xxx-001, PL!HS-xxx-001, PL!SP-..., PL!N-..., etc.
 CARDNO_IN_TEXT = re.compile(
@@ -770,6 +841,7 @@ def load_resume_urls(resume_csv: Path, resume_json: Path) -> Set[str]:
         try:
             data = json.loads(resume_json.read_text(encoding="utf-8"))
             if isinstance(data, list):
+                apply_card_text_overrides_to_records(data, overrides, label="normalize/json")
                 for r in data:
                     if isinstance(r, dict) and r.get("source_url"):
                         urls.add(str(r["source_url"]))
@@ -778,8 +850,10 @@ def load_resume_urls(resume_csv: Path, resume_json: Path) -> Set[str]:
     return urls
 
 
-def finalize_outputs(outdir: Path, records: List[Dict[str, Any]], keys_found: Set[str], failed: List[str]) -> Tuple[Path, Path]:
+def finalize_outputs(outdir: Path, records: List[Dict[str, Any]], keys_found: Set[str], failed: List[str], manual_overrides: Optional[Path] = None) -> Tuple[Path, Path]:
     outdir.mkdir(parents=True, exist_ok=True)
+    overrides = load_card_text_overrides(manual_overrides)
+    apply_card_text_overrides_to_records(records, overrides, label="scrape/finalize")
     df = pd.DataFrame(records)
     if "source_url" in df.columns:
         df = df.drop_duplicates(subset=["source_url"], keep="last")
@@ -800,7 +874,8 @@ def finalize_outputs(outdir: Path, records: List[Dict[str, Any]], keys_found: Se
 
 def cmd_scrape(products_url: str, outdir: Path, cache_dir: Path, delay: float,
               checkpoint_every: int, max_fail: int, user_agent: str,
-              limit_products: int = 0, limit_cards: int = 0, no_normalize: bool = False) -> Tuple[Path, Path]:
+              limit_products: int = 0, limit_cards: int = 0, no_normalize: bool = False,
+              manual_overrides: Optional[Path] = None) -> Tuple[Path, Path]:
 
     outdir.mkdir(parents=True, exist_ok=True)
     resume_csv = outdir / "cards_min.csv"
@@ -859,7 +934,7 @@ def cmd_scrape(products_url: str, outdir: Path, cache_dir: Path, delay: float,
         if idx % 200 == 0:
             print(f"[INFO] processed cards {idx}/{len(todo)}")
 
-    out_csv, out_json = finalize_outputs(outdir, records, keys_found, failed)
+    out_csv, out_json = finalize_outputs(outdir, records, keys_found, failed, manual_overrides=manual_overrides)
     print("[DONE] records=", len(pd.read_csv(out_csv)))
     print("  CSV :", out_csv)
     print("  JSON:", out_json)
@@ -937,8 +1012,10 @@ def process_tokens(obj: Dict[str, Any]) -> Dict[str, Any]:
     return obj
 
 
-def cmd_normalize(csv_path: Path, json_path: Optional[Path], outdir: Path, suffix: str) -> Tuple[Path, Optional[Path]]:
+def cmd_normalize(csv_path: Path, json_path: Optional[Path], outdir: Path, suffix: str, manual_overrides: Optional[Path] = None) -> Tuple[Path, Optional[Path]]:
     df = pd.read_csv(csv_path)
+    overrides = load_card_text_overrides(manual_overrides)
+    df = apply_card_text_overrides_to_dataframe(df, overrides, label="normalize/csv")
     if "effect_tokens_json" not in df.columns:
         raise SystemExit("[ERROR] effect_tokens_json not found")
 
@@ -1017,6 +1094,7 @@ def cmd_normalize(csv_path: Path, json_path: Optional[Path], outdir: Path, suffi
         try:
             data = json.loads(json_path.read_text(encoding="utf-8"))
             if isinstance(data, list):
+                apply_card_text_overrides_to_records(data, overrides, label="normalize/json")
                 for r in data:
                     if not isinstance(r, dict):
                         continue
@@ -1610,12 +1688,14 @@ def build_parser() -> argparse.ArgumentParser:
     ps.add_argument("--limit-products", type=int, default=0)
     ps.add_argument("--limit-cards", type=int, default=0)
     ps.add_argument("--no-normalize", action="store_true")
+    ps.add_argument("--manual-overrides", default=CONFIG["manual_overrides"])
 
     pn = sub.add_parser("normalize")
     pn.add_argument("--csv", required=True)
     pn.add_argument("--json", default="")
     pn.add_argument("--outdir", default="")
     pn.add_argument("--suffix", default=CONFIG["normalize_suffix"])
+    pn.add_argument("--manual-overrides", default=CONFIG["manual_overrides"])
 
     pm = sub.add_parser("mine")
     pm.add_argument("--csv", required=True)
@@ -1653,6 +1733,7 @@ def build_parser() -> argparse.ArgumentParser:
     pall.add_argument("--no-official-image-manifest", action="store_true")
     pall.add_argument("--official-timeout", type=float, default=25.0)
     pall.add_argument("--no-per-card-fallback", action="store_true")
+    pall.add_argument("--manual-overrides", default=CONFIG["manual_overrides"])
 
     return p
 
@@ -1672,6 +1753,7 @@ def main() -> None:
             limit_products=args.limit_products,
             limit_cards=args.limit_cards,
             no_normalize=args.no_normalize,
+            manual_overrides=Path(args.manual_overrides) if args.manual_overrides else None,
         )
         return
 
@@ -1679,7 +1761,7 @@ def main() -> None:
         csvp = Path(args.csv)
         jsonp = Path(args.json) if args.json else None
         outdir = Path(args.outdir) if args.outdir else csvp.parent
-        cmd_normalize(csvp, jsonp, outdir, args.suffix)
+        cmd_normalize(csvp, jsonp, outdir, args.suffix, manual_overrides=Path(args.manual_overrides) if args.manual_overrides else None)
         return
 
     if args.cmd == "mine":
@@ -1719,8 +1801,9 @@ def main() -> None:
             limit_products=args.limit_products,
             limit_cards=args.limit_cards,
             no_normalize=args.no_normalize,
+            manual_overrides=Path(args.manual_overrides) if args.manual_overrides else None,
         )
-        norm_csv, norm_json = cmd_normalize(out_csv, out_json, Path(args.outdir), args.suffix)
+        norm_csv, norm_json = cmd_normalize(out_csv, out_json, Path(args.outdir), args.suffix, manual_overrides=Path(args.manual_overrides) if args.manual_overrides else None)
         cmd_mine(norm_csv, Path(args.outdir), args.mine_top)
         cmd_audit(norm_csv, args.top_unknown)
         if not args.no_official_image_manifest:
