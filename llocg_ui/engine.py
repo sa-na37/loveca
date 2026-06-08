@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: miracle_wave_success_score_set_20260605a
+# BUILD_TAG: excess_success_manual_prompt_jp_20260608a
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -2198,7 +2198,9 @@ class GameState:
     used_this_turn: Dict[str, int] = field(default_factory=dict)
     # last LIVE attempt result (for LIVE_RESOLVE timing / success-zone decision)
     last_attempt_lives: List[str] = field(default_factory=list)
-    last_attempt_score_bonus: List[int] = field(default_factory=list)  # aligned to last_attempt_lives; success-phase temporary bonuses
+    last_attempt_score_bonus: List[int] = field(default_factory=list)  # aligned to last_attempt_lives; success-phase temporary +N/-N after direct set
+    last_attempt_score_set: List[Optional[int]] = field(default_factory=list)  # aligned to last_attempt_lives; direct 「スコアはNになる」 values
+    last_attempt_total_score_bonus: int = 0  # live-success adjustment to the live total score, not tied to one LIVE
     last_attempt_score_rows: List[Dict[str, int]] = field(default_factory=list)  # per-live rows from attempt: {cn, base, delta, score}
     last_attempt_attempt_score: int = 0
     last_attempt_final_score: int = 0
@@ -2296,6 +2298,8 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
         "used_this_turn": dict(getattr(gs, "used_this_turn", {}) or {}),
         "last_attempt_lives": list(getattr(gs, 'last_attempt_lives', []) or []),
         "last_attempt_score_bonus": [int(x) for x in (getattr(gs, 'last_attempt_score_bonus', []) or [])],
+        "last_attempt_score_set": [None if x is None else int(x) for x in (getattr(gs, 'last_attempt_score_set', []) or [])],
+        "last_attempt_total_score_bonus": int(getattr(gs, 'last_attempt_total_score_bonus', 0) or 0),
         "last_attempt_score_rows": [dict(x) for x in (getattr(gs, 'last_attempt_score_rows', []) or [])],
         "last_attempt_attempt_score": int(getattr(gs, 'last_attempt_attempt_score', 0) or 0),
         "last_attempt_final_score": int(getattr(gs, 'last_attempt_final_score', 0) or 0),
@@ -2353,6 +2357,15 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
     except Exception:
         gs.last_attempt_score_bonus = []
     try:
+        _sets_in = list(snap.get('last_attempt_score_set', getattr(gs, 'last_attempt_score_set', []) or []) or [])
+        gs.last_attempt_score_set = [None if x is None or str(x) == '' else int(x) for x in _sets_in]
+    except Exception:
+        gs.last_attempt_score_set = []
+    try:
+        gs.last_attempt_total_score_bonus = int(snap.get('last_attempt_total_score_bonus', getattr(gs, 'last_attempt_total_score_bonus', 0) or 0) or 0)
+    except Exception:
+        gs.last_attempt_total_score_bonus = 0
+    try:
         gs.last_attempt_score_rows = [dict(x) for x in list(snap.get('last_attempt_score_rows', getattr(gs, 'last_attempt_score_rows', [])) or [])]
     except Exception:
         gs.last_attempt_score_rows = []
@@ -2360,6 +2373,10 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
         gs.last_attempt_score_bonus.append(0)
     if len(gs.last_attempt_score_bonus) > len(gs.last_attempt_lives):
         gs.last_attempt_score_bonus = gs.last_attempt_score_bonus[:len(gs.last_attempt_lives)]
+    while len(gs.last_attempt_score_set) < len(gs.last_attempt_lives):
+        gs.last_attempt_score_set.append(None)
+    if len(gs.last_attempt_score_set) > len(gs.last_attempt_lives):
+        gs.last_attempt_score_set = gs.last_attempt_score_set[:len(gs.last_attempt_lives)]
     gs.last_attempt_attempt_score = int(snap.get('last_attempt_attempt_score', getattr(gs, 'last_attempt_attempt_score', 0) or 0) or 0)
     gs.last_attempt_final_score = int(snap.get('last_attempt_final_score', getattr(gs, 'last_attempt_final_score', 0) or 0) or 0)
     gs.last_attempt_ok = bool(snap.get('last_attempt_ok', getattr(gs, 'last_attempt_ok', False)))
@@ -5249,6 +5266,35 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         else:
             gs.log.append(f"[SKIP] LIVE: {cn_live}[ライブ成功時] unresolved (revealed no-bladeheart cards={no_bh_n} != 0 and excess hearts={excess_n} < {need_excess})")
         return
+    if kind in ('adjust_live_total_score_by_excess_heart_count',):
+        src_cn = str((trig or {}).get('source_cn', '') or '').strip()
+        pos = str((trig or {}).get('pos', '') or '').upper()
+        zero_bonus = int((trig or {}).get('zero_excess_bonus', 0) or 0)
+        high_threshold = int((trig or {}).get('high_excess_threshold', 0) or 0)
+        high_delta = int((trig or {}).get('high_excess_delta', 0) or 0)
+        excess_n = int(_last_attempt_excess_heart_total(gs) or 0)
+        prefix = f"[AUTO] {pos}: {src_cn}[ライブ成功時]" if pos else f"[AUTO] {src_cn}[ライブ成功時]"
+        if excess_n <= 0:
+            _add_live_success_total_score_bonus(gs, cards_db, zero_bonus, min_total=0, detail=f"excess hearts={excess_n} -> live total score +{zero_bonus}", source_cn=src_cn, pos=pos)
+        elif excess_n >= high_threshold:
+            _add_live_success_total_score_bonus(gs, cards_db, high_delta, min_total=0, detail=f"excess hearts={excess_n}/{high_threshold} -> live total score {high_delta}", source_cn=src_cn, pos=pos)
+        else:
+            gs.log.append(f"{prefix}: excess hearts={excess_n}; no score adjustment")
+        return
+    if kind in ('opponent_loses_excess_hearts_then_live_score_bonus_manual',):
+        cn_live = str((trig or {}).get('source_cn', '') or '').strip()
+        need = int((trig or {}).get('lost_threshold', 0) or 0)
+        bonus = int((trig or {}).get('bonus', 0) or 0)
+        gs.pending.append({
+            'kind': 'confirm_effect',
+            'text': f'{cn_live}[ライブ成功時] 相手は余剰ハートをすべて失います。相手が余剰ハートを{need}つ以上失っている場合、このカードのスコアを+{bonus}します。条件を満たす場合は「使う」、満たさない場合は「スキップ」を選んでください。',
+            'options': ['使う', 'スキップ'],
+            'source_cn': cn_live,
+            'after_live_success_score_bonus': {'cn_live': cn_live, 'bonus': bonus, 'detail': f'opponent lost excess hearts >= {need}'},
+            'effect_text': _auto_trigger_effect_text(trig or {}),
+        })
+        gs.log.append(f"[PENDING] LIVE: {cn_live}[ライブ成功時] opponent excess-heart loss confirmation threshold={need}")
+        return
     if kind in ('add_live_success_score_bonus_if_revealed_card_tag_count_at_least',):
         cn_live = str((trig or {}).get('source_cn', '') or '')
         tag = str((trig or {}).get('condition_tag', '') or '')
@@ -6081,6 +6127,31 @@ def _build_live_success_trigger_from_effect(gs: GameState, cards_db: Dict[str, C
             'label': str(label or ''),
         }
 
+    m = re.match(r'^自分が余剰ハートを持たない場合、ライブの合計スコアを\+(?P<zero_bonus>\d+)する。自分が余剰ハートを(?P<high>\d+)つ以上持つ場合、ライブの合計スコアを(?P<delta>-\d+)する。この効果ではライブの合計スコアは0未満にならない。?$', eff_norm)
+    if m:
+        return {
+            'kind': 'adjust_live_total_score_by_excess_heart_count',
+            'zero_excess_bonus': int(m.group('zero_bonus') or 0),
+            'high_excess_threshold': int(m.group('high') or 0),
+            'high_excess_delta': int(m.group('delta') or 0),
+            'source_cn': str(source_cn or ''),
+            'pos': str(pos or ''),
+            'ctx': dict(ctx or {}),
+            'label': str(label or ''),
+        }
+
+    m = re.match(r'^ライブ終了時まで、相手は余剰ハートをすべて失う。これにより相手が余剰ハートを(?P<lost>\d+)つ以上失っている場合、このカードのスコアを\+(?P<delta>\d+)する。?$', eff_norm)
+    if m:
+        return {
+            'kind': 'opponent_loses_excess_hearts_then_live_score_bonus_manual',
+            'lost_threshold': int(m.group('lost') or 0),
+            'bonus': int(m.group('delta') or 0),
+            'source_cn': str(source_cn or ''),
+            'pos': str(pos or ''),
+            'ctx': dict(ctx or {}),
+            'label': str(label or ''),
+        }
+
     # Generalized from VIVID WORLD.
     # DB text may or may not include Japanese comma separators between the six icons.
     eff_compact = eff_norm.replace('、', '').replace('，', '').replace(' ', '')
@@ -6556,6 +6627,74 @@ def _live_start_score_bonus_if_live_zone_group_count(cn_live, gs: GameState, car
     group_name, need, delta = parsed
     cnt = int(_live_zone_group_card_count(gs, cards_db, group_name))
     return int(delta if cnt >= int(need) else 0)
+def _effective_live_required_hearts(cn_live, ci, gs: GameState, cards_db: Optional[Dict[str, CardInfo]] = None, set_idx: Optional[int] = None) -> Dict[str, int]:
+    req = dict((getattr(ci, 'required_hearts', {}) if ci else {}) or {})
+    try:
+        _emo_score, _emo_any = _live_start_score_and_required_any_bonus_per_success_zone_cardname_count(cn_live, gs, cards_db=(cards_db or {}), set_idx=set_idx)
+        extra_any = int(_emo_any)
+    except Exception:
+        extra_any = 0
+    if extra_any > 0:
+        req['any'] = int(req.get('any', 0) or 0) + extra_any
+    try:
+        reduce_any = int(_live_start_required_any_reduction_if_success_score(cn_live, gs, cards_db=(cards_db or {}), set_idx=set_idx))
+    except Exception:
+        reduce_any = 0
+    if reduce_any <= 0:
+        try:
+            reduce_any = int(_live_start_required_any_reduction_for_set_idx(gs, set_idx, source_cn=cn_live))
+        except Exception:
+            reduce_any = 0
+    if reduce_any > 0:
+        req['any'] = max(0, int(req.get('any', 0) or 0) - reduce_any)
+    return req
+
+def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[str, CardInfo], set_idx: Optional[int] = None, lives_count: Optional[int] = None) -> int:
+    try:
+        canon = _canon_cardno(cn_live)
+    except Exception:
+        canon = str(cn_live or '')
+    ci_live = _get_card(cards_db, cn_live)
+    parsed_live_count = _parse_live_start_score_if_live_count(ci_live)
+    if parsed_live_count is not None:
+        need, delta = parsed_live_count
+        mapped = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
+        if mapped > 0:
+            return mapped
+        try:
+            lc = int(lives_count if lives_count is not None else 0)
+        except Exception:
+            lc = 0
+        return int(delta if lc >= int(need) else 0)
+    if _parse_live_start_score_per_stage_group_member_heart_color_kind(ci_live) is not None:
+        return int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
+    if _parse_live_start_score_if_success_zone_has_scores(ci_live) is not None:
+        return int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
+    if _parse_live_start_score_if_green_unique_live_names_group_count(ci_live) is not None:
+        return int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
+    parsed_emotion = _parse_live_start_score_and_increase_any_per_success_zone_cardname_count(ci_live)
+    if parsed_emotion is not None:
+        _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
+        if _m > 0:
+            return _m
+        return int(_live_start_score_and_required_any_bonus_per_success_zone_cardname_count(cn_live, gs, cards_db, set_idx=set_idx)[0])
+    if _parse_live_start_score_if_live_zone_group_count(_get_card(cards_db, cn_live)) is not None:
+        _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
+        return _m if _m > 0 else int(_live_start_score_bonus_if_live_zone_group_count(cn_live, gs, cards_db, set_idx=set_idx))
+    if _parse_live_start_score_if_green_live_group_count(_get_card(cards_db, cn_live)) is not None:
+        _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
+        return _m if _m > 0 else int(_live_start_score_bonus_if_green_live_group_or_unit_count(cn_live, gs, cards_db, set_idx=set_idx))
+    if _parse_live_start_reduce_any_and_score_if_success_score(_get_card(cards_db, cn_live)) is not None:
+        _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
+        return _m if _m > 0 else int(_live_start_score_bonus_if_success_score(cn_live, gs, cards_db, set_idx=set_idx))
+    if _parse_live_start_score_and_pick_group_member_temp_blade(ci_live) is not None:
+        return int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
+    if _parse_live_start_optional_pay_energy_for_self_score_if_group(ci_live) is not None:
+        return int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
+    if _parse_live_start_top_keep_one_then_reveal_top_score_if_live_by_group_count(ci_live) is not None:
+        return int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
+    return 0
+
 def _compute_attempt_score_breakdown(lives, cards_db, gs_turn, gs=None, live_set_indices=None):
     lives_count = len(lives or [])
     total = 0
@@ -7089,28 +7228,65 @@ def _last_attempt_live_attempt_score(gs: GameState, cn_live: str, cards_db: Dict
     except Exception:
         return 0
 
-def _set_live_success_score_to(gs: GameState, cards_db: Dict[str, CardInfo], cn_live: str, target_score: int, detail: str = '') -> None:
-    """Apply a live-success score set as a delta against the current attempt score.
+def _get_last_attempt_live_score_set(gs: GameState, cn_live: str) -> Optional[int]:
+    canon = _canon_cardno(cn_live)
+    lives = list(getattr(gs, 'last_attempt_lives', []) or [])
+    sets = list(getattr(gs, 'last_attempt_score_set', []) or [])
+    while len(sets) < len(lives):
+        sets.append(None)
+    for i, x in enumerate(lives):
+        if _canon_cardno(x) == canon:
+            v = sets[i] if i < len(sets) else None
+            try:
+                return None if v is None else int(v)
+            except Exception:
+                return None
+    return None
 
-    last_attempt_score_bonus stores deltas, so a 「スコアはNになる」 effect is
-    represented as target - (attempt score + already resolved success deltas).
-    This supports negative deltas such as MIRACLE WAVE's 7 -> 4 change.
+def _set_last_attempt_live_score_set(gs: GameState, cn_live: str, target_score: int) -> None:
+    canon = _canon_cardno(cn_live)
+    lives = list(getattr(gs, 'last_attempt_lives', []) or [])
+    bonuses = list(getattr(gs, 'last_attempt_score_bonus', []) or [])
+    sets = list(getattr(gs, 'last_attempt_score_set', []) or [])
+    while len(bonuses) < len(lives):
+        bonuses.append(0)
+    while len(sets) < len(lives):
+        sets.append(None)
+    for i, x in enumerate(lives):
+        if _canon_cardno(x) == canon:
+            sets[i] = int(target_score or 0)
+            # A direct 「スコアはNになる」 resolution overwrites score changes that
+            # resolved before it. Later +N effects can still add to this set score.
+            bonuses[i] = 0
+            gs.last_attempt_score_set = sets
+            gs.last_attempt_score_bonus = bonuses
+            return
+
+def _last_attempt_live_current_success_score(gs: GameState, cards_db: Dict[str, CardInfo], cn_live: str) -> int:
+    base = int(_last_attempt_live_attempt_score(gs, cn_live, cards_db) or 0)
+    set_v = _get_last_attempt_live_score_set(gs, cn_live)
+    bonus = int(_get_last_attempt_live_score_bonus(gs, cn_live) or 0)
+    return int((base if set_v is None else int(set_v)) + bonus)
+
+def _set_live_success_score_to(gs: GameState, cards_db: Dict[str, CardInfo], cn_live: str, target_score: int, detail: str = '') -> None:
+    """Apply 「このカードのスコアはNになる」 as a direct set value.
+
+    This keeps the runtime state aligned with the card text rather than encoding
+    the result as a negative/positive delta. Score +N effects that resolve later
+    may still add to this set score; score +N effects that resolved earlier are
+    overwritten by the set.
     """
     try:
         target = int(target_score or 0)
     except Exception:
         target = 0
-    attempt_score = int(_last_attempt_live_attempt_score(gs, cn_live, cards_db) or 0)
-    current_delta = int(_get_last_attempt_live_score_bonus(gs, cn_live) or 0)
-    current_score = int(attempt_score + current_delta)
-    delta = int(target - current_score)
-    if delta != 0:
-        _add_last_attempt_live_score_bonus(gs, cn_live, delta)
+    current_score = int(_last_attempt_live_current_success_score(gs, cards_db, cn_live) or 0)
+    _set_last_attempt_live_score_set(gs, cn_live, target)
     prefix = f"[AUTO] LIVE: {cn_live}[ライブ成功時]"
     if detail:
-        gs.log.append(f"{prefix}: {detail} -> score becomes {target} ({current_score}->{target})")
+        gs.log.append(f"{prefix}: {detail} -> score set to {target} ({current_score}->{target})")
     else:
-        gs.log.append(f"{prefix}: score becomes {target} ({current_score}->{target})")
+        gs.log.append(f"{prefix}: score set to {target} ({current_score}->{target})")
 
 def _add_live_success_score_bonus(gs: GameState, cn_live: str, bonus: int, detail: str = '') -> None:
     try:
@@ -7128,6 +7304,50 @@ def _add_live_success_score_bonus(gs: GameState, cn_live: str, bonus: int, detai
             gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時]: {detail} -> score +0")
         else:
             gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時]: score +0")
+def _last_attempt_total_before_total_bonus(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
+    lives = list(getattr(gs, 'last_attempt_lives', []) or [])
+    bonuses = list(getattr(gs, 'last_attempt_score_bonus', []) or [])
+    sets = list(getattr(gs, 'last_attempt_score_set', []) or [])
+    base_rows = [dict(x) for x in list(getattr(gs, 'last_attempt_score_rows', []) or [])]
+    while len(bonuses) < len(lives):
+        bonuses.append(0)
+    while len(sets) < len(lives):
+        sets.append(None)
+    total = 0
+    for i, cn in enumerate(lives):
+        row0 = base_rows[i] if i < len(base_rows) else {}
+        ci = _get_card(cards_db, cn)
+        attempt_eff = int(row0.get('score', getattr(ci, 'score', 0) or 0) or 0)
+        set_v = sets[i] if i < len(sets) else None
+        try:
+            base_eff = attempt_eff if set_v is None else int(set_v)
+        except Exception:
+            base_eff = attempt_eff
+        total += int(base_eff + int(bonuses[i] or 0))
+    try:
+        for pos, slot in (gs.stage or {}).items():
+            if slot:
+                total += int(_slot_always_score_bonus(gs, cards_db, pos, slot) or 0)
+    except Exception:
+        pass
+    return int(total)
+
+def _add_live_success_total_score_bonus(gs: GameState, cards_db: Dict[str, CardInfo], delta: int, min_total: Optional[int] = None, detail: str = '', source_cn: str = '', pos: str = '') -> None:
+    try:
+        delta_i = int(delta or 0)
+    except Exception:
+        delta_i = 0
+    current_total = int(_last_attempt_total_before_total_bonus(gs, cards_db) + int(getattr(gs, 'last_attempt_total_score_bonus', 0) or 0))
+    applied = delta_i
+    if min_total is not None and current_total + applied < int(min_total):
+        applied = int(min_total) - current_total
+    gs.last_attempt_total_score_bonus = int(getattr(gs, 'last_attempt_total_score_bonus', 0) or 0) + int(applied)
+    prefix = f"[AUTO] {pos}: {source_cn}[ライブ成功時]" if pos else f"[AUTO] {source_cn}[ライブ成功時]"
+    if detail:
+        gs.log.append(f"{prefix}: {detail} (applied {applied:+d}, total {current_total}->{current_total + applied})")
+    else:
+        gs.log.append(f"{prefix}: live total score {applied:+d} (total {current_total}->{current_total + applied})")
+
 def _get_last_attempt_live_score_bonus(gs: GameState, cn_live) -> int:
     canon = _canon_cardno(cn_live)
     lives = list(getattr(gs, 'last_attempt_lives', []) or [])
@@ -7141,12 +7361,15 @@ def _get_last_attempt_live_score_bonus(gs: GameState, cn_live) -> int:
             except Exception:
                 return 0
     return 0
-def _compute_final_compare_score_after_success(gs: GameState, cards_db: Dict[str, CardInfo]) -> tuple[int, list[tuple[str, int, int, int]], int]:
+def _compute_final_compare_score_after_success(gs: GameState, cards_db: Dict[str, CardInfo]) -> tuple[int, list[tuple[str, int, int, int, Optional[int]]], int, int]:
     lives = list(getattr(gs, 'last_attempt_lives', []) or [])
     bonuses = list(getattr(gs, 'last_attempt_score_bonus', []) or [])
+    sets = list(getattr(gs, 'last_attempt_score_set', []) or [])
     base_rows = [dict(x) for x in list(getattr(gs, 'last_attempt_score_rows', []) or [])]
     while len(bonuses) < len(lives):
         bonuses.append(0)
+    while len(sets) < len(lives):
+        sets.append(None)
     rows = []
     total = 0
     for i, cn in enumerate(lives):
@@ -7154,8 +7377,14 @@ def _compute_final_compare_score_after_success(gs: GameState, cards_db: Dict[str
         ci = _get_card(cards_db, cn)
         attempt_eff = int(row0.get('score', getattr(ci, 'score', 0) or 0) or 0)
         success_delta = int(bonuses[i] or 0) if i < len(bonuses) else 0
-        eff_s = int(attempt_eff + success_delta)
-        rows.append((cn, attempt_eff, success_delta, eff_s))
+        set_v_raw = sets[i] if i < len(sets) else None
+        try:
+            set_v: Optional[int] = None if set_v_raw is None else int(set_v_raw)
+        except Exception:
+            set_v = None
+        base_for_success = attempt_eff if set_v is None else int(set_v)
+        eff_s = int(base_for_success + success_delta)
+        rows.append((cn, attempt_eff, success_delta, eff_s, set_v))
         total += eff_s
     stage_score_bonus = 0
     try:
@@ -7165,92 +7394,9 @@ def _compute_final_compare_score_after_success(gs: GameState, cards_db: Dict[str
             stage_score_bonus += int(_slot_always_score_bonus(gs, cards_db, pos, slot) or 0)
     except Exception:
         stage_score_bonus = 0
-    total += int(stage_score_bonus)
-    return int(total), rows, int(stage_score_bonus)
-def _stage_wait_member_count(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
-    n = 0
-    for pos in ('L', 'C', 'R'):
-        slot = (gs.stage or {}).get(pos)
-        if not slot:
-            continue
-        cn = str(getattr(slot, 'cardnumber', '') or '')
-        if not cn:
-            continue
-        ci = _get_card(cards_db, cn)
-        if not ci:
-            continue
-        if _is_live_ci(ci):
-            continue
-        if bool(getattr(slot, 'active', False)):
-            continue
-        n += 1
-    return int(n)
-def _effective_live_required_hearts(cn_live, ci, gs: GameState, cards_db: Optional[Dict[str, CardInfo]] = None, set_idx: Optional[int] = None) -> Dict[str, int]:
-    req = dict((getattr(ci, 'required_hearts', {}) if ci else {}) or {})
-    try:
-        _emo_score, _emo_any = _live_start_score_and_required_any_bonus_per_success_zone_cardname_count(cn_live, gs, cards_db=(cards_db or {}), set_idx=set_idx)
-        extra_any = int(_emo_any)
-    except Exception:
-        extra_any = 0
-    if extra_any > 0:
-        req['any'] = int(req.get('any', 0) or 0) + extra_any
-    try:
-        reduce_any = int(_live_start_required_any_reduction_if_success_score(cn_live, gs, cards_db=(cards_db or {}), set_idx=set_idx))
-    except Exception:
-        reduce_any = 0
-    if reduce_any <= 0:
-        try:
-            reduce_any = int(_live_start_required_any_reduction_for_set_idx(gs, set_idx, source_cn=cn_live))
-        except Exception:
-            reduce_any = 0
-    if reduce_any > 0:
-        req['any'] = max(0, int(req.get('any', 0) or 0) - reduce_any)
-    return req
-def _extra_live_score_delta_for_attempt(cn_live, gs: GameState, cards_db: Dict[str, CardInfo], set_idx: Optional[int] = None, lives_count: Optional[int] = None) -> int:
-    try:
-        canon = _canon_cardno(cn_live)
-    except Exception:
-        canon = str(cn_live or '')
-    ci_live = _get_card(cards_db, cn_live)
-    parsed_live_count = _parse_live_start_score_if_live_count(ci_live)
-    if parsed_live_count is not None:
-        need, delta = parsed_live_count
-        mapped = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
-        if mapped > 0:
-            return mapped
-        try:
-            lc = int(lives_count if lives_count is not None else 0)
-        except Exception:
-            lc = 0
-        return int(delta if lc >= int(need) else 0)
-    if _parse_live_start_score_per_stage_group_member_heart_color_kind(ci_live) is not None:
-        return int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
-    if _parse_live_start_score_if_success_zone_has_scores(ci_live) is not None:
-        return int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
-    if _parse_live_start_score_if_green_unique_live_names_group_count(ci_live) is not None:
-        return int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
-    parsed_emotion = _parse_live_start_score_and_increase_any_per_success_zone_cardname_count(ci_live)
-    if parsed_emotion is not None:
-        _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
-        if _m > 0:
-            return _m
-        return int(_live_start_score_and_required_any_bonus_per_success_zone_cardname_count(cn_live, gs, cards_db, set_idx=set_idx)[0])
-    if _parse_live_start_score_if_live_zone_group_count(_get_card(cards_db, cn_live)) is not None:
-        _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
-        return _m if _m > 0 else int(_live_start_score_bonus_if_live_zone_group_count(cn_live, gs, cards_db, set_idx=set_idx))
-    if _parse_live_start_score_if_green_live_group_count(_get_card(cards_db, cn_live)) is not None:
-        _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
-        return _m if _m > 0 else int(_live_start_score_bonus_if_green_live_group_or_unit_count(cn_live, gs, cards_db, set_idx=set_idx))
-    if _parse_live_start_reduce_any_and_score_if_success_score(_get_card(cards_db, cn_live)) is not None:
-        _m = int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
-        return _m if _m > 0 else int(_live_start_score_bonus_if_success_score(cn_live, gs, cards_db, set_idx=set_idx))
-    if _parse_live_start_score_and_pick_group_member_temp_blade(ci_live) is not None:
-        return int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
-    if _parse_live_start_optional_pay_energy_for_self_score_if_group(ci_live) is not None:
-        return int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
-    if _parse_live_start_top_keep_one_then_reveal_top_score_if_live_by_group_count(ci_live) is not None:
-        return int(_live_start_score_bonus_for_set_idx(gs, set_idx, source_cn=cn_live))
-    return 0
+    total_score_bonus = int(getattr(gs, 'last_attempt_total_score_bonus', 0) or 0)
+    total += int(stage_score_bonus) + int(total_score_bonus)
+    return int(total), rows, int(stage_score_bonus), int(total_score_bonus)
 def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
     if bool(getattr(gs, "cannot_live_until_end_of_live", False)):
         gs.log.append("[ATTEMPT] blocked: you cannot live until end of live")
@@ -7262,6 +7408,8 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
         gs.vivid_world_bonus_this_live = 0
         gs.last_attempt_lives = []
         gs.last_attempt_score_bonus = []
+        gs.last_attempt_score_set = []
+        gs.last_attempt_total_score_bonus = 0
         gs.last_attempt_score_rows = []
         gs.last_attempt_attempt_score = 0
         gs.last_attempt_final_score = 0
@@ -7282,6 +7430,8 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
         # clear end-of-live state defensively
         gs.last_attempt_lives = []
         gs.last_attempt_score_bonus = []
+        gs.last_attempt_score_set = []
+        gs.last_attempt_total_score_bonus = 0
         gs.last_attempt_score_rows = []
         gs.last_attempt_attempt_score = 0
         gs.last_attempt_final_score = 0
@@ -7408,12 +7558,17 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
             gs.log.append(f"[ZONE] live storage holds {len(lives)} successful LIVE(s) until LIVE_RESOLVE")
             gs.last_attempt_lives = list(lives)
             gs.last_attempt_score_bonus = [0 for _ in range(len(lives))]
+            gs.last_attempt_score_set = [None for _ in range(len(lives))]
+            gs.last_attempt_total_score_bonus = 0
             gs.last_attempt_ok = True
             gs.need_live_success_triggers = True
             gs.need_success_store_choice = True
         else:
             gs.log.append(f"[ZONE] live storage holds {len(lives)} failed LIVE(s) until cleanup")
             gs.last_attempt_lives = []
+            gs.last_attempt_score_bonus = []
+            gs.last_attempt_score_set = []
+            gs.last_attempt_total_score_bonus = 0
             gs.last_attempt_attempt_score = 0
             gs.last_attempt_final_score = 0
             gs.last_attempt_ok = False
@@ -7423,6 +7578,8 @@ def cmd_attempt(gs: GameState, cards_db: Dict[str, CardInfo]) -> None:
         gs.set_zone = []
         gs.last_attempt_lives = []
         gs.last_attempt_score_bonus = []
+        gs.last_attempt_score_set = []
+        gs.last_attempt_total_score_bonus = 0
         gs.last_attempt_score_rows = []
         gs.last_attempt_attempt_score = 0
         gs.last_attempt_final_score = 0
@@ -7873,6 +8030,13 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             except Exception:
                 rng = random.Random()
             applied = bool(try_apply_effect_template(gs, rng, cards_db, after_eff, ctx0))
+        score_bonus = p.get('after_live_success_score_bonus') if isinstance(p, dict) else None
+        if isinstance(score_bonus, dict):
+            _cn_bonus = str(score_bonus.get('cn_live', src) or src or '')
+            _bonus_n = int(score_bonus.get('bonus', 0) or 0)
+            _detail = str(score_bonus.get('detail', '') or '')
+            _add_live_success_score_bonus(gs, _cn_bonus, _bonus_n, detail=_detail)
+            applied = True
         gs.log.append(f"[AUTO] {src}: confirm_effect -> {'applied' if applied else 'no_match'} {after_eff}")
         _r = p.get('_resume') if isinstance(p, dict) else None
         if _r:
@@ -10418,13 +10582,20 @@ def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], i
             _lvs = list(getattr(gs, 'last_attempt_lives', []) or [])
             _attempt_total = int(getattr(gs, 'last_attempt_attempt_score', 0) or 0)
             if _lvs:
-                _total, _rows, _stage_bonus = _compute_final_compare_score_after_success(gs, cards_db)
-                _changed = bool(any(int(x or 0) != 0 for x in _bon))
-                for _cn, _base, _delta, _eff in _rows:
-                    if _delta:
+                _total, _rows, _stage_bonus, _total_bonus = _compute_final_compare_score_after_success(gs, cards_db)
+                _sets = list(getattr(gs, 'last_attempt_score_set', []) or [])
+                _changed = bool(any(int(x or 0) != 0 for x in _bon)) or bool(any(x is not None for x in _sets)) or bool(int(_total_bonus or 0) != 0)
+                for _cn, _base, _delta, _eff, _set_v in _rows:
+                    if _set_v is not None and _delta:
+                        gs.log.append(f"  success-score: {_cn} = {_eff} (set {_set_v}{'+' if int(_delta) >= 0 else ''}{_delta})")
+                    elif _set_v is not None:
+                        gs.log.append(f"  success-score: {_cn} = {_eff} (set {_set_v})")
+                    elif _delta:
                         gs.log.append(f"  success-score: {_cn} = {_eff} ({_base}{'+' if int(_delta) >= 0 else ''}{_delta})")
                 if _stage_bonus:
                     gs.log.append(f"  success-score: stage always bonus = +{_stage_bonus}")
+                if _total_bonus:
+                    gs.log.append(f"  success-score: live total adjustment = {_total_bonus:+d}")
                 gs.log.append(f"[COMPARE] final_score_after_success_effects={_total}")
                 gs.last_attempt_final_score = int(_total)
                 gs.banner_text = f"SUCCESS (Final Score {_total})"
@@ -10493,6 +10664,8 @@ def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], i
         # Clear last-attempt helpers
         gs.last_attempt_lives = []
         gs.last_attempt_score_bonus = []
+        gs.last_attempt_score_set = []
+        gs.last_attempt_total_score_bonus = 0
         gs.last_attempt_score_rows = []
         gs.last_attempt_attempt_score = 0
         gs.last_attempt_final_score = 0
