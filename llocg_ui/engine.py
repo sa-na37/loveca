@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: stage_heart_group_condition_family_20260608f
+# BUILD_TAG: success_storage_enter_trigger_fix_20260608h
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -323,6 +323,24 @@ def _is_named_hand_cost_result_effect(effect_text: str) -> bool:
     ]
     return any(re.match(pat, t) for pat in patterns)
 
+
+def _is_success_storage_score_sum_effect_wrapper(effect_text: str) -> bool:
+    """Return True for success-zone score/count conditional wrappers.
+
+    These wrappers are handled explicitly in try_apply_effect_template().  They must
+    also be recognized by _match_effect_template() so [登場] support detection can
+    enqueue the auto trigger instead of silently ignoring the ability.
+    """
+    t = _normalize_icon_token_text(str(effect_text or '').strip()).replace('\n', '')
+    if not t:
+        return False
+    pats = [
+        r'^自分の成功ライブカード置き場にあるカードのスコア(?:の)?合計が\d+以上の場合、.+$',
+        r'^自分の成功ライブカード置き場にカードが\d+枚以上あり、かつスコアの合計が\d+以下の場合、.+$',
+        r"^自分の成功ライブカード置き場に<\(スコア\+1\)>を持つ『[^』]+』のカードが1枚ある場合、ライブ終了時まで、(?:『|「)<常時>ライブの合計スコアを\+1する。(?:』|」)を得る。2枚以上ある場合、代わりに(?:『|「)<常時>』?ライブの合計スコアを\+2する。(?:』|」)を得る。$",
+    ]
+    return any(re.match(pat, t) for pat in pats)
+
 def _match_effect_template(effect_text: str):
     s = (effect_text or "").strip()
     if not s:
@@ -339,6 +357,8 @@ def _match_effect_template(effect_text: str):
             return m_ext
     except Exception:
         pass
+    if _is_success_storage_score_sum_effect_wrapper(s):
+        return ({'id': 'success_storage_score_sum_wrapper', 'op': 'success_storage_score_sum_wrapper'}, {})
     candidates = [s]
     s_norm = _normalize_icon_token_text(s)
     if s_norm != s:
@@ -1887,6 +1907,46 @@ def try_apply_effect_template(gs: 'GameState', rng: random.Random, cards_db: Dic
     if not text:
         return False
     text_norm = _normalize_icon_token_text(text).replace('\n', '')
+    # Success live-card storage score-sum wrappers.
+    # These are conditions around already-generic inner effects.
+    # Example: 自分の成功ライブカード置き場にあるカードのスコア合計が3以上の場合、...
+    m_success_score_gte = re.match(r'^自分の成功ライブカード置き場にあるカードのスコア(?:の)?合計が(?P<thr>\d+)以上の場合、(?P<inner>.+)$', text_norm)
+    if m_success_score_gte:
+        thr = int(m_success_score_gte.group('thr') or 0)
+        got = int(_own_success_zone_score_sum(gs, cards_db) or 0)
+        inner = str(m_success_score_gte.group('inner') or '').strip()
+        if got >= thr:
+            gs.log.append(f'[AUTO] success-zone score sum {got}/{thr} -> apply inner effect')
+            return bool(try_apply_effect_template(gs, rng, cards_db, inner, ctx))
+        gs.log.append(f'[SKIP] success-zone score sum {got}/{thr} -> condition not met')
+        return True
+
+    # Example: 自分の成功ライブカード置き場にカードが1枚以上あり、かつスコアの合計が1以下の場合、...
+    m_success_count_score_lte = re.match(r'^自分の成功ライブカード置き場にカードが(?P<count>\d+)枚以上あり、かつスコアの合計が(?P<thr>\d+)以下の場合、(?P<inner>.+)$', text_norm)
+    if m_success_count_score_lte:
+        need_count = int(m_success_count_score_lte.group('count') or 0)
+        thr = int(m_success_count_score_lte.group('thr') or 0)
+        own_count = len(list(getattr(gs, 'success_zone', []) or []))
+        got_sum = int(_own_success_zone_score_sum(gs, cards_db) or 0)
+        inner = str(m_success_count_score_lte.group('inner') or '').strip()
+        if own_count >= need_count and got_sum <= thr:
+            gs.log.append(f'[AUTO] success-zone count/score condition count={own_count}/{need_count}, score_sum={got_sum}<={thr} -> apply inner effect')
+            return bool(try_apply_effect_template(gs, rng, cards_db, inner, ctx))
+        gs.log.append(f'[SKIP] success-zone count/score condition count={own_count}/{need_count}, score_sum={got_sum}<={thr} -> condition not met')
+        return True
+
+    # Example: 成功ライブ置き場の <スコア+1> μ's cards: 1 -> +1, 2+ -> +2.
+    m_success_score_tag = re.match(r"^自分の成功ライブカード置き場に<\(スコア\+1\)>を持つ『(?P<group>[^』]+)』のカードが1枚ある場合、ライブ終了時まで、(?:『|「)<常時>ライブの合計スコアを\+1する。(?:』|」)を得る。2枚以上ある場合、代わりに(?:『|「)<常時>』?ライブの合計スコアを\+2する。(?:』|」)を得る。$", text_norm)
+    if m_success_score_tag:
+        group_name = str(m_success_score_tag.group('group') or '').strip()
+        got = int(_own_success_zone_count_with_score_tag_and_group(gs, cards_db, group_name) or 0)
+        if got >= 2:
+            return bool(_grant_source_live_total_score_until_end(gs, ctx, 2, label=f'success-zone <スコア+1> 『{group_name}』 cards={got}'))
+        if got == 1:
+            return bool(_grant_source_live_total_score_until_end(gs, ctx, 1, label=f'success-zone <スコア+1> 『{group_name}』 cards={got}'))
+        gs.log.append(f'[SKIP] success-zone <スコア+1> 『{group_name}』 cards={got} -> condition not met')
+        return True
+
     # Cost-result: gain total live score while this source member remains in the live.
     # e.g. ライブ終了時まで、「<常時>ライブの合計スコアを+3する。」を得る。
     m_score = re.match(r'^ライブ終了時まで、「<常時>ライブの合計スコアを\+(?P<n>\d+)する。」を得る。$', text_norm)
@@ -2912,6 +2972,62 @@ def _stage_member_has_all_heart_colors(gs: 'GameState', cards_db: Dict[str, Card
 def _heart_color_keys_to_jp(colors: List[str]) -> str:
     mp = {'pink':'桃', 'red':'赤', 'yellow':'黄', 'green':'緑', 'blue':'青', 'purple':'紫'}
     return '、'.join(mp.get(str(c), str(c)) for c in list(colors or []))
+
+def _own_success_zone_score_sum(gs: 'GameState', cards_db: Dict[str, CardInfo]) -> int:
+    """Return the effective score sum for own success live-card storage."""
+    # Prefer the existing shared success-zone score helper so printed score and
+    # future success-zone score modifiers are interpreted consistently.
+    try:
+        fn = globals().get('_success_zone_score_sum')
+        if callable(fn) and fn is not _own_success_zone_score_sum:
+            return int(fn(gs, cards_db) or 0)
+    except Exception:
+        pass
+    total = 0
+    try:
+        for cn in list(getattr(gs, 'success_zone', []) or []):
+            ci = _get_card(cards_db, cn)
+            if not ci:
+                continue
+            try:
+                total += int(getattr(ci, 'score', 0) or 0)
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return int(total)
+
+def _own_success_zone_count_with_score_tag_and_group(gs: 'GameState', cards_db: Dict[str, CardInfo], group_name: str = '') -> int:
+    """Count own success-zone cards with a score+1 blade-heart tag and optional group."""
+    n = 0
+    group_name = str(group_name or '').strip()
+    try:
+        for cn in list(getattr(gs, 'success_zone', []) or []):
+            ci = _get_card(cards_db, cn)
+            if not ci:
+                continue
+            if group_name and group_name not in str(getattr(ci, 'group', '') or ''):
+                continue
+            if _ci_blade_heart_has_tag(ci, '<スコア+1>'):
+                n += 1
+    except Exception:
+        pass
+    return int(n)
+
+def _grant_source_live_total_score_until_end(gs: 'GameState', ctx: Dict[str, Any], n: int, label: str = '') -> bool:
+    """Grant temp live-total score bonus to the source stage slot."""
+    pos = str((ctx or {}).get('pos', '') or '').upper()
+    slot = gs.stage.get(pos) if pos in ('L', 'C', 'R') else None
+    if not slot:
+        gs.log.append(f'[WARN] {label or "success-zone score condition"}: no source slot for live total score +{int(n or 0)}')
+        return False
+    try:
+        slot.temp_score = int(getattr(slot, 'temp_score', 0) or 0) + int(n or 0)
+        slot.temp_until = 'end_of_live'
+    except Exception:
+        return False
+    gs.log.append(f'[AUTO] {pos}: {label or "success-zone score condition"} -> live total score +{int(n or 0)} until end_of_live')
+    return True
 
 def _count_yell_revealed_live_cards_with_tag(gs: GameState, cards_db: Dict[str, CardInfo], tag_text: str) -> int:
     tag = _normalize_tag_marker(tag_text)
