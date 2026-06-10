@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: success_storage_enter_trigger_fix_20260608h
+# BUILD_TAG: effective_cost_baton_and_badge_20260610b
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -359,6 +359,8 @@ def _match_effect_template(effect_text: str):
         pass
     if _is_success_storage_score_sum_effect_wrapper(s):
         return ({'id': 'success_storage_score_sum_wrapper', 'op': 'success_storage_score_sum_wrapper'}, {})
+    if _activated_success_score_sum_condition(s):
+        return ({'id': 'activated_success_score_sum_condition_wrapper', 'op': 'activated_success_score_sum_condition_wrapper'}, {})
     candidates = [s]
     s_norm = _normalize_icon_token_text(s)
     if s_norm != s:
@@ -832,7 +834,11 @@ def can_activate_in_state(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: s
                 continue
             # BODY起動効果（手札をすべて公開する）はeffect_templateが_EFFECT_RULESにないためスキップ
             is_body_cost = '手札をすべて公開する' in cost and str(ab.get('trigger', '') or '') == 'BODY'
-            if not is_body_cost and not _match_effect_template(eff):
+            cond_thr = int(_activated_success_score_sum_condition(eff) or 0)
+            eff_for_match = _strip_activated_success_score_sum_condition(eff) if cond_thr else eff
+            if cond_thr and not _success_score_sum_condition_met(gs, cards_db, cond_thr):
+                continue
+            if not is_body_cost and not (_match_effect_template(eff) or _match_effect_template(eff_for_match)):
                 continue
             # energy cost check
             need_e = _parse_energy_cost(cost)
@@ -1870,10 +1876,11 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         if cond == 'energy_gte':
             met = (int(gs.energy_active or 0) + int(gs.energy_wait or 0)) >= n
         elif cond == 'stage_member_cost_gte':
-            for slot in gs.stage.values():
+            for _pos2, slot in gs.stage.items():
                 if slot:
                     ci2 = _get_card(cards_db, slot.cardnumber)
-                    if ci2 and int(getattr(ci2, 'cost', 0) or 0) >= n:
+                    eff_cost = int(_slot_effective_cost(gs, cards_db, _pos2, slot) or getattr(ci2, 'cost', 0) or 0)
+                    if ci2 and eff_cost >= n:
                         met = True; break
         elif cond == 'success_nonempty':
             met = len(gs.success_pile) > 0
@@ -1945,6 +1952,17 @@ def try_apply_effect_template(gs: 'GameState', rng: random.Random, cards_db: Dic
         if got == 1:
             return bool(_grant_source_live_total_score_until_end(gs, ctx, 1, label=f'success-zone <スコア+1> 『{group_name}』 cards={got}'))
         gs.log.append(f'[SKIP] success-zone <スコア+1> 『{group_name}』 cards={got} -> condition not met')
+        return True
+
+    # Activation-only condition wrapper: check condition, then apply the inner effect.
+    cond_thr = int(_activated_success_score_sum_condition(text_norm) or 0)
+    if cond_thr:
+        got_sum = int(_own_success_zone_score_sum(gs, cards_db) or 0)
+        inner = _strip_activated_success_score_sum_condition(text_norm)
+        if got_sum >= cond_thr:
+            gs.log.append(f'[AUTO] activated success-zone score condition {got_sum}/{cond_thr} -> apply inner effect')
+            return bool(try_apply_effect_template(gs, rng, cards_db, inner, ctx))
+        gs.log.append(f'[SKIP] activated success-zone score condition {got_sum}/{cond_thr} -> condition not met')
         return True
 
     # Cost-result: gain total live score while this source member remains in the live.
@@ -2242,6 +2260,7 @@ class GameState:
     # one-shot delta reserved for the next LIVE_SET phase (e.g. -1 by 安養寺姫芽)
     next_live_set_limit_delta: int = 0
     success_zone: List[str] = field(default_factory=list)  # 成功ライブカード置き場
+    opponent_success_score_sum: int = -1  # manual/debug opponent success-zone score sum; -1 means unknown
     resolve_zone: List[str] = field(default_factory=list)
     pending: List[Dict[str, Any]] = field(default_factory=list)
     live_start_prompted: bool = False
@@ -2351,6 +2370,7 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
         "live_set_limit": int(getattr(gs, "live_set_limit", 3) or 3),
         "next_live_set_limit_delta": int(getattr(gs, "next_live_set_limit_delta", 0) or 0),
         "success_zone": list(getattr(gs, "success_zone", []) or []),
+        "opponent_success_score_sum": int(getattr(gs, "opponent_success_score_sum", -1) or -1),
         "resolve_zone": list(gs.resolve_zone),
         "pending": json.loads(json.dumps(gs.pending)) if gs.pending else [],
         "live_start_prompted": bool(gs.live_start_prompted),
@@ -2403,6 +2423,7 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
     gs.live_set_limit = int(snap.get("live_set_limit", getattr(gs, "live_set_limit", 3) or 3) or 3)
     gs.next_live_set_limit_delta = int(snap.get("next_live_set_limit_delta", getattr(gs, "next_live_set_limit_delta", 0) or 0) or 0)
     gs.success_zone = list(snap.get("success_zone", getattr(gs, "success_zone", [])))
+    gs.opponent_success_score_sum = _safe_int(snap.get("opponent_success_score_sum", getattr(gs, "opponent_success_score_sum", -1)), -1)
     gs.resolve_zone = list(snap.get("resolve_zone", gs.resolve_zone))
     gs.pending = list(snap.get("pending", gs.pending) or [])
     gs.live_start_prompted = bool(snap.get("live_start_prompted", gs.live_start_prompted))
@@ -2838,8 +2859,8 @@ def _has_body_always_cost13_blade_bonus(ci: Optional[CardInfo]) -> bool:
                 return True
     return False
 def _stage_has_cost13_plus_member(gs: 'GameState', cards_db: Dict[str, CardInfo]) -> bool:
-    """Return True if any slot on stage (self) has a member with cost >= 13."""
-    for slot in (gs.stage or {}).values():
+    """Return True if any slot on stage (self) has current/effective cost >= 13."""
+    for pos, slot in (gs.stage or {}).items():
         if not slot:
             continue
         ci = _get_card(cards_db, slot.cardnumber)
@@ -2848,13 +2869,14 @@ def _stage_has_cost13_plus_member(gs: 'GameState', cards_db: Dict[str, CardInfo]
         if _is_live_ci(ci):
             continue
         try:
-            if int(getattr(ci, 'cost', 0) or 0) >= 13:
+            eff_cost = _slot_effective_cost(gs, cards_db, str(pos), slot)
+            if int(eff_cost or getattr(ci, 'cost', 0) or 0) >= 13:
                 return True
         except Exception:
             pass
     return False
 def _stage_has_other_higher_cost_member(gs: 'GameState', cards_db: Dict[str, CardInfo], self_pos: str, self_cost: int) -> bool:
-    """Return True if another stage member has cost strictly greater than self_cost."""
+    """Return True if another stage member has current/effective cost strictly greater than self_cost."""
     try:
         for pos, slot in (gs.stage or {}).items():
             if pos == self_pos or not slot:
@@ -2863,7 +2885,8 @@ def _stage_has_other_higher_cost_member(gs: 'GameState', cards_db: Dict[str, Car
             if not ci or _is_live_ci(ci):
                 continue
             try:
-                if int(getattr(ci, 'cost', 0) or 0) > int(self_cost or 0):
+                eff_cost = _slot_effective_cost(gs, cards_db, str(pos), slot)
+                if int(eff_cost or getattr(ci, 'cost', 0) or 0) > int(self_cost or 0):
                     return True
             except Exception:
                 pass
@@ -2996,6 +3019,97 @@ def _own_success_zone_score_sum(gs: 'GameState', cards_db: Dict[str, CardInfo]) 
     except Exception:
         pass
     return int(total)
+
+
+def _success_score_sum_gte_from_blob(blob: str) -> int:
+    """Parse threshold N from own success-zone score-sum >= N body/condition text."""
+    try:
+        b = _norm_digits_jp(str(blob or '')).replace(' ', '').replace('\n', '')
+        m = re.search(r'自分の成功ライブカード置き場にあるカードのスコア(?:の)?合計が(\d+)以上', b)
+        return int(m.group(1)) if m else 0
+    except Exception:
+        return 0
+
+def _success_score_sum_condition_met(gs: 'GameState', cards_db: Dict[str, CardInfo], threshold: int) -> bool:
+    try:
+        return int(_own_success_zone_score_sum(gs, cards_db) or 0) >= int(threshold or 0)
+    except Exception:
+        return False
+
+def _body_always_success_score_cost_bonus(ci: Optional[CardInfo], blob: str) -> int:
+    """Parse BODY 常時: success-zone score sum >= N -> this member cost +M."""
+    try:
+        b = _norm_digits_jp(str(blob or '')).replace(' ', '').replace('\n', '')
+        if '自分の成功ライブカード置き場にあるカードのスコア' not in b:
+            return 0
+        if 'このメンバーのコストを+' not in b:
+            return 0
+        m = re.search(r'このメンバーのコストを\+(\d+)する', b)
+        return int(m.group(1)) if m else 0
+    except Exception:
+        return 0
+
+def _body_always_success_score_heart_bonus_from_blob(blob: str) -> Dict[str, int]:
+    """Parse BODY 常時: success-zone score sum >= N -> gain colored hearts.
+
+    Currently used by PL!-bp5-008: <黄><黄>.
+    """
+    out: Dict[str, int] = {}
+    try:
+        b = _norm_digits_jp(str(blob or '')).replace(' ', '').replace('\n', '')
+        if '自分の成功ライブカード置き場にあるカードのスコア' not in b:
+            return {}
+        col_map = {'桃': 'pink', '赤': 'red', '黄': 'yellow', '緑': 'green', '青': 'blue', '紫': 'purple', 'ALL': 'all'}
+        # Match both <黄> and <(黄)> forms.
+        for token in re.findall(r'<(?:\(([^)]+)\)|([^>]+))>', b):
+            raw = str(token[0] or token[1] or '').strip()
+            key = col_map.get(raw, '')
+            if key:
+                out[key] = int(out.get(key, 0) or 0) + 1
+    except Exception:
+        return {}
+    return {k: int(v) for k, v in out.items() if int(v or 0) > 0}
+
+def _slot_effective_cost(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: str, slot) -> int:
+    """Return current cost including supported BODY always cost modifiers."""
+    try:
+        if not slot or not getattr(slot, 'cardnumber', ''):
+            return 0
+        ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+        if not ci or _is_live_ci(ci):
+            return 0
+        base = int(getattr(ci, 'cost', 0) or 0)
+        bonus = 0
+        for _eff, blob in _iter_body_always_effects(ci):
+            try:
+                thr = _success_score_sum_gte_from_blob(blob)
+                if thr and _success_score_sum_condition_met(gs, cards_db, thr):
+                    bonus += int(_body_always_success_score_cost_bonus(ci, blob) or 0)
+            except Exception:
+                pass
+        return int(base + bonus)
+    except Exception:
+        return 0
+
+def _activated_success_score_sum_condition(effect_text: str) -> int:
+    """Parse 起動効果 condition: この能力は、成功ライブ置き場スコア合計N以上の場合のみ起動できる。"""
+    try:
+        t = _norm_digits_jp(_normalize_icon_token_text(str(effect_text or '')).replace('\n', '')).replace(' ', '')
+        if 'この能力は' not in t or '場合のみ起動できる' not in t:
+            return 0
+        m = re.search(r'自分の成功ライブカード置き場にあるカードのスコア(?:の)?合計が(\d+)以上の場合のみ起動できる', t)
+        return int(m.group(1)) if m else 0
+    except Exception:
+        return 0
+
+def _strip_activated_success_score_sum_condition(effect_text: str) -> str:
+    """Remove activation-only condition sentence before applying the inner effect."""
+    try:
+        t = _normalize_icon_token_text(str(effect_text or '').strip()).replace('\n', '')
+        t = re.sub(r'この能力は、自分の成功ライブカード置き場にあるカードのスコア(?:の)?合計が\d+以上の場合のみ起動できる。?$', '', t).strip()
+        return t
+    except Exception:
+        return str(effect_text or '').strip()
 
 def _own_success_zone_count_with_score_tag_and_group(gs: 'GameState', cards_db: Dict[str, CardInfo], group_name: str = '') -> int:
     """Count own success-zone cards with a score+1 blade-heart tag and optional group."""
@@ -3182,6 +3296,12 @@ def _slot_always_hearts_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos:
                                 break
                         if has_group_live:
                             bonus['all'] = int(bonus.get('all', 0) or 0) + int(blob.count('<(ALL)>'))
+                else:
+                    thr = int(_success_score_sum_gte_from_blob(blob) or 0)
+                    if thr and _success_score_sum_condition_met(gs, cards_db, thr):
+                        hb = _body_always_success_score_heart_bonus_from_blob(blob)
+                        for hk, hv in (hb or {}).items():
+                            bonus[hk] = int(bonus.get(hk, 0) or 0) + int(hv or 0)
             except Exception:
                 pass
         return {str(k): int(v) for k, v in bonus.items() if int(v or 0) != 0}
@@ -3235,6 +3355,11 @@ def _slot_always_score_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos: 
                     tag = _quoted_tag(blob)
                     if _stage_has_all_distinct_group_members(gs, cards_db, tag):
                         bonus += 1
+                elif '相手の成功ライブカード置き場にあるカードのスコアの合計が' in blob and 'ライブの合計スコアを+1する' in blob:
+                    m = re.search(r'相手の成功ライブカード置き場にあるカードのスコアの合計が(\d+)以上', blob)
+                    need = int(m.group(1)) if m else 0
+                    if need and _opponent_success_score_sum(gs) >= need:
+                        bonus += 1
             except Exception:
                 pass
         return int(bonus)
@@ -3272,6 +3397,19 @@ def _stage_member_count(gs: 'GameState', cards_db: Dict[str, CardInfo]) -> int:
             continue
         n += 1
     return int(n)
+
+def _opponent_success_score_sum_known(gs: 'GameState') -> bool:
+    try:
+        return int(getattr(gs, 'opponent_success_score_sum', -1) or -1) >= 0
+    except Exception:
+        return False
+
+def _opponent_success_score_sum(gs: 'GameState') -> int:
+    try:
+        return int(getattr(gs, 'opponent_success_score_sum', -1) or -1)
+    except Exception:
+        return -1
+
 def _slot_always_blade_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, slot) -> int:
     """Return generic always/success-zone derived blade bonus currently attached to a stage slot.
     This centralizes UI-visible per-slot blade bonuses so server.py does not need
@@ -3303,8 +3441,15 @@ def _slot_always_blade_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos: 
             try:
                 if '成功ライブカード置き場にあるカード1枚につき' in blob and 'ブレード' in blob:
                     bonus += int(_count_blade_icons_from_tagblob(blob)) * len(list(getattr(gs, 'success_zone', []) or []))
+                elif '自分の成功ライブカード置き場にあるカードのスコアの合計が相手より高い' in blob and 'ブレード' in blob:
+                    opp_sum = _opponent_success_score_sum(gs)
+                    if opp_sum >= 0 and int(_own_success_zone_score_sum(gs, cards_db) or 0) > int(opp_sum):
+                        bonus += int(_count_blade_icons_from_tagblob(blob))
                 elif 'このメンバーよりコストの大きいメンバーがいる場合' in blob and 'ブレード' in blob:
-                    self_cost = int(getattr(c, 'cost', 0) or 0)
+                    try:
+                        self_cost = int(_slot_effective_cost(gs, cards_db, pos, slot) or getattr(c, 'cost', 0) or 0)
+                    except Exception:
+                        self_cost = int(getattr(c, 'cost', 0) or 0)
                     if _stage_has_other_higher_cost_member(gs, cards_db, pos, self_cost):
                         bonus += int(_count_blade_icons_from_tagblob(blob))
                 elif 'ほかの『' in blob and 'のメンバー1人につき' in blob and 'ブレード' in blob:
@@ -4538,7 +4683,12 @@ def cmd_play(gs: GameState, cards_db: Dict[str, CardInfo], hand_idx: int, pos: s
         # Baton touch (ルール 9.6.2.3.2): you may put your member in that area into green room to reduce the cost.
         baton_old_cn = existing.cardnumber
         old = _get_card(cards_db, baton_old_cn)
-        baton_old_cost = int(old.cost) if old else 0
+        # Baton touch reduces by the member's current/effective cost, not only printed cost.
+        # This matters for BODY 常時 effects such as success-zone score sum >= 6 -> cost +3.
+        try:
+            baton_old_cost = int(_slot_effective_cost(gs, cards_db, pos, existing) or 0)
+        except Exception:
+            baton_old_cost = int(old.cost) if old else 0
         # If the replaced member had energies under it, they return to the energy deck (not to energy zone).
         _return_under_energy_to_deck_from_slot(gs, existing, pos=pos, reason=f'{baton_old_cn} leaves stage', cards_db=cards_db)
     cn = gs.hand[hand_idx]
@@ -4559,7 +4709,14 @@ def cmd_play(gs: GameState, cards_db: Dict[str, CardInfo], hand_idx: int, pos: s
     if baton_old_cn is not None:
         # Now that payment succeeded, commit the baton move.
         gs.green_room.append(baton_old_cn)
-        gs.log.append(f"[BATON] {pos}: {baton_old_cn} -> green room; reduce {cost} by {baton_old_cost} => pay {pay_cost}")
+        try:
+            printed_old_cost = int(getattr(_get_card(cards_db, baton_old_cn), 'cost', 0) or 0)
+        except Exception:
+            printed_old_cost = int(baton_old_cost or 0)
+        if int(printed_old_cost or 0) != int(baton_old_cost or 0):
+            gs.log.append(f"[BATON] {pos}: {baton_old_cn} -> green room; reduce {cost} by effective cost {baton_old_cost} (printed {printed_old_cost}) => pay {pay_cost}")
+        else:
+            gs.log.append(f"[BATON] {pos}: {baton_old_cn} -> green room; reduce {cost} by {baton_old_cost} => pay {pay_cost}")
     gs.hand.pop(hand_idx)
     gs.stage[pos] = StageSlot(cardnumber=(c.cardnumber if c else cn), active=True)
     gs.log.append(f"[PLAY] {pos} <- {cn} (pay {pay_cost}; E active={gs.energy_active} wait={gs.energy_wait})")
@@ -8298,6 +8455,14 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                 continue
             cost = str(cl.get('cost_template', '') or '')
             eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+            cond_thr = int(_activated_success_score_sum_condition(eff) or 0)
+            if cond_thr:
+                got_sum = int(_own_success_zone_score_sum(gs, cards_db) or 0)
+                if got_sum < cond_thr:
+                    gs.log.append(f"[ERR] activate: success-zone score sum condition not met ({got_sum}/{cond_thr})")
+                    return
+                eff = _strip_activated_success_score_sum_condition(eff)
+
             # コストのみのclause（effect_templateが空）も処理する
             # 例：「このメンバーをウェイトにする：カードを1枚引き、手札を1枚控え室に置く。」
             # の場合、cost_template="このメンバーをウェイトにする" / effect_template="" のclauseが

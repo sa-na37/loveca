@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: server_mass_bottom_inline_count_highlight_20260605d
+# BUILD_TAG: server_effective_cost_badge_20260610b
 from __future__ import annotations
 
 """llocg_ui.server
@@ -56,9 +56,10 @@ from .engine import (
     _has_sacrifice_ability,
     can_activate_in_state,
     StageSlot,
+    _slot_effective_cost,
 )
 
-APP_VERSION = "success_zone_heart_overlay_20260430b"
+APP_VERSION = "effective_cost_badge_20260610b"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -1054,6 +1055,8 @@ class App:
                         "type": (_get_card(self.cards_db, v.cardnumber).type if _get_card(self.cards_db, v.cardnumber) else ""),
                         "has_sac": _has_sacrifice_ability(_get_card(self.cards_db, v.cardnumber)),
                         "energy_under": int(getattr(v, "energy_under", 0) or 0),
+                        "base_cost": int(getattr(_get_card(self.cards_db, v.cardnumber), "cost", 0) or 0) if _get_card(self.cards_db, v.cardnumber) else 0,
+                        "effective_cost": int(_slot_effective_cost(self.gs, self.cards_db, k, v) or 0),
                         "can_activate": can_activate_in_state(self.gs, self.cards_db, k),
                         # 一時的なブレード/ハート増加（UIアイコン表示用）
                         "temp_blade": int(getattr(v, "temp_blade", 0) or 0),
@@ -1995,8 +1998,9 @@ HTML = r'''<!doctype html>
     if(kind === 'discard_from_hand' || kind === 'discard_named_cards_from_hand') return '手札から選択';
     if(kind === 'position_change') return '移動先を選択';
     if(kind === 'choose_from_topk' || kind === 'choose_top_keep_one' || kind === 'topdeck_from_green' || kind === 'bottomdeck_from_green' || kind === 'hand_to_deck_bottom' || kind === 'hand_to_deck_top_or_bottom') return 'カードを選択';
-    if(kind === 'choose_deck_top_or_bottom_for_hand_card') return '置く場所を選択';
+    if(kind === 'choose_deck_top_or_bottom_for_hand_card' || kind === 'choose_deck_top_or_bottom_for_live_storage_card') return '置く場所を選択';
     if(kind === 'choose_player_for_green_bottom' || kind === 'choose_player_for_deck_top_action') return 'プレイヤーを選択';
+    if(kind === 'live_storage_to_deck_top_or_bottom') return 'ライブカードを選択';
     if(kind === 'manual_opponent_green_bottom_notify' || kind === 'manual_opponent_deck_top_action_notify' || kind === 'manual_opponent_mass_bottom_threshold') return '相手への効果';
     if(kind === 'mass_bottom_auto_ack') return '自動効果確認';
     if(kind === 'mass_bottom_optional_result_ack') return '効果処理結果';
@@ -2030,8 +2034,9 @@ HTML = r'''<!doctype html>
     if(kind === 'choose_effects') return '解決する効果を選んでください。';
     if(kind === 'auto_order') return '解決順を選んでください。';
     if(kind === 'position_change') return '移動先のエリアを選んでください。';
-    if(kind === 'choose_deck_top_or_bottom_for_hand_card') return 'デッキの一番上か一番下を選んでください。';
+    if(kind === 'choose_deck_top_or_bottom_for_hand_card' || kind === 'choose_deck_top_or_bottom_for_live_storage_card') return 'デッキの一番上か一番下を選んでください。';
     if(kind === 'choose_player_for_green_bottom' || kind === 'choose_player_for_deck_top_action') return '自分か相手を選んでください。';
+    if(kind === 'live_storage_to_deck_top_or_bottom') return '控え室に置かれるライブカードのうち、デッキ上/下へ置くカードを選んでください。';
     if(kind === 'manual_opponent_green_bottom_notify' || kind === 'manual_opponent_deck_top_action_notify' || kind === 'manual_opponent_mass_bottom_threshold') return '相手側の処理を手動で行い、条件達成/未達を選んでください。';
     if(kind === 'mass_bottom_auto_ack') return '自動効果を確認してから、後続処理へ進みます。';
     if(kind === 'mass_bottom_optional_result_ack') return '控え室から戻した枚数と条件達成状況を確認してください。';
@@ -3068,6 +3073,9 @@ inner.appendChild(card);
         const tmpBlade  = Number(det.temp_blade      || 0);
         const alwBlade0 = Number(det.always_blade_bonus || 0);
         const alwScore  = Number(det.always_score_bonus || 0);
+        const baseCost = Number(det.base_cost || 0);
+        const effectiveCost = Number(det.effective_cost || 0);
+        const showCostBadge = effectiveCost > 0 && effectiveCost !== baseCost;
         const tmpHearts = Object.assign({}, det.temp_hearts || {});
         const successHearts = Object.assign({}, det.success_zone_hearts_bonus || {});
         const alwHearts = Object.assign({}, det.always_hearts_bonus || {});
@@ -3088,7 +3096,7 @@ inner.appendChild(card);
         }catch(e){}
         const totalBlade = tmpBlade + alwBlade;
 
-        const hasBonus = totalBlade !== 0 || alwScore !== 0 || Object.keys(alwHearts).some(k=>Number(alwHearts[k])!==0) || Object.keys(successHearts).some(k=>Number(successHearts[k])!==0) || Object.keys(tmpHearts).some(k=>Number(tmpHearts[k])!==0);
+        const hasBonus = showCostBadge || totalBlade !== 0 || alwScore !== 0 || Object.keys(alwHearts).some(k=>Number(alwHearts[k])!==0) || Object.keys(successHearts).some(k=>Number(successHearts[k])!==0) || Object.keys(tmpHearts).some(k=>Number(tmpHearts[k])!==0);
         if(hasBonus){
           // オーバーレイ本体（縦並び、カード右上）
           // heart / blade は modal の setRichText と同じ texticons map を使う
@@ -3107,6 +3115,32 @@ inner.appendChild(card);
             'pointer-events:none',
             'z-index:50',
           ].join(';');
+
+          if(showCostBadge){
+            const cb = document.createElement('div');
+            cb.className = 'costBadgeCurrent';
+            cb.title = `現在コスト ${effectiveCost}（印刷コスト ${baseCost}）`;
+            cb.textContent = `コスト ${effectiveCost}`;
+            cb.style.cssText = [
+              'display:inline-flex',
+              'align-items:center',
+              'justify-content:center',
+              'min-width:38px',
+              'height:18px',
+              'padding:1px 5px',
+              'border-radius:999px',
+              'background:rgba(245,245,245,.94)',
+              'color:#111',
+              'border:1px solid rgba(0,0,0,.28)',
+              'box-shadow:0 1px 5px rgba(0,0,0,.38)',
+              'font-size:10px',
+              'font-weight:900',
+              'line-height:1',
+              'white-space:nowrap',
+              'margin-bottom:1px',
+            ].join(';');
+            ov.appendChild(cb);
+          }
 
           const appendBonusIconRow = (signText, specs, titleStr)=>{
             if(!specs || !specs.length) return;
@@ -4286,6 +4320,50 @@ inner.appendChild(card);
         render();
       });
       elModalActions.appendChild(bOk);
+      elMask.style.display = 'block';
+      return;
+    }
+
+    if(kind === 'live_storage_to_deck_top_or_bottom'){
+      const cards = opts.filter(o=>looksLikeCardNo(String(o)));
+      popup = {type:'pending', closable:false};
+      elModalTitle.textContent = 'ライブカードを選択';
+      setRichText(elModalText, pendText || '控え室に置かれるライブカードをデッキの一番上か一番下に置いてもよい。');
+      elModalActions.innerHTML = '';
+      elModalCards.innerHTML = '';
+      if(cards.length){
+        const row = document.createElement('div');
+        row.className = 'choiceRow';
+        const dimsL = standardSize('landscape');
+        cards.forEach((cn)=>{
+          const b = document.createElement('button');
+          b.className = 'choiceBtn';
+          b.style.width = dimsL.w + 'px';
+          b.style.height = dimsL.h + 'px';
+          const img = document.createElement('img');
+          img.src = imgUrl(cn); img.alt = cn;
+          const cap = document.createElement('div');
+          cap.className = 'choiceCap';
+          cap.textContent = cardChoiceCaption(cn, 1, 1);
+          b.appendChild(img); b.appendChild(cap);
+          b.addEventListener('click', async ev=>{
+            ev.stopPropagation();
+            st = await apiCmd('resolve_pending', {idx:0, choice: cn});
+            selHand=[]; updateTop(); render();
+          });
+          row.appendChild(b);
+        });
+        elModalCards.appendChild(row);
+      }
+      const bSkip = document.createElement('button');
+      bSkip.className = 'miniBtn';
+      bSkip.textContent = 'スキップ';
+      bSkip.addEventListener('click', async ev=>{
+        ev.stopPropagation();
+        st = await apiCmd('resolve_pending', {idx:0, choice:'skip'});
+        selHand=[]; updateTop(); render();
+      });
+      elModalActions.appendChild(bSkip);
       elMask.style.display = 'block';
       return;
     }
