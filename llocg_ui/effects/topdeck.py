@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: topdeck_filtered_optional_pick_group_cost_name_genericize_20260428h
+# BUILD_TAG: topdeck_get_card_from_engine_globals_20260610g
 from __future__ import annotations
 
 """llocg_ui.effects.topdeck
@@ -236,13 +236,45 @@ def try_apply_topdeck_ext(
                 gs.log.append(f'[INFO] {label}: no cards after refresh')
                 return True
 
+            # These helper names live in engine.py, not this extension module.
+            # Resolve them from the `eng` globals passed into the extension so
+            # stage->green/top-k effects do not depend on accidental module globals.
+            get_card_fn = eng.get('_get_card')
+            is_live_fn = eng.get('_is_live_ci') or eng.get('_is_live')
+            is_member_fn = eng.get('_is_member_ci') or eng.get('_is_member')
+            canon_fn = eng.get('_canon_cardno')
+
+            def _card_from_db(cn: str):
+                if callable(get_card_fn):
+                    return get_card_fn(cards_db, cn)
+                key = str(cn or '')
+                if key in cards_db:
+                    return cards_db.get(key)
+                if callable(canon_fn):
+                    key2 = canon_fn(key)
+                    if key2 in cards_db:
+                        return cards_db.get(key2)
+                return None
+
+            def _is_live_local(ci) -> bool:
+                if callable(is_live_fn):
+                    return bool(is_live_fn(ci))
+                typ = str(getattr(ci, 'type', '') or getattr(ci, 'card_type', '') or '').upper()
+                return 'LIVE' in typ or 'ライブ' in typ
+
+            def _is_member_local(ci) -> bool:
+                if callable(is_member_fn):
+                    return bool(is_member_fn(ci))
+                typ = str(getattr(ci, 'type', '') or getattr(ci, 'card_type', '') or '').upper()
+                return 'MEMBER' in typ or 'メンバー' in typ
+
             def _matches(cn: str) -> bool:
-                ci = _get_card(cards_db, cn)  # noqa: F405
+                ci = _card_from_db(cn)
                 if not ci:
                     return False
-                if filter_kind == 'LIVE' and not _is_live_ci(ci):  # noqa: F405
+                if filter_kind == 'LIVE' and not _is_live_local(ci):
                     return False
-                if filter_kind == 'MEMBER' and not _is_member_ci(ci):  # noqa: F405
+                if filter_kind == 'MEMBER' and not _is_member_local(ci):
                     return False
                 if filter_group:
                     group = str(getattr(ci, 'group', '') or '')
