@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: effective_cost_baton_and_badge_20260610b
+# BUILD_TAG: cost_badge_hand_and_auto_detail_20260610d
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -341,6 +341,23 @@ def _is_success_storage_score_sum_effect_wrapper(effect_text: str) -> bool:
     ]
     return any(re.match(pat, t) for pat in pats)
 
+
+def _is_success_storage_count_effect_wrapper(effect_text: str) -> bool:
+    """Return True for success-zone card-count conditional wrappers.
+
+    These wrappers are solved explicitly by try_apply_effect_template(), and must
+    also be visible to _match_effect_template() so entry/activated trigger
+    collection can enqueue them.
+    """
+    t = _normalize_icon_token_text(str(effect_text or '').strip()).replace('\n', '')
+    if not t:
+        return False
+    pats = [
+        r'^自分の成功ライブカード置き場にカードがある場合、.+$',
+        r'^自分の成功ライブカード置き場にカードが\d+枚以上(?:ある)?場合、.+$',
+    ]
+    return any(re.match(pat, t) for pat in pats)
+
 def _match_effect_template(effect_text: str):
     s = (effect_text or "").strip()
     if not s:
@@ -359,8 +376,17 @@ def _match_effect_template(effect_text: str):
         pass
     if _is_success_storage_score_sum_effect_wrapper(s):
         return ({'id': 'success_storage_score_sum_wrapper', 'op': 'success_storage_score_sum_wrapper'}, {})
+    if _is_success_storage_count_effect_wrapper(s):
+        return ({'id': 'success_storage_count_wrapper', 'op': 'success_storage_count_wrapper'}, {})
+    # Activation-cost reduction text is not part of the resolved effect. Strip it
+    # before matching the inner effect so BODY activated abilities can be queued.
+    s_act_cost = _strip_activated_success_count_discard_cost_reduction(s)
+    if s_act_cost != s and _match_effect_template(s_act_cost):
+        return ({'id': 'activated_success_count_discard_cost_reduction_wrapper', 'op': 'activated_success_count_discard_cost_reduction_wrapper'}, {})
     if _activated_success_score_sum_condition(s):
         return ({'id': 'activated_success_score_sum_condition_wrapper', 'op': 'activated_success_score_sum_condition_wrapper'}, {})
+    if re.match(r'^自分のステージにほかの『[^』]+』のメンバーがいる場合、.+$', _normalize_icon_token_text(s).replace('\n','')):
+        return ({'id': 'stage_has_other_group_or_unit_member_wrapper', 'op': 'stage_has_other_group_or_unit_member_wrapper'}, {})
     candidates = [s]
     s_norm = _normalize_icon_token_text(s)
     if s_norm != s:
@@ -836,6 +862,7 @@ def can_activate_in_state(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: s
             is_body_cost = '手札をすべて公開する' in cost and str(ab.get('trigger', '') or '') == 'BODY'
             cond_thr = int(_activated_success_score_sum_condition(eff) or 0)
             eff_for_match = _strip_activated_success_score_sum_condition(eff) if cond_thr else eff
+            eff_for_match = _strip_activated_success_count_discard_cost_reduction(eff_for_match)
             if cond_thr and not _success_score_sum_condition_met(gs, cards_db, cond_thr):
                 continue
             if not is_body_cost and not (_match_effect_template(eff) or _match_effect_template(eff_for_match)):
@@ -959,19 +986,67 @@ def _enqueue_discard_from_hand(gs: 'GameState', n: int, label: str = "") -> None
         'options': list(gs.hand),
     })
     gs.log.append(f'[PENDING] discard_from_hand remaining={n} hand={len(gs.hand)}')
-def _enqueue_choose_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo], kind: str, n: int = 1, group: str = "") -> None:
+def _auto_effect_detail_block(ctx: Optional[Dict[str, Any]], action_text: str = '') -> str:
+    """Return a detailed text block for auto-effect choice popups.
+
+    Selection popups created by automatic effects should show the source and
+    resolved effect details, not just the resulting choice instruction.
+    """
+    try:
+        ctx = dict(ctx or {})
+    except Exception:
+        ctx = {}
+    detail = str(ctx.get('auto_effect_detail', '') or '').strip()
+    action_text = str(action_text or '').strip()
+    if detail and action_text:
+        return f'{detail}\n\n処理：{action_text}'
+    if detail:
+        return detail
+    src = str(ctx.get('source_cn', '') or '').strip()
+    if src and action_text:
+        return f'【{src}】自動効果\n処理：{action_text}'
+    return action_text
+
+def _with_auto_effect_detail(ctx: Optional[Dict[str, Any]], detail: str) -> Dict[str, Any]:
+    out = dict(ctx or {})
+    detail = str(detail or '').strip()
+    if detail:
+        out['auto_effect_detail'] = detail
+    return out
+
+def _auto_effect_detail_for_condition(ctx: Optional[Dict[str, Any]], effect_text: str, condition_text: str, timing: str = '自動効果') -> str:
+    ctx0 = dict(ctx or {})
+    src = str(ctx0.get('source_cn', '') or '').strip()
+    head = f'【{src}】{timing}' if src else str(timing or '自動効果')
+    lines = [head]
+    cond = str(condition_text or '').strip()
+    if cond:
+        lines.append(f'条件：{cond}')
+    eff = str(effect_text or '').strip()
+    if eff:
+        lines.append(f'効果：{eff}')
+    return '\n'.join(lines)
+
+def _enqueue_choose_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo], kind: str, n: int = 1, group: str = "", ctx: Optional[Dict[str, Any]] = None) -> None:
     n = int(n or 1)
     cands = _green_candidates(gs, cards_db, kind=kind, group=group)
     if not cands:
         gs.log.append(f'[INFO] retrieve: no {kind} in waiting room')
         return
+    action_text = f'控え室の{("ライブ" if kind=="LIVE" else "メンバー")}カードを1枚手札に加える'
+    if group:
+        action_text += f'（{group}）'
+    auto_detail = str((ctx or {}).get('auto_effect_detail', '') or '').strip()
     gs.pending.append({
         'kind': f'choose_{kind.lower()}_from_green',
-        'text': f'控え室の{("ライブ" if kind=="LIVE" else "メンバー")}カードを1枚手札に加える',
+        'text': _auto_effect_detail_block(ctx, action_text),
         'options': cands,
         'want_kind': kind,
         'want_group': group,
         'remaining_picks': n,
+        'source_cn': str((ctx or {}).get('source_cn', '') or ''),
+        'auto_effect_detail': auto_detail,
+        'suppress_card_text': bool(auto_detail),
     })
     if len(cands) == 1:
         gs.log.append(f'[PENDING] choose {kind} from waiting room (single candidate, confirm required)')
@@ -1400,7 +1475,7 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         if kind not in ('LIVE','MEMBER'):
             gs.log.append('[WARN] retrieve: unsupported kind')
             return
-        _enqueue_choose_from_green(gs, cards_db, kind=kind, n=n, group=group)
+        _enqueue_choose_from_green(gs, cards_db, kind=kind, n=n, group=group, ctx=ctx)
         return
     if op == 'topdeck_from_green':
         kind = str(rule.get('card_kind', '') or '').upper() or 'ANY'
@@ -1883,7 +1958,7 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
                     if ci2 and eff_cost >= n:
                         met = True; break
         elif cond == 'success_nonempty':
-            met = len(gs.success_pile) > 0
+            met = len(list(getattr(gs, 'success_zone', []) or [])) > 0
         elif cond == 'green_size_gte':
             met = len(gs.green_room) >= n
         elif cond == 'stage_has_other_group_member':
@@ -1914,6 +1989,20 @@ def try_apply_effect_template(gs: 'GameState', rng: random.Random, cards_db: Dic
     if not text:
         return False
     text_norm = _normalize_icon_token_text(text).replace('\n', '')
+    # Success live-card storage count wrappers.
+    # Example: 自分の成功ライブカード置き場にカードが2枚以上ある場合、...
+    m_success_count_gte = re.match(r'^自分の成功ライブカード置き場にカードが(?:(?P<count>\d+)枚以上(?:ある)?|ある)場合、(?P<inner>.+)$', text_norm)
+    if m_success_count_gte:
+        need_count = int(m_success_count_gte.group('count') or 1)
+        own_count = len(list(getattr(gs, 'success_zone', []) or []))
+        inner = str(m_success_count_gte.group('inner') or '').strip()
+        if own_count >= need_count:
+            gs.log.append(f'[AUTO] success-zone count {own_count}/{need_count} -> apply inner effect')
+            ctx2 = _with_auto_effect_detail(ctx, _auto_effect_detail_for_condition(ctx, text_norm, f'自分の成功ライブカード置き場 {own_count}/{need_count}枚', '登場時'))
+            return bool(try_apply_effect_template(gs, rng, cards_db, inner, ctx2))
+        gs.log.append(f'[SKIP] success-zone count {own_count}/{need_count} -> condition not met')
+        return True
+
     # Success live-card storage score-sum wrappers.
     # These are conditions around already-generic inner effects.
     # Example: 自分の成功ライブカード置き場にあるカードのスコア合計が3以上の場合、...
@@ -1924,7 +2013,8 @@ def try_apply_effect_template(gs: 'GameState', rng: random.Random, cards_db: Dic
         inner = str(m_success_score_gte.group('inner') or '').strip()
         if got >= thr:
             gs.log.append(f'[AUTO] success-zone score sum {got}/{thr} -> apply inner effect')
-            return bool(try_apply_effect_template(gs, rng, cards_db, inner, ctx))
+            ctx2 = _with_auto_effect_detail(ctx, _auto_effect_detail_for_condition(ctx, text_norm, f'成功ライブカード置き場のスコア合計 {got}/{thr}', '登場時'))
+            return bool(try_apply_effect_template(gs, rng, cards_db, inner, ctx2))
         gs.log.append(f'[SKIP] success-zone score sum {got}/{thr} -> condition not met')
         return True
 
@@ -1938,7 +2028,8 @@ def try_apply_effect_template(gs: 'GameState', rng: random.Random, cards_db: Dic
         inner = str(m_success_count_score_lte.group('inner') or '').strip()
         if own_count >= need_count and got_sum <= thr:
             gs.log.append(f'[AUTO] success-zone count/score condition count={own_count}/{need_count}, score_sum={got_sum}<={thr} -> apply inner effect')
-            return bool(try_apply_effect_template(gs, rng, cards_db, inner, ctx))
+            ctx2 = _with_auto_effect_detail(ctx, _auto_effect_detail_for_condition(ctx, text_norm, f'成功ライブカード置き場 {own_count}/{need_count}枚、スコア合計 {got_sum}<={thr}', '登場時'))
+            return bool(try_apply_effect_template(gs, rng, cards_db, inner, ctx2))
         gs.log.append(f'[SKIP] success-zone count/score condition count={own_count}/{need_count}, score_sum={got_sum}<={thr} -> condition not met')
         return True
 
@@ -1963,6 +2054,25 @@ def try_apply_effect_template(gs: 'GameState', rng: random.Random, cards_db: Dic
             gs.log.append(f'[AUTO] activated success-zone score condition {got_sum}/{cond_thr} -> apply inner effect')
             return bool(try_apply_effect_template(gs, rng, cards_db, inner, ctx))
         gs.log.append(f'[SKIP] activated success-zone score condition {got_sum}/{cond_thr} -> condition not met')
+        return True
+
+    # Conditional wrapper: stage has another group/unit member -> apply inner effect.
+    m_stage_other = re.match(r'^自分のステージにほかの『(?P<tag>[^』]+)』のメンバーがいる場合、(?P<inner>.+)$', text_norm)
+    if m_stage_other:
+        tag = str(m_stage_other.group('tag') or '').strip()
+        inner = str(m_stage_other.group('inner') or '').strip()
+        src_pos = str((ctx or {}).get('pos', '') or '').upper()
+        if _stage_has_other_group_or_unit_member(gs, cards_db, src_pos, tag):
+            gs.log.append(f'[AUTO] stage has other 『{tag}』 member -> apply inner effect')
+            m_retrieve_group_live = re.match(r'^自分の控え室から『(?P<group>[^』]+)』のライブカードを1枚手札に加える。$', inner)
+            if m_retrieve_group_live:
+                group = str(m_retrieve_group_live.group('group') or '').strip()
+                ctx2 = _with_auto_effect_detail(ctx, _auto_effect_detail_for_condition(ctx, text_norm, f'ステージにほかの『{tag}』メンバーがいる', '登場時'))
+                _enqueue_choose_from_green(gs, cards_db, kind='LIVE', n=1, group=group, ctx=ctx2)
+                gs.log.append(f'[PENDING] {str((ctx or {}).get("source_cn", "") or "")} stage-other-『{tag}』 condition -> retrieve 『{group}』 LIVE from waiting room')
+                return True
+            return bool(try_apply_effect_template(gs, rng, cards_db, inner, ctx))
+        gs.log.append(f'[SKIP] stage has other 『{tag}』 member -> condition not met')
         return True
 
     # Cost-result: gain total live score while this source member remains in the live.
@@ -3070,6 +3180,114 @@ def _body_always_success_score_heart_bonus_from_blob(blob: str) -> Dict[str, int
         return {}
     return {k: int(v) for k, v in out.items() if int(v or 0) > 0}
 
+
+def _body_always_success_count_cost_bonus_from_blob(blob: str, success_count: int) -> int:
+    """Parse BODY 常時: success-zone card count -> this member cost +N per card."""
+    try:
+        b = _norm_digits_jp(str(blob or '')).replace(' ', '').replace('\n', '')
+        if '自分の成功ライブカード置き場にあるカード1枚につき' not in b:
+            return 0
+        if 'このメンバーのコストを+' not in b and 'ステージにいるこのメンバーのコストを+' not in b:
+            return 0
+        m = re.search(r'(?:ステージにいる)?このメンバーのコストを\+(\d+)する', b)
+        if not m:
+            return 0
+        return int(m.group(1) or 0) * max(0, int(success_count or 0))
+    except Exception:
+        return 0
+
+def _body_always_success_group_hand_cost_reduction_from_blob(gs: 'GameState', cards_db: Dict[str, CardInfo], blob: str) -> int:
+    """Parse BODY 常時: hand member cost reduction if success zone has a group/unit card."""
+    try:
+        b = _norm_digits_jp(str(blob or '')).replace(' ', '').replace('\n', '')
+        m = re.search(r"自分の成功ライブカード置き場に『([^』]+)』のカードがある場合、手札にあるこのメンバーカードのコストは(\d+)減る", b)
+        if not m:
+            return 0
+        tag = str(m.group(1) or '').strip()
+        red = int(m.group(2) or 0)
+        if not tag or red <= 0:
+            return 0
+        if _success_has_group_or_unit(gs, cards_db, tag):
+            return red
+        return 0
+    except Exception:
+        return 0
+
+def _success_has_group_or_unit(gs: 'GameState', cards_db: Dict[str, CardInfo], tag: str) -> bool:
+    tag = str(tag or '').strip()
+    tag_compact = tag.replace(' ', '').replace('　', '')
+    if not tag:
+        return False
+    for cn in list(getattr(gs, 'success_zone', []) or []):
+        ci = _get_card(cards_db, cn)
+        if not ci:
+            continue
+        group = str(getattr(ci, 'group', '') or '')
+        unit = str(getattr(ci, 'unit', '') or '')
+        group_compact = group.replace(' ', '').replace('　', '')
+        unit_compact = unit.replace(' ', '').replace('　', '')
+        if tag in group or tag in unit or tag_compact in group_compact or tag_compact in unit_compact:
+            return True
+    return False
+
+def _stage_has_other_group_or_unit_member(gs: 'GameState', cards_db: Dict[str, CardInfo], src_pos: str, tag: str) -> bool:
+    tag = str(tag or '').strip()
+    src_pos = str(src_pos or '').upper()
+    if not tag:
+        return False
+    for pos, slot in (getattr(gs, 'stage', {}) or {}).items():
+        if str(pos or '').upper() == src_pos:
+            continue
+        if not slot or not getattr(slot, 'cardnumber', ''):
+            continue
+        ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+        if not ci or _is_live_ci(ci):
+            continue
+        group = str(getattr(ci, 'group', '') or '')
+        unit = str(getattr(ci, 'unit', '') or '')
+        tag_compact = tag.replace(' ', '').replace('　', '')
+        group_compact = group.replace(' ', '').replace('　', '')
+        unit_compact = unit.replace(' ', '').replace('　', '')
+        if tag in group or tag in unit or tag_compact in group_compact or tag_compact in unit_compact:
+            return True
+    return False
+
+def _card_effective_play_cost_from_hand(gs: 'GameState', cards_db: Dict[str, CardInfo], cn: str) -> int:
+    """Return current play cost for a MEMBER card in hand, including BODY hand modifiers."""
+    ci = _get_card(cards_db, cn)
+    if not ci:
+        return 0
+    base = int(getattr(ci, 'cost', 0) or 0)
+    if not _is_member_ci(ci):
+        return base
+    reduction = 0
+    for _eff, blob in _iter_body_always_effects(ci):
+        reduction += int(_body_always_success_group_hand_cost_reduction_from_blob(gs, cards_db, blob) or 0)
+    return max(0, int(base) - int(reduction or 0))
+
+def _activated_success_count_discard_cost_reduction(effect_text: str, success_count: int) -> int:
+    """Return hand-discard cost reduction from success-zone count in an activated effect."""
+    try:
+        t = _norm_digits_jp(_normalize_icon_token_text(str(effect_text or '')).replace('\n', '')).replace(' ', '')
+        if 'この能力を起動するためのコストは' not in t:
+            return 0
+        if '自分の成功ライブカード置き場にあるカード1枚につき' not in t:
+            return 0
+        if '控え室に置く手札の数が1枚減る' not in t:
+            return 0
+        return max(0, int(success_count or 0))
+    except Exception:
+        return 0
+
+def _strip_activated_success_count_discard_cost_reduction(effect_text: str) -> str:
+    """Remove activation cost-reduction sentence before resolving the actual effect."""
+    try:
+        t = _normalize_icon_token_text(str(effect_text or '').strip()).replace('\n', '')
+        t = re.sub(r'この能力を起動するためのコストは、自分の成功ライブカード置き場にあるカード1枚につき、控え室に置く手札の数が1枚減る。?', '', t).strip()
+        return t
+    except Exception:
+        return str(effect_text or '').strip()
+
 def _slot_effective_cost(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: str, slot) -> int:
     """Return current cost including supported BODY always cost modifiers."""
     try:
@@ -3080,11 +3298,14 @@ def _slot_effective_cost(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: st
             return 0
         base = int(getattr(ci, 'cost', 0) or 0)
         bonus = 0
+        success_count = len(list(getattr(gs, 'success_zone', []) or []))
         for _eff, blob in _iter_body_always_effects(ci):
             try:
                 thr = _success_score_sum_gte_from_blob(blob)
                 if thr and _success_score_sum_condition_met(gs, cards_db, thr):
                     bonus += int(_body_always_success_score_cost_bonus(ci, blob) or 0)
+                # BODY 常時: success-zone card count based current cost.
+                bonus += int(_body_always_success_count_cost_bonus_from_blob(blob, success_count) or 0)
             except Exception:
                 pass
         return int(base + bonus)
@@ -4697,7 +4918,11 @@ def cmd_play(gs: GameState, cards_db: Dict[str, CardInfo], hand_idx: int, pos: s
     if not c or not is_member_type(ctype):
         gs.log.append(f"[ERR] play: not a MEMBER card: cn={cn} db_type='{ctype}'")
         return
-    cost = int(c.cost or 0)
+    printed_cost = int(c.cost or 0)
+    try:
+        cost = int(_card_effective_play_cost_from_hand(gs, cards_db, cn) or printed_cost)
+    except Exception:
+        cost = printed_cost
     pay_cost = cost
     if baton_old_cn is not None:
         # Baton touch is only committed if the play itself succeeds.
@@ -4719,6 +4944,11 @@ def cmd_play(gs: GameState, cards_db: Dict[str, CardInfo], hand_idx: int, pos: s
             gs.log.append(f"[BATON] {pos}: {baton_old_cn} -> green room; reduce {cost} by {baton_old_cost} => pay {pay_cost}")
     gs.hand.pop(hand_idx)
     gs.stage[pos] = StageSlot(cardnumber=(c.cardnumber if c else cn), active=True)
+    try:
+        if int(printed_cost or 0) != int(cost or 0):
+            gs.log.append(f"[PLAYCOST] {cn}: hand effective cost {cost} (printed {printed_cost})")
+    except Exception:
+        pass
     gs.log.append(f"[PLAY] {pos} <- {cn} (pay {pay_cost}; E active={gs.energy_active} wait={gs.energy_wait})")
     # Auto abilities can trigger simultaneously on this "member enters stage" event.
     # If multiple triggers exist, let the user choose the resolution order.
@@ -4915,7 +5145,7 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
             # costless-only for now
             if _parse_energy_cost(cost) > 0 or _cost_requires_self_to_green(cost):
                 continue
-            ctx = {'pos': pos.upper(), 'source_cn': canon}
+            ctx = {'pos': pos.upper(), 'source_cn': canon, 'auto_effect_detail': f'【{canon}】登場時効果\n効果：{eff}'}
             if try_apply_effect_template(gs, rng, cards_db, eff, ctx):
                 gs.log.append(f"[AUTO] {canon}[登場]: applied {eff}")
                 if gs.pending:
@@ -8462,6 +8692,10 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                     gs.log.append(f"[ERR] activate: success-zone score sum condition not met ({got_sum}/{cond_thr})")
                     return
                 eff = _strip_activated_success_score_sum_condition(eff)
+            success_count_for_cost = len(list(getattr(gs, 'success_zone', []) or []))
+            discard_success_reduction = int(_activated_success_count_discard_cost_reduction(eff, success_count_for_cost) or 0)
+            if discard_success_reduction > 0:
+                eff = _strip_activated_success_count_discard_cost_reduction(eff)
 
             # コストのみのclause（effect_templateが空）も処理する
             # 例：「このメンバーをウェイトにする：カードを1枚引き、手札を1枚控え室に置く。」
@@ -8514,6 +8748,10 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                     req_discard_n = 0
             if req_discard_n <= 0 and ('手札を1枚控え室に置く' in cost):
                 req_discard_n = 1
+            if req_discard_n > 0 and int(discard_success_reduction or 0) > 0:
+                printed_req_discard_n = int(req_discard_n)
+                req_discard_n = max(0, int(req_discard_n) - int(discard_success_reduction or 0))
+                gs.log.append(f"[COST] activate discard cost reduced by success-zone cards: {printed_req_discard_n}->{req_discard_n} (success={success_count_for_cost})")
             if req_discard_n > 0:
                 if len(gs.hand) < req_discard_n:
                     gs.log.append(f"[ERR] activate: not enough cards in hand for discard cost (need {req_discard_n})")

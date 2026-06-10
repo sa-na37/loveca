@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: server_effective_cost_badge_20260610b
+# BUILD_TAG: server_cost_badge_hand_format_20260610d
 from __future__ import annotations
 
 """llocg_ui.server
@@ -32,7 +32,7 @@ import re
 from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse, parse_qs, unquote
 
 from .db import load_cards_db, is_member_type, is_live_type, _get_card as _db_get_card
@@ -57,9 +57,10 @@ from .engine import (
     can_activate_in_state,
     StageSlot,
     _slot_effective_cost,
+    _card_effective_play_cost_from_hand,
 )
 
-APP_VERSION = "effective_cost_badge_20260610b"
+APP_VERSION = "cost_badge_hand_format_20260610d"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -998,6 +999,25 @@ class App:
                 pass
         return out
 
+    def _hand_detail_for_ui(self) -> List[Dict[str, Any]]:
+        out: List[Dict[str, Any]] = []
+        for cn in list(getattr(self.gs, "hand", []) or []):
+            ci = _get_card(self.cards_db, cn)
+            try:
+                base_cost = int(getattr(ci, "cost", 0) or 0) if ci else 0
+            except Exception:
+                base_cost = 0
+            try:
+                effective_cost = int(_card_effective_play_cost_from_hand(self.gs, self.cards_db, cn) or base_cost)
+            except Exception:
+                effective_cost = base_cost
+            out.append({
+                "cardnumber": cn,
+                "base_cost": int(base_cost or 0),
+                "effective_cost": int(effective_cost or 0),
+            })
+        return out
+
     def _cn2score(self) -> Dict[str, int]:
         out: Dict[str, int] = {}
         for cn in self._all_cardnumbers_in_state():
@@ -1028,6 +1048,7 @@ class App:
             "phase": self.gs.phase,
             "deck": self.gs.deck if self.gs.debug else ["?"] * len(self.gs.deck),
             "hand": list(self.gs.hand),
+            "hand_detail": self._hand_detail_for_ui(),
             "energy_active": int(self.gs.energy_active),
             "energy_wait": int(self.gs.energy_wait),
             "stage": {k: (asdict(v) if v else None) for k, v in self.gs.stage.items()},
@@ -2232,6 +2253,50 @@ HTML = r'''<!doctype html>
   function cardGroupFor(cn){ try{ return String((st && st.cn2group && st.cn2group[cn]) || ''); }catch(e){ return ''; } }
   function cardUnitFor(cn){ try{ return String((st && st.cn2unit && st.cn2unit[cn]) || ''); }catch(e){ return ''; } }
   function cardCostFor(cn){ try{ return Number((st && st.cn2cost && st.cn2cost[cn]) || 0); }catch(e){ return 0; } }
+  function formatCostBadgeText(baseCost, effectiveCost){
+    const base = Number(baseCost || 0);
+    const eff = Number(effectiveCost || 0);
+    const delta = eff - base;
+    if(!Number.isFinite(base) || !Number.isFinite(eff) || !base || !delta) return '';
+    const sign = delta >= 0 ? '+' : '-';
+    return `cost ${base}${sign}${Math.abs(delta)}`;
+  }
+  function appendCostBadgeCurrent(cardEl, baseCost, effectiveCost, compact=false){
+    try{
+      const base = Number(baseCost || 0);
+      const eff = Number(effectiveCost || 0);
+      const delta = eff - base;
+      const label = formatCostBadgeText(base, eff);
+      if(!label || !cardEl) return;
+      const cb = document.createElement('div');
+      cb.className = 'costBadgeCurrent';
+      cb.title = `current cost ${eff} (base ${base}, ${delta>=0?'bonus':'reduction'} ${Math.abs(delta)})`;
+      cb.textContent = label;
+      cb.style.cssText = [
+        'position:absolute',
+        'right:2px',
+        'top:2px',
+        'z-index:80',
+        'display:inline-flex',
+        'align-items:center',
+        'justify-content:center',
+        compact ? 'min-width:34px' : 'min-width:42px',
+        compact ? 'height:16px' : 'height:18px',
+        compact ? 'padding:1px 4px' : 'padding:1px 5px',
+        'border-radius:999px',
+        'background:rgba(245,245,245,.94)',
+        'color:#111',
+        'border:1px solid rgba(0,0,0,.28)',
+        'box-shadow:0 1px 5px rgba(0,0,0,.38)',
+        compact ? 'font-size:9px' : 'font-size:10px',
+        'font-weight:900',
+        'line-height:1',
+        'white-space:nowrap',
+        'pointer-events:none',
+      ].join(';');
+      cardEl.appendChild(cb);
+    }catch(e){}
+  }
   function cardScoreFor(cn){ try{ return Number((st && st.cn2score && st.cn2score[cn]) || 0); }catch(e){ return 0; } }
   function groupOrUnitMatch(cn, name){
     const target = String(name||'').trim();
@@ -2399,6 +2464,19 @@ HTML = r'''<!doctype html>
     return '';
   }
 
+  function pendingHasInlineAutoEffectDetail(p){
+    if(!p || typeof p !== 'object') return false;
+    if(p.suppress_card_text || p.no_card_text) return true;
+    const detail = String(p.auto_effect_detail || '');
+    const text = String(p.text || '');
+    const s = `${detail}
+${text}`;
+    // If the main prompt already contains the effect's condition/effect/action,
+    // do not show the full card text panel as well.  That panel repeats the same
+    // ability and makes automatic-effect choice popups too verbose.
+    return !!(s && s.includes('【') && (s.includes('条件：') || s.includes('効果：') || s.includes('処理：')));
+  }
+
   async function updateModalContextFromPending(p, token){
     elModalCond.className = '';
     elModalCond.style.display = 'none';
@@ -2420,6 +2498,7 @@ HTML = r'''<!doctype html>
       elModalCardTextWrap.classList.add('visible');
       return;
     }
+    if(pendingHasInlineAutoEffectDetail(p)) return;
     const cn = pendingSourceCn(p);
     if(!cn) return;
     const info = await getCardInfoCached(cn);
@@ -2765,6 +2844,12 @@ HTML = r'''<!doctype html>
       const cap = labelFor(cn);
       const isSel = selHand.includes(i);
       const card = makeCard(cn, 'portrait', x, y, sz.w, sz.h, cap, ()=>toggleSel(i), isSel, 100+i);
+      try{
+        const hd = Array.isArray(st && st.hand_detail) ? st.hand_detail[i] : null;
+        const baseCost = Number((hd && hd.base_cost) || cardCostFor(cn) || 0);
+        const effectiveCost = Number((hd && hd.effective_cost) || baseCost || 0);
+        appendCostBadgeCurrent(card, baseCost, effectiveCost, true);
+      }catch(e){}
       inner.appendChild(card);
     });
 
@@ -3119,8 +3204,9 @@ inner.appendChild(card);
           if(showCostBadge){
             const cb = document.createElement('div');
             cb.className = 'costBadgeCurrent';
-            cb.title = `現在コスト ${effectiveCost}（印刷コスト ${baseCost}）`;
-            cb.textContent = `コスト ${effectiveCost}`;
+            const costDelta = effectiveCost - baseCost;
+            cb.title = `current cost ${effectiveCost} (base ${baseCost}, ${costDelta>=0?'bonus':'reduction'} ${Math.abs(costDelta)})`;
+            cb.textContent = formatCostBadgeText(baseCost, effectiveCost);
             cb.style.cssText = [
               'display:inline-flex',
               'align-items:center',
