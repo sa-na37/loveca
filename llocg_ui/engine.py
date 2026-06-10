@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: cost_badge_hand_and_auto_detail_20260610d
+# BUILD_TAG: stage_leave_optional_cost_direct_skip_20260610i
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -62,6 +62,12 @@ _EFFECT_RULES = [
     {"id": "energy_activate_n", "pattern": r"^エネルギーを(?P<n>\d+)枚アクティブにする。$", "op": "energy_activate"},
     {"id": "gain_blade_until_end_live", "pattern": r"^ライブ終了時まで、(?P<blades>(?:<\(ブレード\)>)+)を得る。$", "op": "gain_blade_until_end_live"},
     {"id": "activate_stage_member_upto1", "pattern": r"^自分のステージにいるメンバーを1人までアクティブにする。$", "op": "activate_stage_member"},
+    {"id": "activate_stage_member_optional_any", "pattern": r"^メンバー1人をアクティブにしてもよい。$", "op": "activate_stage_member", "optional": True},
+    {"id": "position_change_stage_member_optional_any", "pattern": r"^メンバー1人をポジションチェンジさせてもよい。$", "op": "position_change_stage_member", "optional": True},
+    {"id": "optional_discard_one_from_hand_then_effect", "pattern": r"^手札を1枚控え室に置いてもよい。そうした場合、(?P<after>.+)$", "op": "optional_discard_one_from_hand_then_effect"},
+    {"id": "retrieve_waiting_live_and_member_upto1", "pattern": r"^自分の控え室からライブカードとメンバーカードをそれぞれ1枚まで手札に加える。$", "op": "retrieve_waiting_live_and_member_upto1"},
+    {"id": "stage_member_gain_icons_until_end_live", "pattern": r"^ライブ終了時まで、自分のステージにいるメンバー1人は、(?P<icons>(?:<(?:\([^)]+\)|[^<>]+)>)+)を得る。$", "op": "stage_member_gain_icons_until_end_live"},
+    {"id": "leave_baton_no_bladeheart_nijigasaki_energy_draw", "pattern": r"^このメンバーがコスト(?P<cost1>\d+)以上のブレードハートを持たない『(?P<group1>[^』]+)』のメンバーとバトンタッチしていた場合、エネルギーを(?P<energy_n>\d+)枚アクティブにする。コスト(?P<cost2>\d+)以上のブレードハートを持たない『(?P<group2>[^』]+)』のメンバーの場合、さらにカードを(?P<draw_n>\d+)枚引く。$", "op": "leave_baton_no_bladeheart_nijigasaki_energy_draw"},
     # Fixed-color hearts (and mixed hearts+blades): e.g. "ライブ終了時まで、<(黄)><(黄)>を得る。"
     # Must come AFTER gain_blade_until_end_live so pure-blade still matches first.
     {"id": "gain_icons_until_end_live", "pattern": r"^ライブ終了時まで、(?P<icons>(?:<(?:\([^)]+\)|[^<>]+)>)+)を得る。$", "op": "gain_icons_until_end_live"},
@@ -358,6 +364,23 @@ def _is_success_storage_count_effect_wrapper(effect_text: str) -> bool:
     ]
     return any(re.match(pat, t) for pat in pats)
 
+
+def _strip_stage_to_green_trigger_prefix(effect_text: str) -> str:
+    """Return the inner effect for BODY triggers of the form
+    「このメンバーがステージから控え室に置かれたとき、...」.
+    The trigger itself is handled by the stage-leave trigger collector; the inner
+    effect should go through the normal generic effect-template route.
+    """
+    t = _normalize_icon_token_text(str(effect_text or '').strip()).replace('\n', '')
+    prefix = 'このメンバーがステージから控え室に置かれたとき、'
+    if t.startswith(prefix):
+        return t[len(prefix):].strip()
+    return str(effect_text or '').strip()
+
+def _is_stage_to_green_effect_wrapper(effect_text: str) -> bool:
+    inner = _strip_stage_to_green_trigger_prefix(effect_text)
+    return bool(inner and inner != str(effect_text or '').strip() and _match_effect_template(inner))
+
 def _match_effect_template(effect_text: str):
     s = (effect_text or "").strip()
     if not s:
@@ -374,6 +397,9 @@ def _match_effect_template(effect_text: str):
             return m_ext
     except Exception:
         pass
+    inner_stage_leave = _strip_stage_to_green_trigger_prefix(s)
+    if inner_stage_leave != s and _match_effect_template(inner_stage_leave):
+        return ({'id': 'stage_to_green_effect_wrapper', 'op': 'stage_to_green_effect_wrapper'}, {})
     if _is_success_storage_score_sum_effect_wrapper(s):
         return ({'id': 'success_storage_score_sum_wrapper', 'op': 'success_storage_score_sum_wrapper'}, {})
     if _is_success_storage_count_effect_wrapper(s):
@@ -1027,17 +1053,21 @@ def _auto_effect_detail_for_condition(ctx: Optional[Dict[str, Any]], effect_text
         lines.append(f'効果：{eff}')
     return '\n'.join(lines)
 
-def _enqueue_choose_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo], kind: str, n: int = 1, group: str = "", ctx: Optional[Dict[str, Any]] = None) -> None:
+def _enqueue_choose_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo], kind: str, n: int = 1, group: str = "", ctx: Optional[Dict[str, Any]] = None, allow_less: bool = False, resume: Optional[Dict[str, Any]] = None) -> None:
     n = int(n or 1)
     cands = _green_candidates(gs, cards_db, kind=kind, group=group)
     if not cands:
-        gs.log.append(f'[INFO] retrieve: no {kind} in waiting room')
+        gs.log.append(f'[INFO] retrieve: no {kind} in waiting room' + (' (optional skip)' if allow_less else ''))
+        if allow_less and resume:
+            gs.pending.append(resume)
         return
     action_text = f'控え室の{("ライブ" if kind=="LIVE" else "メンバー")}カードを1枚手札に加える'
+    if allow_less:
+        action_text = f'控え室の{("ライブ" if kind=="LIVE" else "メンバー")}カードを1枚まで手札に加える'
     if group:
         action_text += f'（{group}）'
     auto_detail = str((ctx or {}).get('auto_effect_detail', '') or '').strip()
-    gs.pending.append({
+    prm = {
         'kind': f'choose_{kind.lower()}_from_green',
         'text': _auto_effect_detail_block(ctx, action_text),
         'options': cands,
@@ -1047,11 +1077,94 @@ def _enqueue_choose_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo], k
         'source_cn': str((ctx or {}).get('source_cn', '') or ''),
         'auto_effect_detail': auto_detail,
         'suppress_card_text': bool(auto_detail),
-    })
+        'allow_skip': bool(allow_less),
+        'allow_less': bool(allow_less),
+        'optional': bool(allow_less),
+    }
+    if resume:
+        prm['_resume'] = resume
+    gs.pending.append(prm)
+    suffix = ' optional' if allow_less else ''
     if len(cands) == 1:
-        gs.log.append(f'[PENDING] choose {kind} from waiting room (single candidate, confirm required)')
+        gs.log.append(f'[PENDING] choose {kind} from waiting room (single candidate, confirm required{suffix})')
     else:
-        gs.log.append(f'[PENDING] choose {kind} from waiting room ({len(cands)} candidates, picks={n})')
+        gs.log.append(f'[PENDING] choose {kind} from waiting room ({len(cands)} candidates, picks={n}{suffix})')
+def _grant_stage_member_temp_icons(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: str, icons_blob: str, source_cn: str = '') -> bool:
+    pos = str(pos or '').upper()
+    slot = (getattr(gs, 'stage', {}) or {}).get(pos)
+    if not slot:
+        return False
+    icons_blob = str(icons_blob or '')
+    try:
+        b = int(_count_blade_icons_from_tagblob(icons_blob) or 0)
+    except Exception:
+        b = 0
+    if b > 0:
+        slot.temp_blade = int(getattr(slot, 'temp_blade', 0) or 0) + b
+        slot.temp_until = 'end_of_live'
+    hearts = _parse_heart_icons(icons_blob)
+    for col, cnt in hearts.items():
+        _grant_temp_heart(slot, col, int(cnt or 0))
+    try:
+        if hearts:
+            slot.temp_until = 'end_of_live'
+    except Exception:
+        pass
+    gs.log.append(f'[AUTO] {source_cn}: stage {pos} temp icons {icons_blob} until end_of_live (blade+{b}, hearts={hearts})')
+    return True
+
+def _enqueue_stage_member_gain_icons(gs: 'GameState', cards_db: Dict[str, CardInfo], icons_blob: str, ctx: Optional[Dict[str, Any]] = None) -> None:
+    opts = [p for p in ('L','C','R') if (getattr(gs, 'stage', {}) or {}).get(p)]
+    src = str((ctx or {}).get('source_cn', '') or '')
+    if not opts:
+        gs.log.append(f'[INFO] {src}: no stage member to gain icons')
+        return
+    action_text = f'ステージのメンバー1人を選び、ライブ終了時まで{icons_blob}を得る'
+    auto_detail = str((ctx or {}).get('auto_effect_detail', '') or '').strip()
+    gs.pending.append({
+        'kind': 'choose_stage_member_to_gain_icons',
+        'text': _auto_effect_detail_block(ctx, action_text),
+        'options': list(opts),
+        'candidates': list(opts),
+        'icons': str(icons_blob or ''),
+        'source_cn': src,
+        'auto_effect_detail': auto_detail,
+        'suppress_card_text': bool(auto_detail),
+    })
+    gs.log.append(f'[PENDING] {src}: choose stage member to gain icons {icons_blob}')
+
+def _enqueue_retrieve_live_and_member_upto1(gs: 'GameState', cards_db: Dict[str, CardInfo], ctx: Optional[Dict[str, Any]] = None) -> None:
+    _enqueue_choose_from_green(gs, cards_db, kind='LIVE', n=1, ctx=ctx, allow_less=True)
+    _enqueue_choose_from_green(gs, cards_db, kind='MEMBER', n=1, ctx=ctx, allow_less=True)
+
+def _baton_new_member_condition(gs: 'GameState', cards_db: Dict[str, CardInfo], ctx: Optional[Dict[str, Any]], group: str, cost_min: int) -> Tuple[bool, int, str]:
+    ctx = dict(ctx or {})
+    new_cn = _canon_cardno(str(ctx.get('baton_new_cn', '') or ctx.get('baton_to_cn', '') or ''))
+    new_pos = str(ctx.get('baton_new_pos', '') or ctx.get('pos', '') or '').upper()
+    ci = _get_card(cards_db, new_cn)
+    if not ci and new_pos in ('L','C','R'):
+        slot = (getattr(gs, 'stage', {}) or {}).get(new_pos)
+        if slot:
+            new_cn = _canon_cardno(str(getattr(slot, 'cardnumber', '') or ''))
+            ci = _get_card(cards_db, new_cn)
+    if not ci or not _is_member_ci(ci):
+        return False, 0, new_cn
+    if group and not _ci_matches_group_or_unit(ci, group):
+        return False, 0, new_cn
+    if _ci_has_blade_heart_payload(ci):
+        return False, 0, new_cn
+    try:
+        if new_pos in ('L','C','R') and (getattr(gs, 'stage', {}) or {}).get(new_pos):
+            cost_val = int(_slot_effective_cost(gs, cards_db, new_pos, (getattr(gs, 'stage', {}) or {}).get(new_pos)) or 0)
+        else:
+            cost_val = int(getattr(ci, 'cost', 0) or 0)
+    except Exception:
+        try:
+            cost_val = int(getattr(ci, 'cost', 0) or 0)
+        except Exception:
+            cost_val = 0
+    return (cost_val >= int(cost_min or 0)), cost_val, new_cn
+
 def _enqueue_topdeck_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo], kind: str, n: int, group: str = '', allow_less: bool = False) -> None:
     kind = str(kind or '').upper()
     n = int(n or 0)
@@ -1477,6 +1590,58 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
             return
         _enqueue_choose_from_green(gs, cards_db, kind=kind, n=n, group=group, ctx=ctx)
         return
+    if op == 'optional_discard_one_from_hand_then_effect':
+        after = str(gd.get('after', '') or '').strip()
+        src = str((ctx or {}).get('source_cn', '') or '')
+        detail = _auto_effect_detail_for_condition(ctx, '手札を1枚控え室に置いてもよい。そうした場合、' + after, 'このメンバーがステージから控え室に置かれたとき', timing='ステージ離脱時')
+        ctx2 = _with_auto_effect_detail(ctx, detail)
+        # Optional costs should open the actual cost-payment picker directly.
+        # Choosing no card is represented by the Skip button; paying the cost continues
+        # to the after_effect_template. This avoids an extra confirmation modal with no
+        # actionable choices.
+        gs.pending.append({
+            'kind': 'discard_from_hand',
+            'remaining': 1,
+            'text': _auto_effect_detail_block(ctx2, 'コストとして控え室に置く手札を1枚選ぶ。支払わない場合はスキップ。'),
+            'options': list(gs.hand),
+            'after_effect_template': after,
+            'after_ctx': ctx2,
+            'after_source_cn': src,
+            'auto_effect_detail': detail,
+            'suppress_card_text': True,
+            'allow_skip': True,
+            'optional': True,
+            'skip_reason': 'optional hand discard stage-leave cost',
+        })
+        gs.log.append(f'[PENDING] {src}: optional hand discard cost picker then stage-leave followup')
+        return
+    if op == 'retrieve_waiting_live_and_member_upto1':
+        _enqueue_retrieve_live_and_member_upto1(gs, cards_db, ctx=ctx)
+        return
+    if op == 'stage_member_gain_icons_until_end_live':
+        _enqueue_stage_member_gain_icons(gs, cards_db, str(gd.get('icons', '') or ''), ctx=ctx)
+        return
+    if op == 'leave_baton_no_bladeheart_nijigasaki_energy_draw':
+        group1 = str(gd.get('group1', '') or '')
+        group2 = str(gd.get('group2', '') or group1)
+        c1 = int(gd.get('cost1', 0) or 0)
+        c2 = int(gd.get('cost2', 0) or 0)
+        energy_n = int(gd.get('energy_n', 0) or 0)
+        draw_n = int(gd.get('draw_n', 0) or 0)
+        ok1, actual_cost, new_cn = _baton_new_member_condition(gs, cards_db, ctx, group1, c1)
+        src = str((ctx or {}).get('source_cn', '') or '')
+        if not ok1:
+            gs.log.append(f'[SKIP] {src}: baton target {new_cn or "?"} cost={actual_cost} does not meet no-bladeheart {group1} cost>={c1}')
+            return
+        take = min(max(0, energy_n), int(gs.energy_wait or 0))
+        gs.energy_wait -= take
+        gs.energy_active += take
+        gs.log.append(f'[AUTO] {src}: baton target {new_cn} cost={actual_cost} no-bladeheart {group1} >= {c1} -> energy activate {energy_n} (moved {take})')
+        ok2, _, _ = _baton_new_member_condition(gs, cards_db, ctx, group2, c2)
+        if ok2 and draw_n > 0:
+            got = draw(gs, draw_n, rng)
+            gs.log.append(f'[AUTO] {src}: baton target {new_cn} cost={actual_cost} >= {c2} -> draw {draw_n} (drew {got})')
+        return
     if op == 'topdeck_from_green':
         kind = str(rule.get('card_kind', '') or '').upper() or 'ANY'
         n = int(gd.get('n', 1) or 1)
@@ -1714,16 +1879,38 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         gs.log.append(f'[AUTO] {pos}: gain blade +{b} (until end_of_live)')
         return
     if op == 'activate_stage_member':
-        opts = [p for p in ('L','C','R') if gs.stage.get(p)]
+        opts = [p for p in ('L','C','R') if gs.stage.get(p) and not bool(getattr(gs.stage.get(p), 'active', True))]
         if not opts:
-            gs.log.append('[INFO] activate_member: no member on stage')
+            gs.log.append('[INFO] activate_member: no WAIT member on stage')
             return
+        allow_skip = bool(rule.get('optional', False) or rule.get('allow_less', False))
+        opts2 = list(opts) + (['skip'] if allow_skip else [])
         gs.pending.append({
             'kind': 'choose_stage_member_to_activate',
-            'text': 'ステージのメンバーを1人までアクティブにする（対象を選択）',
-            'options': opts,
+            'text': _auto_effect_detail_block(ctx, 'ステージのウェイト状態のメンバーを1人アクティブにする'),
+            'options': opts2,
+            'allow_skip': allow_skip,
+            'auto_effect_detail': str((ctx or {}).get('auto_effect_detail', '') or ''),
+            'suppress_card_text': bool(str((ctx or {}).get('auto_effect_detail', '') or '')),
         })
-        gs.log.append('[PENDING] choose stage member to activate')
+        gs.log.append('[PENDING] choose WAIT stage member to activate')
+        return
+    if op == 'position_change_stage_member':
+        opts = [p for p in ('L','C','R') if gs.stage.get(p)]
+        if not opts:
+            gs.log.append('[INFO] position_change: no member on stage')
+            return
+        allow_skip = bool(rule.get('optional', False) or rule.get('allow_less', False))
+        opts2 = list(opts) + (['skip'] if allow_skip else [])
+        gs.pending.append({
+            'kind': 'choose_stage_member_to_position_change_source',
+            'text': _auto_effect_detail_block(ctx, 'ポジションチェンジさせるメンバーを1人選ぶ'),
+            'options': opts2,
+            'allow_skip': allow_skip,
+            'auto_effect_detail': str((ctx or {}).get('auto_effect_detail', '') or ''),
+            'suppress_card_text': bool(str((ctx or {}).get('auto_effect_detail', '') or '')),
+        })
+        gs.log.append('[PENDING] choose stage member to position-change')
         return
     if op == 'gain_icons_until_end_live':
         icons_blob = str(gd.get('icons', '') or '')
@@ -1989,6 +2176,15 @@ def try_apply_effect_template(gs: 'GameState', rng: random.Random, cards_db: Dic
     if not text:
         return False
     text_norm = _normalize_icon_token_text(text).replace('\n', '')
+    # Stage-leave BODY auto wrapper.  Trigger collection verifies the timing,
+    # then the inner effect is resolved through the same generic route as normal
+    # effects (draw/discard, top-k search, activate member, position change, ...).
+    inner_stage_leave = _strip_stage_to_green_trigger_prefix(text_norm)
+    if inner_stage_leave != text_norm:
+        detail = _auto_effect_detail_for_condition(ctx, text_norm, 'このメンバーがステージから控え室に置かれた', '自動効果')
+        ctx2 = _with_auto_effect_detail(ctx, detail)
+        return bool(try_apply_effect_template(gs, rng, cards_db, inner_stage_leave, ctx2))
+
     # Success live-card storage count wrappers.
     # Example: 自分の成功ライブカード置き場にカードが2枚以上ある場合、...
     m_success_count_gte = re.match(r'^自分の成功ライブカード置き場にカードが(?:(?P<count>\d+)枚以上(?:ある)?|ある)場合、(?P<inner>.+)$', text_norm)
@@ -4955,7 +5151,7 @@ def cmd_play(gs: GameState, cards_db: Dict[str, CardInfo], hand_idx: int, pos: s
     triggers: List[Dict[str, Any]] = []
     if baton_old_cn is not None:
         try:
-            triggers.extend(_collect_auto_triggers_on_member_leave_stage(gs, cards_db, left_pos=pos, left_cn=baton_old_cn))
+            triggers.extend(_collect_auto_triggers_on_member_leave_stage(gs, cards_db, left_pos=pos, left_cn=baton_old_cn, baton_new_cn=cn))
         except Exception:
             pass
     triggers.extend(_collect_auto_triggers_on_member_enter(gs, cards_db, entered_pos=pos, entered_cn=cn))
@@ -5322,7 +5518,7 @@ def _list_active_cost10_member_enter_draw_positions(gs: GameState, cards_db: Dic
     return out
 def _has_active_cost10_member_enter_draw_trigger(gs: GameState, cards_db: Dict[str, CardInfo], entered_cn: str) -> bool:
     return bool(_list_active_cost10_member_enter_draw_positions(gs, cards_db, entered_cn))
-def _collect_auto_triggers_on_member_leave_stage(gs: GameState, cards_db: Dict[str, CardInfo], left_pos: str, left_cn: str) -> List[Dict[str, Any]]:
+def _collect_auto_triggers_on_member_leave_stage(gs: GameState, cards_db: Dict[str, CardInfo], left_pos: str, left_cn: str, baton_new_cn: str = '') -> List[Dict[str, Any]]:
     """Collect auto triggers that happen when a MEMBER leaves your stage and goes to green room.
     Narrow support for cards whose compiled clause keeps the full trigger text inside
     effect_template, e.g.
@@ -5364,6 +5560,7 @@ def _collect_auto_triggers_on_member_leave_stage(gs: GameState, cards_db: Dict[s
                 'cn': left_cn,
                 'effect': eff,
                 'label': f'{canon_left}[stage->green]',
+                'baton_new_cn': _canon_cardno(str(baton_new_cn or '')),
             })
     return out
 def _collect_auto_triggers_on_member_enter(gs: GameState, cards_db: Dict[str, CardInfo], entered_pos: str, entered_cn: str) -> List[Dict[str, Any]]:
@@ -5463,9 +5660,13 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
                 rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0) + 17)
             except Exception:
                 rng2 = random.Random(17)
-            ctx = {'source_cn': src_cn}
+            detail = _auto_effect_detail_for_condition({'source_cn': src_cn}, eff, 'このメンバーがステージから控え室に置かれたとき', timing='ステージ離脱時')
+            ctx = {'source_cn': src_cn, 'auto_effect_detail': detail}
             if pos:
-                ctx.update({'pos': pos, 'src_pos': pos})
+                ctx.update({'pos': pos, 'src_pos': pos, 'baton_new_pos': pos})
+            bnew = str((trig or {}).get('baton_new_cn', '') or '').strip()
+            if bnew:
+                ctx['baton_new_cn'] = bnew
             try_apply_effect_template(gs, rng2, cards_db, eff, ctx)
             gs.log.append(f"[AUTO] {src_cn or '?'}[stage->green]: applied {eff}")
         return
@@ -8982,6 +9183,31 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             'queue': list(q),
         })
         setattr(gs, '_deferred_auto_queue', [])
+    if kind == 'choose_stage_member_to_position_change_source':
+        allow_skip = bool(p.get('allow_skip', False) or p.get('optional', False))
+        low = choice_str.lower()
+        if allow_skip and low in ('skip', '__skip__', 'no', 'n', '0', 'false', '使わない', 'いいえ', 'スキップ'):
+            gs.log.append('[SKIP] choose_stage_member_to_position_change_source: skipped')
+            return
+        src_pos = str(choice_str or '').upper()
+        if src_pos not in ('L','C','R'):
+            gs.log.append(f"[ERR] position_change_source: invalid pos {choice_str}")
+            return
+        slot_src = gs.stage.get(src_pos)
+        if not slot_src:
+            gs.log.append(f"[ERR] position_change_source: empty {src_pos}")
+            return
+        src_cn = str(getattr(slot_src, 'cardnumber', '') or '')
+        dst_opts = [p2 for p2 in ('L','C','R') if p2 != src_pos]
+        gs.pending.append({
+            'kind': 'position_change',
+            'src_pos': src_pos,
+            'source_cn': src_cn,
+            'text': f'{src_pos}: {src_cn or "メンバー"} の移動先を選んでください。移動先にメンバーがいる場合は入れ替わります。',
+            'options': dst_opts,
+        })
+        gs.log.append(f'[PENDING] position_change source={src_pos} -> choose destination')
+        return
     if kind == 'position_change':
         src_pos = str(p.get('src_pos', '') or '').upper()
         source_cn = str(p.get('source_cn', '') or '')
@@ -9432,6 +9658,14 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         after_eff = str(p.get('after_effect_template', '') or '').strip()
         after_ctx = dict(p.get('after_ctx', {}) or {})
         after_src = str(p.get('after_source_cn', '') or '')
+        low0 = str(choice_str or '').strip().lower()
+        if low0 in ('skip', '__skip__', 'no', 'n', '0', 'false', 'cancel', '使わない', 'いいえ', 'スキップ') and bool(p.get('allow_skip') or p.get('optional')):
+            gs.log.append(f"[SKIP] {after_src}: skipped optional discard cost")
+            _r = p.get('_resume') if isinstance(p, dict) else None
+            if _r:
+                gs.pending.append(_r)
+            _enqueue_auto_order_from_deferred()
+            return
         cn = _canon_cardno(choice_str)
         pick_i = None
         for i, x in enumerate(list(gs.hand)):
@@ -9472,6 +9706,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         _r = p.get('_resume') if isinstance(p, dict) else None
         if _r:
             gs.pending.append(_r)
+        _enqueue_auto_order_from_deferred()
         return
     if kind == 'show_revealed_cards_ack':
         gs.log.append('[ACT] show_revealed_cards_ack: ok')
@@ -9722,6 +9957,13 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         return
     if kind in ('choose_live_from_green','choose_member_from_green'):
         want_kind = 'LIVE' if kind=='choose_live_from_green' else 'MEMBER'
+        low_choice = str(choice_str or '').strip().lower()
+        if bool(p.get('allow_skip', False) or p.get('allow_less', False) or p.get('optional', False)) and low_choice in ('skip', '__skip__', 'none', 'no', 'n', '0', 'false', 'スキップ'):
+            gs.log.append(f"[SKIP] retrieve optional {want_kind} from waiting room")
+            _r = p.get('_resume') if isinstance(p, dict) else None
+            if _r:
+                gs.pending.append(_r)
+            return
         cn = _canon_cardno(choice_str)
         pick_cn = None
         if cn in gs.green_room:
@@ -9776,7 +10018,9 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         remaining_picks = int(p.get('remaining_picks', 1) or 1) - 1
         if remaining_picks > 0:
             _enqueue_choose_from_green(gs, cards_db, kind=want_kind, n=remaining_picks,
-                                       group=str(p.get('want_group', '') or ''))
+                                       group=str(p.get('want_group', '') or ''),
+                                       ctx={'source_cn': str(p.get('source_cn', '') or ''), 'auto_effect_detail': str(p.get('auto_effect_detail', '') or '')},
+                                       allow_less=bool(p.get('allow_skip', False) or p.get('allow_less', False) or p.get('optional', False)))
             return
         # resume parent prompt if provided (e.g., choose_effects)
         _r = p.get('_resume') if isinstance(p, dict) else None
@@ -10774,6 +11018,17 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             return
         gs.log.append(f'[ERR] manual_opponent_mass_bottom_threshold: invalid choice {choice_str}')
         gs.pending.append(p)
+        return
+    if kind == 'choose_stage_member_to_gain_icons':
+        pos2 = str(choice_str or '').strip().upper()
+        cand = [str(x).upper() for x in list(p.get('candidates', []) or []) if str(x).upper() in ('L','C','R')]
+        if pos2 not in ('L','C','R') or (cand and pos2 not in cand):
+            gs.log.append(f'[ERR] choose_stage_member_to_gain_icons: invalid target {choice_str}')
+            gs.pending.append(p)
+            return
+        ok = _grant_stage_member_temp_icons(gs, cards_db, pos2, str(p.get('icons', '') or ''), source_cn=str(p.get('source_cn', '') or ''))
+        if not ok:
+            gs.log.append(f'[ERR] choose_stage_member_to_gain_icons: failed target {pos2}')
         return
     if kind == 'choose_stage_member_to_gain_blade':
         pos2 = str(choice_str or '').strip().upper()
