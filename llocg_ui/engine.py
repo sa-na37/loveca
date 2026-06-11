@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: stage_leave_optional_cost_direct_skip_20260610i
+# BUILD_TAG: live_start_group_discard_cost_equal_20260610l
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -33,6 +33,8 @@ import re
 _EFFECT_RULES = [
     {"id": "draw_n", "pattern": r"^カードを(?P<n>\d+)枚引く。$", "op": "draw"},
     {"id": "draw_n_then_gain_icons_until_end_live", "pattern": r"^カードを(?P<n>\d+)枚引き、ライブ終了時まで、(?P<icons>(?:<(?:\([^)]+\)|[^<>]+)>)+)を得る。$", "op": "draw_then_gain_icons_until_end_live"},
+    {"id": "draw_then_stage_group_member_temp_cost", "pattern": r"^カードを(?P<draw_n>\d+)枚引き、ライブ終了時まで、自分のステージにいる『(?P<group>[^』]+)』のメンバー1人のコストを\+(?P<cost_n>\d+)する。$", "op": "draw_then_stage_group_member_temp_cost"},
+    {"id": "stage_group_member_cost_equal_original_minus_self_gain_icon_if_gte", "pattern": r"^自分のステージにいる『(?P<group>[^』]+)』のメンバー1人を選ぶ。ライブ終了時まで、このメンバーのコストは、選んだメンバーが元々持つコストより(?P<minus_n>\d+)低い値に等しくなる。これによりこのカードのコストが(?P<threshold>\d+)以上になった場合、ライブ終了時まで、(?P<icons>(?:<(?:\([^)]+\)|[^<>]+)>)+)を得る。$", "op": "stage_group_member_cost_equal_original_minus_self_gain_icon_if_gte"},
     {"id": "draw_n_discard_m", "pattern": r"^カードを(?P<n>\d+)枚引き、手札を(?P<m>\d+)枚控え室に置く。$", "op": "draw_then_discard"},
     {"id": "discard_hand_n", "pattern": r"^手札を(?P<n>\d+)枚控え室に置く。$", "op": "discard_from_hand"},
     {"id": "retrieve_waiting_live_n", "pattern": r"^自分の控え室からライブカードを(?P<n>\d+)枚手札に加える。$", "op": "retrieve_from_waiting_room", "card_kind": "LIVE"},
@@ -284,6 +286,44 @@ def _parse_named_hand_discard_cost(cost_text: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _parse_group_hand_discard_cost(cost_text: str) -> Optional[Dict[str, Any]]:
+    """Parse optional costs that discard cards of a specified group/unit from hand.
+
+    Supported shared forms:
+      - 手札の『DOLLCHESTRA』のカードを1枚控え室に置いてもよい
+      - 手札の『蓮ノ空』のカード1枚を控え室に置いてもよい
+      - 手札の『蓮ノ空』のメンバーカードを3枚まで控え室に置いてもよい
+
+    Returns a contract for the generic hand multi-select/discard pending.
+    """
+    t = _norm_digits_jp(str(cost_text or '').strip())
+    if not t or '手札の『' not in t or '控え室に置いてもよい' not in t:
+        return None
+    t = _normalize_icon_token_text(t)
+    m = re.search(r"手札の『(?P<group>[^』]+)』の(?P<kind>メンバーカード|ライブカード|カード)(?:を)?(?P<n>\d+)?枚(?P<upto>まで)?(?:を)?控え室に置いてもよい", t)
+    if not m:
+        return None
+    group = str(m.group('group') or '').strip()
+    kind_jp = str(m.group('kind') or 'カード')
+    n = int(m.group('n') or 1)
+    if n <= 0 or not group:
+        return None
+    kind = 'ANY'
+    if 'メンバー' in kind_jp:
+        kind = 'MEMBER'
+    elif 'ライブ' in kind_jp:
+        kind = 'LIVE'
+    upto = bool(m.group('upto'))
+    return {
+        'group': group,
+        'kind': kind,
+        'min_picks': 0,
+        'max_picks': n,
+        'exact_or_zero': not upto,
+        'mode': 'up_to' if upto else 'exact_or_skip',
+    }
+
+
 def _hand_named_card_candidates(gs: 'GameState', cards_db: Dict[str, CardInfo], names: List[str]) -> List[str]:
     wanted = {str(x or '').strip() for x in list(names or []) if str(x or '').strip()}
     out: List[str] = []
@@ -406,9 +446,15 @@ def _match_effect_template(effect_text: str):
         return ({'id': 'success_storage_count_wrapper', 'op': 'success_storage_count_wrapper'}, {})
     # Activation-cost reduction text is not part of the resolved effect. Strip it
     # before matching the inner effect so BODY activated abilities can be queued.
-    s_act_cost = _strip_activated_success_count_discard_cost_reduction(s)
-    if s_act_cost != s and _match_effect_template(s_act_cost):
-        return ({'id': 'activated_success_count_discard_cost_reduction_wrapper', 'op': 'activated_success_count_discard_cost_reduction_wrapper'}, {})
+    # Only enter the activation-cost-reduction wrapper when the text actually
+    # contains that sentence.  _strip_activated_success_count_discard_cost_reduction()
+    # also normalizes icon spelling (<青> -> <(青)>); comparing its output to the
+    # original string alone would incorrectly wrap ordinary effects containing
+    # official-style icons.
+    if 'この能力を起動するためのコストは' in s:
+        s_act_cost = _strip_activated_success_count_discard_cost_reduction(s)
+        if s_act_cost != s and _match_effect_template(s_act_cost):
+            return ({'id': 'activated_success_count_discard_cost_reduction_wrapper', 'op': 'activated_success_count_discard_cost_reduction_wrapper'}, {})
     if _activated_success_score_sum_condition(s):
         return ({'id': 'activated_success_score_sum_condition_wrapper', 'op': 'activated_success_score_sum_condition_wrapper'}, {})
     if re.match(r'^自分のステージにほかの『[^』]+』のメンバーがいる場合、.+$', _normalize_icon_token_text(s).replace('\n','')):
@@ -741,6 +787,138 @@ def _grant_stage_member_temp_blade(gs: 'GameState', cards_db: Dict[str, CardInfo
     gs.log.append(f'[AUTO] {source_cn}: stage {pos} temp blade +{int(blade_n or 0)} until end of live')
     return True
 
+def _stage_group_member_positions(gs: 'GameState', cards_db: Dict[str, CardInfo], group_name: str) -> List[str]:
+    group_name = str(group_name or '').strip()
+    out: List[str] = []
+    if not group_name:
+        return out
+    for ppos in ('L', 'C', 'R'):
+        slot = (getattr(gs, 'stage', {}) or {}).get(ppos)
+        if not slot:
+            continue
+        ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+        if ci and _is_member_ci(ci) and _ci_matches_group_or_unit(ci, group_name):
+            out.append(ppos)
+    return out
+
+
+def _grant_stage_member_temp_cost(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: str, cost_n: int, source_cn: str = '') -> bool:
+    pos = str(pos or '').upper()
+    slot = (getattr(gs, 'stage', {}) or {}).get(pos)
+    if not slot:
+        return False
+    try:
+        slot.temp_cost = int(getattr(slot, 'temp_cost', 0) or 0) + int(cost_n or 0)
+        slot.temp_until = 'end_of_live'
+    except Exception:
+        return False
+    gs.log.append(f'[AUTO] {source_cn}: stage {pos} temp cost +{int(cost_n or 0)} until end of live')
+    return True
+
+
+def _enqueue_stage_group_member_temp_cost(gs: 'GameState', cards_db: Dict[str, CardInfo], group_name: str, cost_n: int, source_cn: str = '') -> None:
+    cands = _stage_group_member_positions(gs, cards_db, group_name)
+    if not cands:
+        gs.log.append(f'[SKIP] {source_cn}: no stage 『{group_name}』 member for temp cost +{int(cost_n or 0)}')
+        return
+    if len(cands) == 1:
+        _grant_stage_member_temp_cost(gs, cards_db, cands[0], int(cost_n or 0), source_cn=source_cn)
+        return
+    gs.pending.append({
+        'kind': 'choose_stage_member_for_temp_cost',
+        'text': f'『{group_name}』のメンバー1人を選んで、ライブ終了時までコストを+{int(cost_n or 0)}します。',
+        'options': list(cands),
+        'candidates': list(cands),
+        'cost_n': int(cost_n or 0),
+        'source_cn': source_cn,
+    })
+    gs.log.append(f'[PENDING] {source_cn}: choose 『{group_name}』 member for temp cost +{int(cost_n or 0)}')
+
+def _base_member_cost(ci: Optional[CardInfo]) -> int:
+    try:
+        return int(getattr(ci, 'cost', 0) or 0)
+    except Exception:
+        return 0
+
+
+def _grant_source_cost_equal_selected_original_minus_and_icon(
+    gs: 'GameState',
+    cards_db: Dict[str, CardInfo],
+    source_pos: str,
+    selected_pos: str,
+    minus_n: int,
+    threshold: int,
+    icons_blob: str,
+    source_cn: str = '',
+) -> bool:
+    """Make source member's cost equal selected member's printed/original cost minus N.
+
+    Card text target: 「このメンバーのコストは、選んだメンバーが元々持つコストよりN低い値に等しくなる」.
+    Implemented as a temporary cost delta on the source slot until end of live.
+    """
+    source_pos = str(source_pos or '').upper()
+    selected_pos = str(selected_pos or '').upper()
+    source_slot = (getattr(gs, 'stage', {}) or {}).get(source_pos)
+    selected_slot = (getattr(gs, 'stage', {}) or {}).get(selected_pos)
+    if not source_slot or not selected_slot:
+        return False
+    source_ci = _get_card(cards_db, getattr(source_slot, 'cardnumber', '') or '')
+    selected_ci = _get_card(cards_db, getattr(selected_slot, 'cardnumber', '') or '')
+    if not source_ci or not selected_ci or not _is_member_ci(source_ci) or not _is_member_ci(selected_ci):
+        return False
+    try:
+        target_cost = int(_base_member_cost(selected_ci)) - int(minus_n or 0)
+        source_base = int(_base_member_cost(source_ci))
+        source_slot.temp_cost = int(target_cost) - int(source_base)
+        source_slot.temp_until = 'end_of_live'
+    except Exception:
+        return False
+    gs.log.append(f'[AUTO] {source_cn}: {source_pos} cost becomes {target_cost} (selected {selected_pos} original cost {int(_base_member_cost(selected_ci))} - {int(minus_n or 0)}) until end of live')
+    try:
+        if int(target_cost) >= int(threshold or 0):
+            _grant_stage_member_temp_icons(gs, cards_db, source_pos, str(icons_blob or ''), source_cn=source_cn)
+            gs.log.append(f'[AUTO] {source_cn}: cost threshold {target_cost}>={int(threshold or 0)} met -> {source_pos} gains {icons_blob}')
+        else:
+            gs.log.append(f'[AUTO] {source_cn}: cost threshold {target_cost}<{int(threshold or 0)} not met -> no icons')
+    except Exception as e:
+        gs.log.append(f'[WARN] {source_cn}: cost threshold icon grant failed: {e}')
+    return True
+
+
+def _enqueue_source_cost_equal_group_member_original_minus_and_icon(
+    gs: 'GameState',
+    cards_db: Dict[str, CardInfo],
+    source_pos: str,
+    group_name: str,
+    minus_n: int,
+    threshold: int,
+    icons_blob: str,
+    source_cn: str = '',
+) -> None:
+    source_pos = str(source_pos or '').upper()
+    cands = _stage_group_member_positions(gs, cards_db, group_name)
+    if not cands:
+        gs.log.append(f'[SKIP] {source_cn}: no stage 『{group_name}』 member for cost-equal effect')
+        return
+    if len(cands) == 1:
+        ok = _grant_source_cost_equal_selected_original_minus_and_icon(gs, cards_db, source_pos, cands[0], int(minus_n or 0), int(threshold or 0), str(icons_blob or ''), source_cn=source_cn)
+        if not ok:
+            gs.log.append(f'[ERR] {source_cn}: failed cost-equal effect source={source_pos} target={cands[0]}')
+        return
+    gs.pending.append({
+        'kind': 'choose_stage_member_for_source_cost_equal_minus_icon',
+        'text': f'『{group_name}』のメンバー1人を選び、このメンバーのコストを選んだメンバーの元々のコスト-{int(minus_n or 0)}にします。{int(threshold or 0)}以上なら{icons_blob}を得ます。',
+        'options': list(cands),
+        'candidates': list(cands),
+        'source_pos': source_pos,
+        'minus_n': int(minus_n or 0),
+        'threshold': int(threshold or 0),
+        'icons': str(icons_blob or ''),
+        'source_cn': source_cn,
+    })
+    gs.log.append(f'[PENDING] {source_cn}: choose 『{group_name}』 member for source cost = original-{int(minus_n or 0)}; threshold {int(threshold or 0)} icons={icons_blob}')
+
+
 def _resolve_mass_green_member_threshold_stage_blade(gs: 'GameState', cards_db: Dict[str, CardInfo], moved: List[str], threshold_group: str, threshold_n: int, target_name: str, blade_n: int, source_cn: str = '') -> None:
     group_n = 0
     for cn in list(moved or []):
@@ -795,7 +973,7 @@ def _hand_candidates_by_kind(gs: 'GameState', cards_db: Dict[str, 'CardInfo'], k
             continue
         if kind == 'MEMBER' and not _is_member_ci(ci):
             continue
-        if group and group not in str(getattr(ci, 'group', '') or ''):
+        if group and not _ci_matches_group_or_unit(ci, group):
             continue
         out.append(cn)
     return out
@@ -811,7 +989,7 @@ def _green_candidates_for_kind(gs: 'GameState', cards_db: Dict[str, 'CardInfo'],
             continue
         if kind == 'MEMBER' and not _is_member_ci(ci):
             continue
-        if group and group not in str(getattr(ci, 'group', '') or ''):
+        if group and not _ci_matches_group_or_unit(ci, group):
             continue
         out.append(cn)
     return out
@@ -1182,7 +1360,7 @@ def _enqueue_topdeck_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo], 
         if kind == 'MEMBER' and not _is_member_ci(ci):
             continue
         # ANY: no type filter
-        if group and group not in str(getattr(ci, 'group', '') or ''):
+        if group and not _ci_matches_group_or_unit(ci, group):
             continue
         cands.append(cn)
     if not cands:
@@ -1569,6 +1747,26 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         for col, cnt in heart_counts.items():
             _grant_temp_heart(slot, col, cnt)
         gs.log.append(f'[AUTO] draw {n} -> drew {got}; {pos}: gain icons {icons_blob} (until end_of_live; blades={b} hearts={heart_counts})')
+        return
+    if op == 'draw_then_stage_group_member_temp_cost':
+        draw_n = int(gd.get('draw_n', 0) or 0)
+        group_name = str(gd.get('group', '') or '').strip()
+        cost_n = int(gd.get('cost_n', 0) or 0)
+        got = draw(gs, draw_n, rng)
+        src = str((ctx or {}).get('source_cn', '') or '')
+        gs.log.append(f'[AUTO] draw {draw_n} -> drew {got}; then choose 『{group_name}』 member cost +{cost_n}')
+        _enqueue_stage_group_member_temp_cost(gs, cards_db, group_name, cost_n, source_cn=src)
+        return
+    if op == 'stage_group_member_cost_equal_original_minus_self_gain_icon_if_gte':
+        group_name = str(gd.get('group', '') or '').strip()
+        minus_n = int(gd.get('minus_n', 0) or 0)
+        threshold = int(gd.get('threshold', 0) or 0)
+        icons_blob = str(gd.get('icons', '') or '')
+        src = str((ctx or {}).get('source_cn', '') or '')
+        source_pos = str((ctx or {}).get('pos', '') or '').upper()
+        _enqueue_source_cost_equal_group_member_original_minus_and_icon(
+            gs, cards_db, source_pos, group_name, minus_n, threshold, icons_blob, source_cn=src
+        )
         return
     if op == 'draw_then_discard':
         n = int(gd.get('n', 0) or 0)
@@ -2540,6 +2738,7 @@ class StageSlot:
     temp_blade: int = 0
     temp_hearts: Dict[str, int] = field(default_factory=dict)
     temp_score: int = 0
+    temp_cost: int = 0
     temp_until: str = ""  # e.g., end_of_live
     energy_under: int = 0  # number of energy cards under this member (UI + some effects)
     heart_replace_color: str = ""  # 元々持つハートを置換する色（ライブ終了時まで）。空=無効
@@ -2662,7 +2861,7 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
         if slot is None:
             stage_snap[k] = None
         else:
-            stage_snap[k] = {"cardnumber": slot.cardnumber, "active": bool(slot.active), "temp_blade": int(getattr(slot, "temp_blade", 0) or 0), "temp_hearts": dict(getattr(slot, "temp_hearts", {}) or {}), "temp_score": int(getattr(slot, "temp_score", 0) or 0), "temp_until": str(getattr(slot, "temp_until", "") or ""), "energy_under": int(getattr(slot, "energy_under", 0) or 0), "heart_replace_color": str(getattr(slot, "heart_replace_color", "") or "")}
+            stage_snap[k] = {"cardnumber": slot.cardnumber, "active": bool(slot.active), "temp_blade": int(getattr(slot, "temp_blade", 0) or 0), "temp_hearts": dict(getattr(slot, "temp_hearts", {}) or {}), "temp_score": int(getattr(slot, "temp_score", 0) or 0), "temp_cost": int(getattr(slot, "temp_cost", 0) or 0), "temp_until": str(getattr(slot, "temp_until", "") or ""), "energy_under": int(getattr(slot, "energy_under", 0) or 0), "heart_replace_color": str(getattr(slot, "heart_replace_color", "") or "")}
     return {
         "phase": gs.phase,
         "deck": list(gs.deck),
@@ -2722,7 +2921,7 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
         if v is None:
             stage_new[k] = None
         else:
-            stage_new[k] = StageSlot(cardnumber=str(v.get("cardnumber", "")), active=bool(v.get("active", True)), temp_blade=_safe_int(v.get("temp_blade", 0), 0), temp_hearts=dict(v.get("temp_hearts", {}) or {}), temp_score=_safe_int(v.get("temp_score", 0), 0), temp_until=str(v.get("temp_until", "") or ""), energy_under=_safe_int(v.get("energy_under", 0), 0), heart_replace_color=str(v.get("heart_replace_color", "") or ""))
+            stage_new[k] = StageSlot(cardnumber=str(v.get("cardnumber", "")), active=bool(v.get("active", True)), temp_blade=_safe_int(v.get("temp_blade", 0), 0), temp_hearts=dict(v.get("temp_hearts", {}) or {}), temp_score=_safe_int(v.get("temp_score", 0), 0), temp_cost=_safe_int(v.get("temp_cost", 0), 0), temp_until=str(v.get("temp_until", "") or ""), energy_under=_safe_int(v.get("energy_under", 0), 0), heart_replace_color=str(v.get("heart_replace_color", "") or ""))
     gs.stage = stage_new
     gs.green_room = list(snap.get("green_room", gs.green_room))
     gs.set_zone = list(snap.get("set_zone", gs.set_zone))
@@ -3504,6 +3703,10 @@ def _slot_effective_cost(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: st
                 bonus += int(_body_always_success_count_cost_bonus_from_blob(blob, success_count) or 0)
             except Exception:
                 pass
+        try:
+            bonus += int(getattr(slot, 'temp_cost', 0) or 0)
+        except Exception:
+            pass
         return int(base + bonus)
     except Exception:
         return 0
@@ -4702,7 +4905,7 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                 eff_t = str(cl.get("effect_template", "") or "")
                 cost = cost_t
                 eff = eff_t if eff_t else raw
-                if "<(E)>" not in cost and "[E]" not in cost and "Ｅ" not in cost and "E" not in cost:
+                if _parse_energy_cost(cost) <= 0:
                     blob = str(eff or "")
                     if (not str(getattr(gs, 'success_zone_heart_color', '') or '').strip()) and (
                         ('成功ライブカード置き場' in blob) and ('選んだハート' in blob) and
@@ -4794,44 +4997,113 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                         }
                         _append_prompt(pr, f'{pos}: {ci.cardnumber} ライブ開始時')
                         continue
-                    # Optional hand-discard cost（「手札をN枚控え室に置いてもよい」「手札のXを1枚控え室に置いてもよい」）
+                    # Optional hand-discard cost.  These should enter the actual
+                    # cost-payment picker directly; declining the optional cost is the
+                    # Skip / zero-pick action on that same screen.
                     if '控え室に置いてもよい' in cost and (_match_effect_template(eff) or _is_named_hand_cost_result_effect(eff)):
-                        # 手札のライブカード / 任意カード / 指定名カードを捨てる optional cost.
                         named_cost = _parse_named_hand_discard_cost(cost)
+                        group_cost = _parse_group_hand_discard_cost(cost)
                         m_live = re.search(r'手札のライブカードを(\d+)枚控え室に置いてもよい', cost)
                         m_hand = re.search(r'手札を(\d+)枚控え室に置いてもよい', cost)
-                        extra_cost: Dict[str, Any] = {}
+                        ctx = {'pos': pos.upper(), 'source_cn': ci.cardnumber}
+                        prompt_text = _pretty_optional_effect_prompt_text('ライブ開始時', ci.cardnumber, cost, eff) + '\nコストとして控え室に置く手札を選んでください。支払わない場合はスキップ。'
                         if named_cost:
-                            cost_kind = 'discard_named_from_hand'
-                            cost_n = int(named_cost.get('max_picks') or 0)
-                            extra_cost = {
-                                'cost_names': list(named_cost.get('names', []) or []),
+                            names = list(named_cost.get('names', []) or [])
+                            cands = _hand_named_card_candidates(gs, cards_db, names)
+                            max_raw = named_cost.get('max_picks', None)
+                            max_picks = len(cands) if max_raw is None else int(max_raw or 0)
+                            if max_raw is None:
+                                max_picks = len(cands)
+                            pr = {
+                                'kind': 'choose_member_from_green_multi_up_to',
+                                'source_zone': 'hand',
+                                'action': 'discard_from_hand',
                                 'min_picks': int(named_cost.get('min_picks', 0) or 0),
-                                'max_picks': named_cost.get('max_picks', None),
+                                'max_picks': max(0, max_picks),
                                 'exact_or_zero': bool(named_cost.get('exact_or_zero', False)),
-                                'named_cost_mode': str(named_cost.get('mode', '') or ''),
+                                'text': prompt_text,
+                                'options': list(cands),
+                                'source_cn': ci.cardnumber,
+                                'after_effect_template': eff,
+                                'after_ctx': ctx,
+                                'after_source_cn': ci.cardnumber,
+                                'skip_if_no_picks': True,
                             }
-                        elif m_live:
-                            cost_kind = 'discard_live_from_hand'
+                            _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
+                            continue
+                        if group_cost:
+                            group = str(group_cost.get('group', '') or '')
+                            kind2 = str(group_cost.get('kind', 'ANY') or 'ANY')
+                            cands = _hand_candidates_by_kind(gs, cards_db, kind=kind2, group=group)
+                            max_picks = min(int(group_cost.get('max_picks', 1) or 1), len(cands)) if not bool(group_cost.get('exact_or_zero', False)) else int(group_cost.get('max_picks', 1) or 1)
+                            if int(group_cost.get('max_picks', 1) or 1) == 1:
+                                pr = {
+                                    'kind': 'discard_from_hand',
+                                    'remaining': 1,
+                                    'text': prompt_text,
+                                    'options': list(cands),
+                                    'source_cn': ci.cardnumber,
+                                    'after_effect_template': eff,
+                                    'after_ctx': ctx,
+                                    'after_source_cn': ci.cardnumber,
+                                    'allow_skip': True,
+                                    'optional': True,
+                                    'skip_reason': 'optional group hand discard live-start cost',
+                                }
+                            else:
+                                pr = {
+                                    'kind': 'choose_member_from_green_multi_up_to',
+                                    'source_zone': 'hand',
+                                    'action': 'discard_from_hand',
+                                    'min_picks': int(group_cost.get('min_picks', 0) or 0),
+                                    'max_picks': max(0, max_picks),
+                                    'exact_or_zero': bool(group_cost.get('exact_or_zero', False)),
+                                    'text': prompt_text,
+                                    'options': list(cands),
+                                    'source_cn': ci.cardnumber,
+                                    'after_effect_template': eff,
+                                    'after_ctx': ctx,
+                                    'after_source_cn': ci.cardnumber,
+                                    'skip_if_no_picks': True,
+                                }
+                            _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
+                            continue
+                        if m_live:
                             cost_n = int(m_live.group(1))
-                        elif m_hand:
-                            cost_kind = 'discard_from_hand'
-                            cost_n = int(m_hand.group(1))
+                            cands = _hand_candidates_by_kind(gs, cards_db, kind='LIVE')
                         else:
-                            cost_kind = 'discard_from_hand'
-                            cost_n = 1
-                        pr = {
-                            'kind': 'live_start_pay_effect',
-                            'pos': pos,
-                            'cn': ci.cardnumber,
-                            'need_e': 0,
-                            'cost_kind': cost_kind,
-                            'cost_n': cost_n,
-                            'effect': eff,
-                            'text': _pretty_optional_effect_prompt_text('ライブ開始時', ci.cardnumber, cost, eff),
-                            'options': ['pay', 'skip'],
-                        }
-                        pr.update(extra_cost)
+                            cost_n = int(m_hand.group(1)) if m_hand else 1
+                            cands = list(gs.hand)
+                        if cost_n <= 1:
+                            pr = {
+                                'kind': 'discard_from_hand',
+                                'remaining': 1,
+                                'text': prompt_text,
+                                'options': list(cands),
+                                'source_cn': ci.cardnumber,
+                                'after_effect_template': eff,
+                                'after_ctx': ctx,
+                                'after_source_cn': ci.cardnumber,
+                                'allow_skip': True,
+                                'optional': True,
+                                'skip_reason': 'optional hand discard live-start cost',
+                            }
+                        else:
+                            pr = {
+                                'kind': 'choose_member_from_green_multi_up_to',
+                                'source_zone': 'hand',
+                                'action': 'discard_from_hand',
+                                'min_picks': 0,
+                                'max_picks': int(cost_n),
+                                'exact_or_zero': True,
+                                'text': prompt_text,
+                                'options': list(cands),
+                                'source_cn': ci.cardnumber,
+                                'after_effect_template': eff,
+                                'after_ctx': ctx,
+                                'after_source_cn': ci.cardnumber,
+                                'skip_if_no_picks': True,
+                            }
                         _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
                         continue
                     # self-wait コスト（「このメンバーをウェイトにしてもよい」「ウェイトにする」）付き効果
@@ -5000,7 +5272,7 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                         triggers.append(trig)
                         continue
                     # Only generic no-cost LIVE-card hooks here.
-                    if ('<(E)>' in cost or '[E]' in cost or 'Ｅ' in cost or 'E' in cost):
+                    if _parse_energy_cost(cost) > 0:
                         continue
                     if _cost_requires_self_wait(cost) or _cost_requires_self_to_green(cost):
                         continue
@@ -5061,6 +5333,10 @@ def _clear_end_of_live_buffs(gs: GameState, cards_db: Optional[Dict[str, CardInf
             slot.temp_hearts = {}
             try:
                 slot.temp_score = 0
+            except Exception:
+                pass
+            try:
+                slot.temp_cost = 0
             except Exception:
                 pass
             slot.temp_until = ""
@@ -5282,6 +5558,8 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
                 if _cost_requires_main_phase(cost) and gs.phase != 'MAIN':
                     gs.log.append(f"[INFO] {canon}[登場]: skipped outside MAIN: {cost}")
                     continue
+                group_cost = _parse_group_hand_discard_cost(cost)
+                m_live = re.search(r"手札のライブカードを(\d+)枚控え室に置いてもよい", cost)
                 m = re.search(r"手札を(\d+)枚控え室に置いてもよい", cost)
                 n = 0
                 if m:
@@ -5291,20 +5569,110 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
                         n = 0
                 if n <= 0 and ("手札を1枚控え室に置いてもよい" in cost):
                     n = 1
+                if group_cost and _match_effect_template(eff):
+                    ctx = {'pos': pos.upper(), 'source_cn': canon}
+                    group = str(group_cost.get('group', '') or '')
+                    kind2 = str(group_cost.get('kind', 'ANY') or 'ANY')
+                    cands = _hand_candidates_by_kind(gs, cards_db, kind=kind2, group=group)
+                    need = int(group_cost.get('max_picks', 1) or 1)
+                    prompt_text = _pretty_optional_effect_prompt_text('登場', canon, cost, eff) + '\nコストとして控え室に置く手札を選んでください。支払わない場合はスキップ。'
+                    if need <= 1:
+                        gs.pending.append({
+                            'kind': 'discard_from_hand',
+                            'remaining': 1,
+                            'text': prompt_text,
+                            'options': list(cands),
+                            'after_effect_template': eff,
+                            'after_ctx': ctx,
+                            'after_source_cn': canon,
+                            'allow_skip': True,
+                            'optional': True,
+                            'skip_reason': 'optional group hand discard enter-auto cost',
+                        })
+                    else:
+                        gs.pending.append({
+                            'kind': 'choose_member_from_green_multi_up_to',
+                            'source_zone': 'hand',
+                            'action': 'discard_from_hand',
+                            'min_picks': int(group_cost.get('min_picks', 0) or 0),
+                            'max_picks': need if bool(group_cost.get('exact_or_zero', False)) else min(need, len(cands)),
+                            'exact_or_zero': bool(group_cost.get('exact_or_zero', False)),
+                            'text': prompt_text,
+                            'options': list(cands),
+                            'after_effect_template': eff,
+                            'after_ctx': ctx,
+                            'after_source_cn': canon,
+                            'skip_if_no_picks': True,
+                        })
+                    gs.log.append(f"[PENDING] {canon}[登場]: optional group discard cost picker then {eff}")
+                    return
+                if m_live and _match_effect_template(eff):
+                    ctx = {'pos': pos.upper(), 'source_cn': canon}
+                    n_live = int(m_live.group(1) or 1)
+                    cands = _hand_candidates_by_kind(gs, cards_db, kind='LIVE')
+                    prompt_text = _pretty_optional_effect_prompt_text('登場', canon, cost, eff) + '\nコストとして控え室に置くライブカードを選んでください。支払わない場合はスキップ。'
+                    if n_live <= 1:
+                        gs.pending.append({
+                            'kind': 'discard_from_hand',
+                            'remaining': 1,
+                            'text': prompt_text,
+                            'options': list(cands),
+                            'after_effect_template': eff,
+                            'after_ctx': ctx,
+                            'after_source_cn': canon,
+                            'allow_skip': True,
+                            'optional': True,
+                            'skip_reason': 'optional live hand discard enter-auto cost',
+                        })
+                    else:
+                        gs.pending.append({
+                            'kind': 'choose_member_from_green_multi_up_to',
+                            'source_zone': 'hand',
+                            'action': 'discard_from_hand',
+                            'min_picks': 0,
+                            'max_picks': n_live,
+                            'exact_or_zero': True,
+                            'text': prompt_text,
+                            'options': list(cands),
+                            'after_effect_template': eff,
+                            'after_ctx': ctx,
+                            'after_source_cn': canon,
+                            'skip_if_no_picks': True,
+                        })
+                    gs.log.append(f"[PENDING] {canon}[登場]: optional live-card discard cost picker then {eff}")
+                    return
                 if n > 0:
                     ctx = {'pos': pos.upper(), 'source_cn': canon}
                     combo_self_wait = _cost_requires_self_wait(cost) and not _cost_requires_self_to_green(cost)
+                    if combo_self_wait:
+                        gs.pending.append({
+                            'kind': 'pay_or_skip',
+                            'text': _pretty_optional_effect_prompt_text('登場', canon, cost, eff),
+                            'options': ['pay', 'skip'],
+                            'cost_kind': 'self_wait_and_discard_from_hand',
+                            'cost_n': n,
+                            'after_effect_template': eff,
+                            'ctx': ctx,
+                            'source_cn': canon,
+                        })
+                        gs.log.append(f"[PENDING] {canon}[登場]: pay/skip -> self_wait + discard {n} then {eff}")
+                        return
+                    # Optional hand-discard costs on auto effects should open the actual
+                    # cost-payment screen immediately.  Declining the effect is represented
+                    # by the Skip button on that same hand-selection screen.
                     gs.pending.append({
-                        'kind': 'pay_or_skip',
-                        'text': _pretty_optional_effect_prompt_text('登場', canon, cost, eff),
-                        'options': ['pay', 'skip'],
-                        'cost_kind': ('self_wait_and_discard_from_hand' if combo_self_wait else 'discard_from_hand'),
-                        'cost_n': n,
+                        'kind': 'discard_from_hand',
+                        'remaining': n,
+                        'text': _pretty_optional_effect_prompt_text('登場', canon, cost, eff) + '\nコストとして控え室に置く手札を選んでください。支払わない場合はスキップ。',
+                        'options': list(gs.hand),
                         'after_effect_template': eff,
-                        'ctx': ctx,
-                        'source_cn': canon,
+                        'after_ctx': ctx,
+                        'after_source_cn': canon,
+                        'allow_skip': True,
+                        'optional': True,
+                        'skip_reason': 'optional hand discard enter-auto cost',
                     })
-                    gs.log.append(f"[PENDING] {canon}[登場]: pay/skip -> {'self_wait + ' if combo_self_wait else ''}discard {n} then {eff}")
+                    gs.log.append(f"[PENDING] {canon}[登場]: optional discard cost picker {n} then {eff}")
                     return
                 e_cost = _parse_energy_cost(cost)
                 if e_cost > 0 and _match_effect_template(eff):
@@ -9889,6 +10257,13 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                     return
                 picked.append(found_cn)
                 hand_copy.pop(found_idx)
+            if not picked and bool(p.get('skip_if_no_picks', False)):
+                gs.log.append(f"[SKIP] {str(p.get('after_source_cn', '') or '')}: skipped optional multi-discard cost")
+                _r = p.get('_resume') if isinstance(p, dict) else None
+                if _r:
+                    gs.pending.append(_r)
+                _enqueue_auto_order_from_deferred()
+                return
             gs.hand = hand_copy
             gs.green_room.extend(picked)
             gs.log.append(f"[ACT] discard multi -> {picked}")
@@ -11329,6 +11704,37 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             gs.log.append(f"[SKIP] {pos}: live-start ability skipped")
         return
     # 1c) Live-start Rise Up High: choose 1 Nijigasaki member -> temp blade +1
+    if kind == 'choose_stage_member_for_source_cost_equal_minus_icon':
+        pos2 = str(choice_str or '').strip().upper()
+        cand = [str(x).upper() for x in list(p.get('candidates', []) or []) if str(x).upper() in ('L','C','R')]
+        if pos2 not in ('L','C','R') or (cand and pos2 not in cand):
+            gs.log.append(f"[ERR] choose_stage_member_for_source_cost_equal_minus_icon: invalid choice {choice_str}")
+            gs.pending.append(p)
+            return
+        ok = _grant_source_cost_equal_selected_original_minus_and_icon(
+            gs,
+            cards_db,
+            str(p.get('source_pos', '') or '').upper(),
+            pos2,
+            int(p.get('minus_n', 0) or 0),
+            int(p.get('threshold', 0) or 0),
+            str(p.get('icons', '') or ''),
+            source_cn=str(p.get('source_cn', '') or ''),
+        )
+        if not ok:
+            gs.log.append(f"[ERR] choose_stage_member_for_source_cost_equal_minus_icon: failed for {pos2}")
+            gs.pending.append(p)
+        return
+    if kind == 'choose_stage_member_for_temp_cost':
+        pos2 = str(choice_str or '').strip().upper()
+        opts = list(p.get('options', []) or [])
+        if pos2 not in ('L', 'C', 'R') or (opts and pos2 not in opts):
+            gs.log.append(f"[ERR] choose_stage_member_for_temp_cost: invalid choice {choice_str}")
+            return
+        ok = _grant_stage_member_temp_cost(gs, cards_db, pos2, int(p.get('cost_n', 0) or 0), source_cn=str(p.get('source_cn', '') or ''))
+        if not ok:
+            gs.log.append(f"[ERR] choose_stage_member_for_temp_cost: failed for {pos2}")
+        return
     if kind == 'pick_group_member_for_temp_blade':
         raw = str(choice_str or '').strip()
         pos = (raw[:1].upper() if raw else '')
