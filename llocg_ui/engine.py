@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_start_group_discard_cost_equal_20260610l
+# BUILD_TAG: live_start_cost_plus_condition_retrieve_unit_20260610m
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -35,6 +35,7 @@ _EFFECT_RULES = [
     {"id": "draw_n_then_gain_icons_until_end_live", "pattern": r"^カードを(?P<n>\d+)枚引き、ライブ終了時まで、(?P<icons>(?:<(?:\([^)]+\)|[^<>]+)>)+)を得る。$", "op": "draw_then_gain_icons_until_end_live"},
     {"id": "draw_then_stage_group_member_temp_cost", "pattern": r"^カードを(?P<draw_n>\d+)枚引き、ライブ終了時まで、自分のステージにいる『(?P<group>[^』]+)』のメンバー1人のコストを\+(?P<cost_n>\d+)する。$", "op": "draw_then_stage_group_member_temp_cost"},
     {"id": "stage_group_member_cost_equal_original_minus_self_gain_icon_if_gte", "pattern": r"^自分のステージにいる『(?P<group>[^』]+)』のメンバー1人を選ぶ。ライブ終了時まで、このメンバーのコストは、選んだメンバーが元々持つコストより(?P<minus_n>\d+)低い値に等しくなる。これによりこのカードのコストが(?P<threshold>\d+)以上になった場合、ライブ終了時まで、(?P<icons>(?:<(?:\([^)]+\)|[^<>]+)>)+)を得る。$", "op": "stage_group_member_cost_equal_original_minus_self_gain_icon_if_gte"},
+    {"id": "self_temp_cost_then_stage_group_cost_sum_gt_opponent_gain_icons", "pattern": r"^ライブ終了時まで、このメンバーのコストを\+(?P<cost_n>\d+)する。その後、自分のステージにいる『(?P<group>[^』]+)』のメンバーのコストの合計が、相手のステージにいるメンバーのコストの合計より高い場合、さらにライブ終了時まで、(?P<icons>(?:<(?:\([^)]+\)|[^<>]+)>)+)を得る。$", "op": "self_temp_cost_then_stage_group_cost_sum_gt_opponent_gain_icons"},
     {"id": "draw_n_discard_m", "pattern": r"^カードを(?P<n>\d+)枚引き、手札を(?P<m>\d+)枚控え室に置く。$", "op": "draw_then_discard"},
     {"id": "discard_hand_n", "pattern": r"^手札を(?P<n>\d+)枚控え室に置く。$", "op": "discard_from_hand"},
     {"id": "retrieve_waiting_live_n", "pattern": r"^自分の控え室からライブカードを(?P<n>\d+)枚手札に加える。$", "op": "retrieve_from_waiting_room", "card_kind": "LIVE"},
@@ -525,7 +526,7 @@ def _yell_revealed_candidates(
                 cst = int(getattr(ci2, 'cost', 0) or 0)
                 if not (_is_member_ci(ci2) and cst >= int(cost_min or 0) and cst <= int(cost_lim or 99)):
                     continue
-            if group and (group not in str(getattr(ci2, 'group', '') or '')):
+            if group and not _ci_matches_group_or_unit(ci2, group):
                 continue
             seen.add(canon2)
             cands.append(str(cn2 or ''))
@@ -833,6 +834,58 @@ def _enqueue_stage_group_member_temp_cost(gs: 'GameState', cards_db: Dict[str, C
         'source_cn': source_cn,
     })
     gs.log.append(f'[PENDING] {source_cn}: choose 『{group_name}』 member for temp cost +{int(cost_n or 0)}')
+
+def _stage_group_cost_sum(gs: 'GameState', cards_db: Dict[str, CardInfo], group_name: str) -> int:
+    """Return current/effective cost sum of own stage members matching group or unit."""
+    total = 0
+    group_name = str(group_name or '').strip()
+    if not group_name:
+        return 0
+    for ppos in ('L', 'C', 'R'):
+        slot = (getattr(gs, 'stage', {}) or {}).get(ppos)
+        if not slot or not getattr(slot, 'cardnumber', ''):
+            continue
+        ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+        if not ci or not _is_member_ci(ci):
+            continue
+        if not _ci_matches_group_or_unit(ci, group_name):
+            continue
+        try:
+            total += int(_slot_effective_cost(gs, cards_db, ppos, slot) or 0)
+        except Exception:
+            try:
+                total += int(getattr(ci, 'cost', 0) or 0)
+            except Exception:
+                pass
+    return int(total)
+
+def _enqueue_manual_stage_group_cost_sum_gt_opponent_then_icons(
+    gs: 'GameState',
+    cards_db: Dict[str, CardInfo],
+    group_name: str,
+    icons_blob: str,
+    ctx: Optional[Dict[str, Any]] = None,
+    source_cn: str = '',
+) -> None:
+    """Ask user to confirm opponent-comparison condition, then grant icons to source.
+
+    Opponent stage is not modeled by this simulator, so the self total is shown and
+    the opponent comparison is resolved with Apply/Skip.
+    """
+    ctx2 = dict(ctx or {})
+    if source_cn and not ctx2.get('source_cn'):
+        ctx2['source_cn'] = source_cn
+    own_total = _stage_group_cost_sum(gs, cards_db, group_name)
+    eff = f'ライブ終了時まで、{str(icons_blob or "")}を得る。'
+    gs.pending.append({
+        'kind': 'confirm_effect',
+        'text': f'自分のステージにいる『{group_name}』のメンバーのコスト合計は {own_total} です。相手のステージにいるメンバーのコスト合計より高い場合、ライブ終了時まで {icons_blob} を得ます。条件を満たすなら Apply、満たさないなら Skip。',
+        'options': ['apply', 'skip'],
+        'after_effect_template': eff,
+        'ctx': ctx2,
+        'source_cn': source_cn,
+    })
+    gs.log.append(f'[PENDING] {source_cn}: manual stage cost-sum comparison for 『{group_name}』 own_total={own_total}; icons={icons_blob}')
 
 def _base_member_cost(ci: Optional[CardInfo]) -> int:
     try:
@@ -1767,6 +1820,21 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         _enqueue_source_cost_equal_group_member_original_minus_and_icon(
             gs, cards_db, source_pos, group_name, minus_n, threshold, icons_blob, source_cn=src
         )
+        return
+    if op == 'self_temp_cost_then_stage_group_cost_sum_gt_opponent_gain_icons':
+        cost_n = int(gd.get('cost_n', 0) or 0)
+        group_name = str(gd.get('group', '') or '').strip()
+        icons_blob = str(gd.get('icons', '') or '')
+        src = str((ctx or {}).get('source_cn', '') or '')
+        source_pos = str((ctx or {}).get('pos', '') or '').upper()
+        if source_pos not in ('L', 'C', 'R'):
+            gs.log.append(f'[WARN] {src}: source position missing for self temp cost +{cost_n}')
+            return
+        ok = _grant_stage_member_temp_cost(gs, cards_db, source_pos, cost_n, source_cn=src)
+        if not ok:
+            gs.log.append(f'[WARN] {src}: failed to apply self temp cost +{cost_n}')
+            return
+        _enqueue_manual_stage_group_cost_sum_gt_opponent_then_icons(gs, cards_db, group_name, icons_blob, ctx=ctx, source_cn=src)
         return
     if op == 'draw_then_discard':
         n = int(gd.get('n', 0) or 0)
