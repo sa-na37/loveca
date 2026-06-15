@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: server_cost_badge_hand_format_20260610d
+# BUILD_TAG: server_cardno_cl_popup_fix_20260615y
 from __future__ import annotations
 
 """llocg_ui.server
@@ -187,6 +187,7 @@ class App:
         hand_spec = (env.get('LLOCG_START_HAND') or '').strip()
         e_active_s = (env.get('LLOCG_START_ENERGY_ACTIVE') or '').strip()
         e_wait_s = (env.get('LLOCG_START_ENERGY_WAIT') or '').strip()
+        opponent_wait_s = (env.get('LLOCG_START_OPPONENT_WAIT') or '').strip()
         turn_s = (env.get('LLOCG_START_TURN') or '').strip()
         phase_s = (env.get('LLOCG_START_PHASE') or '').strip()
         hand_size_s = (env.get('LLOCG_START_HAND_SIZE') or '').strip()
@@ -210,7 +211,7 @@ class App:
 
         any_override = any([
             preset_s,
-            hand_spec, e_active_s, e_wait_s, turn_s, phase_s, hand_size_s, shuffle_s, debug_s,
+            hand_spec, e_active_s, e_wait_s, opponent_wait_s, turn_s, phase_s, hand_size_s, shuffle_s, debug_s,
             green_spec, decktop_spec, deckexact_spec, resolve_spec,
             stage_spec, stage_l, stage_c, stage_r,
         ])
@@ -573,6 +574,15 @@ class App:
             try:
                 gs.energy_active = active
                 gs.energy_wait = wait
+            except Exception:
+                pass
+
+        # Opponent wait count override (debug/manual state seed)
+        if opponent_wait_s:
+            try:
+                ow = max(0, min(3, _as_int(opponent_wait_s, 0)))
+                gs.opponent_wait_count = ow
+                gs.log.append(f'[DEBUG_START] opponent_wait_count={ow}')
             except Exception:
                 pass
 
@@ -1051,6 +1061,7 @@ class App:
             "hand_detail": self._hand_detail_for_ui(),
             "energy_active": int(self.gs.energy_active),
             "energy_wait": int(self.gs.energy_wait),
+            "opponent_wait_count": max(0, min(3, int(getattr(self.gs, "opponent_wait_count", 0) or 0))),
             "stage": {k: (asdict(v) if v else None) for k, v in self.gs.stage.items()},
             "green_room": list(self.gs.green_room),
             "set_zone": list(self.gs.set_zone),
@@ -1245,6 +1256,7 @@ class App:
             "resolve_pending",
             "next",
             "mulligan_next",
+            "opponent_wait_delta",
         }
         if mutating and name != "toggle_debug":
             push_undo(self.gs, self.rng)
@@ -1267,6 +1279,18 @@ class App:
         elif name == "toggle_stage_active":
             push_undo(self.gs, self.rng)
             cmd_toggle_stage_active(self.gs, self.cards_db, str(payload.get("pos", "")))
+        elif name == "opponent_wait_delta":
+            try:
+                delta = int(payload.get("delta", 0) or 0)
+            except Exception:
+                delta = 0
+            cur = max(0, min(3, int(getattr(self.gs, "opponent_wait_count", 0) or 0)))
+            newv = max(0, min(3, cur + delta))
+            try:
+                self.gs.opponent_wait_count = newv
+                self.gs.log.append(f"[UI] opponent_wait_count {cur} -> {newv}")
+            except Exception:
+                pass
         elif name == "resolve_pending":
             cmd_resolve_pending(
                 self.gs,
@@ -1614,6 +1638,9 @@ HTML = r'''<!doctype html>
   #topBar .pill{background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:6px 10px;font-size:12px;}
   #topBar .miniBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:6px 10px;border-radius:10px;cursor:pointer;}
   #topBar .miniBtn:hover{background:rgba(255,255,255,.18);}
+  #topBar .oppWaitPill{display:flex;align-items:center;gap:6px;}
+  #topBar .oppWaitBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.16);border-radius:999px;min-width:24px;height:22px;padding:0 7px;line-height:18px;font-size:13px;font-weight:800;cursor:pointer;}
+  #topBar .oppWaitBtn:hover{background:rgba(255,255,255,.20);}
 
   /* banner */
   #banner{position:absolute;left:50%;top:54px;transform:translateX(-50%);padding:10px 16px;border-radius:999px;background:rgba(0,0,0,.72);border:1px solid rgba(255,255,255,.22);z-index:9900;display:none;font-size:18px;font-weight:800;letter-spacing:.5px;pointer-events:none;max-width:85%;text-align:center;}
@@ -1727,6 +1754,7 @@ HTML = r'''<!doctype html>
 
     <div id="topBar">
       <div class="pill">Turn: <b id="turn">?</b> | Phase: <b id="phase">?</b> | Energy: <b id="energy">?</b></div>
+      <div class="pill oppWaitPill">Opponent wait: <b id="opponentWait">0</b>/3 <button class="oppWaitBtn" id="btnOppWaitMinus" title="相手ウェイト人数を減らす">−</button><button class="oppWaitBtn" id="btnOppWaitPlus" title="相手ウェイト人数を増やす">＋</button></div>
       <div class="pill">Selected(hand): <b id="selected">0</b></div>
       <button class="miniBtn" id="btnDbg">枠表示</button>
     </div>
@@ -1811,8 +1839,30 @@ HTML = r'''<!doctype html>
   const elTurn = document.getElementById('turn');
   const elPhase = document.getElementById('phase');
   const elEnergy = document.getElementById('energy');
+  const elOpponentWait = document.getElementById('opponentWait');
+  const btnOppWaitMinus = document.getElementById('btnOppWaitMinus');
+  const btnOppWaitPlus = document.getElementById('btnOppWaitPlus');
   const elSelected = document.getElementById('selected');
   const elBanner = document.getElementById('banner');
+
+  async function adjustOpponentWait(delta){
+    st = await apiCmd('opponent_wait_delta', {delta});
+    selHand = [];
+    updateTop();
+    render();
+  }
+  if(btnOppWaitMinus){
+    btnOppWaitMinus.addEventListener('click', async (ev)=>{
+      ev.stopPropagation();
+      await adjustOpponentWait(-1);
+    });
+  }
+  if(btnOppWaitPlus){
+    btnOppWaitPlus.addEventListener('click', async (ev)=>{
+      ev.stopPropagation();
+      await adjustOpponentWait(1);
+    });
+  }
 
   const elMask = document.getElementById('mask');
   const elModal = document.getElementById('modal');
@@ -2010,11 +2060,19 @@ HTML = r'''<!doctype html>
     if(tot && tot > 1) return `${name} (${nth}/${tot})`;
     return name;
   }
+  function shortAutoOrderLabel(label, cn){
+    let s = String(label || '').trim();
+    const c = String(cn || '').trim();
+    if(c && s.startsWith(c + '：')) s = s.slice(c.length + 1).trim();
+    if(s.length > 18) s = s.slice(0, 17) + '…';
+    return s;
+  }
   function pendingTitleFor(p){
     const kind = String((p && p.kind) || '').trim();
     if(kind === 'pay_or_skip' || kind === 'confirm_effect') return '効果を使いますか？';
     if(kind === 'choose_effects') return '効果を選択';
-    if(kind === 'choose_stage_member_to_activate' || kind === 'choose_stage_member_to_gain_blade') return '対象メンバーを選択';
+    if(kind === 'opponent_wait_notify') return '相手ウェイト人数を記録';
+    if(kind === 'choose_stage_member_to_activate' || kind === 'choose_stage_member_to_gain_blade' || kind === 'choose_stage_member_to_gain_icons' || kind === 'choose_stage_member_to_position_change_source') return '対象メンバーを選択';
     if(kind === 'choose_heart_color' || kind === 'choose_heart_color_for_other') return 'ハートの色を選択';
     if(kind === 'discard_from_hand' || kind === 'discard_named_cards_from_hand') return '手札から選択';
     if(kind === 'position_change') return '移動先を選択';
@@ -2029,6 +2087,7 @@ HTML = r'''<!doctype html>
     if(kind === 'self_top1_to_green_or_keep') return 'デッキ上を確認';
     if(kind === 'choose_member_from_green_multi_up_to') return 'カードを選択';
     if(kind === 'auto_order') return '解決順を選択';
+    if(kind === 'choose_opponent_wait_count_for_topdeck_green_group_members') return '人数を選択';
     return '効果の選択';
   }
   function summarizeEffectText(raw){
@@ -2049,7 +2108,8 @@ HTML = r'''<!doctype html>
     if(kind === 'pay_or_skip' || kind === 'confirm_effect') return 'この効果を使うか、スキップするかを選んでください。';
     if(kind === 'choose_member_from_green_multi_up_to') return '控え室または手札からカードを0〜指定枚数まで選び、確定を押してください。';
     if(kind === 'choose_stage_member_to_activate') return '対象にするメンバーを選んでください。';
-    if(kind === 'choose_stage_member_to_gain_blade') return 'ブレードを得るメンバーを選んでください。';
+    if(kind === 'choose_stage_member_to_position_change_source') return 'ポジションチェンジさせるメンバーを選んでください。';
+    if(kind === 'choose_stage_member_to_gain_blade' || kind === 'choose_stage_member_to_gain_icons') return '効果を受けるメンバーを選んでください。';
     if(kind === 'choose_heart_color' || kind === 'choose_heart_color_for_other') return '付与するハートの色を選んでください。';
     if(kind === 'discard_from_hand' || kind === 'discard_named_cards_from_hand') return '手札から選ぶカードを選択してください。';
     if(kind === 'choose_effects') return '解決する効果を選んでください。';
@@ -3303,6 +3363,7 @@ inner.appendChild(card);
     t.innerHTML = `Energy: <b>${active}</b> / <b>${total}</b><div style="opacity:.8;font-size:12px;margin-top:2px;">wait: ${wait}</div>`;
     wrap.appendChild(t);
 
+
     const btnUndo = document.createElement('button');
     btnUndo.className = 'btn';
     btnUndo.textContent = 'UNDO';
@@ -3696,7 +3757,7 @@ inner.appendChild(card);
     if(!s) return false;
     // Exact cardnumber only. Labels like "C: PL!N-bp1-003 ライブ開始時" must NOT match.
     // Prefixes: PL!, PL!N, PL!S, PL!SP, PL!HS, LL (series suffix optional after !)
-    return /^(?:PL!|LL)[A-Za-z0-9]*-(?:bp\d+|pb\d+|sd\d+|PR|P\d+)-\d{3}$/i.test(s);
+    return /^(?:PL!|LL)[A-Za-z0-9]*-(?:bp\d+|pb\d+|sd\d+|cl\d+|PR|P\d+)-\d{3}$/i.test(s);
   }
 
   function showPending(p){
@@ -4684,7 +4745,11 @@ inner.appendChild(card);
         if(looksLikeCardNo(it.cn)){
           const key = String(it.cn).trim();
           dupSeenAuto[key] = (dupSeenAuto[key]||0) + 1;
-          cap.textContent = cardChoiceCaption(it.cn, dupSeenAuto[key], dupCountAuto[key]);
+          if((dupCountAuto[key]||0) > 1 && it.label && !looksLikeCardNo(it.label)){
+            cap.textContent = `${cardNameFor(it.cn)}：${shortAutoOrderLabel(it.label, it.cn)}`;
+          }else{
+            cap.textContent = cardChoiceCaption(it.cn, dupSeenAuto[key], dupCountAuto[key]);
+          }
         }else{
           cap.textContent = it.label;
         }
@@ -4950,6 +5015,64 @@ inner.appendChild(card);
       return;
     }
 
+    // choose_*_from_green: card images + optional Skip button when 1枚まで/optional
+    if(kind === 'choose_live_from_green' || kind === 'choose_member_from_green'){
+      const cardOpts = opts.filter(o => looksLikeCardNo(String(o)));
+      const hasSkip = !!(p && (p.allow_skip || p.allow_less || p.optional)) || opts.some(o => String(o).toLowerCase() === 'skip');
+      const row = document.createElement('div');
+      row.className = 'choiceRow';
+      const dimsP = standardSize('portrait');
+      const dimsL = standardSize('landscape');
+      const dupCount = {};
+      cardOpts.forEach(o=>{ const k=String(o).trim(); dupCount[k]=(dupCount[k]||0)+1; });
+      const dupSeen = {};
+      cardOpts.forEach(cn=>{
+        cn = String(cn).trim();
+        const intr = intrinsicOrient(cn);
+        const d = (intr==='landscape') ? dimsL : dimsP;
+        const b = document.createElement('button');
+        b.className = 'choiceBtn';
+        b.style.width = d.w + 'px';
+        b.style.height = d.h + 'px';
+        const img = document.createElement('img');
+        img.src = imgUrl(cn); img.alt = cn;
+        dupSeen[cn] = (dupSeen[cn]||0)+1;
+        const cap = document.createElement('div');
+        cap.className = 'choiceCap';
+        cap.textContent = cardChoiceCaption(cn, dupSeen[cn], dupCount[cn]||0);
+        b.appendChild(img); b.appendChild(cap);
+        b.addEventListener('click', async ev=>{
+          ev.stopPropagation();
+          st = await apiCmd('resolve_pending', {idx:0, choice: cn});
+          selHand=[]; updateTop(); render();
+        });
+        row.appendChild(b);
+      });
+      if(cardOpts.length){
+        elModalCards.appendChild(row);
+      }else{
+        const note = document.createElement('div');
+        note.style.opacity = '0.85';
+        note.style.fontSize = '13px';
+        note.style.padding = '6px 0';
+        note.textContent = '候補カードがありません。';
+        elModalCards.appendChild(note);
+      }
+      if(hasSkip){
+        const bSkip = document.createElement('button');
+        bSkip.className = 'miniBtn';
+        bSkip.textContent = 'スキップ';
+        bSkip.addEventListener('click', async ev=>{
+          ev.stopPropagation();
+          st = await apiCmd('resolve_pending', {idx:0, choice:'skip'});
+          selHand=[]; updateTop(); render();
+        });
+        elModalActions.appendChild(bSkip);
+      }
+      elMask.style.display = 'block';
+      return;
+    }
+
     // topdeck_from_green / bottomdeck_from_green / hand_to_deck_bottom: card images + optional Skip button
     if(kind === 'topdeck_from_green' || kind === 'bottomdeck_from_green' || kind === 'hand_to_deck_bottom' || kind === 'hand_to_deck_top_or_bottom'){
       const cardOpts = opts.filter(o => looksLikeCardNo(String(o)));
@@ -5071,7 +5194,7 @@ inner.appendChild(card);
       opts.forEach(opt=>{
         const b = document.createElement('button');
         b.className = 'miniBtn';
-        b.textContent = choiceTextLabel(opt);
+        b.textContent = (kind === 'choose_opponent_wait_count_for_topdeck_green_group_members' || kind === 'opponent_wait_notify') ? String(opt) : choiceTextLabel(opt);
         b.addEventListener('click', async (ev)=>{
           ev.stopPropagation();
           st = await apiCmd('resolve_pending', {idx:0, choice:String(opt)});
@@ -5118,6 +5241,9 @@ inner.appendChild(card);
     const active = st ? Number(st.energy_active||0) : 0;
     const wait = st ? Number(st.energy_wait||0) : 0;
     elEnergy.textContent = st ? `${active}/${active+wait}` : '?';
+    if(elOpponentWait) elOpponentWait.textContent = st ? String(Math.max(0, Math.min(3, Number(st.opponent_wait_count||0)))) : '?';
+    if(btnOppWaitMinus) btnOppWaitMinus.disabled = !st || Number(st.opponent_wait_count||0) <= 0;
+    if(btnOppWaitPlus) btnOppWaitPlus.disabled = !st || Number(st.opponent_wait_count||0) >= 3;
     elSelected.textContent = String(selHand.length);
     setBanner(st && st.banner && st.banner.text ? String(st.banner.text) : '');
   }
