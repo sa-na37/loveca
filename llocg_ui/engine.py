@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: turn_order_success_skip_20260616ak
+# BUILD_TAG: popup_next_skip_and_keke_enter_trigger_20260616aq
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -61,6 +61,7 @@ _EFFECT_RULES = [
     {"id": "draw_then_hand_top_or_bottom", "pattern": r"^カードを(?P<draw_n>\d+)枚引き、手札からカードを(?P<n>\d+)枚デッキの一番上か一番下に置く。$", "op": "draw_then_hand_to_deck_top_or_bottom"},
     {"id": "score_draw_then_hand_top_or_bottom_if_all_stage_group", "pattern": r"^自分のステージにいるメンバーがすべて『(?P<group>[^』]+)』の場合、このカードのスコアを\+(?P<score_n>\d+)し、カードを(?P<draw_n>\d+)枚引き、手札からカードを(?P<n>\d+)枚デッキの一番上か一番下に置く。$", "op": "score_draw_then_hand_top_or_bottom_if_all_stage_group"},
     {"id": "live_zone_group_only_required_color_sum_gain_all", "pattern": r"^自分のライブカード置き場にあるカードが『(?P<group>[^』]+)』のみで、かつそれらの必要ハートに含まれる(?P<icons>(?:<\([^)]+\)>と?)+)の合計が(?P<threshold>\d+)以上の場合、ライブ終了時まで、(?P<all_icons>(?:<\(ALL\)>)+)を得る。$", "op": "live_zone_group_only_required_color_sum_gain_all"},
+    {"id": "energy_put_wait_then_manual_draw_if_no_bladeheart", "pattern": r"^自分のエネルギーデッキから、エネルギーカードを(?P<n>\d+)枚ウェイト状態で置く。これにより控え室に置いたカードがブレードハートを持たない場合、カードを(?P<draw_n>\d+)枚引く。$", "op": "energy_put_wait_then_manual_draw_if_no_bladeheart"},
     {"id": "energy_put_wait_n", "pattern": r"^自分のエネルギーデッキから、エネルギーカードを(?P<n>\d+)枚ウェイト状態で置く。$", "op": "energy_put_wait"},
     {"id": "energy_put_wait_under_plus_one_self", "pattern": r"^(?:自分の)?エネルギーデッキから、このメンバーの下にあるエネルギーカードの枚数に1を足した枚数のエネルギーカードをウェイト状態で置く。$", "op": "energy_put_wait_under_plus_one_self"},
     {"id": "energy_activate_n", "pattern": r"^エネルギーを(?P<n>\d+)枚アクティブにする。$", "op": "energy_activate"},
@@ -2256,6 +2257,47 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         k = int(gd.get('k', 0) or 0)
         _enqueue_reorder_from_topk_keep_any(gs, k, rng)
         return
+    if op == 'energy_put_wait_then_manual_draw_if_no_bladeheart':
+        n = int(gd.get('n', 1) or 1)
+        draw_n = int(gd.get('draw_n', 1) or 1)
+        n = max(0, n)
+        add = _put_wait_energy_from_deck(gs, n, reason='conditional no-bladeheart draw')
+        ctx0 = dict(ctx or {})
+        src_cn = str(ctx0.get('source_cn', '') or '')
+        discarded = str(ctx0.get('discarded_cn', '') or '')
+        if not discarded:
+            discards = [str(x or '') for x in list(ctx0.get('discarded_cns', []) or []) if str(x or '').strip()]
+            discarded = discards[-1] if discards else ''
+        if add > 0 and draw_n > 0 and discarded:
+            ci_disc = _get_card(cards_db, discarded)
+            is_no_bh = bool(ci_disc and not _ci_has_blade_heart_payload(ci_disc))
+            if is_no_bh:
+                drew = draw(gs, draw_n, rng)
+                gs.log.append(f'[AUTO] {src_cn or "?"}: energy wait +{add}; discarded {discarded} has no blade-heart -> draw {drew}')
+                msg = f'{src_cn or "この能力"}：エネルギーデッキから{add}枚をウェイト状態で置きました。コストとして控え室に置いたカード {discarded} はブレードハートを持たないため、カードを{drew}枚引きました。'
+            else:
+                gs.log.append(f'[SKIP] {src_cn or "?"}: energy wait +{add}; discarded {discarded} has blade-heart -> no draw')
+                msg = f'{src_cn or "この能力"}：エネルギーデッキから{add}枚をウェイト状態で置きました。コストとして控え室に置いたカード {discarded} はブレードハートを持つため、追加ドローは行いません。'
+            gs.pending.append({
+                'kind': 'show_revealed_cards_ack',
+                'label': '控え室に置いたカード確認',
+                'text': msg,
+                'display_cards': [discarded],
+                'options': ['ok'],
+                'source_cn': src_cn,
+            })
+            return
+        if add > 0 and draw_n > 0:
+            gs.pending.append({
+                'kind': 'confirm_effect',
+                'text': f'{src_cn or "この能力"}：エネルギーデッキから{add}枚をウェイト状態で置きました。これにより控え室に置いたカードがブレードハートを持たない場合、カードを{draw_n}枚引きます。条件を満たすなら「使う」、満たさないなら「スキップ」を選んでください。',
+                'options': ['apply', 'skip'],
+                'after_effect_template': f'カードを{draw_n}枚引く。',
+                'ctx': ctx0,
+                'source_cn': src_cn,
+            })
+            gs.log.append(f'[PENDING] {src_cn or "?"}: energy wait +{add}; manual no-bladeheart draw check draw={draw_n}')
+        return
     if op == 'energy_put_wait':
         n = int(gd.get('n', 1) or 1)
         n = max(0, n)
@@ -3121,8 +3163,9 @@ def _enqueue_choose_effects_from_ability(gs: 'GameState', cards_db: Dict[str, Ca
 def _iter_activated_abilities(ci: Optional[CardInfo]):
     if not ci or not getattr(ci, 'abilities', None):
         return []
+    abilities = list(getattr(ci, 'abilities', None) or [])
     out = []
-    for ab in ci.abilities:
+    for ab in abilities:
         if not isinstance(ab, dict):
             continue
         at = str(ab.get('ability_type', '') or '')
@@ -3149,10 +3192,38 @@ def _has_matchable_activated(ci: Optional[CardInfo]) -> bool:
                 return True
     return False
 def _iter_triggered_abilities(ci: Optional[CardInfo], trigger_kw: str):
-    if not ci or not getattr(ci, 'abilities', None):
+    if not ci:
+        return []
+    abilities0 = list(getattr(ci, 'abilities', None) or [])
+    # Some tokv1-only/PB cards can be present in the stat DB before the compiled
+    # ability DB is refreshed. Keep this as a narrow fallback in the generic
+    # triggered-ability shape so the normal [登場] optional-cost route still runs.
+    # Do not require abilities0 to be empty: a partially parsed row may have
+    # abilities but no [登場] trigger.
+    if _canon_cardno(getattr(ci, 'cardnumber', '') or '') == 'PL!SP-pb2-013' and '登場' in str(trigger_kw or ''):
+        has_enter = False
+        for _ab0 in abilities0:
+            if isinstance(_ab0, dict) and ('登場' in str(_ab0.get('trigger', '') or '')):
+                has_enter = True
+                break
+        if not has_enter:
+            abilities0 = list(abilities0) + [{
+                'ability_type': '自動',
+                'trigger': '登場',
+                'conditions': '',
+                'clauses': [{
+                    'optional': True,
+                    'cost_template': '手札の『KALEIDOSCORE』のカードを1枚控え室に置いてもよい',
+                    'effect_template': '自分のエネルギーデッキから、エネルギーカードを1枚ウェイト状態で置く。これにより控え室に置いたカードがブレードハートを持たない場合、カードを1枚引く。',
+                    'cost_op': None,
+                    'effect_op': None,
+                    'raw': '手札の『KALEIDOSCORE』のカードを1枚控え室に置いてもよい：自分のエネルギーデッキから、エネルギーカードを1枚ウェイト状態で置く。これにより控え室に置いたカードがブレードハートを持たない場合、カードを1枚引く。',
+                }],
+            }]
+    if not abilities0:
         return []
     out = []
-    for ab in ci.abilities:
+    for ab in abilities0:
         if not isinstance(ab, dict):
             continue
         trig = str(ab.get('trigger', '') or '')
@@ -3984,6 +4055,38 @@ def _stage_member_has_all_heart_colors(gs: 'GameState', cards_db: Dict[str, Card
     missing = [c for c in need if c not in have]
     return (len(missing) == 0 and len(need) > 0, have, missing)
 
+
+def _stage_member_heart_color_kind_count(gs: 'GameState', cards_db: Dict[str, CardInfo]) -> int:
+    """Count distinct colored hearts currently held by stage members."""
+    try:
+        counts = _stage_member_current_heart_color_counts(gs, cards_db)
+        return int(len([k for k, v in (counts or {}).items() if int(v or 0) > 0 and str(k) in {'pink','red','yellow','green','blue','purple'}]))
+    except Exception:
+        return 0
+
+
+def _stage_all_areas_group_members_distinct_names(gs: 'GameState', cards_db: Dict[str, CardInfo], group_name: str) -> bool:
+    """Return True if L/C/R are all occupied by members matching group/unit and have distinct names."""
+    names = set()
+    tag = str(group_name or '').strip()
+    try:
+        for pos in ('L', 'C', 'R'):
+            slot = (gs.stage or {}).get(pos)
+            if not slot or not getattr(slot, 'cardnumber', ''):
+                return False
+            ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+            if not ci or _is_live_ci(ci):
+                return False
+            if tag and not _ci_matches_group_or_unit(ci, tag):
+                return False
+            nm = str(getattr(ci, 'name', '') or getattr(ci, 'cardname', '') or getattr(ci, 'title', '') or getattr(slot, 'cardnumber', '') or '').strip()
+            if not nm or nm in names:
+                return False
+            names.add(nm)
+        return len(names) == 3
+    except Exception:
+        return False
+
 def _heart_color_keys_to_jp(colors: List[str]) -> str:
     mp = {'pink':'桃', 'red':'赤', 'yellow':'黄', 'green':'緑', 'blue':'青', 'purple':'紫'}
     return '、'.join(mp.get(str(c), str(c)) for c in list(colors or []))
@@ -4485,6 +4588,13 @@ def _slot_always_score_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos: 
         bonus = int(getattr(slot, 'temp_score', 0) or 0)
         for _eff, blob in _iter_body_always_effects(ci):
             try:
+                # Do not treat BODY effects that *grant a <ライブ成功時> ability* as an
+                # always-on score bonus.  Example: PL!S-bp2-008 小原鞠莉 grants
+                # a live-success ability that may later add live total score +1/+2;
+                # applying +1 here pre-resolves the gained ability and causes a
+                # duplicate bonus when the queued success trigger resolves.
+                if '<ライブ成功時>' in blob or 'ライブ成功時' in blob:
+                    continue
                 if 'エリアすべてに『' in blob and 'のメンバーが登場しており、かつ名前が異なる場合' in blob and 'ライブの合計スコアを+1する' in blob:
                     tag = _quoted_tag(blob)
                     if _stage_has_all_distinct_group_members(gs, cards_db, tag):
@@ -6016,7 +6126,7 @@ def cmd_play(gs: GameState, cards_db: Dict[str, CardInfo], hand_idx: int, pos: s
     for t in triggers:
         _exec_auto_trigger(gs, cards_db, t)
 def _has_supported_enter_auto(ci: Optional[CardInfo]) -> bool:
-    if not ci or not getattr(ci, 'abilities', None):
+    if not ci:
         return False
     canon = _canon_cardno(getattr(ci, 'cardnumber', '') or '')    # Any costless, regex-matchable enter ability counts as supported.
     for ab in _iter_triggered_abilities(ci, '登場'):
@@ -6043,6 +6153,9 @@ def _has_supported_enter_auto(ci: Optional[CardInfo]) -> bool:
                         n = 0
                 if n <= 0 and ("手札を1枚控え室に置いてもよい" in cost):
                     n = 1
+                group_cost = _parse_group_hand_discard_cost(cost)
+                if group_cost and _match_effect_template(eff):
+                    return True
                 if n > 0 and _match_effect_template(eff):
                     return True
                 if _parse_energy_cost(cost) > 0 and _match_effect_template(eff):
@@ -7137,6 +7250,44 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
                 gs.log.append(f"[WARN] LIVE: {src_cn}[ライブ成功時] effect not matchable after stage named condition: {eff}")
         return
 
+
+    if kind in ('add_live_success_score_bonus_if_revealed_live_or_stage_heart_kinds_or_moved',):
+        src_cn = str((trig or {}).get('source_cn', '') or '')
+        need_live = int((trig or {}).get('condition_revealed_live_count', 0) or 0)
+        need_kinds = int((trig or {}).get('condition_stage_heart_kind_count', 0) or 0)
+        bonus = int((trig or {}).get('bonus', 0) or 0)
+        got_live = int(_count_yell_revealed_live_cards(gs, cards_db))
+        got_kinds = int(_stage_member_heart_color_kind_count(gs, cards_db))
+        if got_live >= need_live or got_kinds >= need_kinds:
+            why = f"revealed LIVE={got_live}/{need_live}, stage heart kinds={got_kinds}/{need_kinds}"
+            _add_live_success_score_bonus(gs, src_cn, bonus, detail=why)
+            return
+        gs.pending.append({
+            'kind': 'confirm_effect',
+            'text': f'{src_cn}[ライブ成功時] エール公開ライブは{got_live}/{need_live}枚、ステージのハート種類数は{got_kinds}/{need_kinds}種類です。このターンに自分のステージにいるメンバーがエリアを移動している場合、このカードのスコアを+{bonus}します。条件を満たす場合は「使う」、満たさない場合は「スキップ」を選んでください。',
+            'options': ['apply', 'skip'],
+            'after_live_success_score_bonus': {'source_cn': src_cn, 'bonus': bonus, 'detail': f'manual position-change condition; revealed LIVE={got_live}/{need_live}; stage heart kinds={got_kinds}/{need_kinds}'},
+            'source_cn': src_cn,
+        })
+        gs.log.append(f"[PENDING] LIVE: {src_cn}[ライブ成功時] manual position-change check; revealed LIVE={got_live}/{need_live}, stage heart kinds={got_kinds}/{need_kinds}")
+        return
+
+    if kind in ('add_live_success_total_score_bonus_if_revealed_live_count_tier',):
+        src_cn = str((trig or {}).get('source_cn', '') or '')
+        pos = str((trig or {}).get('pos', '') or '').upper()
+        c1 = int((trig or {}).get('condition_count_one', 1) or 1)
+        b1 = int((trig or {}).get('bonus_one', 0) or 0)
+        c2 = int((trig or {}).get('condition_count_two', 0) or 0)
+        b2 = int((trig or {}).get('bonus_two', 0) or 0)
+        got = int(_count_yell_revealed_live_cards(gs, cards_db))
+        if c2 and got >= c2:
+            _add_live_success_total_score_bonus(gs, cards_db, b2, detail=f"revealed LIVE={got}/{c2} -> tier bonus", source_cn=src_cn, pos=pos)
+        elif got >= c1:
+            _add_live_success_total_score_bonus(gs, cards_db, b1, detail=f"revealed LIVE={got}/{c1} -> tier bonus", source_cn=src_cn, pos=pos)
+        else:
+            gs.log.append(f"[SKIP] {pos + ': ' if pos else ''}{src_cn}[ライブ成功時] unresolved (revealed LIVE={got} < {c1})")
+        return
+
     if kind in ('apply_effect_template_if_revealed_live_count_at_least_on_live_success',):
         eff = str((trig or {}).get('effect', '') or '').strip()
         src_cn = str((trig or {}).get('source_cn', '') or '').strip()
@@ -7296,6 +7447,69 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
                 'effect_text': _auto_trigger_effect_text(trig or {}),
             })
         return
+    if kind in ('apply_effect_template_if_revealed_no_bladeheart_group_member_at_least_on_live_success',):
+        eff = str((trig or {}).get('effect', '') or '').strip()
+        src_cn = str((trig or {}).get('source_cn', '') or '').strip()
+        pos = str((trig or {}).get('pos', '') or '').upper()
+        ctx = dict((trig or {}).get('ctx', {}) or {})
+        group_name = str((trig or {}).get('condition_group_name', '') or '')
+        need = int((trig or {}).get('condition_count', 1) or 1)
+        got = int(_count_yell_revealed_no_bladeheart_group_members(gs, cards_db, group_name))
+        if got >= need and eff:
+            try:
+                rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0) + 53)
+            except Exception:
+                rng2 = random.Random(53)
+            if pos and not ctx.get('pos'):
+                ctx['pos'] = pos
+            if src_cn and not ctx.get('source_cn'):
+                ctx['source_cn'] = src_cn
+            if try_apply_effect_template(gs, rng2, cards_db, eff, ctx):
+                gs.log.append(f"[AUTO] {pos + ': ' if pos else ''}{src_cn}[ライブ成功時]: no-bladeheart 『{group_name}』 MEMBER revealed={got}/{need} -> applied {eff}")
+            else:
+                gs.log.append(f"[WARN] {pos + ': ' if pos else ''}{src_cn}[ライブ成功時]: effect not matchable after no-bladeheart condition: {eff}")
+        else:
+            gs.log.append(f"[SKIP] {pos + ': ' if pos else ''}{src_cn}[ライブ成功時] unresolved (no-bladeheart 『{group_name}』 MEMBER revealed: {got} < {need})")
+        return
+
+    if kind in ('reveal_top_to_hand_then_live_total_score_if_no_bladeheart_member',):
+        src_cn = str((trig or {}).get('source_cn', '') or '').strip()
+        pos = str((trig or {}).get('pos', '') or '').upper()
+        bonus = int((trig or {}).get('bonus', 0) or 0)
+        try:
+            rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0) + 59)
+        except Exception:
+            rng2 = random.Random(59)
+        if not list(getattr(gs, 'deck', []) or []):
+            try:
+                _rule_refresh_main_deck(gs, rng2, reason='top reveal for no-bladeheart member')
+            except Exception:
+                pass
+        top_cn = str((getattr(gs, 'deck', []) or [''])[0] or '') if list(getattr(gs, 'deck', []) or []) else ''
+        drew = draw(gs, 1, rng2) if top_cn else 0
+        ci_top = _get_card(cards_db, top_cn) if top_cn else None
+        is_no_bh_member = bool(ci_top and _is_member_ci(ci_top) and not _ci_has_blade_heart_payload(ci_top))
+        if drew <= 0:
+            gs.log.append(f"[SKIP] {pos + ': ' if pos else ''}{src_cn}[ライブ成功時]: deck top reveal failed")
+            return
+        gs.log.append(f"[AUTO] {pos + ': ' if pos else ''}{src_cn}[ライブ成功時]: revealed deck top {top_cn} -> hand")
+        if is_no_bh_member and bonus:
+            _add_live_success_total_score_bonus(gs, cards_db, bonus, detail=f"top revealed {top_cn} is no-bladeheart MEMBER", source_cn=src_cn, pos=pos)
+            result = f'公開したカード {top_cn} はブレードハートを持たないメンバーカードです。手札に加え、ライブの合計スコアを+{bonus}しました。'
+        else:
+            gs.log.append(f"[SKIP] {pos + ': ' if pos else ''}{src_cn}[ライブ成功時]: top revealed {top_cn} is not no-bladeheart MEMBER")
+            result = f'公開したカード {top_cn} はブレードハートを持たないメンバーカードではありません。手札には加えますが、ライブの合計スコアは増えません。'
+        gs.pending.append({
+            'kind': 'show_revealed_cards_ack',
+            'label': 'デッキトップ公開',
+            'text': f'{src_cn}[ライブ成功時]：自分のデッキの一番上のカードを公開し、手札に加えます。\n{result}',
+            'display_cards': [top_cn],
+            'options': ['ok'],
+            'source_cn': src_cn,
+            'effect_text': _auto_trigger_effect_text(trig or {}),
+        })
+        return
+
     if kind in ('set_live_success_score_if_no_revealed_no_bladeheart_or_excess_at_least',):
         cn_live = str((trig or {}).get('source_cn', '') or '')
         need_excess = int((trig or {}).get('condition_excess_count', 0) or 0)
@@ -8442,6 +8656,52 @@ def _build_live_success_trigger_from_effect(gs: GameState, cards_db: Dict[str, C
             'label': str(label or ''),
         }
 
+
+    # Revealed LIVE count OR stage heart color kinds OR this-turn position change -> this LIVE score bonus.
+    # Example: LL-bp5-001 Live with a smile!
+    m = re.match(r'^エールにより公開された自分のカードの中にライブカードが(?P<live_n>\d+)枚以上あるか、自分のステージにいるメンバーが持つハートの中に<\(桃\)>、<\(赤\)>、<\(黄\)>、<\(緑\)>、<\(青\)>、<\(紫\)>のうち合計(?P<kind_n>\d+)種類以上あるか、このターンに自分のステージにいるメンバーがエリアを移動している場合、このカードのスコアを\+(?P<delta>\d+)する。?$', eff_norm)
+    if m:
+        return {
+            'kind': 'add_live_success_score_bonus_if_revealed_live_or_stage_heart_kinds_or_moved',
+            'condition_revealed_live_count': int(m.group('live_n') or 0),
+            'condition_stage_heart_kind_count': int(m.group('kind_n') or 0),
+            'bonus': int(m.group('delta') or 0),
+            'source_cn': str(source_cn or ''),
+            'pos': str(pos or ''),
+            'ctx': dict(ctx or {}),
+            'label': str(label or ''),
+        }
+
+    # No-blade-heart group MEMBER revealed -> apply an existing effect template.
+    # Example: PL!-bp6-001 高坂穂乃果.
+    m = re.match(r'^エールにより公開された自分のカードの中に、?ブレードハートを持たない『(?P<group>[^』]+)』のメンバーカードがある場合、(?P<inner>.+)$', eff_norm)
+    if m:
+        inner = str(m.group('inner') or '').strip()
+        if _match_effect_template(inner):
+            return {
+                'kind': 'apply_effect_template_if_revealed_no_bladeheart_group_member_at_least_on_live_success',
+                'effect': inner,
+                'condition_group_name': str(m.group('group') or '').strip(),
+                'condition_count': 1,
+                'source_cn': str(source_cn or ''),
+                'pos': str(pos or ''),
+                'ctx': dict(ctx or {}),
+                'label': str(label or ''),
+            }
+
+    # Reveal deck top, add it to hand, and if it is a no-blade-heart member, add to live total score.
+    # Example: PL!-bp6-007 東條希.
+    m = re.match(r'^自分のデッキの一番上のカードを公開し、手札に加える。それがブレードハートを持たないメンバーカードの場合、ライブの合計スコアを\+(?P<delta>\d+)する。?$', eff_norm)
+    if m:
+        return {
+            'kind': 'reveal_top_to_hand_then_live_total_score_if_no_bladeheart_member',
+            'bonus': int(m.group('delta') or 0),
+            'source_cn': str(source_cn or ''),
+            'pos': str(pos or ''),
+            'ctx': dict(ctx or {}),
+            'label': str(label or ''),
+        }
+
     # Generalized from MIRACLE WAVE.
     # 「スコアはNになる」 is not a +bonus; it is stored as a direct score-set value.
     m = re.match(r'^このターン、エールにより公開された自分のカードの中にブレードハートを持たないカードが0枚の場合か、または自分の余剰ハートを(?P<excess>\d+)つ以上持っている場合、このカードのスコアは(?P<score>\d+)になる。?$', eff_norm)
@@ -8758,6 +9018,51 @@ def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict
                     except Exception:
                         pass
                     success_triggers.append(trig)
+    # BODY-granted live-success abilities on active stage members.
+    # Example: PL!S-bp2-008 小原鞠莉 gains a live-success total-score bonus ability
+    # if all stage areas have distinct 『Aqours』 members.
+    for pos in ('L', 'C', 'R'):
+        slot = gs.stage.get(pos)
+        if not slot or not slot.active:
+            continue
+        ci_src = _get_card(cards_db, slot.cardnumber)
+        if not ci_src or not getattr(ci_src, 'abilities', None):
+            continue
+        for ab in list(getattr(ci_src, 'abilities', []) or []):
+            if not isinstance(ab, dict):
+                continue
+            if 'BODY' not in str(ab.get('trigger', '') or '') and '常時' not in str(ab.get('ability_type', '') or ''):
+                continue
+            clauses = ab.get('clauses', [])
+            if not isinstance(clauses, list):
+                continue
+            for cl in clauses:
+                if not isinstance(cl, dict):
+                    continue
+                eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+                if '「<ライブ成功時>' not in eff or 'ライブの合計スコア' not in eff:
+                    continue
+                eff_norm2 = _normalize_icon_token_text(eff).replace('\n', '')
+                m = re.match(r'^自分のステージのエリアすべてに『(?P<group>[^』]+)』のメンバーが登場しており、かつ名前が異なる場合、「<ライブ成功時>エールにより公開された自分のカードの中にライブカードが(?P<c1>\d+)枚以上ある場合、ライブの合計スコアを\+(?P<b1>\d+)する。ライブカードが(?P<c2>\d+)枚以上ある場合、代わりに合計スコアを\+(?P<b2>\d+)する。」を得る。?$', eff_norm2)
+                if not m:
+                    continue
+                group_name = str(m.group('group') or '').strip()
+                if not _stage_all_areas_group_members_distinct_names(gs, cards_db, group_name):
+                    gs.log.append(f"[SKIP] {pos}: {ci_src.cardnumber}[BODY gained live-success] stage all distinct 『{group_name}』 condition not met")
+                    continue
+                success_triggers.append({
+                    'kind': 'add_live_success_total_score_bonus_if_revealed_live_count_tier',
+                    'condition_count_one': int(m.group('c1') or 1),
+                    'bonus_one': int(m.group('b1') or 0),
+                    'condition_count_two': int(m.group('c2') or 0),
+                    'bonus_two': int(m.group('b2') or 0),
+                    'source_cn': ci_src.cardnumber,
+                    'pos': pos,
+                    'ctx': {'pos': pos, 'source_cn': ci_src.cardnumber},
+                    'label': f"{pos}: {ci_src.cardnumber}[常時で得たライブ成功時]",
+                    'effect_text': eff,
+                })
+
     # Live-card success triggers
     for cn_live in list(lives or []):
         ci_live = _get_card(cards_db, cn_live)
@@ -9390,6 +9695,19 @@ def _count_yell_revealed_no_bladeheart_cards(gs: GameState, cards_db: Dict[str, 
         if not ci:
             continue
         if member_only and not _is_member_ci(ci):
+            continue
+        if not _ci_has_blade_heart_payload(ci):
+            n += 1
+    return int(n)
+
+def _count_yell_revealed_no_bladeheart_group_members(gs: GameState, cards_db: Dict[str, CardInfo], group_name: str) -> int:
+    group_name = str(group_name or '').strip()
+    n = 0
+    for cn in list(getattr(gs, '_yell_revealed_this_live', []) or []):
+        ci = _get_card(cards_db, cn)
+        if not ci or not _is_member_ci(ci):
+            continue
+        if group_name and not _ci_matches_group_or_unit(ci, group_name):
             continue
         if not _ci_has_blade_heart_payload(ci):
             n += 1
@@ -11313,6 +11631,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         _r = p.get('_resume') if isinstance(p, dict) else None
         if isinstance(_r, dict) and _r:
             gs.pending.append(_r)
+        _enqueue_auto_order_from_deferred()
         return
     if kind == 'pick_success_to_store':
         lives = list(p.get('lives', []) or [])
@@ -13526,6 +13845,32 @@ def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], i
     if indices is None:
         indices = []
     if gs.pending:
+        # Let the global NEXT button acknowledge/skip simple pending popups.
+        # The same prompts still have in-popup buttons; this is only a convenience
+        # path so non-choice confirmation popups do not trap the flow.
+        try:
+            p0 = gs.pending[0] if isinstance(gs.pending[0], dict) else {}
+            k0 = str(p0.get('kind', '') or '')
+            opts0 = [str(x).strip().lower() for x in list(p0.get('options', []) or []) if str(x).strip()]
+            ack_kinds = {
+                'show_revealed_cards_ack', 'message_ack', 'effect_notice',
+                'live_start_success_count_distinct_names_score_ack',
+                'mass_bottom_auto_ack', 'mass_bottom_optional_result_ack',
+            }
+            if k0 in ack_kinds:
+                cmd_resolve_pending(gs, cards_db, 0, 'ok', rng)
+                return
+            if k0 == 'pick_success_to_store':
+                cmd_resolve_pending(gs, cards_db, 0, 'skip', rng)
+                return
+            if ('skip' in opts0 or '__skip__' in opts0) and (bool(p0.get('optional', False)) or bool(p0.get('allow_skip', False)) or k0 in ('pay_or_skip', 'confirm_effect', 'discard_from_hand')):
+                cmd_resolve_pending(gs, cards_db, 0, 'skip', rng)
+                return
+        except Exception as e:
+            try:
+                gs.log.append(f'[WARN] next pending-skip helper failed: {e}')
+            except Exception:
+                pass
         gs.log.append("[WARN] next: pending prompt exists; resolve it first.")
         return
     if gs.phase == "MAIN":

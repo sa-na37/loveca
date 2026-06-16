@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: server_turn_order_success_skip_20260616ak
+# BUILD_TAG: server_popup_next_skip_20260616aq
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1361,11 +1361,28 @@ class App:
                     o = p0.get('options', None)
                     if isinstance(o, list):
                         opts = [str(x).strip().lower() for x in o if str(x).strip()]
-                if isinstance(p0, dict) and str(p0.get('kind','') or '') == 'pick_success_to_store':
-                    cmd_resolve_pending(self.gs, self.cards_db, 0, 'skip')
-                    post_process(self.gs)
-                    self.save_trace()
-                    return self.state_json()
+                if isinstance(p0, dict):
+                    k0 = str(p0.get('kind','') or '')
+                    ack_kinds = {
+                        'show_revealed_cards_ack', 'message_ack', 'effect_notice',
+                        'live_start_success_count_distinct_names_score_ack',
+                        'mass_bottom_auto_ack', 'mass_bottom_optional_result_ack',
+                    }
+                    if k0 in ack_kinds:
+                        cmd_resolve_pending(self.gs, self.cards_db, 0, 'ok')
+                        post_process(self.gs)
+                        self.save_trace()
+                        return self.state_json()
+                    if k0 == 'pick_success_to_store':
+                        cmd_resolve_pending(self.gs, self.cards_db, 0, 'skip')
+                        post_process(self.gs)
+                        self.save_trace()
+                        return self.state_json()
+                    if ('skip' in opts or '__skip__' in opts) and (bool(p0.get('optional', False)) or bool(p0.get('allow_skip', False)) or k0 in ('pay_or_skip', 'confirm_effect', 'discard_from_hand')):
+                        cmd_resolve_pending(self.gs, self.cards_db, 0, 'skip')
+                        post_process(self.gs)
+                        self.save_trace()
+                        return self.state_json()
                 if opts:
                     s = set(opts)
                     if s.issubset({'pay','skip','yes','no'}) and len(s) <= 2:
