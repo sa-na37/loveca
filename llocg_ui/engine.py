@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: yell_reroll_bladeheart_le_family_20260616ab
+# BUILD_TAG: yell_reveal_preview_and_score_kind_20260616ac
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -9382,6 +9382,27 @@ def _collect_yell_revealed_body_auto_triggers(gs: GameState, cards_db: Dict[str,
                         )
                     continue
 
+                # no-blade-heart group MEMBER count -> live total score bonus per N, capped.
+                # Example: PL!SP-pb2-008 若菜四季.
+                if ('ブレードハートを持たない' in ec) and ('メンバーカード' in ec) and ('枚につき' in ec) and ('ライブの合計スコアを+' in ec) and ('までしか増えない' in ec):
+                    m_sc = re.search(r"ブレードハートを持たない『(?P<group>[^』]+)』のメンバーカード(?P<per>\d+)枚につき、?ライブの合計スコアを\+(?P<delta>\d+)する。この能力では合計スコアは(?P<cap>\d+)までしか増えない", ec)
+                    if m_sc:
+                        group = str(m_sc.group('group') or '').strip()
+                        per = max(1, int(m_sc.group('per') or 1))
+                        delta = int(m_sc.group('delta') or 0)
+                        cap = int(m_sc.group('cap') or 0)
+                        cands = _yell_revealed_no_bladeheart_candidates(gs, cards_db, revealed, group=group, member_only=True)
+                        got = len(cands)
+                        bonus = min((got // per) * delta, cap)
+                        if bonus > 0:
+                            _append_trigger(
+                                pos, canon, key, once_per_turn,
+                                f"ブレードハートなし『{group}』メンバー{got}枚 → ライブ合計スコア+{bonus}",
+                                'live_total_score_bonus', score_delta=int(bonus),
+                                detail=f"no-blade-heart {group} MEMBER={got}; +{delta} per {per}, cap {cap}",
+                            )
+                    continue
+
                 # 自分がエールしたとき、同じグループを持つメンバーカードが3枚ある/以上 -> icons
                 if ('同じグループを持つメンバーカードが3枚' in ec) and m_icons:
                     group = str(getattr(ci_src, 'group', '') or '').split('/')[0].strip()
@@ -9552,6 +9573,31 @@ def _apply_yell_revealed_body_auto_trigger(gs: GameState, rng: random.Random, ca
         })
         gs.log.append(f"[PENDING] YELL AUTO: {src or '?'} choose revealed cards for extra yell max={max_picks} candidates={len(cands)} mode={extra_mode}")
         return True
+    elif effect_kind == 'live_total_score_bonus':
+        bonus = int((trig or {}).get('score_delta', 0) or 0)
+        if bonus <= 0:
+            gs.log.append(f"[SKIP] YELL AUTO: {src or '?'} live total score bonus is 0")
+            return False
+        slot = (gs.stage or {}).get(pos) if pos in ('L', 'C', 'R') else None
+        if slot and getattr(slot, 'cardnumber', ''):
+            try:
+                slot.temp_score = int(getattr(slot, 'temp_score', 0) or 0) + int(bonus)
+                slot.temp_until = 'end_of_live'
+            except Exception:
+                pass
+            detail = (detail + f"; live total score +{bonus}").strip()
+            ok = True
+        else:
+            # LIVE-card source fallback: tie the bonus to the first current live if available.
+            lives = list(getattr(gs, 'set_zone', []) or [])
+            target_live = lives[0] if lives else ''
+            if target_live:
+                _add_live_start_score_bonus(gs, bonus, source_cn=target_live)
+                detail = (detail + f"; live total score +{bonus} for {target_live}").strip()
+                ok = True
+            else:
+                gs.log.append(f"[WARN] YELL AUTO: no source slot/current live for score bonus {src or '?'}")
+                return False
     elif effect_kind == 'gain_icons':
         slot = (gs.stage or {}).get(pos)
         if not slot or not getattr(slot, 'cardnumber', ''):
@@ -9585,16 +9631,28 @@ def _apply_yell_revealed_body_auto_trigger(gs: GameState, rng: random.Random, ca
 
 
 def _enqueue_yell_revealed_body_auto_triggers(gs: GameState, cards_db: Dict[str, CardInfo], revealed: Optional[List[str]] = None) -> int:
-    triggers = _collect_yell_revealed_body_auto_triggers(gs, cards_db, revealed)
+    cur_revealed = list(revealed if revealed is not None else (getattr(gs, '_yell_revealed_this_live', []) or []))
+    triggers = _collect_yell_revealed_body_auto_triggers(gs, cards_db, cur_revealed)
     if not triggers:
         return 0
     opts = [_auto_trigger_option_text(t) for t in triggers]
-    gs.pending.append({
+    auto_prompt = {
         'kind': 'auto_order',
         'text': 'エール時の自動効果が発生：解決するカードを選択（1つずつ）',
         'options': opts,
         'queue': list(triggers),
-    })
+    }
+    if cur_revealed:
+        gs.pending.append({
+            'kind': 'show_revealed_cards_ack',
+            'label': 'エール公開カード確認',
+            'text': 'エールで公開されたカードを確認してから、エール時自動効果を解決します。',
+            'display_cards': list(cur_revealed),
+            'options': ['ok'],
+            '_resume': auto_prompt,
+        })
+    else:
+        gs.pending.append(auto_prompt)
     gs.log.append(f"[PROMPT] yell-revealed auto abilities queued: {len(triggers)}")
     return int(len(triggers))
 
@@ -11073,6 +11131,9 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         return
     if kind == 'show_revealed_cards_ack':
         gs.log.append('[ACT] show_revealed_cards_ack: ok')
+        _r = p.get('_resume') if isinstance(p, dict) else None
+        if isinstance(_r, dict) and _r:
+            gs.pending.append(_r)
         return
     if kind == 'pick_success_to_store':
         lives = list(p.get('lives', []) or [])
