@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: opponent_wait_counter_hearts_bonus_20260615w
+# BUILD_TAG: yell_reroll_bladeheart_le_family_20260616ab
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -555,6 +555,116 @@ def _remove_from_yell_revealed_tracker(gs: GameState, cn: str) -> None:
     except Exception:
         pass
 
+
+def _remove_one_from_zone_list(lst: Any, cn: str) -> bool:
+    """Remove one matching card number from a mutable list-like zone."""
+    try:
+        canon = _canon_cardno(cn)
+        for i, x in enumerate(list(lst or [])):
+            if _canon_cardno(str(x or '')) == canon:
+                try:
+                    del lst[i]
+                except Exception:
+                    try:
+                        lst.pop(i)
+                    except Exception:
+                        return False
+                return True
+    except Exception:
+        return False
+    return False
+
+
+def _move_yell_revealed_to_green(gs: 'GameState', cn: str) -> bool:
+    """Move one currently YELL-revealed card to green room and update logical trackers."""
+    canon = _canon_cardno(cn)
+    if not canon:
+        return False
+    removed = False
+    try:
+        removed = _remove_one_from_zone_list(gs.resolve_zone, canon) or removed
+    except Exception:
+        pass
+    try:
+        pool = list(getattr(gs, '_yell_revealed_this_live', []) or [])
+        for i, x in enumerate(list(pool)):
+            if _canon_cardno(str(x or '')) == canon:
+                del pool[i]
+                setattr(gs, '_yell_revealed_this_live', pool)
+                removed = True
+                break
+    except Exception:
+        pass
+    if removed:
+        try:
+            gs.green_room.append(canon)
+        except Exception:
+            gs.green_room = [canon]
+    return bool(removed)
+
+
+def _perform_additional_yell(gs: 'GameState', rng: random.Random, cards_db: Dict[str, CardInfo], n: int, reason: str = '') -> List[str]:
+    """Reveal n additional YELL cards, add draw icons, and queue any YELL-time autos."""
+    n = max(0, int(n or 0))
+    if n <= 0:
+        return []
+    revealed: List[str] = []
+    for i in range(n):
+        if not getattr(gs, 'deck', None):
+            _rule_refresh_main_deck(gs, rng, reason=f'additional_yell@{i}')
+        if not getattr(gs, 'deck', None):
+            break
+        revealed.append(gs.deck.pop(0))
+    if not revealed:
+        gs.log.append(f"[YELL+] additional yell 0 ({reason or 'no cards'})")
+        return []
+    try:
+        gs.resolve_zone.extend(revealed)
+    except Exception:
+        gs.resolve_zone = list(revealed)
+    try:
+        pool = list(getattr(gs, '_yell_revealed_this_live', []) or [])
+    except Exception:
+        pool = []
+    pool.extend(revealed)
+    try:
+        setattr(gs, '_yell_revealed_this_live', pool)
+    except Exception:
+        pass
+    draw_n = 0
+    for cn in revealed:
+        c = _get_card(cards_db, cn)
+        if c:
+            draw_n += _count_draw_icons(c.blade_heart_tags_json)
+    got = draw(gs, draw_n, rng) if draw_n > 0 else 0
+    gs.log.append(f"[YELL+] revealed {len(revealed)} ({reason or 'additional'}, draw+{draw_n} -> drew {got})")
+    try:
+        _enqueue_yell_revealed_body_auto_triggers(gs, cards_db, revealed)
+    except Exception as e:
+        gs.log.append(f"[WARN] additional yell auto trigger enqueue failed: {e}")
+    return revealed
+
+
+def _yell_revealed_no_bladeheart_candidates(gs: 'GameState', cards_db: Dict[str, CardInfo], revealed: Optional[List[str]] = None, group: str = '', member_only: bool = False) -> List[str]:
+    pool = list(revealed if revealed is not None else (getattr(gs, '_yell_revealed_this_live', []) or []))
+    out: List[str] = []
+    for cn in pool:
+        ci = _get_card(cards_db, cn)
+        if not ci:
+            continue
+        if member_only and not _is_member_ci(ci):
+            continue
+        if group and not _ci_matches_group_or_unit(ci, group):
+            continue
+        try:
+            has_bh = bool(_ci_blade_heart_raw_text(ci).strip()) and str(_ci_blade_heart_raw_text(ci)).strip() not in ('なし', '-', '0')
+        except Exception:
+            has_bh = False
+        if has_bh:
+            continue
+        out.append(_canon_cardno(cn))
+    return out
+
 def _parse_energy_cost(cost_text: str) -> int:
     """Parse energy cost from cost_template.
     Supports:
@@ -785,6 +895,17 @@ def _stage_positions_by_member_name(gs: 'GameState', cards_db: Dict[str, CardInf
         if want in nm:
             out.append(pos)
     return out
+
+def _stage_distinct_named_members_from_list_count(gs: 'GameState', cards_db: Dict[str, CardInfo], names: List[str]) -> int:
+    """Count how many distinct requested member names are currently represented on stage."""
+    found: set = set()
+    for nm0 in list(names or []):
+        nm = str(nm0 or '').strip()
+        if not nm:
+            continue
+        if _stage_positions_by_member_name(gs, cards_db, nm):
+            found.add(nm)
+    return int(len(found))
 
 def _grant_stage_member_temp_blade(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: str, blade_n: int, source_cn: str = '') -> bool:
     pos = str(pos or '').upper()
@@ -6872,6 +6993,32 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             else:
                 gs.log.append(f"[AUTO] LIVE: {src_cn or '?'}[ライブ成功時] applied {eff}")
         return
+    if kind in ('apply_effect_template_if_stage_named_members_at_least_on_live_success',):
+        eff = str((trig or {}).get('effect', '') or '').strip()
+        src_cn = str((trig or {}).get('source_cn', '') or '').strip()
+        pos = str((trig or {}).get('pos', '') or '').upper()
+        ctx = dict((trig or {}).get('ctx', {}) or {})
+        names = list((trig or {}).get('condition_names', []) or [])
+        need = int((trig or {}).get('condition_count', 0) or 0)
+        got = int(_stage_distinct_named_members_from_list_count(gs, cards_db, names))
+        if got < need:
+            gs.log.append(f"[SKIP] LIVE: {src_cn}[ライブ成功時] unresolved (stage named members: {got} < {need}; names={names})")
+            return
+        if src_cn and not ctx.get('source_cn'):
+            ctx['source_cn'] = src_cn
+        if pos:
+            ctx.setdefault('pos', pos)
+        if eff:
+            try:
+                rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0) + 43)
+            except Exception:
+                rng2 = random.Random(43)
+            if try_apply_effect_template(gs, rng2, cards_db, eff, ctx):
+                gs.log.append(f"[AUTO] LIVE: {src_cn}[ライブ成功時] applied {eff} (stage named members {got}/{need})")
+            else:
+                gs.log.append(f"[WARN] LIVE: {src_cn}[ライブ成功時] effect not matchable after stage named condition: {eff}")
+        return
+
     if kind in ('apply_effect_template_if_revealed_live_count_at_least_on_live_success',):
         eff = str((trig or {}).get('effect', '') or '').strip()
         src_cn = str((trig or {}).get('source_cn', '') or '').strip()
@@ -7969,6 +8116,61 @@ def _build_live_success_trigger_from_effect(gs: GameState, cards_db: Dict[str, C
                 'source_cn': str(source_cn or ''),
                 'label': str(label or ''),
             }
+    # Generalized live-success conditional wrapper: same live total score -> confirm/skip, then existing template.
+    # The simulator does not model opponent live total, so this is resolved manually at effect resolution.
+    m = re.match(r'^自分と相手のライブの合計スコアが同じ場合、(?P<inner>.+)$', eff_norm)
+    if m:
+        inner = str(m.group('inner') or '').strip()
+        if _match_effect_template(inner):
+            return {
+                'kind': 'enqueue_success_prompt',
+                'prompt': {
+                    'kind': 'confirm_effect',
+                    'text': f'{label} 条件付き効果：自分と相手のライブの合計スコアが同じ場合のみ解決します。条件を満たすなら Apply、満たさないなら Skip。',
+                    'options': ['apply', 'skip'],
+                    'after_effect_template': inner,
+                    'ctx': dict(ctx or {}),
+                    'source_cn': str(source_cn or ''),
+                },
+                'source_cn': str(source_cn or ''),
+                'label': str(label or ''),
+            }
+
+    # Generalized live-success conditional wrapper: named stage members -> resolve-time condition check.
+    # Example: Bubble Rise checks distinct named Liella! members, then retrieves from yell.
+    m = re.match(r'^自分のステージに(?P<names>(?:「[^」]+」(?:、)?)+)のうち、名前の異なるメンバーが(?P<count>\d+)枚以上いる場合、(?P<inner>.+)$', eff_norm)
+    if m:
+        names = [str(x or '').strip() for x in re.findall(r'「([^」]+)」', str(m.group('names') or '')) if str(x or '').strip()]
+        need = int(m.group('count') or 0)
+        inner = str(m.group('inner') or '').strip()
+        if names and need > 0 and _match_effect_template(inner):
+            return {
+                'kind': 'apply_effect_template_if_stage_named_members_at_least_on_live_success',
+                'effect': inner,
+                'condition_names': list(names),
+                'condition_count': int(need),
+                'source_cn': str(source_cn or ''),
+                'pos': str(pos or ''),
+                'ctx': dict(ctx or {}),
+                'label': str(label or ''),
+            }
+
+    # Generalized live-success trigger for cards revealed by own yell.
+    # Example: PL!S-bp3-002 can put itself into hand if live total score is higher.
+    m = re.match(r'^ライブの合計スコアが相手より高い場合、このカードを手札に加えてもよい。この能力は、このカードが自分のエールによって公開されている場合のみ発動する。?$', eff_norm)
+    if m:
+        return {
+            'kind': 'enqueue_success_prompt',
+            'prompt': {
+                'kind': 'confirm_revealed_self_to_hand',
+                'text': f'{label} 条件付き効果：このカードが自分のエールで公開されています。ライブの合計スコアが相手より高い場合、このカードを手札に加えてもよいです。条件を満たし手札に加えるなら Apply、加えない/条件未達なら Skip。',
+                'options': ['apply', 'skip'],
+                'source_cn': str(source_cn or ''),
+            },
+            'source_cn': str(source_cn or ''),
+            'label': str(label or ''),
+        }
+
     # Generalized live-success conditional wrapper: excess color + stage group -> resolve-time condition check.
     # Important: do not decide trigger occurrence here from the current board.
     # Simultaneous live-success effects may change the state before this resolves.
@@ -8419,6 +8621,37 @@ def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict
                     except Exception:
                         pass
                     success_triggers.append(trig)
+    # Cards revealed by YELL may themselves have <ライブ成功時> abilities.
+    # Only collect abilities that explicitly say they work while this card is revealed by own yell.
+    for cn_rev in list(getattr(gs, '_yell_revealed_this_live', []) or []):
+        ci_rev = _get_card(cards_db, cn_rev)
+        if not ci_rev or not getattr(ci_rev, 'abilities', None):
+            continue
+        for ab in _iter_triggered_abilities(ci_rev, 'ライブ成功時'):
+            clauses = ab.get('clauses', []) if isinstance(ab, dict) else []
+            if not isinstance(clauses, list):
+                continue
+            for cl in clauses:
+                if not isinstance(cl, dict):
+                    continue
+                eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+                if 'このカードが自分のエールによって公開されている場合のみ発動する' not in eff:
+                    continue
+                trig = _build_live_success_trigger_from_effect(
+                    gs,
+                    cards_db,
+                    eff,
+                    str(cn_rev or ''),
+                    f"{cn_rev}[ライブ成功時/エール公開]",
+                    {'source_cn': cn_rev, 'from_yell_revealed': True},
+                )
+                if trig:
+                    try:
+                        trig.setdefault('effect_text', eff)
+                    except Exception:
+                        pass
+                    success_triggers.append(trig)
+
     if success_triggers:
         _enqueue_success_auto_order(gs, success_triggers)
 # ----------------------------
@@ -9028,11 +9261,33 @@ def _collect_yell_revealed_body_auto_triggers(gs: GameState, cards_db: Dict[str,
             **params,
         })
 
+    sources: List[Tuple[str, str]] = []
     for pos in ('L', 'C', 'R'):
         slot = (gs.stage or {}).get(pos)
         if not slot or not getattr(slot, 'cardnumber', ''):
             continue
         canon = _canon_cardno(getattr(slot, 'cardnumber', '') or '')
+        if canon:
+            sources.append((pos, canon))
+
+    # LIVE cards in the current live storage can also have BODY-style
+    # "自分がエールした時" abilities (e.g. PL!S-bp6-021 / PL!HS-bp6-027).
+    # They must be checked at the same YELL timing as stage-member BODY autos.
+    for i, cn_live in enumerate(list(getattr(gs, 'set_zone', []) or [])):
+        canon = _canon_cardno(cn_live)
+        ci_live = _get_card(cards_db, canon)
+        if not canon or not ci_live or not _is_live_ci(ci_live):
+            continue
+        if not getattr(ci_live, 'abilities', None):
+            continue
+        sources.append((f'LIVE{i+1}', canon))
+
+    seen_sources: Set[Tuple[str, str]] = set()
+    for pos, canon in sources:
+        key_src = (str(pos or '').upper(), _canon_cardno(canon))
+        if key_src in seen_sources:
+            continue
+        seen_sources.add(key_src)
         ci_src = _get_card(cards_db, canon)
         if not ci_src:
             continue
@@ -9062,6 +9317,70 @@ def _collect_yell_revealed_body_auto_triggers(gs: GameState, cards_db: Dict[str,
                 if once_per_turn and int((getattr(gs, 'used_this_turn', {}) or {}).get(key, 0) or 0) >= 1:
                     continue
                 m_icons = re.search(r'ライブ終了時まで、?(?P<icons>(?:<\([^)]+\)>)+)を得る。?', ec)
+
+                # reroll/extra-yell family: move revealed cards to green, then perform additional yell.
+                # PL!S-bp2-004: no LIVE revealed -> put all revealed cards into green and yell again.
+                if ('ライブカードがないとき' in ec) and ('それらのカードをすべて控え室に置いてもよい' in ec) and ('もう一度エール' in ec):
+                    cur_revealed = list(revealed or [])
+                    cur_live_n = sum(1 for _cn in cur_revealed if _is_live_ci(_get_card(cards_db, _cn)))
+                    if cur_revealed and cur_live_n == 0:
+                        _append_trigger(
+                            pos, canon, key, once_per_turn,
+                            f"ライブなし公開{len(cur_revealed)}枚 → 全て控え室に置き、再エール",
+                            'confirm_move_all_current_yell_to_green_then_extra_yell',
+                            candidates=list(cur_revealed), extra_count=int(len(cur_revealed)),
+                            detail=f"no LIVE in current yell; move all {len(cur_revealed)} then extra yell {len(cur_revealed)}",
+                        )
+                    continue
+
+                # PL!S-bp3-020: if current yell revealed 1+ cards and blade-heart cards are 2 or fewer,
+                # optionally move all current revealed cards to green and perform the same number of extra yell.
+                if ('エールにより自分のカードを1枚以上公開したとき' in ec) and ('ブレードハートを持つカードが2枚以下の場合' in ec) and ('それらのカードをすべて控え室に置いてもよい' in ec) and ('もう一度エール' in ec):
+                    cur_revealed = list(revealed or [])
+                    cur_bh_n = 0
+                    for _cn in cur_revealed:
+                        _ci = _get_card(cards_db, _cn)
+                        if _ci and _ci_has_blade_heart_payload(_ci):
+                            cur_bh_n += 1
+                    if cur_revealed and cur_bh_n <= 2:
+                        _append_trigger(
+                            pos, canon, key, once_per_turn,
+                            f"ブレードハート持ち公開{cur_bh_n}枚/2以下 → 全て控え室に置き、再エール",
+                            'confirm_move_all_current_yell_to_green_then_extra_yell',
+                            candidates=list(cur_revealed), extra_count=int(len(cur_revealed)),
+                            detail=f"blade-heart revealed cards={cur_bh_n}/2; move all {len(cur_revealed)} then extra yell {len(cur_revealed)}",
+                        )
+                    continue
+
+                # PL!HS-bp6-027: no blade-heart 『蓮ノ空』 cards, up to 3 -> extra yell equal to moved count.
+                if ('ブレードハートを持たない' in ec) and ('3枚まで控え室に置いてもよい' in ec) and ('等しい枚数のエールを追加' in ec):
+                    m_group = re.search(r"ブレードハートを持たない『(?P<group>[^』]+)』のカード", ec)
+                    group = str(m_group.group('group') or '').strip() if m_group else ''
+                    cands = _yell_revealed_no_bladeheart_candidates(gs, cards_db, revealed, group=group, member_only=False)
+                    if cands:
+                        _append_trigger(
+                            pos, canon, key, once_per_turn,
+                            f"ブレードハートなし『{group}』公開カードを最大3枚控え室→同数追加エール",
+                            'choose_yell_revealed_to_green_then_extra_yell',
+                            candidates=list(cands), max_picks=3, extra_mode='count',
+                            detail=f"no-blade-heart {group} candidates={len(cands)}; max 3",
+                        )
+                    continue
+
+                # PL!S-bp6-021: no blade-heart 『Aqours』 MEMBER up to 1 -> extra yell by cost//5, cap 4.
+                if ('ブレードハートを持たない' in ec) and ('メンバーカードを1枚まで控え室に置いてもよい' in ec) and ('コスト5につき' in ec) and ('追加で' in ec) and ('エール' in ec):
+                    m_group = re.search(r"ブレードハートを持たない『(?P<group>[^』]+)』のメンバーカード", ec)
+                    group = str(m_group.group('group') or '').strip() if m_group else ''
+                    cands = _yell_revealed_no_bladeheart_candidates(gs, cards_db, revealed, group=group, member_only=True)
+                    if cands:
+                        _append_trigger(
+                            pos, canon, key, once_per_turn,
+                            f"ブレードハートなし『{group}』メンバー1枚を控え室→コスト5につき追加エール",
+                            'choose_yell_revealed_to_green_then_extra_yell',
+                            candidates=list(cands), max_picks=1, extra_mode='cost_div5_cap4',
+                            detail=f"no-blade-heart {group} MEMBER candidates={len(cands)}; extra by cost//5 cap4",
+                        )
+                    continue
 
                 # 自分がエールしたとき、同じグループを持つメンバーカードが3枚ある/以上 -> icons
                 if ('同じグループを持つメンバーカードが3枚' in ec) and m_icons:
@@ -9191,6 +9510,48 @@ def _apply_yell_revealed_body_auto_trigger(gs: GameState, rng: random.Random, ca
         drew = draw(gs, 1, rng)
         detail = (detail + f" -> drew {drew}").strip()
         ok = True
+    elif effect_kind == 'confirm_move_all_current_yell_to_green_then_extra_yell':
+        cands = [str(x) for x in list((trig or {}).get('candidates', []) or []) if str(x or '').strip()]
+        extra_count = int((trig or {}).get('extra_count', len(cands)) or 0)
+        if not cands:
+            gs.log.append(f"[SKIP] YELL AUTO: {src or '?'} no revealed cards to reroll")
+            return False
+        gs.pending.append({
+            'kind': 'confirm_yell_revealed_all_to_green_then_extra_yell',
+            'source_cn': src,
+            'usage_key': usage_key,
+            'once_per_turn': once_per_turn,
+            'text': f'{src}[エール時] エール公開カードにライブカードがないため、公開カード{len(cands)}枚をすべて控え室に置いて、{extra_count}枚の追加エールを行いますか？',
+            'options': ['pay', 'skip'],
+            'display_cards': list(cands),
+            'candidates': list(cands),
+            'extra_count': int(extra_count),
+        })
+        gs.log.append(f"[PENDING] YELL AUTO: {src or '?'} reroll yell confirm candidates={len(cands)} extra={extra_count}")
+        return True
+    elif effect_kind == 'choose_yell_revealed_to_green_then_extra_yell':
+        cands = [str(x) for x in list((trig or {}).get('candidates', []) or []) if str(x or '').strip()]
+        max_picks = max(0, int((trig or {}).get('max_picks', 1) or 1))
+        extra_mode = str((trig or {}).get('extra_mode', 'count') or 'count')
+        if not cands or max_picks <= 0:
+            gs.log.append(f"[SKIP] YELL AUTO: {src or '?'} no candidates for additional yell")
+            return False
+        gs.pending.append({
+            'kind': 'choose_yell_revealed_to_green_then_extra_yell',
+            'source_cn': src,
+            'usage_key': usage_key,
+            'once_per_turn': once_per_turn,
+            'text': f'{src}[エール時] エール公開カードから控え室に置くカードを選んでください（最大{max_picks}枚、スキップ可）。選んだ内容に応じて追加エールを行います。',
+            'options': list(cands),
+            'display_cards': list(cands),
+            'candidates': list(cands),
+            'max_picks': int(max_picks),
+            'optional': True,
+            'picked': [],
+            'extra_mode': extra_mode,
+        })
+        gs.log.append(f"[PENDING] YELL AUTO: {src or '?'} choose revealed cards for extra yell max={max_picks} candidates={len(cands)} mode={extra_mode}")
+        return True
     elif effect_kind == 'gain_icons':
         slot = (gs.stage or {}).get(pos)
         if not slot or not getattr(slot, 'cardnumber', ''):
@@ -10000,6 +10361,101 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             'queue': list(q),
         })
         setattr(gs, '_deferred_auto_queue', [])
+    def _mark_used_once_from_pending(pp: Dict[str, Any]) -> None:
+        try:
+            if bool(pp.get('once_per_turn', False)) and str(pp.get('usage_key', '') or '').strip():
+                gs.used_this_turn[str(pp.get('usage_key'))] = 1
+        except Exception:
+            try:
+                gs.used_this_turn = {str(pp.get('usage_key')): 1}
+            except Exception:
+                pass
+
+    def _finish_extra_yell_from_picked(pp: Dict[str, Any], picked: List[str]) -> None:
+        extra_mode = str(pp.get('extra_mode', 'count') or 'count')
+        extra_n = 0
+        if extra_mode == 'cost_div5_cap4':
+            total = 0
+            for cn0 in picked:
+                ci0 = _get_card(cards_db, cn0)
+                try:
+                    total += max(0, int(getattr(ci0, 'cost', 0) or 0) // 5) if ci0 else 0
+                except Exception:
+                    pass
+            extra_n = min(4, int(total))
+        else:
+            extra_n = int(len(picked))
+        if picked:
+            gs.log.append(f"[AUTO] {str(pp.get('source_cn','') or '?')}[エール時]: moved revealed cards to green {picked}; additional yell {extra_n}")
+        else:
+            gs.log.append(f"[SKIP] {str(pp.get('source_cn','') or '?')}[エール時]: no revealed cards moved; additional yell skipped")
+        _mark_used_once_from_pending(pp)
+        if extra_n > 0:
+            _perform_additional_yell(gs, rng, cards_db, extra_n, reason=str(pp.get('source_cn','') or 'extra-yell'))
+        _enqueue_auto_order_from_deferred()
+
+    if kind == 'confirm_yell_revealed_all_to_green_then_extra_yell':
+        low = choice_str.lower()
+        cands = [str(x) for x in list(p.get('candidates', []) or []) if str(x or '').strip()]
+        if low in ('pay', 'yes', 'y', '1', 'true', 'apply', 'use', '使う'):
+            moved = []
+            for cn0 in cands:
+                if _move_yell_revealed_to_green(gs, cn0):
+                    moved.append(_canon_cardno(cn0))
+            extra_n = int(p.get('extra_count', len(moved)) or len(moved))
+            if moved:
+                gs.log.append(f"[AUTO] {str(p.get('source_cn','') or '?')}[エール時]: moved all revealed non-LIVE cards to green {moved}; additional yell {extra_n}")
+                _mark_used_once_from_pending(p)
+                if extra_n > 0:
+                    _perform_additional_yell(gs, rng, cards_db, extra_n, reason=str(p.get('source_cn','') or 'reroll-yell'))
+            else:
+                gs.log.append(f"[SKIP] {str(p.get('source_cn','') or '?')}[エール時]: no current revealed cards moved")
+                _mark_used_once_from_pending(p)
+        else:
+            gs.log.append(f"[SKIP] {str(p.get('source_cn','') or '?')}[エール時]: reroll yell skipped")
+            _mark_used_once_from_pending(p)
+        _enqueue_auto_order_from_deferred()
+        return
+
+    if kind == 'choose_yell_revealed_to_green_then_extra_yell':
+        low = choice_str.lower()
+        picked = [str(x) for x in list(p.get('picked', []) or []) if str(x or '').strip()]
+        cands = [str(x) for x in list(p.get('candidates', []) or []) if str(x or '').strip()]
+        max_picks = max(0, int(p.get('max_picks', 1) or 1))
+        if low in ('skip', '__skip__', 'done', 'finish', 'no', 'n', '0', 'false', '使わない', 'スキップ'):
+            _finish_extra_yell_from_picked(p, picked)
+            return
+        cn = _canon_cardno(choice_str)
+        if not cn or cn not in [_canon_cardno(x) for x in cands]:
+            gs.log.append(f"[ERR] choose_yell_revealed_to_green_then_extra_yell: invalid choice {choice_str}")
+            gs.pending.append(p)
+            return
+        if _move_yell_revealed_to_green(gs, cn):
+            picked.append(cn)
+        else:
+            gs.log.append(f"[WARN] choose_yell_revealed_to_green_then_extra_yell: {cn} was not in current revealed zone")
+        # Remove one selected instance from remaining candidates.
+        removed = False
+        rest = []
+        for x in cands:
+            if (not removed) and _canon_cardno(x) == cn:
+                removed = True
+                continue
+            rest.append(x)
+        if len(picked) >= max_picks or not rest:
+            _finish_extra_yell_from_picked(p, picked)
+            return
+        p2 = dict(p)
+        p2['picked'] = list(picked)
+        p2['candidates'] = list(rest)
+        p2['options'] = list(rest)
+        p2['display_cards'] = list(rest)
+        p2['text'] = f"{str(p.get('source_cn','') or '')}[エール時] 追加で控え室に置く公開カードを選んでください（{len(picked)}/{max_picks}枚選択済み。終了する場合はスキップ）。"
+        p2['optional'] = True
+        gs.pending.append(p2)
+        gs.log.append(f"[PENDING] choose additional-yell revealed card picked={len(picked)}/{max_picks} remain={len(rest)}")
+        return
+
     if kind == 'live_start_reduce_any_if_opponent_wait_exists_manual':
         low = choice_str.lower()
         src = str(p.get('source_cn', '') or '')
@@ -10153,6 +10609,44 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             gs.log.append(f"[INFO] {src or '?'}: notice acknowledged - {txt}")
         _enqueue_auto_order_from_deferred()
         return
+    if kind == 'confirm_revealed_self_to_hand':
+        src = str(p.get('source_cn', '') or '').strip()
+        low = choice_str.lower()
+        if low in ('skip', '__skip__', 'no', 'n', '0', 'false', 'cancel', 'skip effect', '使わない', 'いいえ', 'スキップ'):
+            gs.log.append(f"[SKIP] {src}: revealed self-to-hand skipped")
+            _r = p.get('_resume') if isinstance(p, dict) else None
+            if _r:
+                gs.pending.append(_r)
+            _enqueue_auto_order_from_deferred()
+            return
+        if low not in ('apply', 'yes', 'y', '1', 'true', 'use', 'do', 'go', 'ok', 'confirm', '使う', 'はい'):
+            gs.log.append(f"[ERR] confirm_revealed_self_to_hand: invalid choice {choice_str}")
+            gs.pending.append(p)
+            return
+        cn = _canon_cardno(src)
+        moved = None
+        for zone_name in ('resolve_zone', 'green_room'):
+            z = getattr(gs, zone_name, None)
+            if not isinstance(z, list):
+                continue
+            for i, x in enumerate(list(z)):
+                if _canon_cardno(x) == cn:
+                    moved = z.pop(i)
+                    break
+            if moved:
+                break
+        if not moved:
+            gs.log.append(f"[ERR] confirm_revealed_self_to_hand: source not found in yell zones {cn}")
+            return
+        gs.hand.append(moved)
+        _remove_from_yell_revealed_tracker(gs, moved)
+        gs.log.append(f"[ACT] {src}: revealed self -> hand")
+        _r = p.get('_resume') if isinstance(p, dict) else None
+        if _r:
+            gs.pending.append(_r)
+        _enqueue_auto_order_from_deferred()
+        return
+
     if kind == 'confirm_effect':
         after_eff = str(p.get('after_effect_template', '') or '').strip()
         ctx0 = dict(p.get('ctx', {}) or {})
