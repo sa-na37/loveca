@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: yell_reveal_preview_and_score_kind_20260616ac
+# BUILD_TAG: turn_order_success_skip_20260616ak
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -145,9 +145,12 @@ _EFFECT_RULES = [
     {"id": "retrieve_yell_cost_member_le", "pattern": r"^エールにより公開された自分のカードの中から、コスト(?P<cost_lim>\d+)以下のメンバーカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "COST_MEMBER_LE"},
     {"id": "retrieve_yell_cost_member_ge", "pattern": r"^エールにより公開された自分のカードの中から、コスト(?P<cost_min>\d+)以上のメンバーカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "COST_MEMBER_GE"},
     {"id": "retrieve_yell_group_cost_member_between", "pattern": r"^エールにより公開された自分のカードの中から、コスト(?P<cost_min>\d+)以上(?P<cost_lim>\d+)以下の『(?P<group>[^』]+)』のメンバーカードを1枚手札に加える。$", "op": "retrieve_from_yell", "card_kind": "COST_MEMBER_RANGE"},
-    {"id": "put_yell_revealed_any_to_deck_top_optional", "pattern": r"^エールで公開された自分のカードの中から、カードを1枚デッキの一番上に置いてもよい。$", "op": "put_yell_to_deck_top", "card_kind": "ANY", "up_to": True},
+    # Put cards revealed by yell onto the deck (top/bottom).  Keep both
+    # 「エールで公開された」 and 「エールにより公開された」 variants because DB text uses both.
+    {"id": "put_yell_revealed_any_to_deck_top_optional", "pattern": r"^エール(?:で|により)公開された自分のカードの中から、カードを1枚(?:まで)?デッキの一番上に置いてもよい。$", "op": "put_yell_to_deck_top", "card_kind": "ANY", "up_to": True},
+    {"id": "put_yell_revealed_type_to_deck_top_optional", "pattern": r"^エール(?:で|により)公開された自分のカードの中から、(?P<kind>ライブ|メンバー)カードを1枚(?:まで)?デッキの一番上に置いてもよい。$", "op": "put_yell_to_deck_top", "up_to": True},
     # Put cards revealed by yell on the bottom of the deck (e.g. 未体験HORIZON).
-    {"id": "put_yell_revealed_type_upto_deck_bottom", "pattern": r"^エールにより公開された自分のカードの中から、(?:(?P<kind>ライブ|メンバー)カード|カード)を(?P<n>\d+)枚までデッキの一番下に置く。$", "op": "put_yell_to_deck_bottom"},
+    {"id": "put_yell_revealed_type_upto_deck_bottom", "pattern": r"^エール(?:で|により)公開された自分のカードの中から、(?:(?P<kind>ライブ|メンバー)カード|カード)を(?P<n>\d+)枚までデッキの一番下に置く。$", "op": "put_yell_to_deck_bottom"},
 ]
 _EFFECT_RULES_COMPILED = [{**r, "re": re.compile(r["pattern"])} for r in _EFFECT_RULES]
 _HEART_ICON_COLOR_MAP = {
@@ -2550,16 +2553,22 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         gs.log.append(f'[PENDING] retrieve_from_yell: {len(cands)} candidates, take {max_n}{" up to" if up_to else ""}')
         return
     if op == 'put_yell_to_deck_top':
-        kind = str(rule.get('card_kind', '') or '').upper() or 'ANY'
+        kind_jp = str(gd.get('kind', '') or '')
+        kind = {'ライブ': 'LIVE', 'メンバー': 'MEMBER'}.get(kind_jp, str(rule.get('card_kind', '') or '').upper() or 'ANY')
         max_n = int(gd.get('n', 1) or 1)
         src = str((ctx or {}).get('source_cn', '') or '')
         cands = _yell_revealed_candidates(gs, cards_db, kind)
         if not cands:
             gs.log.append(f'[INFO] put_yell_to_deck_top: no matching card in yell reveals (kind={kind})')
             return
+        label = f'{src}[ライブ成功時]: エールで公開されたカードから1枚までデッキの一番上に置く'
+        if kind == 'LIVE':
+            label += '（ライブカード）'
+        elif kind == 'MEMBER':
+            label += '（メンバーカード）'
         gs.pending.append({
             'kind': 'pick_from_yell_to_deck_top',
-            'text': f'{src}[ライブ成功時]: エールで公開されたカードから1枚までデッキの一番上に置く',
+            'text': label,
             'options': ['skip'] + list(cands),
             'source_cn': src,
             'remaining_n': max_n,
@@ -2631,6 +2640,77 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
             gs.log.append(f'[AUTO] draw_if ({cond}): condition not met -> skip')
         return
     gs.log.append(f"[WARN] effect op not implemented: {op}")
+
+def _normalize_turn_order(value: Any, allow_empty: bool = False) -> str:
+    s = str(value or '').strip().lower()
+    if not s and allow_empty:
+        return ''
+    if s in ('second', 'gote', '後手', '2', 'false'):
+        return 'second'
+    if s in ('first', 'sente', '先手', '1', 'true'):
+        return 'first'
+    return '' if allow_empty else 'first'
+
+def _turn_order_label(value: Any) -> str:
+    return '後手' if _normalize_turn_order(value) == 'second' else '先手'
+
+def _opponent_success_count(gs: 'GameState') -> int:
+    try:
+        return max(0, min(2, int(getattr(gs, 'opponent_success_count', 0) or 0)))
+    except Exception:
+        return 0
+
+def _set_opponent_success_count(gs: 'GameState', value: int) -> int:
+    v = max(0, min(2, int(value or 0)))
+    try:
+        gs.opponent_success_count = v
+    except Exception:
+        pass
+    return v
+
+def _set_turn_order(gs: 'GameState', value: Any) -> str:
+    v = _normalize_turn_order(value)
+    try:
+        gs.turn_order = v
+    except Exception:
+        pass
+    return v
+
+def _reset_opponent_wait_count(gs: 'GameState', reason: str = '') -> None:
+    before = _opponent_wait_count(gs)
+    if before <= 0:
+        return
+    _set_opponent_wait_count(gs, 0)
+    msg = f'[AUTO] opponent_wait_count reset {before} -> 0'
+    if reason:
+        msg += f' ({reason})'
+    try:
+        gs.log.append(msg)
+    except Exception:
+        pass
+
+def _apply_turn_order_transition_resets(gs: 'GameState') -> None:
+    # Current-turn reset: if we are first, opponent turn begins after our turn ends.
+    cur = _normalize_turn_order(getattr(gs, 'turn_order', 'first'))
+    if cur == 'first':
+        _reset_opponent_wait_count(gs, '先手のターン終了時')
+    # Apply next-turn order selected by success-storage decision, if any.
+    nxt = _normalize_turn_order(getattr(gs, 'next_turn_order', ''), allow_empty=True)
+    if nxt:
+        try:
+            gs.turn_order = nxt
+            gs.next_turn_order = ''
+            gs.log.append(f'[TURN_ORDER] next turn -> {_turn_order_label(nxt)}')
+        except Exception:
+            pass
+    else:
+        try:
+            gs.turn_order = cur
+        except Exception:
+            pass
+    # Next-turn reset: if we are second, opponent turn happened before our turn begins.
+    if _normalize_turn_order(getattr(gs, 'turn_order', 'first')) == 'second':
+        _reset_opponent_wait_count(gs, '後手のターン開始前')
 
 def _opponent_wait_count(gs: 'GameState') -> int:
     try:
@@ -3161,7 +3241,10 @@ class GameState:
     next_live_set_limit_delta: int = 0
     success_zone: List[str] = field(default_factory=list)  # 成功ライブカード置き場
     opponent_success_score_sum: int = -1  # manual/debug opponent success-zone score sum; -1 means unknown
+    opponent_success_count: int = 0  # manual/UI tracked opponent success live storage count (0..2)
     opponent_wait_count: int = 0  # manual/UI tracked opponent waiting members count (0..3)
+    turn_order: str = "first"  # current turn perspective: first/sente or second/gote
+    next_turn_order: str = ""  # set by success-store decision; applied at next turn start
     resolve_zone: List[str] = field(default_factory=list)
     pending: List[Dict[str, Any]] = field(default_factory=list)
     live_start_prompted: bool = False
@@ -3272,7 +3355,10 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
         "next_live_set_limit_delta": int(getattr(gs, "next_live_set_limit_delta", 0) or 0),
         "success_zone": list(getattr(gs, "success_zone", []) or []),
         "opponent_success_score_sum": int(getattr(gs, "opponent_success_score_sum", -1) or -1),
+        "opponent_success_count": max(0, min(2, int(getattr(gs, "opponent_success_count", 0) or 0))),
         "opponent_wait_count": max(0, min(3, int(getattr(gs, "opponent_wait_count", 0) or 0))),
+        "turn_order": str(getattr(gs, "turn_order", "first") or "first"),
+        "next_turn_order": str(getattr(gs, "next_turn_order", "") or ""),
         "resolve_zone": list(gs.resolve_zone),
         "pending": json.loads(json.dumps(gs.pending)) if gs.pending else [],
         "live_start_prompted": bool(gs.live_start_prompted),
@@ -3326,7 +3412,10 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
     gs.next_live_set_limit_delta = int(snap.get("next_live_set_limit_delta", getattr(gs, "next_live_set_limit_delta", 0) or 0) or 0)
     gs.success_zone = list(snap.get("success_zone", getattr(gs, "success_zone", [])))
     gs.opponent_success_score_sum = _safe_int(snap.get("opponent_success_score_sum", getattr(gs, "opponent_success_score_sum", -1)), -1)
+    gs.opponent_success_count = max(0, min(2, _safe_int(snap.get("opponent_success_count", getattr(gs, "opponent_success_count", 0)), 0)))
     gs.opponent_wait_count = max(0, min(3, _safe_int(snap.get("opponent_wait_count", getattr(gs, "opponent_wait_count", 0)), 0)))
+    gs.turn_order = _normalize_turn_order(snap.get("turn_order", getattr(gs, "turn_order", "first")))
+    gs.next_turn_order = _normalize_turn_order(snap.get("next_turn_order", getattr(gs, "next_turn_order", "")), allow_empty=True)
     gs.resolve_zone = list(snap.get("resolve_zone", gs.resolve_zone))
     gs.pending = list(snap.get("pending", gs.pending) or [])
     gs.live_start_prompted = bool(snap.get("live_start_prompted", gs.live_start_prompted))
@@ -4174,6 +4263,23 @@ def _count_yell_revealed_live_cards_with_tag(gs: GameState, cards_db: Dict[str, 
             n += 1
     return int(n)
 
+def _count_yell_revealed_group_live_cards_with_tag(gs: GameState, cards_db: Dict[str, CardInfo], group_name: str, tag_text: str) -> int:
+    """Count YELL-revealed LIVE cards that match group/unit text and have the given blade-heart tag."""
+    tag = _normalize_tag_marker(tag_text)
+    group_name = str(group_name or '').strip()
+    if not tag:
+        return 0
+    n = 0
+    for cn in list(getattr(gs, '_yell_revealed_this_live', []) or []):
+        ci = _get_card(cards_db, cn)
+        if not ci or not _is_live_ci(ci):
+            continue
+        if group_name and (group_name not in str(getattr(ci, 'group', '') or '')) and (group_name not in str(getattr(ci, 'unit', '') or '')):
+            continue
+        if _ci_blade_heart_has_tag(ci, tag):
+            n += 1
+    return int(n)
+
 def _ci_blade_heart_score_icon_bonus(ci: Optional[CardInfo]) -> int:
     """Return the score bonus from score-up blade-heart icons on a revealed card.
 
@@ -4465,6 +4571,18 @@ def _slot_always_blade_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos: 
             for _eff0, _blob0 in _iter_body_always_effects(c):
                 if ('相手のステージにいるウェイト状態のメンバー1人につき' in str(_blob0 or '') and 'ブレード' in str(_blob0 or '')):
                     bonus += int(_count_blade_icons_from_tagblob(str(_blob0 or '')) or 1) * _opponent_wait_count(gs)
+        except Exception:
+            pass
+        # Continuous: 相手の成功ライブカード置き場枚数が自分より多いかぎり、その差ぶん <(ブレード)> を得る。
+        try:
+            own_success_n = len(list(getattr(gs, 'success_zone', []) or []))
+            opp_success_n = _opponent_success_count(gs)
+            diff_success_n = max(0, int(opp_success_n) - int(own_success_n))
+            if diff_success_n > 0:
+                for _eff0, _blob0 in _iter_body_always_effects(c):
+                    btxt = str(_blob0 or '')
+                    if ('相手の成功ライブカード置き場にあるカードの枚数が自分より多いかぎり' in btxt and 'その差に等しい数' in btxt and 'ブレード' in btxt):
+                        bonus += int(_count_blade_icons_from_tagblob(btxt) or 1) * diff_success_n
         except Exception:
             pass
         if _has_under_energy_blade_bonus(c):
@@ -7047,6 +7165,40 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         else:
             gs.log.append(f"[SKIP] LIVE: {src_cn}[ライブ成功時] unresolved (revealed live cards: {got} < {need})")
         return
+    if kind in ('add_live_success_total_score_bonus_if_revealed_group_live_score_tag_at_least',):
+        src_cn = str((trig or {}).get('source_cn', '') or '')
+        pos = str((trig or {}).get('pos', '') or '').upper()
+        group_name = str((trig or {}).get('condition_group_name', '') or '')
+        need = int((trig or {}).get('condition_count', 0) or 0)
+        bonus = int((trig or {}).get('bonus', 0) or 0)
+        got = int(_count_yell_revealed_group_live_cards_with_tag(gs, cards_db, group_name, '<(スコア+1)>'))
+        if got >= need and bonus:
+            _add_live_success_total_score_bonus(gs, cards_db, bonus, detail=f"revealed 『{group_name}』 LIVE with <スコア+1>: {got}/{need}", source_cn=src_cn, pos=pos)
+        else:
+            gs.log.append(f"[SKIP] {pos + ': ' if pos else ''}{src_cn}[ライブ成功時] unresolved (revealed 『{group_name}』 LIVE with <スコア+1>: {got} < {need})")
+        return
+    if kind in ('draw_if_revealed_score_tag_live_or_success_score_above_original',):
+        src_cn = str((trig or {}).get('source_cn', '') or '')
+        pos = str((trig or {}).get('pos', '') or '').upper()
+        got = int(_count_yell_revealed_live_cards_with_tag(gs, cards_db, '<(スコア+1)>'))
+        if got >= 1:
+            try:
+                rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
+            except Exception:
+                rng2 = random.Random()
+            drew = draw(gs, 1, rng2)
+            gs.log.append(f"[AUTO] {pos + ': ' if pos else ''}{src_cn}[ライブ成功時]: revealed LIVE with <スコア+1>={got} -> draw {drew}")
+            return
+        gs.pending.append({
+            'kind': 'confirm_effect',
+            'text': f'{src_cn}[ライブ成功時] エール公開に<スコア+1>を持つライブカードはありません。自分のライブカード置き場に元々のスコアより高いスコアのライブカードがある場合、カードを1枚引きます。条件を満たすなら Apply、満たさないなら Skip。',
+            'options': ['apply', 'skip'],
+            'after_effect_template': 'カードを1枚引く。',
+            'ctx': {'source_cn': src_cn, 'pos': pos} if pos else {'source_cn': src_cn},
+            'source_cn': src_cn,
+        })
+        gs.log.append(f"[PENDING] {pos + ': ' if pos else ''}{src_cn}[ライブ成功時] success-zone above-original score condition manual; revealed score tag LIVE={got}")
+        return
     if kind in ('add_live_success_score_bonus_if_revealed_group_member_count_at_least',):
         cn_live = str((trig or {}).get('source_cn', '') or '')
         group_name = str((trig or {}).get('condition_group_name', '') or '')
@@ -8248,6 +8400,33 @@ def _build_live_success_trigger_from_effect(gs: GameState, cards_db: Dict[str, C
                 'ctx': dict(ctx or {}),
                 'label': str(label or ''),
             }
+
+    # Revealed <スコア+1> group LIVE -> live total score bonus.
+    # Example: PL!S-bp6-009 黒澤ルビィ.
+    m = re.match(r'^エール(?:により|で)公開された自分のカードの中に、?<\(スコア\+1\)>を持つ『(?P<group>[^』]+)』のライブカードが(?P<count>\d+)?枚?(?:以上)?ある場合、ライブの合計スコアを\+(?P<delta>\d+)する。?$', eff_norm)
+    if m:
+        return {
+            'kind': 'add_live_success_total_score_bonus_if_revealed_group_live_score_tag_at_least',
+            'condition_group_name': str(m.group('group') or '').strip(),
+            'condition_count': int(m.group('count') or 1),
+            'bonus': int(m.group('delta') or 0),
+            'source_cn': str(source_cn or ''),
+            'pos': str(pos or ''),
+            'ctx': dict(ctx or {}),
+            'label': str(label or ''),
+        }
+
+    # Revealed <スコア+1> LIVE or manually confirmed above-original score in live storage -> draw.
+    # Example: PL!SP-pb2-004 平安名すみれ.
+    m = re.match(r'^自分のライブカード置き場の中に元々のスコアより高いスコアのライブカードがあるか、エールにより公開された自分のカードの中に<\(スコア\+1\)>を持つライブカードがある場合、カードを1枚引く。?$', eff_norm)
+    if m:
+        return {
+            'kind': 'draw_if_revealed_score_tag_live_or_success_score_above_original',
+            'source_cn': str(source_cn or ''),
+            'pos': str(pos or ''),
+            'ctx': dict(ctx or {}),
+            'label': str(label or ''),
+        }
 
     # Generalized success-zone count + revealed score-tag LIVE condition.
     m = re.match(r'^自分か相手の成功ライブカード置き場にカードが(?P<count>\d+)枚以上あり、かつエール(?:によって|により)公開された自分のカードの中に<\(スコア\+1\)>を持つライブカードが(?P<reveal_n>\d+)枚以上ある場合、このカードのスコアを\+(?P<delta>\d+)する。?$', eff_norm)
@@ -11142,6 +11321,13 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             return
         c0 = str(choice_str or '').strip()
         if c0.lower() == 'skip':
+            try:
+                before_opp_success = _opponent_success_count(gs)
+                after_opp_success = _set_opponent_success_count(gs, before_opp_success + 1)
+                gs.next_turn_order = 'second'
+                gs.log.append(f'[TURN_ORDER] success_store skipped -> next turn 後手; opponent_success_count {before_opp_success} -> {after_opp_success}')
+            except Exception:
+                pass
             gs.log.append('[ACT] success_store: skipped')
             return
         cn = _canon_cardno(c0)
@@ -11174,6 +11360,11 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             gs.success_zone.append(pick_cn)
         except Exception:
             gs.success_zone = list(getattr(gs, 'success_zone', []) or []) + [pick_cn]
+        try:
+            gs.next_turn_order = 'first'
+            gs.log.append('[TURN_ORDER] success_store moved -> next turn 先手')
+        except Exception:
+            pass
         gs.log.append(f"[ACT] success_store: moved {pick_cn} -> success storage")
         return
     if kind == 'live_start_success_heart_by_success':
@@ -13267,6 +13458,7 @@ def cmd_end_turn(gs: GameState, rng: random.Random) -> None:
     if bool(getattr(gs, "cannot_live_until_end_of_live", False)):
         gs.log.append("[INFO] live_set: you cannot live until end of live; any set cards will not start a live and will go to green room")
 def _advance_to_next_turn(gs: GameState, rng: random.Random) -> None:
+    _apply_turn_order_transition_resets(gs)
     gs.turn += 1
     begin_turn(gs, rng)
 def _collect_live_storage_cleanup_topbottom_triggers(gs: GameState, cards_db: Dict[str, CardInfo], live_cns: List[str]) -> List[Dict[str, Any]]:

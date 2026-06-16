@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: server_cardno_cl_popup_fix_20260615y
+# BUILD_TAG: server_turn_order_success_skip_20260616ak
 from __future__ import annotations
 
 """llocg_ui.server
@@ -188,6 +188,8 @@ class App:
         e_active_s = (env.get('LLOCG_START_ENERGY_ACTIVE') or '').strip()
         e_wait_s = (env.get('LLOCG_START_ENERGY_WAIT') or '').strip()
         opponent_wait_s = (env.get('LLOCG_START_OPPONENT_WAIT') or '').strip()
+        opponent_success_s = (env.get('LLOCG_START_OPPONENT_SUCCESS') or '').strip()
+        turn_order_s = (env.get('LLOCG_START_TURN_ORDER') or '').strip()
         turn_s = (env.get('LLOCG_START_TURN') or '').strip()
         phase_s = (env.get('LLOCG_START_PHASE') or '').strip()
         hand_size_s = (env.get('LLOCG_START_HAND_SIZE') or '').strip()
@@ -211,7 +213,7 @@ class App:
 
         any_override = any([
             preset_s,
-            hand_spec, e_active_s, e_wait_s, opponent_wait_s, turn_s, phase_s, hand_size_s, shuffle_s, debug_s,
+            hand_spec, e_active_s, e_wait_s, opponent_wait_s, opponent_success_s, turn_order_s, turn_s, phase_s, hand_size_s, shuffle_s, debug_s,
             green_spec, decktop_spec, deckexact_spec, resolve_spec,
             stage_spec, stage_l, stage_c, stage_r,
         ])
@@ -577,12 +579,29 @@ class App:
             except Exception:
                 pass
 
-        # Opponent wait count override (debug/manual state seed)
+        # Opponent manual counters / turn-order overrides (debug/manual state seed)
         if opponent_wait_s:
             try:
                 ow = max(0, min(3, _as_int(opponent_wait_s, 0)))
                 gs.opponent_wait_count = ow
                 gs.log.append(f'[DEBUG_START] opponent_wait_count={ow}')
+            except Exception:
+                pass
+        if opponent_success_s:
+            try:
+                osn = max(0, min(2, _as_int(opponent_success_s, 0)))
+                gs.opponent_success_count = osn
+                gs.log.append(f'[DEBUG_START] opponent_success_count={osn}')
+            except Exception:
+                pass
+        if turn_order_s:
+            try:
+                tos = str(turn_order_s).strip().lower()
+                if tos in ('second', 'gote', '後手', '2'):
+                    gs.turn_order = 'second'
+                else:
+                    gs.turn_order = 'first'
+                gs.log.append(f'[DEBUG_START] turn_order={getattr(gs, "turn_order", "first")}')
             except Exception:
                 pass
 
@@ -1062,6 +1081,9 @@ class App:
             "energy_active": int(self.gs.energy_active),
             "energy_wait": int(self.gs.energy_wait),
             "opponent_wait_count": max(0, min(3, int(getattr(self.gs, "opponent_wait_count", 0) or 0))),
+            "opponent_success_count": max(0, min(2, int(getattr(self.gs, "opponent_success_count", 0) or 0))),
+            "turn_order": str(getattr(self.gs, "turn_order", "first") or "first"),
+            "next_turn_order": str(getattr(self.gs, "next_turn_order", "") or ""),
             "stage": {k: (asdict(v) if v else None) for k, v in self.gs.stage.items()},
             "green_room": list(self.gs.green_room),
             "set_zone": list(self.gs.set_zone),
@@ -1257,6 +1279,8 @@ class App:
             "next",
             "mulligan_next",
             "opponent_wait_delta",
+            "opponent_success_delta",
+            "turn_order_set",
         }
         if mutating and name != "toggle_debug":
             push_undo(self.gs, self.rng)
@@ -1291,6 +1315,28 @@ class App:
                 self.gs.log.append(f"[UI] opponent_wait_count {cur} -> {newv}")
             except Exception:
                 pass
+        elif name == "opponent_success_delta":
+            try:
+                delta = int(payload.get("delta", 0) or 0)
+            except Exception:
+                delta = 0
+            cur = max(0, min(2, int(getattr(self.gs, "opponent_success_count", 0) or 0)))
+            newv = max(0, min(2, cur + delta))
+            try:
+                self.gs.opponent_success_count = newv
+                self.gs.log.append(f"[UI] opponent_success_count {cur} -> {newv}")
+            except Exception:
+                pass
+        elif name == "turn_order_set":
+            raw = str(payload.get("value", "") or "").strip().lower()
+            val = "second" if raw in ("second", "gote", "後手", "2") else "first"
+            try:
+                oldv = str(getattr(self.gs, "turn_order", "first") or "first")
+                self.gs.turn_order = val
+                self.gs.next_turn_order = ""
+                self.gs.log.append(f"[UI] turn_order {oldv} -> {val}")
+            except Exception:
+                pass
         elif name == "resolve_pending":
             cmd_resolve_pending(
                 self.gs,
@@ -1315,6 +1361,11 @@ class App:
                     o = p0.get('options', None)
                     if isinstance(o, list):
                         opts = [str(x).strip().lower() for x in o if str(x).strip()]
+                if isinstance(p0, dict) and str(p0.get('kind','') or '') == 'pick_success_to_store':
+                    cmd_resolve_pending(self.gs, self.cards_db, 0, 'skip')
+                    post_process(self.gs)
+                    self.save_trace()
+                    return self.state_json()
                 if opts:
                     s = set(opts)
                     if s.issubset({'pay','skip','yes','no'}) and len(s) <= 2:
@@ -1640,7 +1691,9 @@ HTML = r'''<!doctype html>
   #topBar .miniBtn:hover{background:rgba(255,255,255,.18);}
   #topBar .oppWaitPill{display:flex;align-items:center;gap:6px;}
   #topBar .oppWaitBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.16);border-radius:999px;min-width:24px;height:22px;padding:0 7px;line-height:18px;font-size:13px;font-weight:800;cursor:pointer;}
+  #topBar .turnOrderBtn{min-width:42px;}
   #topBar .oppWaitBtn:hover{background:rgba(255,255,255,.20);}
+  #topBar .oppWaitBtn.orderSelected{background:#ffd84d;color:#111;border-color:#ffd84d;box-shadow:0 0 0 2px rgba(0,0,0,.35),0 0 12px rgba(255,216,77,.55);}
 
   /* banner */
   #banner{position:absolute;left:50%;top:54px;transform:translateX(-50%);padding:10px 16px;border-radius:999px;background:rgba(0,0,0,.72);border:1px solid rgba(255,255,255,.22);z-index:9900;display:none;font-size:18px;font-weight:800;letter-spacing:.5px;pointer-events:none;max-width:85%;text-align:center;}
@@ -1755,6 +1808,8 @@ HTML = r'''<!doctype html>
     <div id="topBar">
       <div class="pill">Turn: <b id="turn">?</b> | Phase: <b id="phase">?</b> | Energy: <b id="energy">?</b></div>
       <div class="pill oppWaitPill">Opponent wait: <b id="opponentWait">0</b>/3 <button class="oppWaitBtn" id="btnOppWaitMinus" title="相手ウェイト人数を減らす">−</button><button class="oppWaitBtn" id="btnOppWaitPlus" title="相手ウェイト人数を増やす">＋</button></div>
+      <div class="pill oppWaitPill">Opp success: <b id="opponentSuccess">0</b>/2 <button class="oppWaitBtn" id="btnOppSuccessMinus" title="相手成功置き場枚数を減らす">−</button><button class="oppWaitBtn" id="btnOppSuccessPlus" title="相手成功置き場枚数を増やす">＋</button></div>
+      <div class="pill oppWaitPill"><button class="oppWaitBtn turnOrderBtn" id="btnOrderFirst" title="現在ターンを先手扱いにする">先手</button><button class="oppWaitBtn turnOrderBtn" id="btnOrderSecond" title="現在ターンを後手扱いにする">後手</button></div>
       <div class="pill">Selected(hand): <b id="selected">0</b></div>
       <button class="miniBtn" id="btnDbg">枠表示</button>
     </div>
@@ -1842,6 +1897,12 @@ HTML = r'''<!doctype html>
   const elOpponentWait = document.getElementById('opponentWait');
   const btnOppWaitMinus = document.getElementById('btnOppWaitMinus');
   const btnOppWaitPlus = document.getElementById('btnOppWaitPlus');
+  const elOpponentSuccess = document.getElementById('opponentSuccess');
+  const btnOppSuccessMinus = document.getElementById('btnOppSuccessMinus');
+  const btnOppSuccessPlus = document.getElementById('btnOppSuccessPlus');
+  const elTurnOrder = document.getElementById('turnOrder');
+  const btnOrderFirst = document.getElementById('btnOrderFirst');
+  const btnOrderSecond = document.getElementById('btnOrderSecond');
   const elSelected = document.getElementById('selected');
   const elBanner = document.getElementById('banner');
 
@@ -1861,6 +1922,43 @@ HTML = r'''<!doctype html>
     btnOppWaitPlus.addEventListener('click', async (ev)=>{
       ev.stopPropagation();
       await adjustOpponentWait(1);
+    });
+  }
+
+  async function adjustOpponentSuccess(delta){
+    st = await apiCmd('opponent_success_delta', {delta});
+    selHand = [];
+    updateTop();
+    render();
+  }
+  async function setTurnOrder(value){
+    st = await apiCmd('turn_order_set', {value});
+    selHand = [];
+    updateTop();
+    render();
+  }
+  if(btnOppSuccessMinus){
+    btnOppSuccessMinus.addEventListener('click', async (ev)=>{
+      ev.stopPropagation();
+      await adjustOpponentSuccess(-1);
+    });
+  }
+  if(btnOppSuccessPlus){
+    btnOppSuccessPlus.addEventListener('click', async (ev)=>{
+      ev.stopPropagation();
+      await adjustOpponentSuccess(1);
+    });
+  }
+  if(btnOrderFirst){
+    btnOrderFirst.addEventListener('click', async (ev)=>{
+      ev.stopPropagation();
+      await setTurnOrder('first');
+    });
+  }
+  if(btnOrderSecond){
+    btnOrderSecond.addEventListener('click', async (ev)=>{
+      ev.stopPropagation();
+      await setTurnOrder('second');
     });
   }
 
@@ -2072,6 +2170,8 @@ HTML = r'''<!doctype html>
     if(kind === 'pay_or_skip' || kind === 'confirm_effect') return '効果を使いますか？';
     if(kind === 'choose_effects') return '効果を選択';
     if(kind === 'opponent_wait_notify') return '相手ウェイト人数を記録';
+    if(kind === 'confirm_yell_revealed_all_to_green_then_extra_yell') return '追加エール確認';
+    if(kind === 'choose_yell_revealed_to_green_then_extra_yell') return '公開カードを選択';
     if(kind === 'choose_stage_member_to_activate' || kind === 'choose_stage_member_to_gain_blade' || kind === 'choose_stage_member_to_gain_icons' || kind === 'choose_stage_member_to_position_change_source') return '対象メンバーを選択';
     if(kind === 'choose_heart_color' || kind === 'choose_heart_color_for_other') return 'ハートの色を選択';
     if(kind === 'discard_from_hand' || kind === 'discard_named_cards_from_hand') return '手札から選択';
@@ -2113,6 +2213,8 @@ HTML = r'''<!doctype html>
     if(kind === 'choose_heart_color' || kind === 'choose_heart_color_for_other') return '付与するハートの色を選んでください。';
     if(kind === 'discard_from_hand' || kind === 'discard_named_cards_from_hand') return '手札から選ぶカードを選択してください。';
     if(kind === 'choose_effects') return '解決する効果を選んでください。';
+    if(kind === 'confirm_yell_revealed_all_to_green_then_extra_yell') return '控え室に置く公開カードを確認し、追加エールを行うか選んでください。';
+    if(kind === 'choose_yell_revealed_to_green_then_extra_yell') return '控え室に置くエール公開カードを選んでください。';
     if(kind === 'auto_order') return '解決順を選んでください。';
     if(kind === 'position_change') return '移動先のエリアを選んでください。';
     if(kind === 'choose_deck_top_or_bottom_for_hand_card' || kind === 'choose_deck_top_or_bottom_for_live_storage_card') return 'デッキの一番上か一番下を選んでください。';
@@ -2527,6 +2629,11 @@ HTML = r'''<!doctype html>
   function pendingHasInlineAutoEffectDetail(p){
     if(!p || typeof p !== 'object') return false;
     if(p.suppress_card_text || p.no_card_text) return true;
+    const kind0 = String((p && p.kind) || '').trim();
+    // Card-pick popups already show the selected source card at left and a short
+    // instruction above the card list.  Showing the full source card text here
+    // duplicates that context and pushes the actual card list out of view.
+    if(kind0 === 'pick_from_yell' || kind0 === 'pick_from_yell_to_deck_top' || kind0 === 'pick_from_yell_to_deck_bottom') return true;
     const detail = String(p.auto_effect_detail || '');
     const text = String(p.text || '');
     const s = `${detail}
@@ -3394,7 +3501,7 @@ inner.appendChild(card);
     inner.appendChild(wrap);
   }
 
-  function openCardListPopup(title, cards, {closable=true, helperText='', forcePortrait=false, forceLandscape=false } = {}){
+  function openCardListPopup(title, cards, {closable=true, helperText='', forcePortrait=false, forceLandscape=false, confirmClose=false } = {}){
     let cardsList = cards.slice();
     // sort waiting room cards (spec update): by cardnumber asc, then card type
     try{
@@ -3463,6 +3570,20 @@ inner.appendChild(card);
       targetActions.appendChild(close);
       elViewerLayer.style.display = 'block';
     }else{
+      if(confirmClose){
+        const bConfirmClose = document.createElement('button');
+        bConfirmClose.className = 'miniBtn';
+        bConfirmClose.textContent = '確認';
+        bConfirmClose.addEventListener('click', async (ev)=>{
+          ev.stopPropagation();
+          closePopup();
+          st = await apiCmd('next', {indices: selHand.slice()});
+          selHand = [];
+          updateTop();
+          render();
+        });
+        targetActions.appendChild(bConfirmClose);
+      }
       elMask.style.display = 'block';
     }
   }
@@ -4451,6 +4572,34 @@ inner.appendChild(card);
     const opts = (p && (Array.isArray(p.options)?p.options: (Array.isArray(p.candidates)?p.candidates:(Array.isArray(p.cards)?p.cards:(Array.isArray(p.shown)?p.shown:[]))))) || [];
 
 
+    if(kind === 'confirm_yell_revealed_all_to_green_then_extra_yell'){
+      const displayCards = Array.isArray(p.display_cards) ? p.display_cards : (Array.isArray(p.candidates) ? p.candidates : []);
+      openCardListPopup('追加エール確認', displayCards, {
+        closable: false,
+        helperText: pendText || '公開カードを控え室に置いて追加エールを行うか選んでください。'
+      });
+      popup = {type:'pending', closable:false};
+      const bUse = document.createElement('button');
+      bUse.className = 'miniBtn';
+      bUse.textContent = '使う';
+      bUse.addEventListener('click', async ev=>{
+        ev.stopPropagation();
+        st = await apiCmd('resolve_pending', {idx:0, choice:'pay'});
+        selHand=[]; updateTop(); render();
+      });
+      const bSkip = document.createElement('button');
+      bSkip.className = 'miniBtn';
+      bSkip.textContent = 'スキップ';
+      bSkip.addEventListener('click', async ev=>{
+        ev.stopPropagation();
+        st = await apiCmd('resolve_pending', {idx:0, choice:'skip'});
+        selHand=[]; updateTop(); render();
+      });
+      elModalActions.appendChild(bUse);
+      elModalActions.appendChild(bSkip);
+      return;
+    }
+
     if(kind === 'mass_bottom_auto_ack' || kind === 'mass_bottom_optional_result_ack'){
       // 結果本文は上部の既存 effect processing text に集約する。
       // 重複を避けるため下部には追加説明を出さず、可変枚数だけ軽く強調する。
@@ -4943,22 +5092,31 @@ inner.appendChild(card);
       return;
     }
 
-    // pick_from_yell / pick_from_yell_to_deck_bottom: show yell-revealed card choices as card images + Skip.
+    // pick_from_yell / pick_from_yell_to_deck_top / pick_from_yell_to_deck_bottom: show yell-revealed card choices as card images + Skip.
     // options intentionally may contain 'skip', so handle this before the generic allCardNo fallback.
-    if(kind === 'pick_from_yell' || kind === 'pick_from_yell_to_deck_bottom'){
+    if(kind === 'pick_from_yell' || kind === 'pick_from_yell_to_deck_top' || kind === 'pick_from_yell_to_deck_bottom'){
       const cardOpts = opts.filter(o => looksLikeCardNo(String(o)));
       const hasSkip  = opts.some(o => String(o).toLowerCase() === 'skip') || allowSkip;
       popup = {type:'pending', closable:false};
       elModalTitle.textContent = 'エール公開カードを選択';
-      const defaultPickText = (kind === 'pick_from_yell')
-        ? 'エールにより公開されたカードから、手札に加えるカードを選んでください。'
-        : 'エールにより公開されたカードから、デッキの一番下に置くカードを選んでください。';
+      let defaultPickText = 'エールにより公開されたカードから、手札に加えるカードを選んでください。';
+      if(kind === 'pick_from_yell_to_deck_top'){
+        defaultPickText = 'エールにより公開されたカードから、デッキの一番上に置くカードを選んでください。';
+      }else if(kind === 'pick_from_yell_to_deck_bottom'){
+        defaultPickText = 'エールにより公開されたカードから、デッキの一番下に置くカードを選んでください。';
+      }
       setRichText(elModalText, pendText || defaultPickText);
       elModalActions.innerHTML = '';
       elModalCards.innerHTML = '';
 
       const row = document.createElement('div');
       row.className = 'choiceRow';
+      // Use only #modalCards as the horizontal scroller for this card list.
+      // Leaving .choiceRow scrollable creates two horizontal scrollbars.
+      row.style.overflowX = 'visible';
+      row.style.overflowY = 'visible';
+      row.style.maxWidth = 'none';
+      row.style.width = 'max-content';
       const dimsP = standardSize('portrait');
       const dimsL = standardSize('landscape');
       const dupCount = {};
@@ -5226,7 +5384,7 @@ inner.appendChild(card);
     const rz = (st && Array.isArray(st.resolve_zone)) ? st.resolve_zone : [];
     if(rz.length > 0){
       // confirm-only popup; user proceeds with NEXT.
-      openCardListPopup('解決領域', rz, {closable:false, helperText:'NEXTで次へ進みます', forcePortrait:true});
+      openCardListPopup('解決領域', rz, {closable:false, helperText:'NEXTで次へ進みます', forcePortrait:true, confirmClose:true});
     }else{
       // if the current popup is resolve, close it
       if(popup && popup.type==='cardlist' && !popup.closable){
@@ -5244,6 +5402,19 @@ inner.appendChild(card);
     if(elOpponentWait) elOpponentWait.textContent = st ? String(Math.max(0, Math.min(3, Number(st.opponent_wait_count||0)))) : '?';
     if(btnOppWaitMinus) btnOppWaitMinus.disabled = !st || Number(st.opponent_wait_count||0) <= 0;
     if(btnOppWaitPlus) btnOppWaitPlus.disabled = !st || Number(st.opponent_wait_count||0) >= 3;
+    if(elOpponentSuccess) elOpponentSuccess.textContent = st ? String(Math.max(0, Math.min(2, Number(st.opponent_success_count||0)))) : '?';
+    if(btnOppSuccessMinus) btnOppSuccessMinus.disabled = !st || Number(st.opponent_success_count||0) <= 0;
+    if(btnOppSuccessPlus) btnOppSuccessPlus.disabled = !st || Number(st.opponent_success_count||0) >= 2;
+    const ord = st ? String(st.turn_order || 'first') : 'first';
+    if(elTurnOrder) elTurnOrder.textContent = (ord === 'second') ? '後手' : '先手';
+    if(btnOrderFirst){
+      btnOrderFirst.disabled = !st;
+      btnOrderFirst.classList.toggle('orderSelected', !!st && ord !== 'second');
+    }
+    if(btnOrderSecond){
+      btnOrderSecond.disabled = !st;
+      btnOrderSecond.classList.toggle('orderSelected', !!st && ord === 'second');
+    }
     elSelected.textContent = String(selHand.length);
     setBanner(st && st.banner && st.banner.text ? String(st.banner.text) : '');
   }
