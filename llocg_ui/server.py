@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: server_popup_next_skip_20260616aq
+# BUILD_TAG: server_popup_peek_icon_fix_20260616at
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1762,6 +1762,11 @@ HTML = r'''<!doctype html>
   #modalCards .surf{position:relative;height:1px;}
   #modalActions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap;flex:0 0 auto;}
   #modalActions .miniBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:6px 10px;border-radius:10px;cursor:pointer;}
+  #popupPeekBtn{position:absolute;right:6px;top:6px;z-index:9800;display:none;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.20);background:rgba(0,0,0,.68);color:#eee;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.35);}
+  #popupPeekBtn:hover{background:rgba(40,40,40,.86);}
+  #popupPeekBtn.active{display:flex;background:#ffd54a;color:#111;border-color:rgba(0,0,0,.35);}
+  #popupPeekBtn.inspecting{display:flex;background:rgba(80,180,255,.85);color:#fff;border-color:rgba(255,255,255,.28);}
+  .popupPeekHidden{visibility:hidden !important;pointer-events:none !important;}
   /* secondary inspect popup (can coexist with pending/effect popup) */
   #viewerLayer{position:absolute;inset:0;display:none;z-index:9200;pointer-events:none;}
   #viewerModal{position:absolute;right:18px;top:74px;width:min(46%, 560px);max-height:min(74%, calc(var(--pmH) - 120px));overflow:hidden;background:#1b1b1b;border:1px solid rgba(255,255,255,.15);border-radius:16px;padding:12px;box-shadow:0 14px 60px rgba(0,0,0,.72);display:flex;flex-direction:column;pointer-events:auto;}
@@ -1834,6 +1839,8 @@ HTML = r'''<!doctype html>
     <div id="banner"></div>
 
     <div id="zones"></div>
+
+    <button id="popupPeekBtn" title="ポップアップを一時的に隠して盤面を確認">🙈 盤面確認</button>
 
     <div id="mask">
       <div id="modal">
@@ -1993,6 +2000,7 @@ HTML = r'''<!doctype html>
   const elModalCardText = document.getElementById('modalCardText');
   const elModalCards = document.getElementById('modalCards');
   const elModalActions = document.getElementById('modalActions');
+  const btnPopupPeek = document.getElementById('popupPeekBtn');
 
   const elViewerLayer = document.getElementById('viewerLayer');
   const elViewerModal = document.getElementById('viewerModal');
@@ -2009,6 +2017,7 @@ HTML = r'''<!doctype html>
   let selHand = []; // indices
   let popup = {type:null};
   let viewerPopup = {type:null};
+  let popupsHiddenForInspect = false;
   let bannerTimer = null;
   let stdPortrait = null;
   let stdLandscape = null;
@@ -2023,12 +2032,41 @@ HTML = r'''<!doctype html>
   let modalContextToken = 0;
   const elCdClose     = document.getElementById('cdClose');
 
-  elCdClose.addEventListener('click', ()=>{ elCardDetail.classList.remove('visible'); });
+  elCdClose.addEventListener('click', ()=>{ elCardDetail.classList.remove('visible'); applyPopupPeekState(); });
   elViewerClose.addEventListener('click', ()=>{ closeViewerPopup(); });
-  document.addEventListener('keydown', ev=>{ if(ev.key==='Escape') elCardDetail.classList.remove('visible'); });
+  document.addEventListener('keydown', ev=>{ if(ev.key==='Escape'){ elCardDetail.classList.remove('visible'); applyPopupPeekState(); } });
+
+  function hasPopupForInspect(){
+    return !!((popup && popup.type) || (viewerPopup && viewerPopup.type) || elCardDetail.classList.contains('visible'));
+  }
+
+  function applyPopupPeekState(){
+    const has = hasPopupForInspect();
+    if(!has) popupsHiddenForInspect = false;
+    const hide = !!(has && popupsHiddenForInspect);
+    if(elMask) elMask.classList.toggle('popupPeekHidden', hide);
+    if(elViewerLayer) elViewerLayer.classList.toggle('popupPeekHidden', hide);
+    if(elCardDetail) elCardDetail.classList.toggle('popupPeekHidden', hide);
+    if(btnPopupPeek){
+      btnPopupPeek.classList.toggle('active', has && !hide);
+      btnPopupPeek.classList.toggle('inspecting', hide);
+      btnPopupPeek.textContent = hide ? '👁️ ポップアップ表示' : '🙈 盤面確認';
+      btnPopupPeek.title = hide ? 'ポップアップを再表示する' : 'ポップアップを一時的に隠して盤面を確認';
+    }
+  }
+
+  if(btnPopupPeek){
+    btnPopupPeek.addEventListener('click', (ev)=>{
+      ev.stopPropagation();
+      if(!hasPopupForInspect()) return;
+      popupsHiddenForInspect = !popupsHiddenForInspect;
+      applyPopupPeekState();
+    });
+  }
   document.addEventListener('click', ev=>{
     if(elCardDetail.classList.contains('visible') && !elCardDetail.contains(ev.target)){
       elCardDetail.classList.remove('visible');
+      applyPopupPeekState();
     }
   });
 
@@ -2039,6 +2077,7 @@ HTML = r'''<!doctype html>
     elCdMeta.innerHTML = '';
     elCdAbilities.textContent = '読み込み中…';
     elCardDetail.classList.add('visible');
+    applyPopupPeekState();
 
     // Position near the anchor element
     if(anchorEl){
@@ -3586,6 +3625,7 @@ inner.appendChild(card);
       close.addEventListener('click', ()=>{ closeViewerPopup(); });
       targetActions.appendChild(close);
       elViewerLayer.style.display = 'block';
+      applyPopupPeekState();
     }else{
       if(confirmClose){
         const bConfirmClose = document.createElement('button');
@@ -3602,6 +3642,7 @@ inner.appendChild(card);
         targetActions.appendChild(bConfirmClose);
       }
       elMask.style.display = 'block';
+      applyPopupPeekState();
     }
   }
 
@@ -3659,24 +3700,29 @@ inner.appendChild(card);
     }
 
     elMask.style.display = 'block';
+    applyPopupPeekState();
   }
 
   function closePopup(){
     popup = {type:null};
     elMask.style.display = 'none';
+    elMask.classList.remove('popupPeekHidden');
     clearModalLead();
     elModalCards.innerHTML = '';
     elModalText.textContent = '';
     elModalActions.innerHTML = '';
+    applyPopupPeekState();
   }
 
   function closeViewerPopup(){
     viewerPopup = {type:null};
     elViewerLayer.style.display = 'none';
+    elViewerLayer.classList.remove('popupPeekHidden');
     elViewerCards.innerHTML = '';
     elViewerText.textContent = '';
     elViewerActions.innerHTML = '';
     elViewerTitle.textContent = 'カード一覧';
+    applyPopupPeekState();
   }
 
   function showReorderPopup(p){
@@ -5497,6 +5543,7 @@ inner.appendChild(card);
     if(!maybeShowPending()){
       maybeShowResolvePopup();
     }
+    applyPopupPeekState();
   }
 
   btnDbg.addEventListener('click', ()=>{ debug = !debug; render(); });
