@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: server_popup_peek_icon_fix_20260616at
+# BUILD_TAG: server_opponent_success_score_continue_fix_20260616ay
 from __future__ import annotations
 
 """llocg_ui.server
@@ -189,6 +189,8 @@ class App:
         e_wait_s = (env.get('LLOCG_START_ENERGY_WAIT') or '').strip()
         opponent_wait_s = (env.get('LLOCG_START_OPPONENT_WAIT') or '').strip()
         opponent_success_s = (env.get('LLOCG_START_OPPONENT_SUCCESS') or '').strip()
+        opponent_success_score_s = (env.get('LLOCG_START_OPPONENT_SUCCESS_SCORE') or env.get('LLOCG_START_OPPONENT_SUCCESS_SCORE_SUM') or '').strip()
+        opponent_excess_s = (env.get('LLOCG_START_OPPONENT_EXCESS') or env.get('LLOCG_START_OPPONENT_EXCESS_HEARTS') or '').strip()
         turn_order_s = (env.get('LLOCG_START_TURN_ORDER') or '').strip()
         turn_s = (env.get('LLOCG_START_TURN') or '').strip()
         phase_s = (env.get('LLOCG_START_PHASE') or '').strip()
@@ -213,7 +215,7 @@ class App:
 
         any_override = any([
             preset_s,
-            hand_spec, e_active_s, e_wait_s, opponent_wait_s, opponent_success_s, turn_order_s, turn_s, phase_s, hand_size_s, shuffle_s, debug_s,
+            hand_spec, e_active_s, e_wait_s, opponent_wait_s, opponent_success_s, opponent_success_score_s, opponent_excess_s, turn_order_s, turn_s, phase_s, hand_size_s, shuffle_s, debug_s,
             green_spec, decktop_spec, deckexact_spec, resolve_spec,
             stage_spec, stage_l, stage_c, stage_r,
         ])
@@ -592,6 +594,20 @@ class App:
                 osn = max(0, min(2, _as_int(opponent_success_s, 0)))
                 gs.opponent_success_count = osn
                 gs.log.append(f'[DEBUG_START] opponent_success_count={osn}')
+            except Exception:
+                pass
+        if opponent_success_score_s:
+            try:
+                oss = max(0, min(20, _as_int(opponent_success_score_s, 0)))
+                gs.opponent_success_score_sum = oss
+                gs.log.append(f'[DEBUG_START] opponent_success_score_sum={oss}')
+            except Exception:
+                pass
+        if opponent_excess_s:
+            try:
+                oex = max(0, min(9, _as_int(opponent_excess_s, 0)))
+                gs.opponent_excess_heart_count = oex
+                gs.log.append(f'[DEBUG_START] opponent_excess_heart_count={oex}')
             except Exception:
                 pass
         if turn_order_s:
@@ -1082,6 +1098,7 @@ class App:
             "energy_wait": int(self.gs.energy_wait),
             "opponent_wait_count": max(0, min(3, int(getattr(self.gs, "opponent_wait_count", 0) or 0))),
             "opponent_success_count": max(0, min(2, int(getattr(self.gs, "opponent_success_count", 0) or 0))),
+            "opponent_excess_heart_count": max(0, min(9, int(getattr(self.gs, "opponent_excess_heart_count", 0) or 0))),
             "turn_order": str(getattr(self.gs, "turn_order", "first") or "first"),
             "next_turn_order": str(getattr(self.gs, "next_turn_order", "") or ""),
             "stage": {k: (asdict(v) if v else None) for k, v in self.gs.stage.items()},
@@ -1343,6 +1360,7 @@ class App:
                 self.cards_db,
                 int(payload.get("idx", -1)),
                 str(payload.get("choice", "")),
+                self.rng,
             )
         elif name == "next":
             idxs = payload.get("indices", [])
@@ -1370,6 +1388,20 @@ class App:
                     }
                     if k0 in ack_kinds:
                         cmd_resolve_pending(self.gs, self.cards_db, 0, 'ok')
+                        post_process(self.gs)
+                        self.save_trace()
+                        return self.state_json()
+                    if k0 == 'set_opponent_excess_for_live_success':
+                        cur_ex = str(max(0, min(9, int(getattr(self.gs, 'opponent_excess_heart_count', 0) or 0))))
+                        cmd_resolve_pending(self.gs, self.cards_db, 0, cur_ex)
+                        post_process(self.gs)
+                        self.save_trace()
+                        return self.state_json()
+                    if k0 == 'set_opponent_success_score_for_live_attempt':
+                        cur_oss_i = int(getattr(self.gs, 'opponent_success_score_sum', -1) or -1)
+                        if cur_oss_i < 0:
+                            cur_oss_i = 0
+                        cmd_resolve_pending(self.gs, self.cards_db, 0, str(max(0, min(20, cur_oss_i))), self.rng)
                         post_process(self.gs)
                         self.save_trace()
                         return self.state_json()
@@ -2046,7 +2078,8 @@ HTML = r'''<!doctype html>
     const hide = !!(has && popupsHiddenForInspect);
     if(elMask) elMask.classList.toggle('popupPeekHidden', hide);
     if(elViewerLayer) elViewerLayer.classList.toggle('popupPeekHidden', hide);
-    if(elCardDetail) elCardDetail.classList.toggle('popupPeekHidden', hide);
+    // During board inspection, keep the card-detail panel usable for newly clicked board cards.
+    // The main modal/viewer are hidden above and no longer intercept clicks.
     if(btnPopupPeek){
       btnPopupPeek.classList.toggle('active', has && !hide);
       btnPopupPeek.classList.toggle('inspecting', hide);
@@ -2060,6 +2093,7 @@ HTML = r'''<!doctype html>
       ev.stopPropagation();
       if(!hasPopupForInspect()) return;
       popupsHiddenForInspect = !popupsHiddenForInspect;
+      if(popupsHiddenForInspect && elCardDetail) elCardDetail.classList.remove('visible');
       applyPopupPeekState();
     });
   }
@@ -2226,6 +2260,8 @@ HTML = r'''<!doctype html>
     if(kind === 'pay_or_skip' || kind === 'confirm_effect') return '効果を使いますか？';
     if(kind === 'choose_effects') return '効果を選択';
     if(kind === 'opponent_wait_notify') return '相手ウェイト人数を記録';
+    if(kind === 'set_opponent_excess_for_live_success') return '相手余剰ハート数を指定';
+    if(kind === 'set_opponent_success_score_for_live_attempt') return '相手成功スコア合計を指定';
     if(kind === 'confirm_yell_revealed_all_to_green_then_extra_yell') return '追加エール確認';
     if(kind === 'choose_yell_revealed_to_green_then_extra_yell') return '公開カードを選択';
     if(kind === 'choose_stage_member_to_activate' || kind === 'choose_stage_member_to_gain_blade' || kind === 'choose_stage_member_to_gain_icons' || kind === 'choose_stage_member_to_position_change_source') return '対象メンバーを選択';
@@ -2272,6 +2308,8 @@ HTML = r'''<!doctype html>
     if(kind === 'confirm_yell_revealed_all_to_green_then_extra_yell') return '控え室に置く公開カードを確認し、追加エールを行うか選んでください。';
     if(kind === 'choose_yell_revealed_to_green_then_extra_yell') return '控え室に置くエール公開カードを選んでください。';
     if(kind === 'auto_order') return '解決順を選んでください。';
+    if(kind === 'set_opponent_excess_for_live_success') return 'このライブ成功時効果の処理で参照する相手余剰ハート数を選んでください。';
+    if(kind === 'set_opponent_success_score_for_live_attempt') return 'このライブ判定で参照する相手成功ライブカード置き場のスコア合計を選んでください。';
     if(kind === 'position_change') return '移動先のエリアを選んでください。';
     if(kind === 'choose_deck_top_or_bottom_for_hand_card' || kind === 'choose_deck_top_or_bottom_for_live_storage_card') return 'デッキの一番上か一番下を選んでください。';
     if(kind === 'choose_player_for_green_bottom' || kind === 'choose_player_for_deck_top_action') return '自分か相手を選んでください。';
@@ -4633,6 +4671,98 @@ inner.appendChild(card);
     elModalCards.innerHTML = '';
 
     const opts = (p && (Array.isArray(p.options)?p.options: (Array.isArray(p.candidates)?p.candidates:(Array.isArray(p.cards)?p.cards:(Array.isArray(p.shown)?p.shown:[]))))) || [];
+
+
+    if(kind === 'set_opponent_excess_for_live_success'){
+      popup = {type:'pending', closable:false};
+      elModalTitle.textContent = '相手余剰ハート数を指定';
+      setRichText(elModalText, pendText || 'このライブ成功時効果の処理で参照する相手余剰ハート数を選んでください。');
+      elModalCards.innerHTML = '';
+      elModalActions.innerHTML = '';
+      const wrap = document.createElement('div');
+      wrap.style.display = 'flex';
+      wrap.style.alignItems = 'center';
+      wrap.style.gap = '12px';
+      wrap.style.padding = '14px 4px';
+      const lab = document.createElement('label');
+      lab.textContent = '相手余剰ハート数';
+      lab.style.fontWeight = '700';
+      const sel = document.createElement('select');
+      sel.style.fontSize = '18px';
+      sel.style.padding = '8px 14px';
+      sel.style.borderRadius = '10px';
+      sel.style.background = '#222';
+      sel.style.color = '#fff';
+      sel.style.border = '1px solid rgba(255,255,255,.28)';
+      const cur = Math.max(0, Math.min(9, Number((p && p.current) || (st && st.opponent_excess_heart_count) || 0)));
+      for(let i=0;i<=9;i++){
+        const opt = document.createElement('option');
+        opt.value = String(i);
+        opt.textContent = String(i);
+        if(i === cur) opt.selected = true;
+        sel.appendChild(opt);
+      }
+      wrap.appendChild(lab);
+      wrap.appendChild(sel);
+      elModalCards.appendChild(wrap);
+      const bOk = document.createElement('button');
+      bOk.className = 'miniBtn';
+      bOk.textContent = '確定';
+      bOk.addEventListener('click', async (ev)=>{
+        ev.stopPropagation();
+        st = await apiCmd('resolve_pending', {idx:0, choice:String(sel.value)});
+        selHand=[]; updateTop(); render();
+      });
+      elModalActions.appendChild(bOk);
+      elMask.style.display = 'block';
+      return;
+    }
+
+    if(kind === 'set_opponent_success_score_for_live_attempt'){
+      popup = {type:'pending', closable:false};
+      elModalTitle.textContent = '相手成功スコア合計を指定';
+      setRichText(elModalText, pendText || 'このライブ判定で参照する相手成功ライブカード置き場のスコア合計を選んでください。');
+      elModalCards.innerHTML = '';
+      elModalActions.innerHTML = '';
+      const wrap = document.createElement('div');
+      wrap.style.display = 'flex';
+      wrap.style.alignItems = 'center';
+      wrap.style.gap = '12px';
+      wrap.style.padding = '14px 4px';
+      const lab = document.createElement('label');
+      lab.textContent = '相手成功スコア合計';
+      lab.style.fontWeight = '700';
+      const sel = document.createElement('select');
+      sel.style.fontSize = '18px';
+      sel.style.padding = '8px 14px';
+      sel.style.borderRadius = '10px';
+      sel.style.background = '#222';
+      sel.style.color = '#fff';
+      sel.style.border = '1px solid rgba(255,255,255,.28)';
+      const rawCur = Number((p && p.current) || (st && st.opponent_success_score_sum) || 0);
+      const cur = Math.max(0, Math.min(20, Number.isFinite(rawCur) ? rawCur : 0));
+      for(let i=0;i<=20;i++){
+        const opt = document.createElement('option');
+        opt.value = String(i);
+        opt.textContent = String(i);
+        if(i === cur) opt.selected = true;
+        sel.appendChild(opt);
+      }
+      wrap.appendChild(lab);
+      wrap.appendChild(sel);
+      elModalCards.appendChild(wrap);
+      const bOk = document.createElement('button');
+      bOk.className = 'miniBtn';
+      bOk.textContent = '確定';
+      bOk.addEventListener('click', async (ev)=>{
+        ev.stopPropagation();
+        st = await apiCmd('resolve_pending', {idx:0, choice:String(sel.value)});
+        selHand=[]; updateTop(); render();
+      });
+      elModalActions.appendChild(bOk);
+      elMask.style.display = 'block';
+      return;
+    }
 
 
     if(kind === 'confirm_yell_revealed_all_to_green_then_extra_yell'){

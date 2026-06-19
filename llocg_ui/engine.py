@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: popup_next_skip_and_keke_enter_trigger_20260616aq
+# BUILD_TAG: success_score_conditional_sequence_20260616bb
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -1420,12 +1420,22 @@ def _auto_effect_detail_for_condition(ctx: Optional[Dict[str, Any]], effect_text
         lines.append(f'効果：{eff}')
     return '\n'.join(lines)
 
-def _enqueue_choose_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo], kind: str, n: int = 1, group: str = "", ctx: Optional[Dict[str, Any]] = None, allow_less: bool = False, resume: Optional[Dict[str, Any]] = None) -> None:
+def _enqueue_choose_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo], kind: str, n: int = 1, group: str = "", ctx: Optional[Dict[str, Any]] = None, allow_less: bool = False, resume: Optional[Dict[str, Any]] = None, after_effect_template: str = '', after_ctx: Optional[Dict[str, Any]] = None) -> None:
     n = int(n or 1)
     cands = _green_candidates(gs, cards_db, kind=kind, group=group)
     if not cands:
         gs.log.append(f'[INFO] retrieve: no {kind} in waiting room' + (' (optional skip)' if allow_less else ''))
-        if allow_less and resume:
+        # Some sequential effects continue after the retrieve instruction even
+        # when there is no legal card to retrieve.  Example: PL!-PR-017 first
+        # retrieves a μ's LIVE, then separately checks own success-zone score
+        # sum to activate energy.
+        if after_effect_template:
+            try:
+                rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0) + 31)
+            except Exception:
+                rng2 = random.Random(31)
+            try_apply_effect_template(gs, rng2, cards_db, str(after_effect_template or ''), dict(after_ctx or ctx or {}))
+        if resume:
             gs.pending.append(resume)
         return
     action_text = f'控え室の{("ライブ" if kind=="LIVE" else "メンバー")}カードを1枚手札に加える'
@@ -1447,6 +1457,8 @@ def _enqueue_choose_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo], k
         'allow_skip': bool(allow_less),
         'allow_less': bool(allow_less),
         'optional': bool(allow_less),
+        'after_effect_template': str(after_effect_template or ''),
+        'after_ctx': dict(after_ctx or ctx or {}),
     }
     if resume:
         prm['_resume'] = resume
@@ -2710,6 +2722,31 @@ def _set_opponent_success_count(gs: 'GameState', value: int) -> int:
         pass
     return v
 
+def _opponent_excess_heart_count(gs: 'GameState') -> int:
+    try:
+        return max(0, min(9, int(getattr(gs, 'opponent_excess_heart_count', 0) or 0)))
+    except Exception:
+        return 0
+
+def _set_opponent_excess_heart_count(gs: 'GameState', value: int) -> int:
+    v = max(0, min(9, int(value or 0)))
+    try:
+        gs.opponent_excess_heart_count = v
+    except Exception:
+        pass
+    return v
+
+def _add_opponent_excess_heart_count(gs: 'GameState', delta: int) -> int:
+    return _set_opponent_excess_heart_count(gs, _opponent_excess_heart_count(gs) + int(delta or 0))
+
+def _reset_opponent_excess_heart_count(gs: 'GameState', reason: str = '') -> None:
+    before = _opponent_excess_heart_count(gs)
+    if before:
+        _set_opponent_excess_heart_count(gs, 0)
+        gs.log.append(f"[OPP_EXCESS] reset {before} -> 0" + (f" ({reason})" if reason else ""))
+    else:
+        _set_opponent_excess_heart_count(gs, 0)
+
 def _set_turn_order(gs: 'GameState', value: Any) -> str:
     v = _normalize_turn_order(value)
     try:
@@ -2753,6 +2790,9 @@ def _apply_turn_order_transition_resets(gs: 'GameState') -> None:
     # Next-turn reset: if we are second, opponent turn happened before our turn begins.
     if _normalize_turn_order(getattr(gs, 'turn_order', 'first')) == 'second':
         _reset_opponent_wait_count(gs, '後手のターン開始前')
+    # Opponent excess hearts are a live-result-only manual parameter.  They do
+    # not persist across turns.
+    _reset_opponent_excess_heart_count(gs, 'ターン跨ぎ')
 
 def _opponent_wait_count(gs: 'GameState') -> int:
     try:
@@ -2868,6 +2908,38 @@ def try_apply_effect_template(gs: 'GameState', rng: random.Random, cards_db: Dic
             return bool(try_apply_effect_template(gs, rng, cards_db, inner, ctx2))
         gs.log.append(f'[SKIP] success-zone score sum {got}/{thr} -> condition not met')
         return True
+
+    # Sequential effect wrapper: A. If own success-zone score sum >= N, B.
+    # Example: PL!-PR-017 矢澤にこ
+    #   自分の控え室から『μ's』のライブカードを1枚手札に加える。
+    #   自分の成功ライブカード置き場にあるカードのスコアの合計が9以上の場合、エネルギーを2枚アクティブにする。
+    m_success_score_suffix = re.match(r'^(?P<first>.+?。)自分の成功ライブカード置き場にあるカードのスコア(?:の)?合計が(?P<thr>\d+)以上の場合、(?P<second>.+)$', text_norm)
+    if m_success_score_suffix:
+        first = str(m_success_score_suffix.group('first') or '').strip()
+        thr = int(m_success_score_suffix.group('thr') or 0)
+        second = str(m_success_score_suffix.group('second') or '').strip()
+        got = int(_own_success_zone_score_sum(gs, cards_db) or 0)
+        follow = second if got >= thr else ''
+        if got >= thr:
+            gs.log.append(f'[AUTO] success-zone score suffix {got}/{thr} -> follow-up enabled: {second}')
+        else:
+            gs.log.append(f'[SKIP] success-zone score suffix {got}/{thr} -> follow-up skipped: {second}')
+        # Preserve the natural order for waiting-room retrieval: choose the card first,
+        # then resolve the conditional follow-up immediately after the choice.
+        m_first_retrieve_group_live = re.match(r'^自分の控え室から『(?P<group>[^』]+)』のライブカードを1枚手札に加える。$', first)
+        if m_first_retrieve_group_live:
+            group = str(m_first_retrieve_group_live.group('group') or '').strip()
+            detail = _auto_effect_detail_for_condition(ctx, text_norm, f'成功ライブカード置き場のスコア合計 {got}/{thr}', '起動効果')
+            ctx2 = _with_auto_effect_detail(ctx, detail)
+            _enqueue_choose_from_green(gs, cards_db, kind='LIVE', n=1, group=group, ctx=ctx2, after_effect_template=follow, after_ctx=ctx2)
+            gs.log.append(f'[PENDING] sequential retrieve 『{group}』 LIVE then success-score follow-up ({got}/{thr})')
+            return True
+        # Generic fallback for other future texts.
+        ok_first = bool(try_apply_effect_template(gs, rng, cards_db, first, ctx))
+        if follow:
+            ok_second = bool(try_apply_effect_template(gs, rng, cards_db, follow, ctx))
+            return bool(ok_first or ok_second)
+        return bool(ok_first)
 
     # Example: 自分の成功ライブカード置き場にカードが1枚以上あり、かつスコアの合計が1以下の場合、...
     m_success_count_score_lte = re.match(r'^自分の成功ライブカード置き場にカードが(?P<count>\d+)枚以上あり、かつスコアの合計が(?P<thr>\d+)以下の場合、(?P<inner>.+)$', text_norm)
@@ -3314,6 +3386,7 @@ class GameState:
     opponent_success_score_sum: int = -1  # manual/debug opponent success-zone score sum; -1 means unknown
     opponent_success_count: int = 0  # manual/UI tracked opponent success live storage count (0..2)
     opponent_wait_count: int = 0  # manual/UI tracked opponent waiting members count (0..3)
+    opponent_excess_heart_count: int = 0  # live-result manual opponent excess hearts count (0..9); reset across turns
     turn_order: str = "first"  # current turn perspective: first/sente or second/gote
     next_turn_order: str = ""  # set by success-store decision; applied at next turn start
     resolve_zone: List[str] = field(default_factory=list)
@@ -3425,9 +3498,10 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
         "live_set_limit": int(getattr(gs, "live_set_limit", 3) or 3),
         "next_live_set_limit_delta": int(getattr(gs, "next_live_set_limit_delta", 0) or 0),
         "success_zone": list(getattr(gs, "success_zone", []) or []),
-        "opponent_success_score_sum": int(getattr(gs, "opponent_success_score_sum", -1) or -1),
+        "opponent_success_score_sum": int(getattr(gs, "opponent_success_score_sum", -1) if getattr(gs, "opponent_success_score_sum", -1) is not None else -1),
         "opponent_success_count": max(0, min(2, int(getattr(gs, "opponent_success_count", 0) or 0))),
         "opponent_wait_count": max(0, min(3, int(getattr(gs, "opponent_wait_count", 0) or 0))),
+        "opponent_excess_heart_count": max(0, min(9, int(getattr(gs, "opponent_excess_heart_count", 0) or 0))),
         "turn_order": str(getattr(gs, "turn_order", "first") or "first"),
         "next_turn_order": str(getattr(gs, "next_turn_order", "") or ""),
         "resolve_zone": list(gs.resolve_zone),
@@ -3485,6 +3559,7 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
     gs.opponent_success_score_sum = _safe_int(snap.get("opponent_success_score_sum", getattr(gs, "opponent_success_score_sum", -1)), -1)
     gs.opponent_success_count = max(0, min(2, _safe_int(snap.get("opponent_success_count", getattr(gs, "opponent_success_count", 0)), 0)))
     gs.opponent_wait_count = max(0, min(3, _safe_int(snap.get("opponent_wait_count", getattr(gs, "opponent_wait_count", 0)), 0)))
+    gs.opponent_excess_heart_count = max(0, min(9, _safe_int(snap.get("opponent_excess_heart_count", getattr(gs, "opponent_excess_heart_count", 0)), 0)))
     gs.turn_order = _normalize_turn_order(snap.get("turn_order", getattr(gs, "turn_order", "first")))
     gs.next_turn_order = _normalize_turn_order(snap.get("next_turn_order", getattr(gs, "next_turn_order", "")), allow_empty=True)
     gs.resolve_zone = list(snap.get("resolve_zone", gs.resolve_zone))
@@ -4604,6 +4679,11 @@ def _slot_always_score_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos: 
                     need = int(m.group(1)) if m else 0
                     if need and _opponent_success_score_sum(gs) >= need:
                         bonus += 1
+                elif '相手の余剰ハートが' in blob and 'つ以上あるかぎり' in blob and 'ライブの合計スコアを+1する' in blob:
+                    # Opponent excess hearts are known only after the opponent's live result.
+                    # Do not expose this as a continuous UI badge; it is resolved via a
+                    # live-success timing manual prompt when a relevant effect exists.
+                    continue
             except Exception:
                 pass
         return int(bonus)
@@ -4644,15 +4724,56 @@ def _stage_member_count(gs: 'GameState', cards_db: Dict[str, CardInfo]) -> int:
 
 def _opponent_success_score_sum_known(gs: 'GameState') -> bool:
     try:
-        return int(getattr(gs, 'opponent_success_score_sum', -1) or -1) >= 0
+        v = getattr(gs, 'opponent_success_score_sum', -1)
+        if v is None:
+            v = -1
+        return int(v) >= 0
     except Exception:
         return False
 
 def _opponent_success_score_sum(gs: 'GameState') -> int:
     try:
-        return int(getattr(gs, 'opponent_success_score_sum', -1) or -1)
+        v = getattr(gs, 'opponent_success_score_sum', -1)
+        if v is None:
+            v = -1
+        return int(v)
     except Exception:
         return -1
+
+def _set_opponent_success_score_sum(gs: 'GameState', value: int) -> int:
+    try:
+        v = max(0, min(20, int(value or 0)))
+    except Exception:
+        v = 0
+    try:
+        gs.opponent_success_score_sum = v
+    except Exception:
+        pass
+    return v
+
+def _stage_needs_opponent_success_score_sum(gs: 'GameState', cards_db: Dict[str, CardInfo]) -> bool:
+    """Return True if current stage has an effect that needs opponent success-zone score sum.
+
+    Opponent success-zone cards are not represented by real card objects in this
+    simulator, so score-sum comparison effects must ask the user once before the
+    live attempt.
+    """
+    try:
+        for _pos, slot in (getattr(gs, 'stage', {}) or {}).items():
+            if not slot or not getattr(slot, 'cardnumber', '') or not getattr(slot, 'active', False):
+                continue
+            ci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+            if not ci or _is_live_ci(ci):
+                continue
+            for _eff, blob in _iter_body_always_effects(ci):
+                b = str(blob or '')
+                if ('相手の成功ライブカード置き場にあるカードのスコアの合計' in b and 'ライブの合計スコア' in b):
+                    return True
+                if ('自分の成功ライブカード置き場にあるカードのスコアの合計が相手より高い' in b and 'ブレード' in b):
+                    return True
+        return False
+    except Exception:
+        return False
 
 def _slot_always_blade_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, slot) -> int:
     """Return generic always/success-zone derived blade bonus currently attached to a stage slot.
@@ -4707,6 +4828,18 @@ def _slot_always_blade_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos: 
                 elif '自分の成功ライブカード置き場にあるカードのスコアの合計が相手より高い' in blob and 'ブレード' in blob:
                     opp_sum = _opponent_success_score_sum(gs)
                     if opp_sum >= 0 and int(_own_success_zone_score_sum(gs, cards_db) or 0) > int(opp_sum):
+                        bonus += int(_count_blade_icons_from_tagblob(blob))
+                elif '自分と相手の成功ライブカード置き場にカードが合計' in blob and 'ブレード' in blob:
+                    m_total_success = re.search(r'自分と相手の成功ライブカード置き場にカードが合計(\d+)枚以上', blob)
+                    need_total_success = int(m_total_success.group(1)) if m_total_success else 0
+                    own_success_n0 = len(list(getattr(gs, 'success_zone', []) or []))
+                    opp_success_n0 = _opponent_success_count(gs)
+                    if need_total_success and (int(own_success_n0) + int(opp_success_n0)) >= need_total_success:
+                        bonus += int(_count_blade_icons_from_tagblob(blob))
+                elif '自分の成功ライブカード置き場のカードが0枚で、かつ相手の成功ライブカード置き場にカードが1枚以上ある場合' in blob and 'ブレード' in blob:
+                    own_success_n0 = len(list(getattr(gs, 'success_zone', []) or []))
+                    opp_success_n0 = _opponent_success_count(gs)
+                    if int(own_success_n0) == 0 and int(opp_success_n0) >= 1:
                         bonus += int(_count_blade_icons_from_tagblob(blob))
                 elif 'このメンバーよりコストの大きいメンバーがいる場合' in blob and 'ブレード' in blob:
                     try:
@@ -7161,6 +7294,23 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         bonus = int(per * n)
         _add_live_success_score_bonus(gs, cn_live, bonus, detail=(f"wait members={n}" if n > 0 else "wait members=0"))
         return
+    if kind == 'add_live_success_total_score_bonus_if_opponent_excess_at_least':
+        src_cn = str((trig or {}).get('source_cn', '') or '')
+        pos = str((trig or {}).get('pos', '') or '').upper()
+        need = int((trig or {}).get('condition_opponent_excess_count', 0) or 0)
+        bonus = int((trig or {}).get('bonus', 0) or 0)
+        got = _opponent_excess_heart_count(gs)
+        if need and got >= need and bonus:
+            _add_live_success_total_score_bonus(gs, cards_db, bonus, detail=f"opponent excess hearts={got}/{need}", source_cn=src_cn, pos=pos)
+            gs.log.append(f"[AUTO] {pos or 'LIVE'}: {src_cn}[常時/ライブ後参照]: opponent excess hearts {got}/{need} -> live total score +{bonus}")
+        else:
+            gs.log.append(f"[SKIP] {pos or 'LIVE'}: {src_cn}[常時/ライブ後参照] opponent excess hearts {got}/{need}; no score bonus")
+            gs.pending.append({
+                'kind': 'message_ack',
+                'source_cn': src_cn,
+                'text': f'{src_cn}：相手の余剰ハートが{got}/{need}つのため、ライブの合計スコア+{bonus}は適用されません。',
+            })
+        return
     if kind in ('enqueue_choose_effects_from_ability_on_live_success', 'success_enqueue_choose_effects'):
         ab = dict((trig or {}).get('ability', {}) or {})
         ctx = dict((trig or {}).get('ctx', {}) or {})
@@ -7521,8 +7671,31 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         if met_no_bh or met_excess:
             reason = f"revealed no-bladeheart cards={no_bh_n}, excess hearts={excess_n}/{need_excess}"
             _set_live_success_score_to(gs, cards_db, cn_live, target, detail=reason)
+            why = []
+            if met_no_bh:
+                why.append('エール公開にブレードハートを持たないカードが0枚')
+            if met_excess:
+                why.append(f'余剰ハート{excess_n}/{need_excess}つ以上')
+            gs.pending.append({
+                'kind': 'show_revealed_cards_ack',
+                'label': 'エール公開条件確認',
+                'text': f'{cn_live}[ライブ成功時]：' + ' / '.join(why) + f' のため、このカードのスコアを{target}にしました。',
+                'display_cards': list(getattr(gs, '_yell_revealed_this_live', []) or []),
+                'options': ['ok'],
+                'source_cn': cn_live,
+                'effect_text': _auto_trigger_effect_text(trig or {}),
+            })
         else:
             gs.log.append(f"[SKIP] LIVE: {cn_live}[ライブ成功時] unresolved (revealed no-bladeheart cards={no_bh_n} != 0 and excess hearts={excess_n} < {need_excess})")
+            gs.pending.append({
+                'kind': 'show_revealed_cards_ack',
+                'label': 'エール公開条件確認',
+                'text': f'{cn_live}[ライブ成功時]：エール公開にブレードハートを持たないカードが{no_bh_n}枚あり、余剰ハートも{excess_n}/{need_excess}つ未満のため、この効果は適用されません。',
+                'display_cards': list(getattr(gs, '_yell_revealed_this_live', []) or []),
+                'options': ['ok'],
+                'source_cn': cn_live,
+                'effect_text': _auto_trigger_effect_text(trig or {}),
+            })
         return
     if kind in ('adjust_live_total_score_by_excess_heart_count',):
         src_cn = str((trig or {}).get('source_cn', '') or '').strip()
@@ -7534,24 +7707,43 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         prefix = f"[AUTO] {pos}: {src_cn}[ライブ成功時]" if pos else f"[AUTO] {src_cn}[ライブ成功時]"
         if excess_n <= 0:
             _add_live_success_total_score_bonus(gs, cards_db, zero_bonus, min_total=0, detail=f"excess hearts={excess_n} -> live total score +{zero_bonus}", source_cn=src_cn, pos=pos)
+            msg = f'{src_cn}[ライブ成功時]：余剰ハートがないため、ライブの合計スコアを+{zero_bonus}しました。'
         elif excess_n >= high_threshold:
             _add_live_success_total_score_bonus(gs, cards_db, high_delta, min_total=0, detail=f"excess hearts={excess_n}/{high_threshold} -> live total score {high_delta}", source_cn=src_cn, pos=pos)
+            msg = f'{src_cn}[ライブ成功時]：余剰ハートが{excess_n}/{high_threshold}つ以上あるため、ライブの合計スコアを{high_delta}しました。'
         else:
             gs.log.append(f"{prefix}: excess hearts={excess_n}; no score adjustment")
+            msg = f'{src_cn}[ライブ成功時]：余剰ハートが{excess_n}つのため、スコア調整は行いません。'
+        gs.pending.append({
+            'kind': 'effect_notice',
+            'label': '余剰ハート条件確認',
+            'text': msg,
+            'options': ['ok'],
+            'source_cn': src_cn,
+            'effect_text': _auto_trigger_effect_text(trig or {}),
+        })
         return
     if kind in ('opponent_loses_excess_hearts_then_live_score_bonus_manual',):
         cn_live = str((trig or {}).get('source_cn', '') or '').strip()
         need = int((trig or {}).get('lost_threshold', 0) or 0)
         bonus = int((trig or {}).get('bonus', 0) or 0)
+        before = _opponent_excess_heart_count(gs)
+        after = _set_opponent_excess_heart_count(gs, 0)
+        if before >= need and bonus:
+            _add_live_success_score_bonus(gs, cn_live, bonus, detail=f'opponent lost excess hearts {before}/{need}')
+            msg = f'{cn_live}[ライブ成功時]：相手は余剰ハートをすべて失います。相手の余剰ハートは{before}つから{after}つになり、{need}つ以上失ったため、このカードのスコアを+{bonus}しました。'
+        else:
+            gs.log.append(f"[SKIP] LIVE: {cn_live}[ライブ成功時] opponent lost excess hearts {before}/{need}; score bonus not applied")
+            msg = f'{cn_live}[ライブ成功時]：相手は余剰ハートをすべて失います。相手の余剰ハートは{before}つから{after}つになりましたが、{need}つ以上失っていないため、スコア加算は行いません。'
+        gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時]: opponent_excess_heart_count {before} -> {after}")
         gs.pending.append({
-            'kind': 'confirm_effect',
-            'text': f'{cn_live}[ライブ成功時] 相手は余剰ハートをすべて失います。相手が余剰ハートを{need}つ以上失っている場合、このカードのスコアを+{bonus}します。条件を満たす場合は「使う」、満たさない場合は「スキップ」を選んでください。',
-            'options': ['使う', 'スキップ'],
+            'kind': 'effect_notice',
+            'label': '相手余剰ハート確認',
+            'text': msg,
+            'options': ['ok'],
             'source_cn': cn_live,
-            'after_live_success_score_bonus': {'cn_live': cn_live, 'bonus': bonus, 'detail': f'opponent lost excess hearts >= {need}'},
             'effect_text': _auto_trigger_effect_text(trig or {}),
         })
-        gs.log.append(f"[PENDING] LIVE: {cn_live}[ライブ成功時] opponent excess-heart loss confirmation threshold={need}")
         return
 
     if kind in ('add_live_success_score_bonus_if_excess_total_zero',):
@@ -7560,8 +7752,18 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         excess_n = int(_last_attempt_excess_heart_total(gs) or 0)
         if excess_n <= 0:
             _add_live_success_score_bonus(gs, cn_live, bonus, detail=f"excess hearts={excess_n} -> score +{bonus}")
+            msg = f'{cn_live}[ライブ成功時]：余剰ハートがないため、このカードのスコアを+{bonus}しました。'
         else:
             gs.log.append(f"[SKIP] LIVE: {cn_live}[ライブ成功時] unresolved (excess hearts={excess_n} > 0)")
+            msg = f'{cn_live}[ライブ成功時]：余剰ハートが{excess_n}つあるため、この効果は適用されません。'
+        gs.pending.append({
+            'kind': 'effect_notice',
+            'label': '余剰ハート条件確認',
+            'text': msg,
+            'options': ['ok'],
+            'source_cn': cn_live,
+            'effect_text': _auto_trigger_effect_text(trig or {}),
+        })
         return
     if kind in ('apply_effect_template_if_excess_total_at_least_on_live_success',):
         eff = str((trig or {}).get('effect', '') or '').strip()
@@ -7628,8 +7830,18 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             except Exception:
                 pass
             gs.log.append(f"[AUTO] LIVE: {cn_live}[ライブ成功時]: excess hearts lost -> 0")
+            msg = f'{cn_live}[ライブ成功時]：余剰ハートが{excess_n}{cond_text}つあるため、余剰ハートをすべて失い、このカードのスコアを+{bonus}しました。'
         else:
             gs.log.append(f"[SKIP] LIVE: {cn_live}[ライブ成功時] unresolved (excess hearts={excess_n} {skip_text})")
+            msg = f'{cn_live}[ライブ成功時]：余剰ハートが{excess_n}つで条件（{cond_text}）を満たさないため、この効果は適用されません。'
+        gs.pending.append({
+            'kind': 'effect_notice',
+            'label': '余剰ハート条件確認',
+            'text': msg,
+            'options': ['ok'],
+            'source_cn': cn_live,
+            'effect_text': _auto_trigger_effect_text(trig or {}),
+        })
         return
     if kind in ('add_live_success_score_bonus_if_either_success_count_and_revealed_score_tag_live_at_least',):
         cn_live = str((trig or {}).get('source_cn', '') or '').strip()
@@ -8930,12 +9142,37 @@ def _build_live_success_trigger_from_effect(gs: GameState, cards_db: Dict[str, C
         'ctx': dict(ctx or {}),
         'label': str(label or ''),
     }
+def _trigger_needs_opponent_excess_hearts(trig: Dict[str, Any]) -> bool:
+    kind = str((trig or {}).get('kind', '') or '')
+    return kind in {
+        'opponent_loses_excess_hearts_then_live_score_bonus_manual',
+        'add_live_success_total_score_bonus_if_opponent_excess_at_least',
+    }
+
+def _triggers_need_opponent_excess_hearts(triggers: List[Dict[str, Any]]) -> bool:
+    return any(_trigger_needs_opponent_excess_hearts(t) for t in list(triggers or []))
+
 def _enqueue_success_auto_order(gs: GameState, triggers: List[Dict[str, Any]]) -> int:
     triggers = list(triggers or [])
     n = len(triggers)
     if n <= 0:
         return 0
     text = 'ライブ成功時効果が発生：解決するカードを選択' if n == 1 else 'ライブ成功時効果が複数発生：解決するカードを選択（1つずつ）'
+    if _triggers_need_opponent_excess_hearts(triggers):
+        gs.pending.append({
+            'kind': 'set_opponent_excess_for_live_success',
+            'text': '対戦相手の余剰ハート数を指定してください。この値はこのライブ成功時効果の処理中だけ保持し、ターンを跨いだら0にリセットします。',
+            'options': [str(i) for i in range(0, 10)],
+            'current': _opponent_excess_heart_count(gs),
+            '_resume_success_auto_order': {
+                'kind': 'auto_order',
+                'text': text,
+                'options': [_auto_trigger_option_text(t) for t in triggers if _auto_trigger_option_text(t)],
+                'queue': list(triggers),
+            },
+        })
+        gs.log.append(f"[PROMPT] opponent excess hearts required before live-success abilities queued: {n}")
+        return n
     gs.pending.append({
         'kind': 'auto_order',
         'text': text,
@@ -9063,6 +9300,34 @@ def _run_live_success_triggers(gs: GameState, rng: random.Random, cards_db: Dict
                     'effect_text': eff,
                 })
 
+    # BODY continuous effects that refer to opponent excess hearts are resolved at
+    # live-success timing because the opponent's excess-heart count is only known
+    # after the opponent's live result and is entered manually for this timing.
+    for pos in ('L', 'C', 'R'):
+        slot = gs.stage.get(pos)
+        if not slot or not slot.active:
+            continue
+        ci_src = _get_card(cards_db, slot.cardnumber)
+        if not ci_src:
+            continue
+        for _eff0, _blob0 in _iter_body_always_effects(ci_src):
+            blob0 = str(_blob0 or '')
+            if '相手の余剰ハートが' in blob0 and 'つ以上あるかぎり' in blob0 and 'ライブの合計スコアを+1する' in blob0:
+                m0 = re.search(r'相手の余剰ハートが(\d+)つ以上', blob0)
+                need0 = int(m0.group(1)) if m0 else 0
+                if need0:
+                    success_triggers.append({
+                        'kind': 'add_live_success_total_score_bonus_if_opponent_excess_at_least',
+                        'condition_opponent_excess_count': int(need0),
+                        'bonus': 1,
+                        'source_cn': ci_src.cardnumber,
+                        'pos': pos,
+                        'ctx': {'pos': pos, 'source_cn': ci_src.cardnumber},
+                        'label': f"{pos}: {ci_src.cardnumber}[常時/相手余剰ハート参照]",
+                        'effect_text': blob0,
+                    })
+
+
     # Live-card success triggers
     for cn_live in list(lives or []):
         ci_live = _get_card(cards_db, cn_live)
@@ -9150,8 +9415,32 @@ def _effective_success_zone_live_score(cn_live, gs: GameState, cards_db: Dict[st
     except Exception:
         base = 0
     bonus = 0
-    # Future success-zone score modifiers should be routed here so all
-    # "成功ライブカード置き場のスコア合計" references stay consistent.
+    # Success-zone BODY modifiers must be included here because multiple
+    # effects compare 「成功ライブカード置き場にあるカードのスコアの合計」.
+    # Example: PL!-bp4-019 Angelic Angel is base score 4 but, while it is in
+    # own success zone and a μ's member is on stage, its success-zone score is
+    # 4+5=9.  PL!-bp4-018 矢澤にこ then compares that effective sum before YELL,
+    # so omitting this modifier prevents her continuous blade +2 from affecting
+    # the YELL count.
+    try:
+        for _eff0, blob0 in _iter_body_always_effects(ci):
+            btxt = str(blob0 or '')
+            if ('このカードが自分の成功ライブカード置き場に' not in btxt
+                    or '自分の成功ライブカード置き場にあるこのカードのスコアを+' not in btxt):
+                continue
+            # Optional group condition: 「自分のステージに『X』のメンバーがいるかぎり」.
+            if '自分のステージに『' in btxt and 'のメンバーがいるかぎり' in btxt:
+                tag = _quoted_tag(btxt)
+                try:
+                    if tag and not _stage_has_group_or_unit_member(gs, cards_db, tag):
+                        continue
+                except Exception:
+                    continue
+            m = re.search(r'このカードのスコアを\+(\d+)する', btxt)
+            if m:
+                bonus += int(m.group(1))
+    except Exception:
+        pass
     return int(base + bonus)
 
 def _success_zone_score_sum(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
@@ -9714,7 +10003,13 @@ def _count_yell_revealed_no_bladeheart_group_members(gs: GameState, cards_db: Di
     return int(n)
 
 def _yell_revealed_bladeheart_kind_count(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
-    colors = set()
+    """Count distinct blade-heart *kinds* among cards revealed by YELL.
+
+    For effects whose text says 「<桃>、<赤>、...、<ALL>のうちN種類以上」,
+    <ALL> is one listed kind, not a wildcard that expands into all six colors.
+    This differs from heart payment/allocation logic, where ALL can cover colors.
+    """
+    kinds = set()
     for cn in list(getattr(gs, '_yell_revealed_this_live', []) or []):
         ci = _get_card(cards_db, cn)
         if not ci:
@@ -9724,10 +10019,10 @@ def _yell_revealed_bladeheart_kind_count(gs: GameState, cards_db: Dict[str, Card
             key = str(inner or '').strip()
             col = _HEART_ICON_COLOR_MAP.get(key)
             if col:
-                colors.add(col)
+                kinds.add(col)
             elif key == 'ALL':
-                colors.update(['pink', 'red', 'yellow', 'green', 'blue', 'purple'])
-    return int(len(colors))
+                kinds.add('all')
+    return int(len(kinds))
 
 def _collect_yell_revealed_body_auto_triggers(gs: GameState, cards_db: Dict[str, CardInfo], revealed: Optional[List[str]] = None) -> List[Dict[str, Any]]:
     """Collect generic BODY <自動><ターン1回> triggers that look at this yell's revealed cards.
@@ -10949,6 +11244,55 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             _perform_additional_yell(gs, rng, cards_db, extra_n, reason=str(pp.get('source_cn','') or 'extra-yell'))
         _enqueue_auto_order_from_deferred()
 
+    if kind == 'set_opponent_excess_for_live_success':
+        try:
+            val = max(0, min(9, int(choice_str or 0)))
+        except Exception:
+            gs.log.append(f"[ERR] opponent_excess_for_live_success: invalid choice {choice_str}")
+            gs.pending.append(p)
+            return
+        before = _opponent_excess_heart_count(gs)
+        _set_opponent_excess_heart_count(gs, val)
+        gs.log.append(f"[MANUAL] opponent excess hearts for live success {before} -> {val}")
+        resume = p.get('_resume_success_auto_order') if isinstance(p, dict) else None
+        if isinstance(resume, dict):
+            gs.pending.append(resume)
+        _enqueue_auto_order_from_deferred()
+        return
+
+    if kind == 'set_opponent_success_score_for_live_attempt':
+        try:
+            val = max(0, min(20, int(choice_str or 0)))
+        except Exception:
+            gs.log.append(f"[ERR] opponent_success_score_for_live_attempt: invalid choice {choice_str}")
+            gs.pending.append(p)
+            return
+        before = _opponent_success_score_sum(gs)
+        _set_opponent_success_score_sum(gs, val)
+        gs.log.append(f"[MANUAL] opponent success-zone score sum for live attempt {before} -> {val}")
+        _enqueue_auto_order_from_deferred()
+        # This prompt is inserted immediately before YELL because the value can
+        # change continuous blade bonuses.  After the user confirms the value,
+        # continue the same Next step instead of leaving the game in LIVE_PERF
+        # and asking for the same value again on the next click.
+        try:
+            if str(getattr(gs, 'phase', '') or '') == 'LIVE_PERF' and rng is not None and not list(getattr(gs, 'pending', []) or []):
+                if not list(getattr(gs, 'set_zone', []) or []):
+                    gs.log.append('[INFO] opponent-success-score prompt resolved: no LIVE in set_zone; YELL skipped')
+                    gs.phase = 'LIVE_RESOLVE'
+                    gs.log.append(f"[PHASE] LIVE_RESOLVE (no live) turn={gs.turn}")
+                else:
+                    cmd_yell(gs, rng, cards_db)
+                    if not list(getattr(gs, 'pending', []) or []):
+                        gs.phase = 'LIVE_ATTEMPT'
+                        gs.log.append(f"[PHASE] LIVE_ATTEMPT (attempt) turn={gs.turn}")
+        except Exception as e:
+            try:
+                gs.log.append(f"[WARN] opponent-success-score prompt auto-continue failed: {e}")
+            except Exception:
+                pass
+        return
+
     if kind == 'confirm_yell_revealed_all_to_green_then_extra_yell':
         low = choice_str.lower()
         cands = [str(x) for x in list(p.get('candidates', []) or []) if str(x or '').strip()]
@@ -11965,6 +12309,18 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                                        ctx={'source_cn': str(p.get('source_cn', '') or ''), 'auto_effect_detail': str(p.get('auto_effect_detail', '') or '')},
                                        allow_less=bool(p.get('allow_skip', False) or p.get('allow_less', False) or p.get('optional', False)))
             return
+        after_eff = str(p.get('after_effect_template', '') or '').strip()
+        if after_eff:
+            ctx_after = dict(p.get('after_ctx', {}) or {})
+            src_after = str(p.get('source_cn', '') or '')
+            if src_after and not ctx_after.get('source_cn'):
+                ctx_after['source_cn'] = src_after
+            try:
+                rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0) + 31)
+            except Exception:
+                rng2 = random.Random(31)
+            ok_after = try_apply_effect_template(gs, rng2, cards_db, after_eff, ctx_after)
+            gs.log.append(f"[AUTO] retrieve follow-up -> {'applied' if ok_after else 'no_match'} {after_eff}")
         # resume parent prompt if provided (e.g., choose_effects)
         _r = p.get('_resume') if isinstance(p, dict) else None
         if _r:
@@ -13860,6 +14216,15 @@ def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], i
             if k0 in ack_kinds:
                 cmd_resolve_pending(gs, cards_db, 0, 'ok', rng)
                 return
+            if k0 == 'set_opponent_excess_for_live_success':
+                cmd_resolve_pending(gs, cards_db, 0, str(_opponent_excess_heart_count(gs)), rng)
+                return
+            if k0 == 'set_opponent_success_score_for_live_attempt':
+                cur_oss = _opponent_success_score_sum(gs)
+                if cur_oss < 0:
+                    cur_oss = 0
+                cmd_resolve_pending(gs, cards_db, 0, str(cur_oss), rng)
+                return
             if k0 == 'pick_success_to_store':
                 cmd_resolve_pending(gs, cards_db, 0, 'skip', rng)
                 return
@@ -13927,6 +14292,20 @@ def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], i
             gs.log.append('[INFO] perf: no LIVE in set_zone; skipping cheer/attempt.')
             gs.phase = 'LIVE_RESOLVE'
             gs.log.append(f'[PHASE] LIVE_RESOLVE (no live) turn={gs.turn}')
+            return
+        # Opponent success-zone score sum can affect continuous blade bonuses,
+        # so it must be fixed before YELL is performed, not after revealed cards.
+        if _stage_needs_opponent_success_score_sum(gs, cards_db) and not _opponent_success_score_sum_known(gs):
+            cur_oss = _opponent_success_score_sum(gs)
+            if cur_oss < 0:
+                cur_oss = 0
+            gs.pending.append({
+                'kind': 'set_opponent_success_score_for_live_attempt',
+                'text': '相手の成功ライブカード置き場にあるカードのスコア合計を指定してください。この値は今回のエール枚数・ライブ判定で、相手成功置き場スコア合計を参照する常時効果に使います。',
+                'options': [str(i) for i in range(0, 21)],
+                'current': int(cur_oss),
+            })
+            gs.log.append('[PROMPT] opponent success-zone score sum required before YELL')
             return
         cmd_yell(gs, rng, cards_db)
         gs.phase = "LIVE_ATTEMPT"
