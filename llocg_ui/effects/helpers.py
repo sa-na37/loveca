@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: helpers_green_pick_detail_fallback_20260424e
+# BUILD_TAG: helpers_live_in_progress_set_zone_20260622g
 from __future__ import annotations
 
 """llocg_ui.effects.helpers
@@ -404,8 +404,9 @@ def _draw_cards(eng: Dict[str, Any], gs: Any, n: int) -> int:
 def _live_in_progress_cards(gs: Any) -> list:
     """Return list of cards currently in the live zone (ライブ中のカード)."""
     try:
-        # Try common field names
-        for attr in ("live_zone", "live_cards", "current_live_cards", "live_area"):
+        # Try common field names. In this runtime, set_zone is the live card storage
+        # used during the current live, so include it as the primary source.
+        for attr in ("set_zone", "live_zone", "live_cards", "current_live_cards", "live_area"):
             z = getattr(gs, attr, None)
             if z is not None:
                 return list(z) if not isinstance(z, list) else z

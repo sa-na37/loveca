@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: effect_registry_icon_normalize_20260622c
+# BUILD_TAG: effect_registry_conditional_stage_bonus_20260622g
 from __future__ import annotations
 
 """llocg_ui.effects.registry
@@ -473,6 +473,166 @@ def _norm_ws(text: str) -> str:
     return s
 
 
+
+_COLOR_ICON_TO_KEY = {
+    "桃": "pink",
+    "赤": "red",
+    "黄": "yellow",
+    "緑": "green",
+    "青": "blue",
+    "紫": "purple",
+    "任意": "any",
+    "ALL": "all",
+}
+
+
+def _parse_temp_bonus_icon_run(icon_run: str) -> Dict[str, str]:
+    """Return gd fragments for a contiguous icon run such as <(桃)><(ブレード)>."""
+    import re as _re
+    blade = 0
+    hearts: Dict[str, int] = {}
+    for raw in _re.findall(r'<\(([^)]+)\)>', _norm_ws(icon_run or "")):
+        token = str(raw or "").strip()
+        if token == "ブレード":
+            blade += 1
+            continue
+        key = _COLOR_ICON_TO_KEY.get(token)
+        if key:
+            hearts[key] = int(hearts.get(key, 0) or 0) + 1
+    gd: Dict[str, str] = {}
+    if blade > 0:
+        gd["blade"] = str(blade)
+    if hearts:
+        gd["hearts"] = ",".join(f"{k}:{v}" for k, v in hearts.items() if int(v or 0) > 0)
+    return gd
+
+
+
+def _parse_condition_for_stage_member_temp_bonus(condition_text: str) -> Optional[Dict[str, str]]:
+    """Parse lightweight conditional wrappers for stage-member temp-bonus effects.
+
+    Supported condition fragments are intentionally generic and data-shaped:
+    - 成功ライブカード置き場にカードがN枚以上ある
+    - 控え室に『X』のメンバーカードがN枚以上ある
+    - ライブ中のライブカードに、ライブ開始時/ライブ成功時能力を持たないカードがある
+    """
+    import re as _re
+    c = _norm_ws(condition_text or "")
+    gd: Dict[str, str] = {}
+
+    m = _re.fullmatch(r"自分の成功ライブカード置き場にカードが(?P<n>\d+)枚以上ある", c)
+    if m:
+        gd["require_success_zone_count_min"] = str(m.group("n"))
+        return gd
+
+    m = _re.fullmatch(r"自分の控え室に『(?P<group>[^』]+)』のメンバーカードが(?P<n>\d+)枚以上ある", c)
+    if m:
+        gd["require_green_group_or_unit_member_count_min"] = str(m.group("n"))
+        gd["require_green_group_or_unit"] = str(m.group("group") or "").strip()
+        return gd
+
+    if _re.fullmatch(r"自分のライブ中のライブカードに、<ライブ開始時>能力も<ライブ成功時>能力も持たないカードがある", c):
+        gd["require_live_without_live_start_success_abilities"] = "1"
+        return gd
+
+    return None
+
+
+def _try_match_generic_conditional_stage_member_temp_bonus(effect_text: str) -> Optional[Tuple[Dict[str, Any], Dict[str, str]]]:
+    """Generic conditional wrapper for one-target stage-member temp bonus.
+
+    Covers effects of the form:
+      <condition>場合、ライブ終了時まで、自分のステージにいる<target>メンバー1人は、<icons>を得る。
+
+    This reuses the existing live_start_pick_stage_member_temp_bonus resolver and
+    only adds condition metadata. Complex target predicates are still left out.
+    """
+    import re as _re
+    t = _norm_ws(effect_text or "")
+    m = _re.fullmatch(
+        r"(?P<cond>.+?)場合、ライブ終了時まで、自分のステージにいる(?P<target>.*?)メンバー1人は、?(?P<icons>(?:<\([^)]*\)>)+)を得る。",
+        t,
+    )
+    if not m:
+        return None
+
+    cond_gd = _parse_condition_for_stage_member_temp_bonus(str(m.group("cond") or ""))
+    if cond_gd is None:
+        return None
+
+    target = str(m.group("target") or "")
+    if "を持つ" in target or "名前" in target or "これにより" in target:
+        return None
+
+    gd = _parse_temp_bonus_icon_run(m.group("icons") or "")
+    if not gd:
+        return None
+    gd.update(cond_gd)
+    gd["select_text"] = "一時ボーナスを与えるメンバーを選んでください"
+    gd["effect_text"] = t
+    gd["auto_if_single"] = "0"
+    if "このメンバー以外" in target or "ほかの" in target:
+        gd["exclude_self"] = "1"
+    cm = _re.search(r"コスト\s*(\d+)\s*以上", target)
+    if cm:
+        gd["cost_min"] = cm.group(1)
+    quoted = _re.findall(r"『([^』]+)』", target)
+    if len(quoted) == 1:
+        gd["group_or_unit_eq"] = quoted[0].strip()
+    elif len(quoted) > 1:
+        return None
+    gd["no_target_log"] = "no valid stage member target (generic conditional stage member temp bonus)"
+    return (
+        {"id": "generic_conditional_stage_member_temp_bonus", "op": "__ext__", "ext_key": "live_start_pick_stage_member_temp_bonus"},
+        gd,
+    )
+
+def _try_match_generic_stage_member_temp_bonus(effect_text: str) -> Optional[Tuple[Dict[str, Any], Dict[str, str]]]:
+    """Generic live-start target bonus matcher.
+
+    Covers one-target stage-member effects of the form:
+    - ライブ終了時まで、自分のステージにいるメンバー1人は、<icons>を得る。
+    - ライブ終了時まで、自分のステージにいる『X』のメンバー1人は、<icons>を得る。
+    - ライブ終了時まで、自分のステージにいるこのメンバー以外の『X』のメンバー1人は、<icons>を得る。
+    - ライブ終了時まで、自分のステージにいるコストN以上の『X』のメンバー1人は、<icons>を得る。
+
+    It intentionally does not absorb conditional wrappers such as
+    「〜場合、ライブ終了時まで...」; those need a separate wrapper rule.
+    """
+    import re as _re
+    t = _norm_ws(effect_text or "")
+    m = _re.fullmatch(
+        r"ライブ終了時まで、自分のステージにいる(?P<target>.*?)メンバー1人は、?(?P<icons>(?:<\([^)]*\)>)+)を得る。",
+        t,
+    )
+    if not m:
+        return None
+    target = str(m.group("target") or "")
+    # More complex target predicates need their own wrapper, not this simple matcher.
+    if "を持つ" in target or "名前" in target or "これにより" in target:
+        return None
+    gd = _parse_temp_bonus_icon_run(m.group("icons") or "")
+    if not gd:
+        return None
+    gd["select_text"] = "一時ボーナスを与えるメンバーを選んでください"
+    gd["effect_text"] = t
+    gd["auto_if_single"] = "0"
+    if "このメンバー以外" in target or "ほかの" in target:
+        gd["exclude_self"] = "1"
+    cm = _re.search(r"コスト\s*(\d+)\s*以上", target)
+    if cm:
+        gd["cost_min"] = cm.group(1)
+    quoted = _re.findall(r"『([^』]+)』", target)
+    if len(quoted) == 1:
+        gd["group_or_unit_eq"] = quoted[0].strip()
+    elif len(quoted) > 1:
+        return None
+    gd["no_target_log"] = "no valid stage member target (generic stage member temp bonus)"
+    return (
+        {"id": "generic_stage_member_temp_bonus", "op": "__ext__", "ext_key": "live_start_pick_stage_member_temp_bonus"},
+        gd,
+    )
+
 def try_match_effect_template_ext(
     eng: Dict[str, Any],
     effect_text: str,
@@ -496,9 +656,21 @@ def try_match_effect_template_ext(
         if not tpl:
             continue
         if s == tpl:
-            return ({"id": r.get("id"), "op": "__ext__", "ext_key": r.get("ext_key")}, dict(r.get("gd") or {}))
+            gd0 = dict(r.get("gd") or {})
+            gd0.setdefault("effect_text", s_norm)
+            return ({"id": r.get("id"), "op": "__ext__", "ext_key": r.get("ext_key")}, gd0)
         if s_norm == _norm_ws(tpl):
-            return ({"id": r.get("id"), "op": "__ext__", "ext_key": r.get("ext_key")}, dict(r.get("gd") or {}))
+            gd0 = dict(r.get("gd") or {})
+            gd0.setdefault("effect_text", s_norm)
+            return ({"id": r.get("id"), "op": "__ext__", "ext_key": r.get("ext_key")}, gd0)
+
+    generic_conditional_stage_bonus = _try_match_generic_conditional_stage_member_temp_bonus(s_norm)
+    if generic_conditional_stage_bonus is not None:
+        return generic_conditional_stage_bonus
+
+    generic_stage_bonus = _try_match_generic_stage_member_temp_bonus(s_norm)
+    if generic_stage_bonus is not None:
+        return generic_stage_bonus
 
     # cards_compiled_v7b splits some abilities into multiple clauses.
     # Match the actual clause fragment that engine.py sees.

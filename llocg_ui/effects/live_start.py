@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_start_dual_target_bonus_and_same_name_generic_fix_wait_positions_20260424c
+# BUILD_TAG: live_start_conditional_stage_bonus_20260622g
 from __future__ import annotations
 
 """llocg_ui.effects.live_start
@@ -295,6 +295,118 @@ def _stage_other_wait_positions(gs: Any, exclude_pos: str = "") -> list[str]:
     except Exception:
         return []
     return out
+
+
+def _affiliation_matches(value: str, want: str) -> bool:
+    want_s = str(want or "").strip()
+    if not want_s:
+        return True
+    value_s = str(value or "").strip()
+    if not value_s:
+        return False
+    if value_s == want_s:
+        return True
+    parts = [p.strip() for p in value_s.replace("／", "/").split("/") if p.strip()]
+    return want_s in parts
+
+
+def _card_group_or_unit_matches(card: Any, cards_db: Dict[str, Any], want: str) -> bool:
+    want_s = str(want or "").strip()
+    if not want_s:
+        return True
+    try:
+        if _affiliation_matches(_card_group(card, cards_db), want_s):
+            return True
+        if _affiliation_matches(_card_unit(card, cards_db), want_s):
+            return True
+    except Exception:
+        pass
+    return False
+
+
+
+def _count_green_group_or_unit_members(gs: Any, cards_db: Dict[str, Any], group_or_unit: str) -> int:
+    want = str(group_or_unit or "").strip()
+    if not want:
+        return 0
+    n = 0
+    try:
+        for cn in list(getattr(gs, "green_room", []) or []):
+            if _card_type_norm(cn, cards_db) != "MEMBER":
+                continue
+            if _card_group_or_unit_matches(cn, cards_db, want):
+                n += 1
+    except Exception:
+        return 0
+    return n
+
+
+def _card_has_live_start_or_success_ability(cards_db: Dict[str, Any], cn: str) -> bool:
+    try:
+        info = cards_db.get(str(cn or ""))
+        if info is None:
+            return False
+        abilities = getattr(info, "abilities", None)
+        if abilities is None and isinstance(info, dict):
+            abilities = info.get("abilities")
+        for ab in list(abilities or []):
+            trig = getattr(ab, "trigger", None)
+            if trig is None and isinstance(ab, dict):
+                trig = ab.get("trigger")
+            if str(trig or "").strip() in ("ライブ開始時", "ライブ成功時"):
+                return True
+    except Exception:
+        return False
+    return False
+
+
+def _has_live_without_live_start_success_abilities(gs: Any, cards_db: Dict[str, Any]) -> bool:
+    for cn in _live_in_progress_cards(gs):
+        if _card_type_norm(cn, cards_db) != "LIVE":
+            continue
+        if not _card_has_live_start_or_success_ability(cards_db, str(cn or "")):
+            return True
+    return False
+
+
+def _live_start_generic_conditions_ok(gs: Any, cards_db: Dict[str, Any], gd: Dict[str, Any], source_name: str) -> bool:
+    try:
+        need_success = int(str((gd or {}).get("require_success_zone_count_min") or "0") or "0")
+    except Exception:
+        need_success = 0
+    if need_success > 0:
+        got = len(list(getattr(gs, "success_zone", []) or []))
+        if got < need_success:
+            try:
+                gs.log.append(f"[AUTO_EXT] condition not met: success_zone {got}/{need_success} ({source_name})")
+            except Exception:
+                pass
+            return False
+
+    try:
+        need_green = int(str((gd or {}).get("require_green_group_or_unit_member_count_min") or "0") or "0")
+    except Exception:
+        need_green = 0
+    if need_green > 0:
+        want = str((gd or {}).get("require_green_group_or_unit") or "").strip()
+        got = _count_green_group_or_unit_members(gs, cards_db, want)
+        if got < need_green:
+            try:
+                gs.log.append(f"[AUTO_EXT] condition not met: green {want} MEMBER {got}/{need_green} ({source_name})")
+            except Exception:
+                pass
+            return False
+
+    if str((gd or {}).get("require_live_without_live_start_success_abilities") or "0") == "1":
+        if not _has_live_without_live_start_success_abilities(gs, cards_db):
+            try:
+                gs.log.append(f"[AUTO_EXT] condition not met: no live without start/success ability ({source_name})")
+            except Exception:
+                pass
+            return False
+
+    return True
+
 def _stage_target_candidates(
     gs: Any,
     cards_db: Dict[str, Any],
@@ -302,12 +414,22 @@ def _stage_target_candidates(
     src_pos: str = "",
     exclude_self: bool = False,
     group_eq: str = "",
+    group_or_unit_eq: str = "",
+    cost_min: int = 0,
 ) -> list[tuple[str, Any]]:
     out: list[tuple[str, Any]] = []
     for pos, slot in _stage_positions_all_occupied(gs):
         if exclude_self and pos == str(src_pos or "").upper():
             continue
         if group_eq and _card_group(slot, cards_db) != group_eq:
+            continue
+        if group_or_unit_eq and not _card_group_or_unit_matches(slot, cards_db, group_or_unit_eq):
+            continue
+        try:
+            cm = int(cost_min or 0)
+        except Exception:
+            cm = 0
+        if cm > 0 and _card_cost(slot, cards_db) < cm:
             continue
         out.append((pos, slot))
     return out
@@ -323,6 +445,7 @@ def _queue_generic_pick_stage_member_temp_bonus(
     blade: int,
     hearts: Dict[str, int],
     log_line: str,
+    effect_text: str = "",
 ) -> None:
     label_head = source_name or source_cn or "カード"
     _queue_choose_stage_member(
@@ -341,6 +464,11 @@ def _queue_generic_pick_stage_member_temp_bonus(
         },
         log_line=log_line,
     )
+    if str(effect_text or "").strip():
+        try:
+            getattr(gs, "pending")[-1]["effect_text"] = str(effect_text or "").strip()
+        except Exception:
+            pass
 
 
 
@@ -361,6 +489,8 @@ def _apply_stage_temp_bonus_candidates(
     src_pos: str = "",
     exclude_self: bool = False,
     group_eq: str = "",
+    group_or_unit_eq: str = "",
+    cost_min: int = 0,
     positions: list[str] | None = None,
     blade: int = 0,
     hearts: Dict[str, int] | None = None,
@@ -369,7 +499,8 @@ def _apply_stage_temp_bonus_candidates(
 ) -> bool:
     posset = set([str(x).strip().upper() for x in (positions or []) if str(x).strip()])
     candidates = _stage_target_candidates(
-        gs, cards_db, src_pos=src_pos, exclude_self=exclude_self, group_eq=group_eq
+        gs, cards_db, src_pos=src_pos, exclude_self=exclude_self, group_eq=group_eq,
+        group_or_unit_eq=group_or_unit_eq, cost_min=cost_min
     )
     if posset:
         candidates = [(pos, slot) for pos, slot in candidates if pos in posset]
@@ -514,11 +645,19 @@ def try_apply_live_start_ext(
         no_target_log = str((gd or {}).get("no_target_log") or f"no valid targets ({source_name})")
         exclude_self = str((gd or {}).get("exclude_self") or "0") == "1"
         group_eq = str((gd or {}).get("group_eq") or "")
+        group_or_unit_eq = str((gd or {}).get("group_or_unit_eq") or "")
+        try:
+            cost_min = int(str((gd or {}).get("cost_min") or "0") or "0")
+        except Exception:
+            cost_min = 0
         auto_if_single = str((gd or {}).get("auto_if_single") or "0") == "1"
         blade = int(str((gd or {}).get("blade") or "0") or "0")
         hearts = _parse_hearts_csv((gd or {}).get("hearts"))
+        if not _live_start_generic_conditions_ok(gs, cards_db, gd or {}, source_name):
+            return True
         candidates = _stage_target_candidates(
-            gs, cards_db, src_pos=src_pos, exclude_self=exclude_self, group_eq=group_eq
+            gs, cards_db, src_pos=src_pos, exclude_self=exclude_self, group_eq=group_eq,
+            group_or_unit_eq=group_or_unit_eq, cost_min=cost_min
         )
         if not candidates:
             try:
@@ -541,6 +680,7 @@ def try_apply_live_start_ext(
             blade=blade,
             hearts=hearts,
             log_line=f"[PENDING] {source_name}: choose member from {[pos for pos, _ in candidates]}",
+            effect_text=str((gd or {}).get("effect_text") or ""),
         )
         return True
 
@@ -568,6 +708,11 @@ def try_apply_live_start_ext(
         no_target_log = str((gd or {}).get("no_target_log") or f"no valid targets ({source_name})")
         exclude_self = str((gd or {}).get("exclude_self") or "0") == "1"
         group_eq = str((gd or {}).get("group_eq") or "")
+        group_or_unit_eq = str((gd or {}).get("group_or_unit_eq") or "")
+        try:
+            cost_min = int(str((gd or {}).get("cost_min") or "0") or "0")
+        except Exception:
+            cost_min = 0
         positions = _parse_positions_csv((gd or {}).get("positions"))
         blade = int(str((gd or {}).get("blade") or "0") or "0")
         hearts = _parse_hearts_csv((gd or {}).get("hearts"))
@@ -576,6 +721,8 @@ def try_apply_live_start_ext(
             src_pos=src_pos,
             exclude_self=exclude_self,
             group_eq=group_eq,
+            group_or_unit_eq=group_or_unit_eq,
+            cost_min=cost_min,
             positions=positions,
             blade=blade,
             hearts=hearts,
@@ -648,6 +795,16 @@ def try_apply_live_start_ext(
             )
             return True
 
+        extra = {
+            "ctx": {
+                "discarded_name": discarded_name,
+                "blade": blade,
+                "hearts": dict(hearts or {}),
+                "source_name": source_name,
+            }
+        }
+        if str((gd or {}).get("effect_text") or "").strip():
+            extra["effect_text"] = str((gd or {}).get("effect_text") or "").strip()
         _queue_choose_stage_member(
             gs,
             candidates=[pos for pos, _ in matched],
@@ -655,14 +812,7 @@ def try_apply_live_start_ext(
             source_cn=src,
             label=f"【{source_name}】{discarded_name}{select_text}",
             text=f"【{source_name}】{discarded_name}{select_text}",
-            extra_payload={
-                "ctx": {
-                    "discarded_name": discarded_name,
-                    "blade": blade,
-                    "hearts": dict(hearts or {}),
-                    "source_name": source_name,
-                }
-            },
+            extra_payload=extra,
             log_line=f"[PENDING] {source_name}: choose same-name member from {[pos for pos, _ in matched]}",
         )
         return True
