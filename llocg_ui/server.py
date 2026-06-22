@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: server_opponent_success_score_continue_fix_20260616ay
+# BUILD_TAG: pending_modal_no_duplicate_effect_detail_20260622f
 from __future__ import annotations
 
 """llocg_ui.server
@@ -58,6 +58,8 @@ from .engine import (
     StageSlot,
     _slot_effective_cost,
     _card_effective_play_cost_from_hand,
+    _success_zone_score_sum,
+    _ordered_heart_counts,
 )
 
 APP_VERSION = "cost_badge_hand_format_20260610d"
@@ -1108,6 +1110,7 @@ class App:
             "set_zone_score_rows": self._set_zone_score_rows_for_ui(),
             "resolve_zone": list(self.gs.resolve_zone),
             "success_zone": list(getattr(self.gs, "success_zone", []) or []),
+            "success_zone_score_sum": int(_success_zone_score_sum(self.gs, self.cards_db) or 0),
             "success_zone_heart_color": str(getattr(self.gs, "success_zone_heart_color", "") or ""),
             "success_zone_heart_pos": str(getattr(self.gs, "success_zone_heart_pos", "") or ""),
             "pending": list(self.gs.pending),
@@ -1153,7 +1156,7 @@ class App:
         Each element is either None or a dict: {cardnumber, base, delta, score}.
         Only LIVE cards in set_zone receive rows; non-LIVE entries stay None.
         """
-        from .engine import _compute_attempt_score_breakdown, _effective_live_required_hearts
+        from .engine import _compute_attempt_score_breakdown, _effective_live_required_hearts, _ordered_heart_counts
         try:
             items = list(getattr(self.gs, 'set_zone', []) or [])
             rows_out = [None] * len(items)
@@ -1191,7 +1194,7 @@ class App:
                     'base': int(r.get('base', 0) or 0),
                     'delta': int(r.get('delta', 0) or 0),
                     'score': int(r.get('score', 0) or 0),
-                    'req_delta': req_delta,
+                    'req_delta': _ordered_heart_counts(req_delta),
                 }
             return rows_out
         except Exception:
@@ -1562,14 +1565,14 @@ class Handler(BaseHTTPRequestHandler):
             hearts = {}
             try:
                 bh = getattr(ci, 'base_hearts', None) or {}
-                hearts = {k: v for k, v in bh.items() if v and int(v) > 0}
+                hearts = _ordered_heart_counts({k: v for k, v in bh.items() if v and int(v) > 0})
             except Exception:
                 pass
             # required hearts + score (LIVE)
             required_hearts = {}
             try:
                 rh = getattr(ci, 'required_hearts', None) or {}
-                required_hearts = {k: v for k, v in rh.items() if v and int(v) > 0}
+                required_hearts = _ordered_heart_counts({k: v for k, v in rh.items() if v and int(v) > 0})
             except Exception:
                 pass
             score = ''
@@ -2145,12 +2148,12 @@ HTML = r'''<!doctype html>
       if(info.score) chips.push(`スコア${info.score}`);
       if(info.hearts && Object.keys(info.hearts).length){
         const jpMap = {pink:'桃',red:'赤',yellow:'黄',green:'緑',blue:'青',purple:'紫'};
-        const hStr = Object.entries(info.hearts).map(([k,v])=>`${jpMap[k]||k}×${v}`).join(' ');
+        const hStr = orderedHeartEntries(info.hearts).map(([k,v])=>`${jpMap[k]||k}×${v}`).join(' ');
         chips.push(hStr);
       }
       if(info.required_hearts && Object.keys(info.required_hearts).length){
         const jpMap = {pink:'桃',red:'赤',yellow:'黄',green:'緑',blue:'青',purple:'紫',any:'無色'};
-        const rStr = '必要: ' + Object.entries(info.required_hearts).map(([k,v])=>`${jpMap[k]||k}×${v}`).join(' ');
+        const rStr = '必要: ' + orderedHeartEntries(info.required_hearts).map(([k,v])=>`${jpMap[k]||k}×${v}`).join(' ');
         chips.push(rStr);
       }
       chips.forEach(c=>{ const s=document.createElement('span'); s.textContent=c; elCdMeta.appendChild(s); });
@@ -2353,6 +2356,16 @@ HTML = r'''<!doctype html>
   const HEART_LABEL_BY_COLOR = {
     pink:'桃', red:'赤', yellow:'黄', green:'緑', blue:'青', purple:'紫', any:'任意', all:'ALL',
   };
+  const HEART_COLOR_ORDER = ['pink','red','yellow','green','blue','purple','any','all'];
+  function heartColorOrderKey(k){
+    const idx = HEART_COLOR_ORDER.indexOf(String(k||'').toLowerCase());
+    return idx >= 0 ? idx : HEART_COLOR_ORDER.length + String(k||'').charCodeAt(0);
+  }
+  function orderedHeartEntries(map){
+    return Object.entries(map || {})
+      .filter(([k,v]) => Number(v || 0) !== 0)
+      .sort((a,b) => heartColorOrderKey(a[0]) - heartColorOrderKey(b[0]));
+  }
   const TEXTICON_TOKEN_RE = /<\((ブレード|桃|赤|黄|緑|青|紫|任意|虹|すべて)\)>/g;
 
   function textIconLabel(tok, fallback){
@@ -2608,6 +2621,8 @@ HTML = r'''<!doctype html>
     return seen.size;
   }
   function successZoneScoreSum(){
+    const eff = Number(st && st.success_zone_score_sum);
+    if(Number.isFinite(eff)) return eff;
     const arr = (st && Array.isArray(st.success_zone)) ? st.success_zone : [];
     return arr.reduce((a,cn)=>a + cardScoreFor(String(cn||'')), 0);
   }
@@ -2633,6 +2648,11 @@ HTML = r'''<!doctype html>
   }
   function pendingConditionStatus(p){
     if(!p || typeof p !== 'object') return null;
+    if(p.condition_status && typeof p.condition_status === 'object'){
+      const st0 = String(p.condition_status.state || 'neutral').trim();
+      const txt0 = String(p.condition_status.text || '').trim();
+      if(txt0) return {state: (st0 === 'met' || st0 === 'unmet' ? st0 : 'neutral'), text: txt0};
+    }
     const kind = String(p.kind || '').trim();
     const neutral = (text)=>({state:'neutral', text});
     const met = (text)=>({state:'met', text:`条件達成: ${text}`});
@@ -2753,6 +2773,17 @@ ${text}`;
     }
     const specificEffect = pendingEffectText(p);
     if(specificEffect){
+      const mainPrompt = String(pendingTextFor(p) || '').trim();
+      const normDup = (v)=>String(v || '').replace(/\s+/g, '');
+      const mainNorm = normDup(mainPrompt);
+      const effNorm = normDup(specificEffect);
+      const kind = String((p && p.kind) || '').trim();
+      // Confirmation modals already show the concrete executing effect in the
+      // main prompt line.  Do not render a second "発動する効果" box with the
+      // same text; it is verbose and makes the confirmation feel duplicated.
+      if((kind === 'confirm_effect' || kind === 'pay_or_skip') || (mainNorm && effNorm && mainNorm.includes(effNorm))){
+        return;
+      }
       if(token != null && token !== modalContextToken) return;
       if(elModalCardTextTitle) elModalCardTextTitle.textContent = '発動する効果';
       setRichText(elModalCardText, specificEffect);
@@ -2760,16 +2791,11 @@ ${text}`;
       return;
     }
     if(pendingHasInlineAutoEffectDetail(p)) return;
-    const cn = pendingSourceCn(p);
-    if(!cn) return;
-    const info = await getCardInfoCached(cn);
-    if(token != null && token !== modalContextToken) return;
-    if(!info) return;
-    const txt = Array.isArray(info.abilities) && info.abilities.length ? info.abilities.join('\n\n') : '（効果なし）';
-    if(token != null && token !== modalContextToken) return;
-    if(elModalCardTextTitle) elModalCardTextTitle.textContent = 'カードテキスト';
-    elModalCardText.textContent = txt;
-    elModalCardTextWrap.classList.add('visible');
+    // Do not fall back to the source card's full text in pending popups.
+    // A source card can have multiple abilities; showing all of them makes it look
+    // as if unrelated effects are being resolved.  Pending modals should show only
+    // pendingEffectText(p) when the engine supplied the concrete executing effect.
+    return;
   }
   function setModalChoiceHoverHint(msg){
     const s = String(msg || '').trim();
@@ -3296,7 +3322,7 @@ ${text}`;
     };
     const ov2 = document.createElement('div');
     ov2.style.cssText = ['position:absolute','right:0','top:14px','display:flex','flex-direction:column','align-items:flex-end','gap:3px','padding:3px 4px','background:rgba(0,0,0,0.62)','border-radius:6px 0 0 6px','pointer-events:none','z-index:50'].join(';');
-    for(const [col, cnt] of Object.entries(reqDelta)){
+    for(const [col, cnt] of orderedHeartEntries(reqDelta)){
       const n = Number(cnt || 0);
       if(!n) continue;
       const absn = Math.abs(n);
@@ -3494,7 +3520,7 @@ inner.appendChild(card);
             ov.appendChild(makeTextIconRow(signText, makeTextIconStack(specs, '', 16, 10), titleStr));
           };
           const appendHeartBonusRows = (bonusMap, suffix)=>{
-            for(const [col, cnt] of Object.entries(bonusMap || {})){
+            for(const [col, cnt] of orderedHeartEntries(bonusMap || {})){
               const n = Number(cnt);
               if(!n) continue;
               const token = HEART_TOKEN_BY_COLOR[col] || '<(任意)>';
