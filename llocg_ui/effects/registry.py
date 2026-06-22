@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: effect_registry_20260428_success_zone_threshold_action_expand_h
+# BUILD_TAG: effect_registry_icon_normalize_20260622c
 from __future__ import annotations
 
 """llocg_ui.effects.registry
@@ -454,17 +454,18 @@ EXTRA_EFFECT_RULES = [
 
 
 def _norm_ws(text: str) -> str:
-    """Collapse whitespace for effect_template comparison.
+    """Normalize effect-template text for extension matching.
 
-    Steps:
-      1. Collapse every run of whitespace (including newlines) to a single space.
-      2. Remove spaces that appear immediately before or after icon tokens of the
-         form ``<(...)>`` — these spaces are an artefact of the card DB inserting
-         newlines around icon tokens and must not prevent matching against the
-         one-liner form used in EXTRA_EFFECT_RULES.
+    The DB/compiler may emit official-style icon tokens such as ``<桃>`` while
+    older extension rules use runtime-style tokens such as ``<(桃)>``. Treat those
+    as equivalent here so existing generic rules are not bypassed just because of
+    icon spelling. Trigger tags like ``<ライブ開始時>`` are intentionally left
+    untouched.
     """
     import re as _re
     s = _re.sub(r'\s+', ' ', (text or "").strip())
+    icon_names = "桃|赤|黄|緑|青|紫|任意|ALL|E|ブレード"
+    s = _re.sub(r'<(' + icon_names + r')>', r'<(\1)>', s)
     # Remove space before icon token: "は、 <(ブレード)>" -> "は、<(ブレード)>"
     s = _re.sub(r' (<\([^)]*\)>)', r'\1', s)
     # Remove space after icon token: "<(ブレード)> を" -> "<(ブレード)>を"
