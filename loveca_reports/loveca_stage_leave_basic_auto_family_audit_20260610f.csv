@@ -1,0 +1,12 @@
+cardnumber,cardname,class,effect
+PL!-PR-001,高坂穂乃果,implemented_leave_activate_member_optional,このメンバーがステージから控え室に置かれたとき、メンバー1人をアクティブにしてもよい。
+PL!-PR-002,絢瀬絵里,implemented_leave_activate_member_optional,このメンバーがステージから控え室に置かれたとき、メンバー1人をアクティブにしてもよい。
+PL!HS-bp2-012,乙宗梢,implemented_leave_topk_member_to_hand,このメンバーがステージから控え室に置かれたとき、自分のデッキの上からカードを5枚見る。その中からメンバーカードを1枚公開して手札に加えてもよい。残りを控え室に置く。
+PL!HS-bp2-013,夕霧綴理,implemented_leave_topk_live_to_hand,このメンバーがステージから控え室に置かれたとき、自分のデッキの上からカードを5枚見る。その中からライブカードを1枚公開して手札に加えてもよい。残りを控え室に置く。
+PL!HS-bp2-015,藤島慈,implemented_leave_draw_then_discard,このメンバーがステージから控え室に置かれたとき、カードを2枚引き、手札を1枚控え室に置く。
+PL!HS-bp5-003,大沢瑠璃乃,implemented_leave_position_change_optional,このメンバーがステージから控え室に置かれたとき、メンバー1人をポジションチェンジさせてもよい。
+PL!HS-bp6-017,日野下花帆,deferred_leave_optional_hand_discard_followup,このメンバーがステージから控え室に置かれたとき、手札を1枚控え室に置いてもよい。そうした場合、自分の控え室からライブカードとメンバーカードをそれぞれ1枚まで手札に加える。
+PL!HS-bp6-018,村野さやか,deferred_leave_optional_hand_discard_followup,このメンバーがステージから控え室に置かれたとき、手札を1枚控え室に置いてもよい。そうした場合、ライブ終了時まで、自分のステージにいるメンバー1人は、<青><(ブレード)>を得る。
+PL!HS-bp6-019,大沢瑠璃乃,implemented_leave_draw_then_discard,このメンバーがステージから控え室に置かれたとき、カードを2枚引き、手札を2枚控え室に置く。
+PL!N-bp5-005,宮下愛,deferred_leave_baton_condition_bonus,このメンバーがステージから控え室に置かれたとき、このメンバーがコスト10以上のブレードハートを持たない『虹ヶ咲』のメンバーとバトンタッチしていた場合、エネルギーを2枚アクティブにする。コスト15以上のブレードハートを持たない『虹ヶ咲』のメンバーの場合、さらにカードを1枚引く。
+PL!S-bp2-002,桜内梨子,deferred_leave_optional_hand_discard_followup,このメンバーがステージから控え室に置かれたとき、手札を1枚控え室に置いてもよい。そうした場合、自分の控え室から『Aqours』のライブカードを1枚手札に加える。

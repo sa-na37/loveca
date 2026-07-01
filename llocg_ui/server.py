@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: pending_modal_no_duplicate_effect_detail_20260622f
+# BUILD_TAG: server_public_known_to_hand_topk_ui_20260625d
 from __future__ import annotations
 
 """llocg_ui.server
@@ -8,6 +8,7 @@ Manual UI web server for LLCG.
 
 Endpoints (kept compatible with the existing "jank" engine API):
 - GET  /          : UI HTML
+- GET  /public    : read-only public UI HTML
 - GET  /state     : JSON state
 - POST /cmd       : mutate state (cmd + payload)
 - GET  /img?cn=   : card image
@@ -37,6 +38,7 @@ from urllib.parse import urlparse, parse_qs, unquote
 
 from .db import load_cards_db, is_member_type, is_live_type, _get_card as _db_get_card
 from .images import ImageLocator
+from .views import make_view_state
 from .engine import (
     new_game,
     push_undo,
@@ -62,7 +64,7 @@ from .engine import (
     _ordered_heart_counts,
 )
 
-APP_VERSION = "cost_badge_hand_format_20260610d"
+APP_VERSION = "public_known_to_hand_topk_ui_20260625d"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -91,7 +93,371 @@ class App:
         self.gs, self.rng = new_game(self.root, self.deck_code, seed=seed, debug=debug)
         self._force_mulligan_start()
         self._apply_start_overrides_from_env()
+        # Public-window reveal ledger.  This is intentionally independent from
+        # gs.pending because owner-side acknowledgement can clear a reveal popup
+        # before the public window's next poll sees it.
+        self._public_reveal_events: List[Dict[str, Any]] = []
+        self._public_reveal_seq: int = 0
+        self._public_reveal_seen: Dict[str, float] = {}
+        # Cards that became known while being added to hand remain public until
+        # MAIN ends.  This is the public-window source of truth for
+        # "private zone -> revealed -> hand" and "public zone -> hand" effects,
+        # independent of transient owner-side popups.
+        self._public_hand_revealed_turn: int = int(getattr(self.gs, "turn", 0) or 0)
+        self._public_hand_revealed_cards: List[str] = []
+        self._public_hand_reveal_events: List[Dict[str, Any]] = []
+        self._public_hand_reveal_seq: int = 0
         self.save_trace()
+
+    def _public_reveal_event_from_pending_item(self, item: Any, reason: str = "") -> Optional[Dict[str, Any]]:
+        if not isinstance(item, dict):
+            return None
+        kind = str(item.get("kind", "") or item.get("type", "") or "")
+        if kind != "show_revealed_cards_ack":
+            return None
+        cards: List[str] = []
+        for key in ("display_cards", "shown", "revealed_cards", "cards", "candidates"):
+            val = item.get(key)
+            if isinstance(val, list):
+                for cn in val:
+                    cn_s = str(cn or "").strip()
+                    if cn_s and cn_s not in cards:
+                        cards.append(cn_s)
+        # Even an empty reveal ack is useful as a public note, but cards are the
+        # part that must persist after owner-side popup dismissal.
+        text = str(item.get("text", "") or item.get("message", "") or item.get("prompt", "") or "公開カードを確認しました。")
+        return {
+            "kind": "public_reveal_event",
+            "source_kind": kind,
+            "title": "公開カード",
+            "text": text,
+            "display_cards": cards,
+            "display_card_count": len(cards),
+            "reason": str(reason or ""),
+        }
+
+    def _remember_public_reveals_from_pending(self, reason: str = "") -> None:
+        now = time.time()
+        # Prune old seen keys and expired events first.
+        self._public_reveal_seen = {k: t for k, t in getattr(self, "_public_reveal_seen", {}).items() if now - float(t or 0) <= 30.0}
+        self._public_reveal_events = [ev for ev in getattr(self, "_public_reveal_events", []) if float(ev.get("expires_at", 0.0) or 0.0) > now]
+        try:
+            pending = list(getattr(self.gs, "pending", []) or [])
+        except Exception:
+            pending = []
+        for item in pending:
+            ev = self._public_reveal_event_from_pending_item(item, reason)
+            if not ev:
+                continue
+            key = json.dumps({"text": ev.get("text", ""), "cards": ev.get("display_cards", [])}, ensure_ascii=False, sort_keys=True)
+            if key in self._public_reveal_seen:
+                # Refresh expiry rather than duplicating.
+                for old_ev in self._public_reveal_events:
+                    old_key = json.dumps({"text": old_ev.get("text", ""), "cards": old_ev.get("display_cards", [])}, ensure_ascii=False, sort_keys=True)
+                    if old_key == key:
+                        old_ev["expires_at"] = now + 10.0
+                continue
+            self._public_reveal_seen[key] = now
+            self._public_reveal_seq += 1
+            ev["seq"] = self._public_reveal_seq
+            ev["created_at"] = now
+            ev["expires_at"] = now + 10.0
+            self._public_reveal_events.append(ev)
+
+    def _public_reveal_events_snapshot(self) -> List[Dict[str, Any]]:
+        now = time.time()
+        self._public_reveal_events = [ev for ev in getattr(self, "_public_reveal_events", []) if float(ev.get("expires_at", 0.0) or 0.0) > now]
+        return [dict(ev) for ev in self._public_reveal_events]
+
+    def _current_turn_int(self) -> int:
+        try:
+            return int(getattr(self.gs, "turn", 0) or 0)
+        except Exception:
+            return 0
+
+    def _sync_public_hand_reveals_turn(self) -> None:
+        """Clear public-in-hand reveal state as soon as its legal window ends.
+
+        These cards are public only while they remain relevant to main-phase
+        private-zone lookup effects.  Keeping them public until turn change leaks
+        whether a revealed hand card was set face-down as a live card.  Therefore
+        clear the ledger immediately after leaving MAIN, and also on turn change.
+        """
+        cur_turn = self._current_turn_int()
+        try:
+            phase = str(getattr(self.gs, "phase", "") or "").upper()
+        except Exception:
+            phase = ""
+        turn_changed = int(getattr(self, "_public_hand_revealed_turn", cur_turn) or 0) != cur_turn
+        phase_closed = phase != "MAIN"
+        if turn_changed or phase_closed:
+            self._public_hand_revealed_turn = cur_turn
+            self._public_hand_revealed_cards = []
+            self._public_hand_reveal_events = []
+
+    def _live_set_cards_are_public_for_public_source(self) -> bool:
+        """Mirror public-view live set visibility for source-count tracking."""
+        try:
+            phase = str(getattr(self.gs, "phase", "") or "").upper()
+        except Exception:
+            phase = ""
+        if phase in {"LIVE_PERF", "LIVE_ATTEMPT", "LIVE_RESOLVE"}:
+            return True
+        if phase == "LIVE_CONFIRM" and bool(getattr(self.gs, "live_start_prompted", False)):
+            return True
+        return False
+
+    def _public_source_counts_for_hand_reveal(self) -> Dict[str, int]:
+        """Count cards that are publicly known and can later move to hand.
+
+        This is intentionally about *source visibility*, not about all cards the
+        owner can see.  It is used with hand-count deltas after a command:
+        if a card's count in public sources decreases and its count in hand
+        increases, the public window keeps that card face-up in hand until MAIN
+        ends.
+        """
+        counts: Dict[str, int] = {}
+
+        def add_cn(cn0: Any) -> None:
+            cn = str(cn0 or "").strip()
+            if cn and cn != "__BACK__":
+                counts[cn] = counts.get(cn, 0) + 1
+
+        def add_list(v: Any) -> None:
+            if isinstance(v, list):
+                for cn0 in v:
+                    add_cn(cn0)
+
+        # Public zones in the current simulator surface.
+        add_list(getattr(self.gs, "green_room", None))
+        add_list(getattr(self.gs, "resolve_zone", None))
+        add_list(getattr(self.gs, "success_zone", None))
+        if self._live_set_cards_are_public_for_public_source():
+            add_list(getattr(self.gs, "set_zone", None))
+
+        stage = getattr(self.gs, "stage", None)
+        try:
+            items = stage.items() if isinstance(stage, dict) else []
+        except Exception:
+            items = []
+        for _pos, slot in items:
+            try:
+                cn = slot.get("cardnumber") if isinstance(slot, dict) else getattr(slot, "cardnumber", "")
+            except Exception:
+                cn = ""
+            add_cn(cn)
+
+        # Explicit reveal acknowledgements are public even if the revealed cards
+        # are not yet in a normal public zone.  This covers effects whose owner
+        # popup is acknowledged immediately.
+        try:
+            pending = list(getattr(self.gs, "pending", []) or [])
+        except Exception:
+            pending = []
+        for item in pending:
+            if not isinstance(item, dict):
+                continue
+            kind = str(item.get("kind", "") or item.get("type", "") or "")
+            if kind != "show_revealed_cards_ack":
+                continue
+            for key in ("display_cards", "shown", "revealed_cards", "cards", "candidates"):
+                add_list(item.get(key))
+
+        return counts
+
+    def _reveal_candidate_cards_from_pending(self) -> List[str]:
+        """Return card numbers that may become public if added to hand.
+
+        Public-window rule used here:
+        - Explicit reveal ACKs are public.
+        - For private-zone lookup effects, do NOT reveal the whole pool.
+          If the pending text/effect text says a card is revealed/publicly shown
+          and added to hand, keep only the card that actually reaches hand public
+          until MAIN ends.
+
+        Main regression target: PL!-bp6-002.  Its pending is
+        ``choose_from_topk`` rather than ``show_revealed_cards_ack``; the chosen
+        matching card must become public after resolve_pending adds it to hand.
+        """
+        out: List[str] = []
+
+        def _add_cards(val: Any) -> None:
+            if not isinstance(val, list):
+                return
+            for cn0 in val:
+                cn = str(cn0 or "").strip()
+                if cn and cn not in out:
+                    out.append(cn)
+
+        try:
+            pending = list(getattr(self.gs, "pending", []) or [])
+        except Exception:
+            pending = []
+
+        for item in pending:
+            if not isinstance(item, dict):
+                continue
+            kind = str(item.get("kind", "") or item.get("type", "") or "")
+
+            if kind == "show_revealed_cards_ack":
+                for key in ("display_cards", "shown", "revealed_cards", "cards", "candidates"):
+                    _add_cards(item.get(key))
+                continue
+
+            # Private-zone lookup -> hand effects.  Do not reveal the whole
+            # owner-only pool.  We keep only the selected card public after it
+            # actually reaches hand.
+            #
+            # Important: filtered top-k effects generated by the engine do not
+            # necessarily contain the word "公開" in pending.text.  Example
+            # PL!-bp6-002 currently produces:
+            #   kind=choose_from_topk
+            #   text="デッキ上2枚から『μ's』・能力なし/常時能力ありを1枚手札へ..."
+            #   candidates=[...]
+            # The presence of candidates means the owner is choosing from a
+            # condition-checked subset.  The chosen card needs to be public so
+            # the public window can verify the condition, but the unchosen pool
+            # stays private.
+            public_text = "\n".join([
+                str(item.get("text", "") or ""),
+                str(item.get("effect_text", "") or ""),
+                str(item.get("detail_text", "") or ""),
+            ])
+
+            if kind == "choose_from_topk":
+                has_filtered_candidates = isinstance(item.get("candidates"), list) and len(item.get("candidates") or []) > 0
+                explicit_public_to_hand = ("公開" in public_text and "手札" in public_text)
+                if not (has_filtered_candidates or explicit_public_to_hand):
+                    continue
+                _add_cards(item.get("candidates"))
+                if not out:
+                    opts = item.get("options")
+                    if isinstance(opts, list):
+                        _add_cards([x for x in opts if str(x).strip().lower() not in {"skip", "__skip__", "スキップ"}])
+                continue
+
+            if kind == "look_top_3way_step":
+                # 3-way look effects are not necessarily public.  Keep the
+                # stricter explicit-text rule here until a dedicated metadata
+                # flag is added at pending generation time.
+                if not ("公開" in public_text and "手札" in public_text):
+                    continue
+                _add_cards(item.get("candidates"))
+                if not out:
+                    opts = item.get("options")
+                    if isinstance(opts, list):
+                        _add_cards([x for x in opts if str(x).strip().lower() not in {"skip", "__skip__", "スキップ"}])
+                continue
+
+        return out
+
+    def _remember_public_hand_reveals_after_cmd(self, before_hand: List[str], reveal_candidates: List[str], reason: str = "") -> None:
+        """Keep known cards that reached hand public until MAIN ends.
+
+        Cases covered:
+        - private-zone lookup effects that reveal/condition-check selected card(s)
+          before adding them to hand;
+        - cards moved from public zones such as green room/resolve/success to hand.
+
+        The owner-side popup can close immediately, so the public window needs a
+        short scoped ledger independent from pending.
+        """
+        self._sync_public_hand_reveals_turn()
+        try:
+            phase = str(getattr(self.gs, "phase", "") or "").upper()
+        except Exception:
+            phase = ""
+        if phase != "MAIN":
+            return
+        try:
+            after_hand = [str(cn) for cn in list(getattr(self.gs, "hand", []) or [])]
+        except Exception:
+            after_hand = []
+        before_counts: Dict[str, int] = {}
+        for cn in before_hand or []:
+            before_counts[str(cn)] = before_counts.get(str(cn), 0) + 1
+        added: List[str] = []
+
+        def add_if_hand_increased(cn0: Any) -> None:
+            cn = str(cn0 or "").strip()
+            if not cn or cn == "__BACK__" or cn in added:
+                return
+            after_n = sum(1 for x in after_hand if x == cn)
+            before_n = int(before_counts.get(cn, 0) or 0)
+            if after_n > before_n:
+                added.append(cn)
+
+        for cn in reveal_candidates or []:
+            # Mark only cards that are in hand after resolution and whose count
+            # in hand increased.  This avoids keeping merely-viewed/bottomed cards
+            # public and avoids ordinary non-reveal draws.
+            add_if_hand_increased(cn)
+
+        # Generic public-zone -> hand rule.  If a card was in a public source
+        # before the command, that public-source count decreased, and the same
+        # card's hand count increased, keep it visible in the public hand row
+        # until MAIN ends.
+        before_src: Dict[str, int] = getattr(self, "_public_hand_before_source_counts", {}) or {}
+        after_src = self._public_source_counts_for_hand_reveal()
+        for cn, before_src_n in before_src.items():
+            try:
+                bsn = int(before_src_n or 0)
+            except Exception:
+                bsn = 0
+            if bsn <= 0:
+                continue
+            asn = int(after_src.get(cn, 0) or 0)
+            if asn < bsn:
+                add_if_hand_increased(cn)
+
+        if not added:
+            return
+        cards = list(getattr(self, "_public_hand_revealed_cards", []) or [])
+        for cn in added:
+            if cn not in cards:
+                cards.append(cn)
+        self._public_hand_revealed_cards = cards
+        self._public_hand_reveal_seq += 1
+        ev = {
+            "kind": "public_hand_reveal",
+            "title": "公開して手札に加えたカード",
+            "text": "公開情報として手札に加わったカードです。メインフェイズ終了まで公開情報として扱います。",
+            "display_cards": added,
+            "display_card_count": len(added),
+            "turn": self._current_turn_int(),
+            "seq": self._public_hand_reveal_seq,
+            "created_at": time.time(),
+            "reason": str(reason or ""),
+        }
+        self._public_hand_reveal_events.append(ev)
+        # Keep the short animation ledger small; the persistent public cards are
+        # stored separately in _public_hand_revealed_cards.
+        self._public_hand_reveal_events = self._public_hand_reveal_events[-8:]
+        try:
+            self.gs.log.append(f"[PUBLIC_REVEAL] hand public until MAIN end: {', '.join(added)}")
+        except Exception:
+            pass
+
+    def _public_hand_revealed_cards_snapshot(self) -> List[str]:
+        self._sync_public_hand_reveals_turn()
+        hand = set(str(cn) for cn in list(getattr(self.gs, "hand", []) or []))
+        cards: List[str] = []
+        for cn in list(getattr(self, "_public_hand_revealed_cards", []) or []):
+            if cn in hand and cn not in cards:
+                cards.append(cn)
+        self._public_hand_revealed_cards = cards
+        return list(cards)
+
+    def _public_hand_reveal_events_snapshot(self) -> List[Dict[str, Any]]:
+        self._sync_public_hand_reveals_turn()
+        cur_turn = self._current_turn_int()
+        events = []
+        now = time.time()
+        for ev in list(getattr(self, "_public_hand_reveal_events", []) or []):
+            if int(ev.get("turn", cur_turn) or cur_turn) == cur_turn and now - float(ev.get("created_at", 0.0) or 0.0) <= 20.0:
+                events.append(dict(ev))
+        self._public_hand_reveal_events = events
+        return [dict(ev) for ev in events]
 
     def save_trace(self) -> None:
         self.outdir.mkdir(parents=True, exist_ok=True)
@@ -1078,6 +1444,9 @@ class App:
         return out
 
     def state_json(self) -> Dict[str, Any]:
+        # Capture reveal acknowledgements while they are still pending, so the
+        # public window can show them even if the owner resolves immediately.
+        self._remember_public_reveals_from_pending("state_json")
         now = time.time()
         banner = None
         if getattr(self.gs, "banner_text", "") and (
@@ -1093,6 +1462,7 @@ class App:
             "debug": self.gs.debug,
             "turn": self.gs.turn,
             "phase": self.gs.phase,
+            "live_start_prompted": bool(getattr(self.gs, "live_start_prompted", False)),
             "deck": self.gs.deck if self.gs.debug else ["?"] * len(self.gs.deck),
             "hand": list(self.gs.hand),
             "hand_detail": self._hand_detail_for_ui(),
@@ -1114,6 +1484,9 @@ class App:
             "success_zone_heart_color": str(getattr(self.gs, "success_zone_heart_color", "") or ""),
             "success_zone_heart_pos": str(getattr(self.gs, "success_zone_heart_pos", "") or ""),
             "pending": list(self.gs.pending),
+            "public_reveal_events": self._public_reveal_events_snapshot(),
+            "public_hand_revealed_cards": self._public_hand_revealed_cards_snapshot(),
+            "public_hand_reveal_events": self._public_hand_reveal_events_snapshot(),
             "cn2name": self._cn2name(),
             "cn2label": self._cn2label(),
             "cn2type": self._cn2type(),
@@ -1302,7 +1675,18 @@ class App:
             "opponent_success_delta",
             "turn_order_set",
         }
+        before_hand_for_public_reveal: List[str] = []
+        reveal_candidates_for_public_hand: List[str] = []
         if mutating and name != "toggle_debug":
+            # Owner commands can clear a reveal ACK before the public window's
+            # next poll.  Preserve it in a short-lived public ledger first.
+            self._remember_public_reveals_from_pending(f"before_cmd:{name}")
+            try:
+                before_hand_for_public_reveal = [str(cn) for cn in list(getattr(self.gs, "hand", []) or [])]
+            except Exception:
+                before_hand_for_public_reveal = []
+            reveal_candidates_for_public_hand = self._reveal_candidate_cards_from_pending()
+            self._public_hand_before_source_counts = self._public_source_counts_for_hand_reveal()
             push_undo(self.gs, self.rng)
 
         if name == "play":
@@ -1392,12 +1776,14 @@ class App:
                     if k0 in ack_kinds:
                         cmd_resolve_pending(self.gs, self.cards_db, 0, 'ok')
                         post_process(self.gs)
+                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}")
                         self.save_trace()
                         return self.state_json()
                     if k0 == 'set_opponent_excess_for_live_success':
                         cur_ex = str(max(0, min(9, int(getattr(self.gs, 'opponent_excess_heart_count', 0) or 0))))
                         cmd_resolve_pending(self.gs, self.cards_db, 0, cur_ex)
                         post_process(self.gs)
+                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}")
                         self.save_trace()
                         return self.state_json()
                     if k0 == 'set_opponent_success_score_for_live_attempt':
@@ -1406,16 +1792,19 @@ class App:
                             cur_oss_i = 0
                         cmd_resolve_pending(self.gs, self.cards_db, 0, str(max(0, min(20, cur_oss_i))), self.rng)
                         post_process(self.gs)
+                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}")
                         self.save_trace()
                         return self.state_json()
                     if k0 == 'pick_success_to_store':
                         cmd_resolve_pending(self.gs, self.cards_db, 0, 'skip')
                         post_process(self.gs)
+                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}")
                         self.save_trace()
                         return self.state_json()
                     if ('skip' in opts or '__skip__' in opts) and (bool(p0.get('optional', False)) or bool(p0.get('allow_skip', False)) or k0 in ('pay_or_skip', 'confirm_effect', 'discard_from_hand')):
                         cmd_resolve_pending(self.gs, self.cards_db, 0, 'skip')
                         post_process(self.gs)
+                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}")
                         self.save_trace()
                         return self.state_json()
                 if opts:
@@ -1429,6 +1818,7 @@ class App:
                             choice = opts[0]
                         cmd_resolve_pending(self.gs, self.cards_db, 0, choice)
                         post_process(self.gs)
+                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}")
                         self.save_trace()
                         return self.state_json()
 
@@ -1453,6 +1843,8 @@ class App:
 
         # Post-process to resume deferred prompts (e.g., auto trigger order).
         post_process(self.gs)
+        if mutating and name != "toggle_debug":
+            self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, name)
 
         self.save_trace()
         return self.state_json()
@@ -1491,7 +1883,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         u = urlparse(self.path)
 
-        if u.path == "/":
+        if u.path == "/" or u.path == "/public":
             self._send(200, HTML.encode("utf-8"), "text/html; charset=utf-8")
             return
 
@@ -1515,7 +1907,15 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if u.path == "/state":
-            data = json.dumps(self.app.state_json(), ensure_ascii=False).encode("utf-8")
+            qs = parse_qs(u.query)
+            view_mode = (qs.get("view", [""])[0] or qs.get("mode", [""])[0] or "private").strip().lower()
+            state = self.app.state_json()
+            data = json.dumps(make_view_state(state, view_mode), ensure_ascii=False).encode("utf-8")
+            self._send(200, data, "application/json; charset=utf-8")
+            return
+
+        if u.path == "/public_state":
+            data = json.dumps(make_view_state(self.app.state_json(), "public"), ensure_ascii=False).encode("utf-8")
             self._send(200, data, "application/json; charset=utf-8")
             return
 
@@ -1600,6 +2000,31 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/img":
             qs = parse_qs(u.query)
             cn = unquote((qs.get("cn", [""])[0] or "").strip())
+            # special: public/private card back image.
+            # Use the official local back image under llocg_db_out_full/card_images/back.png.
+            if cn == "__BACK__":
+                cand = []
+                try:
+                    loveca_root = Path(__file__).resolve().parents[1]
+                    cand.extend([
+                        loveca_root / "llocg_db_out_full" / "card_images" / "back.png",
+                        self.app.root / "llocg_db_out_full" / "card_images" / "back.png",
+                        self.app.root / "card_images" / "back.png",
+                        Path.cwd() / "llocg_db_out_full" / "card_images" / "back.png",
+                        Path.cwd() / "card_images" / "back.png",
+                    ])
+                except Exception:
+                    pass
+                for p2 in cand:
+                    try:
+                        if p2 and p2.exists():
+                            self._send(200, p2.read_bytes(), "image/png")
+                            return
+                    except Exception:
+                        pass
+                self._send(404, b"", "text/plain")
+                return
+
             # special: energy card back image
             if cn == "__ENERGY__":
                 cand = []
@@ -1741,6 +2166,20 @@ HTML = r'''<!doctype html>
   #topBar .pill{background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:6px 10px;font-size:12px;}
   #topBar .miniBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:6px 10px;border-radius:10px;cursor:pointer;}
   #topBar .miniBtn:hover{background:rgba(255,255,255,.18);}
+  body.publicView #topBar .miniBtn, body.publicView #topBar .oppWaitBtn{opacity:.35;cursor:not-allowed;pointer-events:none;}
+  #publicViewBadge{display:none;background:#66d9ef;color:#071014;border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:6px 10px;font-size:12px;font-weight:900;letter-spacing:.04em;}
+  body.publicView #publicViewBadge{display:inline-flex;}
+  .publicMaskCard{position:absolute;border-radius:8px;background:repeating-linear-gradient(135deg,rgba(40,50,60,.95),rgba(40,50,60,.95) 10px,rgba(22,28,34,.95) 10px,rgba(22,28,34,.95) 20px);border:1px solid rgba(255,255,255,.22);box-shadow:0 6px 18px rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;color:#d9e8ff;font-weight:900;font-size:18px;letter-spacing:.08em;text-shadow:0 1px 2px rgba(0,0,0,.8);user-select:none;pointer-events:none;}
+  .publicMaskCard::after{content:'SECRET';opacity:.82;}
+  .publicPendingNote{margin-top:10px;padding:10px 12px;border-radius:10px;background:rgba(102,217,239,.10);border:1px solid rgba(102,217,239,.28);color:#dff9ff;font-size:13px;line-height:1.45;}
+  .publicKnownHandPanel{position:absolute;right:calc(var(--sideW) + 14px);bottom:18px;z-index:8200;display:none;gap:8px;align-items:flex-end;padding:9px 10px 10px;border-radius:12px;background:rgba(0,0,0,.68);border:1px solid rgba(255,216,77,.42);box-shadow:0 8px 26px rgba(0,0,0,.55);}
+  .publicKnownHandPanel .publicKnownTitle{font-size:12px;font-weight:900;color:#ffe985;writing-mode:vertical-rl;letter-spacing:.08em;line-height:1.1;}
+  .cardWrap.publicRevealFlash{animation:publicRevealBlink .55s ease-in-out 0s 4;box-shadow:0 0 0 4px rgba(255,216,77,.95),0 0 24px rgba(255,216,77,.95),0 8px 22px rgba(0,0,0,.70) !important;}
+  .cardWrap.publicKnownHandCard{box-shadow:0 0 0 2px rgba(255,216,77,.75),0 8px 22px rgba(0,0,0,.70) !important;}
+    .publicRevealFloat{position:absolute;left:50%;top:18%;transform:translateX(-50%);z-index:20000;padding:12px 16px;border-radius:16px;background:rgba(0,0,0,.78);border:1px solid rgba(255,216,77,.72);box-shadow:0 10px 30px rgba(0,0,0,.62),0 0 28px rgba(255,216,77,.38);display:flex;align-items:center;gap:12px;pointer-events:none;animation:publicRevealFloat 2.8s ease-out forwards;}
+  .publicRevealFloatTitle{font-size:16px;font-weight:900;color:#ffe985;white-space:nowrap;text-shadow:0 2px 3px rgba(0,0,0,.9);}
+  @keyframes publicRevealBlink{0%,100%{filter:none;transform:translateY(0);}50%{filter:brightness(1.35);transform:translateY(-4px);}}
+  @keyframes publicRevealFloat{0%{opacity:0;transform:translate(-50%,12px) scale(.96);}12%{opacity:1;transform:translate(-50%,0) scale(1);}82%{opacity:1;transform:translate(-50%,0) scale(1);}100%{opacity:0;transform:translate(-50%,-14px) scale(1.02);}}
   #topBar .oppWaitPill{display:flex;align-items:center;gap:6px;}
   #topBar .oppWaitBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.16);border-radius:999px;min-width:24px;height:22px;padding:0 7px;line-height:18px;font-size:13px;font-weight:800;cursor:pointer;}
   #topBar .turnOrderBtn{min-width:42px;}
@@ -1863,6 +2302,7 @@ HTML = r'''<!doctype html>
     <img id="playmat" src="/playmat" alt="playmat"/>
 
     <div id="topBar">
+      <div id="publicViewBadge">PUBLIC VIEW / READ ONLY</div>
       <div class="pill">Turn: <b id="turn">?</b> | Phase: <b id="phase">?</b> | Energy: <b id="energy">?</b></div>
       <div class="pill oppWaitPill">Opponent wait: <b id="opponentWait">0</b>/3 <button class="oppWaitBtn" id="btnOppWaitMinus" title="相手ウェイト人数を減らす">−</button><button class="oppWaitBtn" id="btnOppWaitPlus" title="相手ウェイト人数を増やす">＋</button></div>
       <div class="pill oppWaitPill">Opp success: <b id="opponentSuccess">0</b>/2 <button class="oppWaitBtn" id="btnOppSuccessMinus" title="相手成功置き場枚数を減らす">−</button><button class="oppWaitBtn" id="btnOppSuccessPlus" title="相手成功置き場枚数を増やす">＋</button></div>
@@ -1928,6 +2368,10 @@ HTML = r'''<!doctype html>
 (()=>{
   const BASE_W = 1560;
   const BASE_H = 851;
+  const urlParams = new URLSearchParams(window.location.search || '');
+  const VIEW_MODE = String(urlParams.get('view') || (window.location.pathname === '/public' ? 'public' : 'private')).toLowerCase();
+  const IS_PUBLIC_VIEW = (VIEW_MODE === 'public');
+  if(IS_PUBLIC_VIEW){ document.body.classList.add('publicView'); }
 
   // Base coordinates, aligned to playmat.jpg
   // Right side contains: DECK (top), Waiting room (middle), Energy+UNDO+NEXT (bottom)
@@ -2193,10 +2637,16 @@ HTML = r'''<!doctype html>
   window.addEventListener('resize', ()=>{ cssScale(); render(); });
 
   async function apiState(){
-    const r = await fetch('/state', {cache:'no-store'});
+    const url = IS_PUBLIC_VIEW ? '/state?view=public' : '/state';
+    const r = await fetch(url, {cache:'no-store'});
     return await r.json();
   }
   async function apiCmd(cmd, payload={}){
+    // /public and ?view=public are read-only viewer modes.
+    // Keep buttons harmless even if old controls remain visible.
+    if(IS_PUBLIC_VIEW){
+      return await apiState();
+    }
     const r = await fetch('/cmd', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
@@ -2271,7 +2721,7 @@ HTML = r'''<!doctype html>
     if(kind === 'choose_heart_color' || kind === 'choose_heart_color_for_other') return 'ハートの色を選択';
     if(kind === 'discard_from_hand' || kind === 'discard_named_cards_from_hand') return '手札から選択';
     if(kind === 'position_change') return '移動先を選択';
-    if(kind === 'choose_from_topk' || kind === 'choose_top_keep_one' || kind === 'topdeck_from_green' || kind === 'bottomdeck_from_green' || kind === 'hand_to_deck_bottom' || kind === 'hand_to_deck_top_or_bottom') return 'カードを選択';
+    if(kind === 'choose_from_topk' || kind === 'choose_top_keep_one' || kind === 'topdeck_from_green' || kind === 'bottomdeck_from_green' || kind === 'live_storage_live_to_deck_top_gain_icons' || kind === 'hand_to_deck_bottom' || kind === 'hand_to_deck_top_or_bottom') return 'カードを選択';
     if(kind === 'choose_deck_top_or_bottom_for_hand_card' || kind === 'choose_deck_top_or_bottom_for_live_storage_card') return '置く場所を選択';
     if(kind === 'choose_player_for_green_bottom' || kind === 'choose_player_for_deck_top_action') return 'プレイヤーを選択';
     if(kind === 'live_storage_to_deck_top_or_bottom') return 'ライブカードを選択';
@@ -2773,17 +3223,6 @@ ${text}`;
     }
     const specificEffect = pendingEffectText(p);
     if(specificEffect){
-      const mainPrompt = String(pendingTextFor(p) || '').trim();
-      const normDup = (v)=>String(v || '').replace(/\s+/g, '');
-      const mainNorm = normDup(mainPrompt);
-      const effNorm = normDup(specificEffect);
-      const kind = String((p && p.kind) || '').trim();
-      // Confirmation modals already show the concrete executing effect in the
-      // main prompt line.  Do not render a second "発動する効果" box with the
-      // same text; it is verbose and makes the confirmation feel duplicated.
-      if((kind === 'confirm_effect' || kind === 'pay_or_skip') || (mainNorm && effNorm && mainNorm.includes(effNorm))){
-        return;
-      }
       if(token != null && token !== modalContextToken) return;
       if(elModalCardTextTitle) elModalCardTextTitle.textContent = '発動する効果';
       setRichText(elModalCardText, specificEffect);
@@ -2791,11 +3230,16 @@ ${text}`;
       return;
     }
     if(pendingHasInlineAutoEffectDetail(p)) return;
-    // Do not fall back to the source card's full text in pending popups.
-    // A source card can have multiple abilities; showing all of them makes it look
-    // as if unrelated effects are being resolved.  Pending modals should show only
-    // pendingEffectText(p) when the engine supplied the concrete executing effect.
-    return;
+    const cn = pendingSourceCn(p);
+    if(!cn) return;
+    const info = await getCardInfoCached(cn);
+    if(token != null && token !== modalContextToken) return;
+    if(!info) return;
+    const txt = Array.isArray(info.abilities) && info.abilities.length ? info.abilities.join('\n\n') : '（効果なし）';
+    if(token != null && token !== modalContextToken) return;
+    if(elModalCardTextTitle) elModalCardTextTitle.textContent = 'カードテキスト';
+    elModalCardText.textContent = txt;
+    elModalCardTextWrap.classList.add('visible');
   }
   function setModalChoiceHoverHint(msg){
     const s = String(msg || '').trim();
@@ -2897,6 +3341,7 @@ ${text}`;
     wrap.style.height = h + 'px';
     wrap.style.zIndex = String(z);
     wrap.dataset.baseZ = String(z);
+    wrap.dataset.cn = String(cn || '');
     if(isSelected){ wrap.classList.add('selected'); wrap.style.zIndex='18000'; wrap.dataset.baseZ='18000'; }
 
     const intr = forceIntrinsicOrient || intrinsicOrient(cn);
@@ -3096,6 +3541,81 @@ ${text}`;
     zoneEl.appendChild(badge);
   }
 
+
+  function publicCount(field, fallbackList){
+    if(!IS_PUBLIC_VIEW) return Array.isArray(fallbackList) ? fallbackList.length : 0;
+    const v = st ? Number(st[field] || 0) : 0;
+    if(Number.isFinite(v) && v >= 0) return v;
+    return Array.isArray(fallbackList) ? fallbackList.length : 0;
+  }
+
+  function makePublicMaskCard(x, y, w, h, z=100){
+    const d = document.createElement('div');
+    d.className = 'publicMaskCard';
+    d.style.left = x + 'px';
+    d.style.top = y + 'px';
+    d.style.width = w + 'px';
+    d.style.height = h + 'px';
+    d.style.zIndex = String(z);
+    return d;
+  }
+
+  function renderMaskedHand(zoneEl, count, revealedCards){
+    const inner = zoneEl.querySelector('.zoneInner');
+    const zoneW = zoneEl.clientWidth;
+    const zoneH = zoneEl.clientHeight;
+    const padTop = 22;
+    const padX = 10;
+    const availW = zoneW - padX*2;
+    const availH = zoneH - padTop - 10;
+
+    // Use the normal portrait card geometry.  Non-public cards use the local
+    // back.png returned by /img?cn=__BACK__.  Cards that were revealed while
+    // being added to hand remain public in the hand row until the current turn
+    // changes, so public viewers can visually match the known hand card.
+    const sz = computeDispSize('portrait', availW, availH);
+    stdPortrait = {w: sz.w, h: sz.h};
+    stdLandscape = {w: sz.h, h: sz.w};
+
+    const nAll = Math.max(0, Number(count || 0));
+    const nShow = Math.min(nAll, 8);
+    const revealed = (revealedCards || []).map(x=>String(x||'')).filter(Boolean);
+    const revealedShow = revealed.slice(Math.max(0, revealed.length - nShow));
+    const revealStart = Math.max(0, nShow - revealedShow.length);
+    let step = 0;
+    if(nShow <= 1){
+      step = 0;
+    }else{
+      const maxStep = sz.w + px(8);
+      const fitStep = (availW - sz.w) / (nShow - 1);
+      step = Math.min(maxStep, fitStep);
+      if(!isFinite(step) || step < 0) step = 0;
+    }
+
+    const totalW = (nShow===0) ? 0 : (sz.w + step*(nShow-1));
+    const startX = (availW > totalW) ? (availW - totalW)/2 : 0;
+    const baseY = padTop + Math.max(0, (availH - sz.h)/2);
+
+    for(let i=0;i<nShow;i++){
+      const x = padX + startX + step*i;
+      const y = baseY;
+      const ri = i - revealStart;
+      const cn = (ri >= 0 && ri < revealedShow.length) ? revealedShow[ri] : '__BACK__';
+      const isKnown = cn !== '__BACK__';
+      const cap = isKnown ? labelFor(cn) : '';
+      const card = makeCard(cn, 'portrait', x, y, sz.w, sz.h, cap, null, false, 100+i, true, 'portrait');
+      if(isKnown){
+        card.classList.add('publicKnownHandCard');
+      }
+      inner.appendChild(card);
+    }
+
+    const badge = document.createElement('div');
+    badge.className = 'countBadge';
+    badge.textContent = String(nAll);
+    zoneEl.appendChild(badge);
+  }
+
   function renderHand(zoneEl, cards){
     const inner = zoneEl.querySelector('.zoneInner');
     const zoneW = zoneEl.clientWidth;
@@ -3131,6 +3651,7 @@ ${text}`;
       const cap = labelFor(cn);
       const isSel = selHand.includes(i);
       const card = makeCard(cn, 'portrait', x, y, sz.w, sz.h, cap, ()=>toggleSel(i), isSel, 100+i);
+      if(publicHandRevealedCards().includes(String(cn))){ card.classList.add('publicKnownHandCard'); }
       try{
         const hd = Array.isArray(st && st.hand_detail) ? st.hand_detail[i] : null;
         const baseCost = Number((hd && hd.base_cost) || cardCostFor(cn) || 0);
@@ -3144,6 +3665,75 @@ ${text}`;
     badge.className = 'countBadge';
     badge.textContent = String(cards.length);
     zoneEl.appendChild(badge);
+  }
+
+  let lastPublicHandRevealSeq = 0;
+
+  function publicHandRevealedCards(){
+    if(!st || !Array.isArray(st.public_hand_revealed_cards)) return [];
+    const seen = new Set();
+    return st.public_hand_revealed_cards.map(x=>String(x||'')).filter(cn=>cn && !seen.has(cn) && (seen.add(cn) || true));
+  }
+
+  function renderPublicKnownHandPanel(){
+    // The separate bottom-right "revealed hand" mini panel was removed.
+    // Publicly revealed cards are represented in the hand row itself.
+    const panel = document.getElementById('publicKnownHandPanel');
+    if(panel){
+      panel.innerHTML = '';
+      panel.style.display = 'none';
+    }
+  }
+
+  function flashCardsByNumber(cardNumbers){
+    const want = new Set((cardNumbers||[]).map(x=>String(x||'')).filter(Boolean));
+    if(!want.size) return;
+    document.querySelectorAll('.cardWrap').forEach(el=>{
+      const cn = String(el.dataset.cn || '');
+      if(want.has(cn)){
+        el.classList.remove('publicRevealFlash');
+        void el.offsetWidth;
+        el.classList.add('publicRevealFlash');
+        setTimeout(()=>{ try{ el.classList.remove('publicRevealFlash'); }catch(e){} }, 2600);
+      }
+    });
+  }
+
+  function showPublicRevealFloat(ev){
+    const cards = (ev && Array.isArray(ev.display_cards)) ? ev.display_cards.map(x=>String(x||'')).filter(Boolean) : [];
+    if(!cards.length) return;
+    const box = document.createElement('div');
+    box.className = 'publicRevealFloat';
+    const title = document.createElement('div');
+    title.className = 'publicRevealFloatTitle';
+    title.textContent = '公開して手札に加えました';
+    box.appendChild(title);
+    cards.forEach((cn, idx)=>{
+      const orient = intrinsicOrient(cn);
+      const d = standardSize(orient);
+      const card = makeCard(cn, orient, 0, 0, d.w*0.48, d.h*0.48, cardNameFor(cn), null, false, 500+idx, true);
+      card.style.position = 'relative';
+      card.style.left = '0';
+      card.style.top = '0';
+      card.classList.add('publicRevealFlash');
+      box.appendChild(card);
+    });
+    document.body.appendChild(box);
+    setTimeout(()=>{ try{ box.remove(); }catch(e){} }, 3000);
+  }
+
+  function consumePublicHandRevealEvents(){
+    if(!st || !Array.isArray(st.public_hand_reveal_events)) return;
+    let maxSeq = lastPublicHandRevealSeq;
+    st.public_hand_reveal_events.forEach(ev=>{
+      const seq = Number(ev && ev.seq || 0);
+      if(seq > lastPublicHandRevealSeq){
+        showPublicRevealFloat(ev);
+        flashCardsByNumber((ev && ev.display_cards) || []);
+        if(seq > maxSeq) maxSeq = seq;
+      }
+    });
+    lastPublicHandRevealSeq = maxSeq;
   }
 
   function appendChoiceCardImage(btn, cn, wantOrient='portrait'){
@@ -3241,7 +3831,8 @@ ${text}`;
       const sz = computeDispSize('landscape', slotW, availH);
       const x = padX + slotsX[i] + (slotW - sz.w)/2;
       const y = padTop + Math.max(0, (availH - sz.h)/2);
-      const card = makeCard(cn, 'landscape', x, y, sz.w, sz.h, '', null, false, 100+i);
+      const isBack = (cn === '__BACK__');
+      const card = makeCard(cn, 'landscape', x, y, sz.w, sz.h, '', null, false, 100+i, isBack, isBack ? 'portrait' : null);
       try{
         const row = (i < scoreRows.length) ? scoreRows[i] : null;
         const delta = Number(row && row.delta || 0);
@@ -5450,8 +6041,8 @@ inner.appendChild(card);
       return;
     }
 
-    // topdeck_from_green / bottomdeck_from_green / hand_to_deck_bottom: card images + optional Skip button
-    if(kind === 'topdeck_from_green' || kind === 'bottomdeck_from_green' || kind === 'hand_to_deck_bottom' || kind === 'hand_to_deck_top_or_bottom'){
+    // topdeck_from_green / bottomdeck_from_green / live storage / hand_to_deck_bottom: card images + optional Skip button
+    if(kind === 'topdeck_from_green' || kind === 'bottomdeck_from_green' || kind === 'live_storage_live_to_deck_top_gain_icons' || kind === 'hand_to_deck_bottom' || kind === 'hand_to_deck_top_or_bottom'){
       const cardOpts = opts.filter(o => looksLikeCardNo(String(o)));
       const hasSkip  = opts.some(o => String(o).toLowerCase() === 'skip');
       const row = document.createElement('div');
@@ -5586,6 +6177,78 @@ inner.appendChild(card);
     elMask.style.display = 'block';
   }
 
+
+  function showPublicPending(p){
+    popup = {type:'public_pending', closable:false};
+    clearModalLead();
+    elModalTitle.textContent = String((p && p.title) || '効果処理中');
+    elModalActions.innerHTML = '';
+    elModalCards.innerHTML = '';
+    elModalCond.className = '';
+    elModalCond.textContent = '';
+
+    const body = String((p && (p.text || p.effect_text)) || 'プレイヤーが効果・選択を処理しています。');
+    setRichText(elModalText, body);
+
+    const src = String((p && p.source) || '');
+    if(src && looksLikeCardNo(src)){
+      const row = document.createElement('div');
+      row.className = 'choiceRow';
+      const orient = intrinsicOrient(src);
+      const d = standardSize(orient);
+      const card = makeCard(src, orient, 0, 0, d.w, d.h, cardNameFor(src), null, false, 100);
+      card.style.position = 'relative';
+      row.appendChild(card);
+      elModalCards.appendChild(row);
+    }
+
+    const displayCards = (p && Array.isArray(p.display_cards)) ? p.display_cards.map(x=>String(x||'')).filter(Boolean) : [];
+    if(displayCards.length){
+      const row = document.createElement('div');
+      row.className = 'choiceRow';
+      displayCards.forEach((cn0, idx)=>{
+        const orient0 = intrinsicOrient(cn0);
+        const d0 = standardSize(orient0);
+        const card0 = makeCard(cn0, orient0, 0, 0, d0.w, d0.h, cardNameFor(cn0), null, false, 110 + idx);
+        card0.style.position = 'relative';
+        row.appendChild(card0);
+      });
+      elModalCards.appendChild(row);
+    }
+
+    const note = document.createElement('div');
+    note.className = 'publicPendingNote';
+    const kind = String((p && p.kind) || 'pending');
+    const counts = [];
+    if(p && Number(p.display_card_count || 0) > 0) counts.push(`公開カード ${Number(p.display_card_count)}件`);
+    if(p && Number(p.candidate_count || 0) > 0) counts.push(`候補 ${Number(p.candidate_count)}件`);
+    if(p && Number(p.option_count || 0) > 0) counts.push(`選択肢 ${Number(p.option_count)}件`);
+    note.textContent = `PUBLIC VIEW: ${kind}${counts.length ? ' / ' + counts.join(' / ') : ''}。操作はオーナー画面で行います。`;
+    elModalActions.appendChild(note);
+    elMask.style.display = 'block';
+    applyPopupPeekState();
+  }
+
+  function maybeShowPublicPending(){
+    if(!IS_PUBLIC_VIEW) return false;
+    const p = (st && Array.isArray(st.public_pending) && st.public_pending.length) ? st.public_pending[0] : null;
+    if(p){
+      showPublicPending(p);
+      return true;
+    }
+    // Public reveal ledger: owner-side reveal ACK may already be gone, but the
+    // public window should still show the revealed cards for a short time.
+    const ev = (st && Array.isArray(st.public_reveal_events) && st.public_reveal_events.length) ? st.public_reveal_events[0] : null;
+    if(ev){
+      showPublicPending(ev);
+      return true;
+    }
+    if(popup && popup.type === 'public_pending'){
+      closePopup();
+    }
+    return false;
+  }
+
   function maybeShowPending(){
     const p = (st && Array.isArray(st.pending) && st.pending.length) ? st.pending[0] : null;
     if(p){
@@ -5651,8 +6314,8 @@ inner.appendChild(card);
       if(z.kind==='log') renderLog(zd, st.log || []);
     }
 
-    // DECK: 山札あり→裏面表示、なし→何も表示しない
-    const deckCount = (st.deck||[]).length;
+    // DECK: public view receives only deck_count, so keep the back-card mask visible.
+    const deckCount = IS_PUBLIC_VIEW ? publicCount('deck_count', st.deck||[]) : ((st.deck||[]).length);
     if(deckCount > 0){
       renderTopCard(zels.deck, '__BACK__', 'portrait', deckCount, null);
     }else{
@@ -5692,11 +6355,22 @@ inner.appendChild(card);
     renderStage(zels.stageC, 'C', stage.C);
     renderStage(zels.stageR, 'R', stage.R);
 
-    // Hand
-    renderHand(zels.hand, Array.isArray(st.hand)?st.hand:[]);
+    // Hand: public view must show a masked hand, not an empty 0-card area.
+    if(IS_PUBLIC_VIEW){
+      renderMaskedHand(zels.hand, publicCount('hand_count', st.hand||[]), publicHandRevealedCards());
+    }else{
+      renderHand(zels.hand, Array.isArray(st.hand)?st.hand:[]);
+    }
 
-    // Pending (choice) takes precedence; otherwise show resolve popup
-    if(!maybeShowPending()){
+    renderPublicKnownHandPanel();
+    consumePublicHandRevealEvents();
+
+    // Pending (choice) takes precedence; public view receives redacted public_pending.
+    if(IS_PUBLIC_VIEW){
+      if(!maybeShowPublicPending()){
+        maybeShowResolvePopup();
+      }
+    }else if(!maybeShowPending()){
       maybeShowResolvePopup();
     }
     applyPopupPeekState();
@@ -5707,12 +6381,40 @@ inner.appendChild(card);
   elViewerLayer.addEventListener('click', (ev)=>{ if(ev.target === elViewerLayer){ closeViewerPopup(); } });
   elViewerModal.addEventListener('click', (ev)=>{ ev.stopPropagation(); });
 
+  let lastStateSignature = '';
+  let statePollInFlight = false;
+  function stableStateSignature(s){
+    try { return JSON.stringify(s || {}); }
+    catch(e){ return String(Date.now()); }
+  }
+  async function refreshStateFromServer({force=false} = {}){
+    if(statePollInFlight) return;
+    statePollInFlight = true;
+    try{
+      const next = await apiState();
+      const sig = stableStateSignature(next);
+      if(force || sig !== lastStateSignature){
+        st = next;
+        lastStateSignature = sig;
+        updateTop();
+        render();
+      }
+    }catch(err){
+      console.error(err);
+      if(force) alert('Failed to load /state. Is the server running?');
+    }finally{
+      statePollInFlight = false;
+    }
+  }
+
   // init
   cssScale();
-  apiState().then(s=>{ st = s; updateTop(); render(); }).catch(err=>{
-    console.error(err);
-    alert('Failed to load /state. Is the server running?');
-  });
+  refreshStateFromServer({force:true});
+  // Public window is read-only and must follow the owner window automatically.
+  // The owner/private window still updates immediately after each /cmd response.
+  if(IS_PUBLIC_VIEW){
+    setInterval(()=>{ refreshStateFromServer({force:false}); }, 700);
+  }
 })();
 </script>
 </body>

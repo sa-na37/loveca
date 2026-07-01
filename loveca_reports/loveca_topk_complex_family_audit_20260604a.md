@@ -1,66 +1,60 @@
 # Loveca topk complex family audit 20260604a
 
-- source: `/mnt/data/cards_compiled_v7h.json`
+- source: `llocg_db_out_full/cards_compiled_v7h.json`
 - candidates: 146
+- implemented_body_reveal_all_hand_no_live_top5_live: 3
+- implemented_choose_color_reveal_top5_group_pick_blades: 1
+- implemented_choose_number_top_cost_compare: 1
 - implemented_cost_ge_any: 1
+- implemented_discarded_group_branch_topk_or_live_retrieve: 1
 - implemented_energy_conditional_topk_choose: 1
-- implemented_existing_topk_or_deck: 73
+- implemented_existing_topk_or_deck: 116
 - implemented_group_live_required_total_ge: 1
+- implemented_live_start_hand_group_top_bottom_blade: 1
+- implemented_live_storage_cleanup_top_or_bottom: 1
+- implemented_live_storage_no_live_start_topdeck_gain_icons: 1
+- implemented_live_success_excess_top_reorder: 1
+- implemented_live_success_reveal_top_no_bladeheart_score: 1
+- implemented_live_total_plus_top_choose: 1
 - implemented_member_heart_any_color: 1
 - implemented_member_heart_color_min: 1
 - implemented_member_or_live_heart_filter: 3
-- needs_audit_unmatched_topk: 65
+- implemented_mill_top_then_live_deck_nth: 1
+- implemented_named_member_pick_opponent_wait_cost_blade: 1
+- implemented_optional_repeat_mill_blade_wait: 1
+- implemented_reveal_top_cost_member_position_change: 1
+- implemented_reveal_until_choice_live_or_cost_member: 1
+- implemented_stage_count_reveal_live_score: 1
+- implemented_stage_count_top_keep_one: 1
+- implemented_stage_group_count_top_keep_reveal_score: 1
+- implemented_stage_named_reveal_pick_gain_picked_hearts: 1
+- implemented_top_member_pick_group_gain_icons: 1
 
 ## Newly covered focused variants
 
+- `LL-bp4-001` 絢瀬絵里＆朝香果林＆葉月恋 — look_top_named_members_optional_then_opponent_wait_cost_blade
+- `PL!-bp3-022` ユメノトビラ — reveal_top_by_all_stage_members_live_score_rest_waiting
+- `PL!-bp5-001` 高坂穂乃果 — look_top_live_total_plus_n_choose_one_rest_waiting
+- `PL!-bp5-003` 南ことり — discarded_group_top4_choose2_else_retrieve_live
 - `PL!-bp5-014` 星空凛 — look_top_k_optional_member_heart_any_color
+- `PL!-bp6-006` 西木野真姫 — choose_heart_color_reveal_top5_all_match_group_pick_gain_blades
+- `PL!-bp6-007` 東條希 — live_success_reveal_top_no_bladeheart_score
+- `PL!-pb1-001` 高坂穂乃果 — reveal_until_live_or_cost_ge_member_to_hand_rest_waiting_choice
+- `PL!HS-bp6-001` 日野下花帆 — look_top_stage_member_count_plus_keep_one_top_rest_waiting
+- `PL!HS-bp6-028` ブルウモーメント — live_success_excess_total_top_reorder_keep_any
+- `PL!HS-pb1-005` 徒町小鈴 — choose_number_reveal_top_member_cost_compare_hand_or_blade
+- `PL!HS-sd1-002` 村野さやか — look_top_k_optional_member_gain_icons_if_group_picked
+- `PL!N-bp3-028` ツナガルコネクト — look_top_stage_group_count_keep_one_top_rest_waiting_reveal_score_if_live
+- `PL!N-bp5-021` 天王寺璃奈 — mill_top_k_then_waiting_live_to_deck_nth_optional
+- `PL!N-bp5-029` 無敵級＊ビリーバー — stage_named_exists_reveal_topk_named_pick_gain_picked_hearts
+- `PL!N-pb1-004` 朝香果林 — reveal_top1_cost_le_member_hand_then_self_position_change
 - `PL!S-bp5-007` 国木田花丸 — look_top_k_optional_member_heart_color_min
+- `PL!S-bp6-004` 黒澤ダイヤ — live_storage_count_choose_group_live_no_live_start_topdeck_gain_icons
 - `PL!S-pb1-013` 黒澤ダイヤ — look_top_k_optional_member_heart_or_live_required
 - `PL!S-pb1-014` 渡辺曜 — look_top_k_optional_member_heart_or_live_required
 - `PL!S-pb1-015` 津島善子 — look_top_k_optional_member_heart_or_live_required
+- `PL!S-sd1-009` 黒澤ルビィ — live_start_hand_group_to_deck_top_or_bottom_blade
 - `PL!SP-bp2-002` 唐可可 — look_top_k_optional_cost_ge_any
 - `PL!SP-bp4-002` 唐可可 — look_top_k_optional_group_live_required_total_ge
+- `PL!SP-bp5-009` 鬼塚夏美 — optional_repeat_mill_top1_gain_blade_wait_if_live
 - `PL!SP-sd1-009` 鬼塚夏美 — look_top_k_choose_if_energy_gte
-
-## Remaining unmatched examples
-
-- `LL-bp4-001` 絢瀬絵里＆朝香果林＆葉月恋 [登場/ライブ開始時] 自分のデッキの上からカードを5枚見る。その中から「絢瀬絵里」か「朝香果林」か「葉月恋」のメンバーカードを1枚公開して手札に加えてもよい。残りを控え室に置く。その後、相手のステージにいる、これにより公開したカードのコスト以下で、かつ元々持つ<(ブレード)>の数が3つ以下のメンバーをすべてウェイトにする。
-- `LL-bp6-001` 南ことり＆黒澤ダイヤ＆徒町小鈴 [登場] 自分のデッキの上からカードを6枚見る。その中からカードを2枚手札に加え、残りを控え室に置く。
-- `PL!-bp3-022` ユメノトビラ [ライブ開始時] 自分のデッキの上から、自分と相手のステージにいるメンバー1人につき、1枚公開する。それらの中にあるライブカード1枚につきこのカードのスコアを+1する。その後、これにより公開したカードを控え室に置く。
-- `PL!-bp4-006` 西木野真姫 [登場] 自分の成功ライブカード置き場にあるカードのスコア合計が3以上の場合、自分のデッキの上からカードを5枚見る。その中から『μ's』のメンバーカードを1枚公開して手札に加えてもよい。残りを控え室に置く。
-- `PL!-bp5-001` 高坂穂乃果 [ライブ成功時] 自分のデッキの上から、自分のライブの合計スコアに2を足した数に等しい枚数見る。その中からカードを1枚手札に加える。残りを控え室に置く。
-- `PL!-bp5-003` 南ことり [BODY] これにより控え室に置いたカードが『μ's』のカードの場合、自分のデッキの上からカードを4枚見る。その中からカードを2枚手札に加える。残りを控え室に置く。『μ's』のカード以外の場合、自分の控え室からライブカードを1枚手札に加える。
-- `PL!-bp5-010` 高坂穂乃果 [ライブ開始時] 自分のデッキの上からカードを3枚控え室に置く。その後、自分の控え室から『A-RISE』のメンバーカードを1枚手札に加える。
-- `PL!-bp5-222` 優木あんじゅ [登場] 自分のデッキの上からカードを3枚見る。その中から1枚を手札に加える。残りを控え室に置く。
-- `PL!-bp6-002` 絢瀬絵里 [登場] 自分のデッキの上からカードを2枚見る。その中から能力を持たない『μ's』のカードか<常時>能力を持つ『μ's』のカードを1枚公開して手札に加えてもよい。残りを控え室に置く。
-- `PL!-bp6-006` 西木野真姫 [BODY] 好きなハートの色を1つ指定する。その後、自分のデッキの上からカードを5枚公開する。公開されたカードの中に指定した色のハートを持つメンバーカードと必要ハートに指定した色を含むライブカードが合計5枚含まれる場合、その中から『μ's』のカードを1枚手札に加え、ライブ終了時まで、<(ブレード)><(ブレード)><(ブレード)>を得る。公開した残りのカードを控え室に置く。
-- `PL!-bp6-007` 東條希 [ライブ成功時] 自分のデッキの一番上のカードを公開し、手札に加える。それがブレードハートを持たないメンバーカードの場合、ライブの合計スコアを+1する。
-- `PL!-bp6-016` 東條希 [ライブ成功時] 自分のデッキの上からカードを3枚見る。それらを好きな順番でデッキの上に置く。
-- `PL!-pb1-001` 高坂穂乃果 [BODY] ライブカードかコスト10以上のメンバーカードのどちらか1つを選ぶ。選んだカードが公開されるまで、自分のデッキの一番上からカードを1枚ずつ公開する。そのカードを手札に加え、これにより公開されたほかのすべてのカードを控え室に置く。
-- `PL!-pb1-006` 西木野真姫 [登場] 自分の控え室から『μ's』のライブカードを1枚までデッキの一番上に置く。その後、相手のステージにウェイト状態のメンバーがいる場合、カードを1枚引く。
-- `PL!-pb1-016` 東條希 [登場] 手札を1枚控え室に置いてもよい。自分のデッキの上からカードを4枚見る。その中から『lily white』のカードを1枚公開して手札に加えてもよい。残りを控え室に置く。
-- `PL!-sd1-007` 東條希 [登場] 自分のデッキの上からカードを5枚控え室に置く。それらの中にライブカードがある場合、カードを1枚引く。
-- `PL!-sd1-019` START：DASH!! [ライブ成功時] 自分のデッキの上からカードを3枚見る。その中から好きな枚数を好きな順場でデッキの上に置き、残りを控え室に置く。
-- `PL!HS-PR-019` 百生吟子 [登場] 自分のデッキの上からカードを3枚控え室に置く。それらがすべて<緑>を持つメンバーカードの場合、ライブ終了時まで、<緑>を得る。
-- `PL!HS-PR-021` 安養寺姫芽 [登場] 自分のデッキの上からカードを3枚控え室に置く。それらがすべて<桃>を持つメンバーカードの場合、ライブ終了時まで、<桃>を得る。
-- `PL!HS-bp1-008` 徒町小鈴 [登場] 自分のデッキの上からカードを3枚控え室に置く。それらがすべてメンバーカードの場合、カードを1枚引く。
-- `PL!HS-bp5-001` 日野下花帆 [登場] 自分のデッキの上からカードを4枚控え室に置く。それらの中にライブカードがある場合、ライブ終了時まで、<(ブレード)>を<(ブレード)>を得る。
-- `PL!HS-bp5-008` 桂城泉 [登場] 自分のデッキの上からカードを5枚見る。その中からコスト9以上の『蓮ノ空』のメンバーカードを1枚公開して手札に加えてもよい。残りを控え室に置く。
-- `PL!HS-bp5-013` 徒町小鈴 [ライブ開始時] 自分のデッキの上からカードを3枚控え室に置く。それらがすべてメンバーカードの場合、ライブ終了時まで、<(ブレード)><(ブレード)>を得る。
-- `PL!HS-bp6-001` 日野下花帆 [登場] 自分のデッキの上から、自分のステージにいるメンバーの数に2を足した数に等しい枚数見る。その中から1枚をデッキの一番上に置き、残りを控え室に置く。
-- `PL!HS-bp6-009` 日野下花帆 [ライブ開始時] 自分のデッキの上からカードを4枚控え室に置く。それらがすべて『蓮ノ空』のカードの場合、ライブ終了時まで、<(ブレード)>を得る。
-- `PL!HS-bp6-028` ブルウモーメント [ライブ成功時] このターン、自分が余剰ハートを1つ以上持っている場合、自分のデッキの上からカードを2枚見る。その中から好きな枚数を好きな順番でデッキの上に置き、残りを控え室に置く。
-- `PL!HS-cl1-001` 日野下花帆 [ライブ開始時] 自分のデッキの上からカードを1枚見る。そのカードを控え室に置いてもよい。
-- `PL!HS-cl1-004` 百生吟子 [登場] 自分のデッキの上からカードを3枚控え室に置く。
-- `PL!HS-cl1-007` セラス 柳田 リリエンフェルト [登場] 自分のデッキの上からカードを3枚見る。その中から1枚を手札に加える。残りを控え室に置く。
-- `PL!HS-pb1-004` 百生吟子 [登場] 自分のデッキの上からカードを3枚控え室に置く。その後、自分の控え室から『スリーズブーケ』のライブカードを1枚手札に加える。
-- `PL!HS-pb1-005` 徒町小鈴 [ライブ開始時] 数1つを選ぶ。自分のデッキの一番上のカードを公開する。公開したカードがメンバーカードで、かつコストが選んだ数以上の場合、公開したカードを手札に加える。選んだ数以下の場合、ライブ終了時まで、<(ブレード)><(ブレード)>を得る。
-- `PL!HS-pb1-027` ユメワズライ [ライブ成功時] 自分のステージに『スリーズブーケ』のメンバーがいる場合、自分のデッキの上からカードを4枚控え室に置いてもよい。
-- `PL!HS-sd1-002` 村野さやか [ライブ開始時] 自分のデッキの上からカードを5枚見る。その中からメンバーカードを1枚公開して手札に加えてもよい。残りを控え室に置く。これにより『蓮ノ空』のカードを手札に加えた場合、ライブ終了時まで、<青><(ブレード)>を得る。
-- `PL!HS-sd1-013` 徒町小鈴 [登場] 自分のデッキの上からカードを3枚控え室に置く。それらがすべて<青>を持つメンバーカードの場合、ライブ終了時まで、<青>を得る。
-- `PL!N-PR-003` 上原歩夢 [BODY] 自分のステージにほかのメンバーがおり、かつこれにより公開した手札の中にライブカードがない場合、自分のデッキの上からカードを5枚見る。その中からライブカードを1枚公開して手札に加えてもよい。残りを控え室に置く。
-- `PL!N-PR-008` 近江彼方 [BODY] 自分のステージにほかのメンバーがおり、かつこれにより公開した手札の中にライブカードがない場合、自分のデッキの上からカードを5枚見る。その中からライブカードを1枚公開して手札に加えてもよい。残りを控え室に置く。
-- `PL!N-PR-010` エマ・ヴェルデ [BODY] 自分のステージにほかのメンバーがおり、かつこれにより公開した手札の中にライブカードがない場合、自分のデッキの上からカードを5枚見る。その中からライブカードを1枚公開して手札に加えてもよい。残りを控え室に置く。
-- `PL!N-bp1-009` 天王寺璃奈 [登場] 自分のデッキの上からカードを2枚控え室に置く。その後、自分の控え室からメンバーカードを1枚手札に加える。
-- `PL!N-bp1-011` ミア・テイラー [登場] ライブカードが公開されるまで、自分のデッキの一番上のカードを公開し続ける。そのライブカードを手札に加え、これにより公開されたほかのすべてのカードを控え室に置く。
-- `PL!N-bp3-028` ツナガルコネクト [ライブ開始時] 自分のステージにいる『虹ヶ咲』のメンバー1人につき、自分のデッキの上からカードを1枚見る。その中から1枚をデッキの上に置き、残りを控え室に置く。自分のデッキの一番上のカードを1枚公開する。これによりライブカードを公開したとき、このカードのスコアを+1する。

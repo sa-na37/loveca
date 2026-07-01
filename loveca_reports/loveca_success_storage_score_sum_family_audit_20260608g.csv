@@ -1,0 +1,17 @@
+cardnumber,cardname,ability_type,trigger,category,effect
+PL!-PR-017,矢澤にこ,起動,BODY,implemented_success_score_sum_ge_inner_effect,自分の控え室から『μ's』のライブカードを1枚手札に加える。自分の成功ライブカード置き場にあるカードのスコアの合計が9以上の場合、エネルギーを2枚アクティブにする。
+PL!-bp4-002,絢瀬絵里,起動,BODY,deferred_activated_ability_condition,自分の控え室から『μ's』のライブカードを1枚手札に加える。この能力は、自分の成功ライブカード置き場にあるカードのスコアの合計が6以上の場合のみ起動できる。
+PL!-bp4-004,園田海未,自動,登場,implemented_success_score_sum_ge_inner_effect,自分の成功ライブカード置き場にあるカードのスコアの合計が6以上の場合、エネルギーを2枚アクティブにする。
+PL!-bp4-006,西木野真姫,自動,登場,implemented_success_score_sum_ge_inner_effect,自分の成功ライブカード置き場にあるカードのスコア合計が3以上の場合、自分のデッキの上からカードを5枚見る。その中から『μ's』のメンバーカードを1枚公開して手札に加えてもよい。残りを控え室に置く。
+PL!-bp4-007,東條希,自動,登場,implemented_success_count_and_score_sum_le_inner_score,自分の成功ライブカード置き場にカードが1枚以上あり、かつスコアの合計が1以下の場合、ライブ終了時まで、「<常時>ライブの合計スコアを+1する。」を得る。
+PL!-bp4-008,小泉花陽,常時,BODY,deferred_body_always_success_score_condition,自分の成功ライブカード置き場にあるカードのスコアの合計が6以上である限り、ステージにいるこのメンバーのコストを+3する。
+PL!-bp4-016,東條希,自動,登場,implemented_success_score_sum_ge_inner_effect,自分の成功ライブカード置き場にあるカードのスコアの合計が3以上の場合、カードを1枚引く。
+PL!-bp4-018,矢澤にこ,常時,BODY,deferred_body_always_success_score_condition,自分の成功ライブカード置き場にあるカードのスコアの合計が相手より高いかぎり、<(ブレード)><(ブレード)>を得る。
+PL!-bp4-021,？←HEARTBEAT,自動,ライブ開始時,implemented_success_score_sum_ge_inner_effect,自分の成功ライブカード置き場にあるカードのスコアの合計が6以上の場合、このライブを成功させるための必要ハートを<任意>減らす。スコアの合計が9以上の場合、さらにこのカードのスコアを+1する。
+PL!-bp5-005,星空凛,自動,登場,implemented_success_score_sum_ge_inner_effect,自分の成功ライブカード置き場にあるカードのスコアの合計が6以上の場合、自分のエネルギーデッキから、エネルギーカードを1枚アクティブ状態で置く。
+PL!-bp5-008,小泉花陽,常時,BODY,deferred_body_always_success_score_condition,自分の成功ライブカード置き場にあるカードのスコアの合計が6以上であるかぎり、<黄><黄>を得る。
+PL!-bp5-015,西木野真姫,自動,登場,implemented_success_score_sum_ge_inner_effect,自分の成功ライブカード置き場にあるカードのスコアの合計が3以上の場合、カードを1枚引く。
+PL!-bp6-013,園田海未,自動,登場,implemented_success_score_sum_ge_inner_effect,自分の成功ライブカード置き場にあるカードのスコアの合計が6以上の場合、自分の控え室から『μ's』のライブカードを1枚手札に加える。
+PL!-pb1-004,園田海未,自動,登場,implemented_success_score_tag_group_count_score_bonus,自分の成功ライブカード置き場に<スコア+1>を持つ『μ's』のカードが1枚ある場合、ライブ終了時まで、「<常時>ライブの合計スコアを+1する。」を得る。2枚以上ある場合、代わりに「<常時>』ライブの合計スコアを+2する。」を得る。
+PL!N-bp4-012,鐘嵐珠,常時,BODY,deferred_body_always_success_score_condition,相手の成功ライブカード置き場にあるカードのスコアの合計が6以上であるかぎり、ライブの合計スコアを+1する。
+PL!SP-bp5-023,Shooting Voice!!,自動,ライブ成功時,implemented_existing_either_success_count_revealed_score_tag_live_score,自分か相手の成功ライブカード置き場にカードが2枚以上あり、かつエールによって公開された自分のカードの中に<(スコア)+1>を持つライブカードが1枚以上ある場合、このカードのスコアを+2する。

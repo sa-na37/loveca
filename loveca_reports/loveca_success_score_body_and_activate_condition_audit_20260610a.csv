@@ -1,0 +1,6 @@
+cardnumber,cardname,ability_type,trigger,category,effect
+PL!-bp4-002,絢瀬絵里,起動,BODY,implemented_activated_success_score_sum_condition,手札を2枚控え室に置く：自分の控え室から『μ's』のライブカードを1枚手札に加える。この能力は、自分の成功ライブカード置き場にあるカードのスコアの合計が6以上の場合のみ起動できる。
+PL!-bp4-008,小泉花陽,常時,BODY,implemented_body_own_success_score_sum_cost_bonus,自分の成功ライブカード置き場にあるカードのスコアの合計が6以上である限り、ステージにいるこのメンバーのコストを+3する。
+PL!-bp4-018,矢澤にこ,常時,BODY,implemented_body_own_gt_opponent_success_score_manual_blade,自分の成功ライブカード置き場にあるカードのスコアの合計が相手より高いかぎり、<(ブレード)><(ブレード)> を得る。
+PL!-bp5-008,小泉花陽,常時,BODY,implemented_body_own_success_score_sum_heart_bonus,自分の成功ライブカード置き場にあるカードのスコアの合計が6以上であるかぎり、 <黄> <黄> を得る。
+PL!N-bp4-012,鐘嵐珠,常時,BODY,implemented_body_opponent_success_score_sum_manual_total_score,相手の成功ライブカード置き場にあるカードのスコアの合計が6以上であるかぎり、ライブの合計スコアを+1する。

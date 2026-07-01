@@ -1,0 +1,2 @@
+cardnumber,cardname,status,has_cleanup_topbottom,has_reqsum_all
+PL!S-bp6-002,桜内梨子,implemented_live_storage_cleanup_top_or_bottom+implemented_live_start_group_req_color_sum_all,1,1

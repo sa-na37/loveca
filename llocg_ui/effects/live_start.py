@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_start_conditional_stage_bonus_20260622g
+# BUILD_TAG: stage_cost_lower_draw2_top_20260624b
 from __future__ import annotations
 
 """llocg_ui.effects.live_start
@@ -594,6 +594,44 @@ def try_apply_live_start_ext(
         try:
             getattr(gs, "pending").append(payload)
             gs.log.append(f"[PENDING] 高坂穂乃果: confirm draw1 (my_cost={my_cost}, opp unavailable)")
+        except Exception:
+            pass
+        return True
+
+    if ext_key == "live_start_my_cost_lower_draw2_hand_top1":
+        my_cost = _stage_member_cost_sum(gs, cards_db)
+        opp_exists = _has_opponent_state(gs)
+        opp_cost = _opp_stage_member_cost_sum(gs, cards_db) if opp_exists else 0
+        src = str((ctx or {}).get("source_cn") or "")
+        effect_text = "カードを2枚引き、自分の手札を1枚デッキの一番上に置く。"
+        if opp_exists:
+            if my_cost < opp_cost:
+                ok = False
+                try:
+                    ok = bool(eng.get("try_apply_effect_template")(gs, rng, cards_db, effect_text, {"source_cn": src}) if callable(eng.get("try_apply_effect_template")) else False)
+                except Exception:
+                    ok = False
+                try:
+                    gs.log.append(f"[AUTO_EXT] stage_cost {my_cost}<{opp_cost} -> draw2/hand top1 {'applied' if ok else 'failed'}")
+                except Exception:
+                    pass
+            else:
+                try:
+                    gs.log.append(f"[AUTO_EXT] stage_cost {my_cost}>={opp_cost}, no draw2/hand top1")
+                except Exception:
+                    pass
+            return True
+        payload = {
+            "kind": "confirm_effect",
+            "text": "【天王寺璃奈】ライブ開始時：自分ステージのコスト合計が相手より低いなら、カードを2枚引き、手札1枚をデッキの一番上に置く",
+            "options": ["使う", "スキップ"],
+            "after_effect_template": effect_text,
+            "ctx": {"source_cn": src},
+            "source_cn": src,
+        }
+        try:
+            getattr(gs, "pending").append(payload)
+            gs.log.append(f"[PENDING] 天王寺璃奈: confirm draw2/hand top1 (my_cost={my_cost}, opp unavailable)")
         except Exception:
             pass
         return True

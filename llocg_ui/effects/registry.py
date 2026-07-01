@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: effect_registry_conditional_stage_bonus_20260622g
+# BUILD_TAG: stage_cost_lower_draw2_top_20260624b
 from __future__ import annotations
 
 """llocg_ui.effects.registry
@@ -33,6 +33,11 @@ EXTRA_EFFECT_RULES = [
         "id": "live_start_my_cost_lower_draw1",
         "effect_template": "自分ステージにいるメンバーのコストの合計が相手より低い場合、カードを1枚引く。",
         "ext_key": "live_start_my_cost_lower_draw1",
+    },
+    {
+        "id": "live_start_my_cost_lower_draw2_hand_top1",
+        "effect_template": "自分のステージにいるメンバーのコストの合計が相手より低い場合、カードを2枚引き、自分の手札を1枚デッキの一番上に置く。",
+        "ext_key": "live_start_my_cost_lower_draw2_hand_top1",
     },
     # Prompt 26: PL!-bp4-004 園田海未 (登場)
     {
