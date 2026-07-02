@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: effect_events_detail_log_20260701g
+# BUILD_TAG: public_pending_mirror_visible_effects_20260701h
 from __future__ import annotations
 
 """llocg_ui.server
@@ -7330,14 +7330,27 @@ inner.appendChild(card);
   function showPublicPending(p){
     popup = {type:'public_pending', closable:false};
     clearModalLead();
-    elModalTitle.textContent = String((p && p.title) || '効果処理中');
     elModalActions.innerHTML = '';
     elModalCards.innerHTML = '';
     elModalCond.className = '';
     elModalCond.textContent = '';
 
-    const body = String((p && (p.text || p.effect_text)) || 'プレイヤーが効果・選択を処理しています。');
+    const kind = String((p && p.kind) || 'pending');
+    const hidden = !!(p && p.public_hidden);
+    const title = String((p && p.title) || pendingTitleFor(p) || (hidden ? '非公開情報を確認中' : '効果の選択'));
+    elModalTitle.textContent = title;
+
+    const body = String((p && (p.text || p.effect_text)) || pendingTextFor(p) || (hidden ? 'メイン画面で非公開領域のカードを確認・選択しています。' : '効果を処理しています。'));
     setRichText(elModalText, body);
+
+    const pubStatus = pendingConditionStatus(p || {});
+    if(pubStatus && pubStatus.text){
+      elModalCond.textContent = pubStatus.text;
+      elModalCond.className = pubStatus.state === 'met' ? 'condMet' : (pubStatus.state === 'unmet' ? 'condUnmet' : 'condNeutral');
+      elModalCond.style.display = 'block';
+    }else{
+      elModalCond.style.display = 'none';
+    }
 
     const src = String((p && p.source) || '');
     if(src && looksLikeCardNo(src)){
@@ -7363,16 +7376,31 @@ inner.appendChild(card);
         row.appendChild(card0);
       });
       elModalCards.appendChild(row);
+      appendYellRevealDrawNotice(p);
+    }
+
+    const publicOptions = (p && Array.isArray(p.options)) ? p.options.map(x=>String(x||'')).filter(Boolean) : [];
+    if(publicOptions.length){
+      const row = document.createElement('div');
+      row.className = 'choiceRow';
+      row.style.cssText = 'gap:calc(7px * var(--uiScale));align-items:center;justify-content:center;flex-wrap:wrap;';
+      publicOptions.forEach(opt=>{
+        const chip = document.createElement('span');
+        chip.className = 'miniBtn';
+        chip.style.cssText = 'opacity:.75;cursor:default;pointer-events:none;';
+        chip.appendChild(choiceRichLabel(opt));
+        row.appendChild(chip);
+      });
+      elModalCards.appendChild(row);
     }
 
     const note = document.createElement('div');
     note.className = 'publicPendingNote';
-    const kind = String((p && p.kind) || 'pending');
-    const counts = [];
-    if(p && Number(p.display_card_count || 0) > 0) counts.push(`公開カード ${Number(p.display_card_count)}件`);
-    if(p && Number(p.candidate_count || 0) > 0) counts.push(`候補 ${Number(p.candidate_count)}件`);
-    if(p && Number(p.option_count || 0) > 0) counts.push(`選択肢 ${Number(p.option_count)}件`);
-    note.textContent = `PUBLIC VIEW: ${kind}${counts.length ? ' / ' + counts.join(' / ') : ''}。操作はオーナー画面で行います。`;
+    if(hidden){
+      note.textContent = 'PUBLIC VIEW: 非公開領域を含むため、詳細なカード候補はメイン画面だけに表示しています。';
+    }else{
+      note.textContent = 'PUBLIC VIEW: 表示内容はメイン画面と同じです。操作はメイン画面で行います。';
+    }
     elModalActions.appendChild(note);
     elMask.style.display = 'block';
     applyPopupPeekState();
