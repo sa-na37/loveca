@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: public_pending_raw_modal_with_card_backs_20260701i
+# BUILD_TAG: public_pending_raw_modal_with_card_backs_20260701k
 from __future__ import annotations
 
 """View-state helpers for Loveca UI.
@@ -20,7 +20,7 @@ import re
 from typing import Any, Dict, Iterable, Set
 
 
-PUBLIC_BUILD_TAG = "public_pending_raw_modal_with_card_backs_20260701i"
+PUBLIC_BUILD_TAG = "public_pending_raw_modal_with_card_backs_20260701k"
 
 
 def _as_list(value: Any) -> list:
@@ -450,7 +450,7 @@ def make_public_state(state: Dict[str, Any]) -> Dict[str, Any]:
     src["public_reveal_events"] = _public_reveal_event_summary(src.get("public_reveal_events"))
 
     # Card-number maps are useful for rendering but must not expose hand/deck.
-    for key in ["cn2name", "cn2label", "cn2type", "cn2group", "cn2unit", "cn2cost", "cn2score"]:
+    for key in ["cn2name", "cn2label", "cn2type", "cn2is_live", "cn2group", "cn2unit", "cn2cost", "cn2score"]:
         src[key] = _filter_map_by_public_cards(src.get(key), public_cards)
 
     # Debug internals should not be part of share view.

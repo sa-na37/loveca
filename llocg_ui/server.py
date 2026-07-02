@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: public_pending_raw_modal_with_card_backs_20260701i
+# BUILD_TAG: yell_reveal_followup_and_color_icon_fix_20260701k
 from __future__ import annotations
 
 """llocg_ui.server
@@ -65,7 +65,7 @@ from .engine import (
     _rule_refresh_main_deck,
 )
 
-APP_VERSION = "public_pending_raw_modal_with_card_backs_20260701i"
+APP_VERSION = "yell_reveal_followup_and_color_icon_fix_20260701k"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -688,6 +688,8 @@ class App:
         hand_size_s = (env.get('LLOCG_START_HAND_SIZE') or '').strip()
         shuffle_s = (env.get('LLOCG_START_SHUFFLE') or '').strip()
         debug_s = (env.get('LLOCG_START_DEBUG') or '').strip()
+        stage_moved_s = (env.get('LLOCG_START_STAGE_MOVED_THIS_TURN') or '').strip()
+        stage_moved_cards_s = (env.get('LLOCG_START_STAGE_MOVED_CARDS') or env.get('LLOCG_START_STAGE_MOVED_CARDNUMBERS') or '').strip()
 
         # Optional richer injections for faster effect testing
         green_spec = (env.get('LLOCG_START_GREEN') or '').strip()        # waiting room
@@ -718,7 +720,7 @@ class App:
             preset_s,
             hand_spec, e_active_s, e_wait_s, opponent_wait_s, opponent_success_s, opponent_success_score_s, opponent_excess_s, turn_order_s, turn_s, phase_s, hand_size_s, shuffle_s, debug_s,
             green_spec, decktop_spec, deckexact_present, deckexact_spec, deckexact_strict_s, deckempty_s, resolve_spec,
-            stage_spec, stage_l, stage_c, stage_r,
+            stage_spec, stage_l, stage_c, stage_r, stage_moved_s, stage_moved_cards_s,
         ])
         if not any_override:
             return
@@ -1198,6 +1200,35 @@ class App:
             except Exception:
                 pass
 
+        # Debug-only movement-state seed for testing hand-cost reductions that
+        # depend on a member having moved this turn.
+        if stage_moved_s or stage_moved_cards_s:
+            try:
+                moved = str(stage_moved_s).strip().lower() in ('1','true','yes','y','on','moved')
+                cards = _split_cards(stage_moved_cards_s) if stage_moved_cards_s else []
+                if cards:
+                    moved = True
+                setattr(gs, 'stage_moved_this_turn', bool(moved))
+                if cards:
+                    try:
+                        cur = set(getattr(gs, 'stage_moved_cardnumbers_this_turn', set()) or set())
+                    except Exception:
+                        cur = set()
+                    cur.update(cards)
+                    setattr(gs, 'stage_moved_cardnumbers_this_turn', cur)
+                try:
+                    log = list(getattr(gs, 'stage_movement_log_this_turn', []) or [])
+                    log.append({'debug_start': True, 'cards': list(cards), 'moved': bool(moved)})
+                    setattr(gs, 'stage_movement_log_this_turn', log)
+                except Exception:
+                    pass
+                gs.log.append(f'[DEBUG_START] stage_moved_this_turn={bool(moved)} cards={cards}')
+            except Exception as e:
+                try:
+                    gs.log.append(f'[WARN] DEBUG_START stage_moved failed: {e}')
+                except Exception:
+                    pass
+
         # Green room injection (append)
         if green_spec:
             add = _split_cards(green_spec)
@@ -1489,6 +1520,21 @@ class App:
                 out[cn] = str(ci.type)
         return out
 
+    def _cn2is_live(self) -> Dict[str, bool]:
+        out: Dict[str, bool] = {}
+        for cn in self._all_cardnumbers_in_state():
+            ci = _get_card(self.cards_db, cn)
+            if ci is None:
+                continue
+            try:
+                out[cn] = bool(is_live_type(getattr(ci, "type", "") or ""))
+            except Exception:
+                try:
+                    out[cn] = int(getattr(ci, "score", 0) or 0) > 0
+                except Exception:
+                    out[cn] = False
+        return out
+
     def _cn2name(self) -> Dict[str, str]:
         out: Dict[str, str] = {}
         for cn in self._all_cardnumbers_in_state():
@@ -1645,6 +1691,7 @@ class App:
             "cn2name": self._cn2name(),
             "cn2label": self._cn2label(),
             "cn2type": self._cn2type(),
+            "cn2is_live": self._cn2is_live(),
             "cn2group": self._cn2group(),
             "cn2unit": self._cn2unit(),
             "cn2cost": self._cn2cost(),
@@ -2731,7 +2778,7 @@ HTML = r'''<!doctype html>
   // running stale JS.  Compare the state ui_version and reload once when the
   // server-side bundle changes, so public refresh notices use the current modal
   // layout and owner-OK synchronization.
-  const CLIENT_UI_VERSION = 'public_pending_raw_modal_with_card_backs_20260701i';
+  const CLIENT_UI_VERSION = 'yell_reveal_followup_and_color_icon_fix_20260701k';
   let clientReloadingForVersion = false;
   const urlParams = new URLSearchParams(window.location.search || '');
   const VIEW_MODE = String(urlParams.get('view') || (window.location.pathname === '/public' ? 'public' : 'private')).toLowerCase();
@@ -3036,7 +3083,11 @@ HTML = r'''<!doctype html>
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({cmd, payload})
     });
-    return await r.json();
+    const data = await r.json();
+    try{
+      localStorage.setItem('llocg_public_refresh_ping', String(Date.now()) + ':' + String(cmd || ''));
+    }catch(e){}
+    return data;
   }
 
   function cnType(cn){
@@ -3054,6 +3105,9 @@ HTML = r'''<!doctype html>
     if(!cn || cn === '__BACK__' || cn === '__ENERGY__') return false;
     const po = publicKnownOrient(cn);
     if(po === 'landscape') return true;
+    try{
+      if(st && st.cn2is_live && st.cn2is_live[cn] === true) return true;
+    }catch(e){}
     const t = cnType(cn).toUpperCase();
     if(t.includes('LIVE')) return true;
     try{
@@ -3119,12 +3173,14 @@ HTML = r'''<!doctype html>
   function choiceRichLabel(raw){
     const s = String(raw || '').trim();
     const low = s.toLowerCase();
-    const token = HEART_TOKEN_BY_COLOR[low];
+    const jpToColor = {'桃':'pink','赤':'red','黄':'yellow','緑':'green','青':'blue','紫':'purple','任意':'any','無色':'any','any':'any','all':'all'};
+    const norm = HEART_TOKEN_BY_COLOR[low] ? low : (jpToColor[s] || jpToColor[low] || '');
+    const token = HEART_TOKEN_BY_COLOR[norm];
     if(token){
       const span = document.createElement('span');
       span.style.cssText = 'display:inline-flex;align-items:center;gap:6px;';
-      span.appendChild(makeTextIconImg(token, HEART_LABEL_BY_COLOR[low] || low, '1.2em'));
-      span.appendChild(document.createTextNode(`${HEART_LABEL_BY_COLOR[low] || low}ハート`));
+      span.appendChild(makeTextIconImg(token, HEART_LABEL_BY_COLOR[norm] || s || low, '1.2em'));
+      span.appendChild(document.createTextNode(`${HEART_LABEL_BY_COLOR[norm] || s || low}ハート`));
       return span;
     }
     return document.createTextNode(choiceTextLabel(s));
@@ -3780,7 +3836,7 @@ ${text}`;
     if(orient==='landscape') return {w: ch, h: cw};
     return {w: cw, h: ch};
   }
-  function makeCard(cn, wantOrient, x, y, w, h, capText, onClick, isSelected=false, z=100, noHover=false, forceIntrinsicOrient=null){
+  function makeCard(cn, wantOrient, x, y, w, h, capText, onClick, isSelected=false, z=100, noHover=false, forceIntrinsicOrient=null, normalizeNatural=false){
     const wrap = document.createElement('div');
     wrap.className = 'cardWrap';
     wrap.style.left = x + 'px';
@@ -3795,17 +3851,17 @@ ${text}`;
     const intr = forceIntrinsicOrient || intrinsicOrient(cn);
     const needsRotate = (intr !== wantOrient);
 
-    if(!needsRotate){
+    const appendPlainImg = ()=>{
       const img = document.createElement('img');
       img.src = imgUrl(cn);
       img.alt = cn;
+      img.style.objectFit = 'contain';
       wrap.appendChild(img);
-    }else{
-      // portrait<-landscape : rotate +90 (CW)
-      // landscape<-portrait : rotate -90 (CCW)
+      return img;
+    };
+    const appendRotatedImg = (rotDeg)=>{
       const inner = document.createElement('div');
       inner.className = 'rot';
-      const rotDeg = (wantOrient==='portrait') ? 90 : -90;
       inner.style.transform = `translate(-50%,-50%) rotate(${rotDeg}deg)`;
       inner.style.width = h + 'px';
       inner.style.height = w + 'px';
@@ -3824,6 +3880,33 @@ ${text}`;
       img.style.objectFit = 'contain';
       inner.appendChild(img);
       wrap.appendChild(inner);
+      return img;
+    };
+
+    if(normalizeNatural){
+      const img = appendPlainImg();
+      const normalizeLoadedImage = ()=>{
+        try{
+          const nw = Number(img.naturalWidth || 0);
+          const nh = Number(img.naturalHeight || 0);
+          if(nw <= 0 || nh <= 0) return;
+          const naturalOrient = (nw >= nh) ? 'landscape' : 'portrait';
+          if(naturalOrient === wantOrient) return;
+          wrap.innerHTML = '';
+          // portrait<-landscape : rotate +90 (CW)
+          // landscape<-portrait : rotate -90 (CCW)
+          appendRotatedImg((wantOrient === 'portrait') ? 90 : -90);
+        }catch(e){}
+      };
+      img.addEventListener('load', normalizeLoadedImage, {once:true});
+      // Cached images can already be complete before the load listener runs.
+      if(img.complete) setTimeout(normalizeLoadedImage, 0);
+    }else if(!needsRotate){
+      appendPlainImg();
+    }else{
+      // portrait<-landscape : rotate +90 (CW)
+      // landscape<-portrait : rotate -90 (CCW)
+      appendRotatedImg((wantOrient === 'portrait') ? 90 : -90);
     }
 
     if(capText){
@@ -5025,7 +5108,7 @@ inner.appendChild(card);
     elModalText.appendChild(note);
   }
 
-  function openCardListPopup(title, cards, {closable=true, helperText='', forcePortrait=false, forceLandscape=false, confirmClose=false } = {}){
+  function openCardListPopup(title, cards, {closable=true, helperText='', forcePortrait=false, forceLandscape=false, confirmClose=false, normalizeNatural=false } = {}){
     let cardsList = cards.slice();
     // sort waiting room cards (spec update): by cardnumber asc, then card type
     try{
@@ -5080,7 +5163,7 @@ inner.appendChild(card);
       const d = (orient==='landscape') ? dimsL : dimsP;
       const x = 12 + step*i + (maxW - d.w)/2;
       const y = 6 + (maxH - d.h)/2;
-      const c = makeCard(cn, orient, x, y, d.w, d.h, '', null, false, 100+i);
+      const c = makeCard(cn, orient, x, y, d.w, d.h, '', null, false, 100+i, false, null, normalizeNatural);
       surf.appendChild(c);
     });
 
@@ -5431,7 +5514,11 @@ inner.appendChild(card);
                          : '公開されたカードを確認');
       openCardListPopup(String((p && p.label) ? p.label : '公開カード確認'), displayCards, {
         closable: false,
-        helperText
+        helperText,
+        // Some card image assets have inconsistent intrinsic rotation.
+        // For the YELL reveal popup, normalize by actual image aspect so all
+        // LIVE cards are landscape and all MEMBER cards are portrait.
+        normalizeNatural: true
       });
       appendYellRevealDrawNotice(p);
       popup = {type:'pending', closable:false};
@@ -6259,6 +6346,48 @@ inner.appendChild(card);
 
     const opts = (p && (Array.isArray(p.options)?p.options: (Array.isArray(p.candidates)?p.candidates:(Array.isArray(p.cards)?p.cards:(Array.isArray(p.shown)?p.shown:[]))))) || [];
 
+    if(kind === 'choose_heart_color' || kind === 'choose_heart_color_for_other'){
+      const row = document.createElement('div');
+      row.className = 'choiceRow';
+      row.style.cssText = 'gap:calc(8px * var(--uiScale));align-items:center;justify-content:center;flex-wrap:wrap;';
+      const ordered = opts.slice().sort((a,b)=>{
+        const normColor = (x)=>{
+          const s0 = String(x || '').trim();
+          const low0 = s0.toLowerCase();
+          const jp = {'桃':'pink','赤':'red','黄':'yellow','緑':'green','青':'blue','紫':'purple','任意':'any','無色':'any'};
+          return HEART_TOKEN_BY_COLOR[low0] ? low0 : (jp[s0] || low0);
+        };
+        return heartColorOrderKey(normColor(a)) - heartColorOrderKey(normColor(b));
+      });
+      ordered.forEach(opt=>{
+        const b = document.createElement('button');
+        b.className = 'miniBtn';
+        b.style.cssText = 'min-width:96px;justify-content:center;';
+        b.appendChild(choiceRichLabel(opt));
+        b.addEventListener('click', async (ev)=>{
+          ev.stopPropagation();
+          st = await apiCmd('resolve_pending', {idx:0, choice:String(opt)});
+          selHand = [];
+          updateTop();
+          render();
+        });
+        row.appendChild(b);
+      });
+      elModalCards.appendChild(row);
+      if(allowSkip){
+        const bSkip = document.createElement('button');
+        bSkip.className = 'miniBtn';
+        bSkip.textContent = 'スキップ';
+        bSkip.addEventListener('click', async (ev)=>{
+          ev.stopPropagation();
+          st = await apiCmd('resolve_pending', {idx:0, choice:'skip'});
+          selHand = []; updateTop(); render();
+        });
+        elModalActions.appendChild(bSkip);
+      }
+      elMask.style.display = 'block';
+      return;
+    }
 
     if(kind === 'set_opponent_excess_for_live_success'){
       popup = {type:'pending', closable:false};
@@ -7593,7 +7722,12 @@ inner.appendChild(card);
   // Public window is read-only and must follow the owner window automatically.
   // The owner/private window still updates immediately after each /cmd response.
   if(IS_PUBLIC_VIEW){
-    setInterval(()=>{ refreshStateFromServer({force:false}); }, 700);
+    setInterval(()=>{ refreshStateFromServer({force:false}); }, 250);
+    window.addEventListener('storage', (ev)=>{
+      if(ev && ev.key === 'llocg_public_refresh_ping'){
+        refreshStateFromServer({force:true});
+      }
+    });
   }
 })();
 </script>
