@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: public_pending_mirror_visible_effects_20260701h
+# BUILD_TAG: public_pending_raw_modal_with_card_backs_20260701i
 from __future__ import annotations
 
 """View-state helpers for Loveca UI.
@@ -16,10 +16,11 @@ PrivateViewState/PublicViewState/DebugViewState split.
 """
 
 from copy import deepcopy
+import re
 from typing import Any, Dict, Iterable, Set
 
 
-PUBLIC_BUILD_TAG = "public_pending_mirror_visible_effects_20260701h"
+PUBLIC_BUILD_TAG = "public_pending_raw_modal_with_card_backs_20260701i"
 
 
 def _as_list(value: Any) -> list:
@@ -261,6 +262,73 @@ def _public_reveal_event_summary(events: Any) -> list[dict[str, Any]]:
     return out
 
 
+
+CARDNO_TEXT_RE = re.compile(r"\b(?:PL!|LL)[A-Za-z0-9]*-(?:bp\d+|pb\d+|sd\d+|cl\d+|PR|P\d+)-\d{3}\b", re.IGNORECASE)
+
+
+def _is_exact_cardno(value: str) -> bool:
+    return bool(CARDNO_TEXT_RE.fullmatch(str(value or "").strip()))
+
+
+def _mask_cardnos_in_public_text(value: str, public_cards: Set[str]) -> str:
+    """Mask private-zone card numbers in labels while preserving public ones."""
+    text = str(value or "")
+
+    def repl(m: re.Match[str]) -> str:
+        cn = m.group(0)
+        return cn if cn in public_cards else "非公開カード"
+
+    return CARDNO_TEXT_RE.sub(repl, text)
+
+
+def _public_sanitize_pending_value(value: Any, public_cards: Set[str], key: str = "") -> Any:
+    """Preserve the owner popup payload shape, replacing private cards by backs.
+
+    The public window should render the same modal route as the owner window.
+    Only cards that are still in opponent-private zones are masked to __BACK__.
+    """
+    if isinstance(value, str):
+        v = value.strip()
+        if _is_exact_cardno(v):
+            return v if v in public_cards else "__BACK__"
+        return _mask_cardnos_in_public_text(value, public_cards)
+    if isinstance(value, list):
+        return [_public_sanitize_pending_value(v, public_cards, key) for v in value]
+    if isinstance(value, tuple):
+        return [_public_sanitize_pending_value(v, public_cards, key) for v in value]
+    if isinstance(value, dict):
+        out: Dict[str, Any] = {}
+        for k, v in value.items():
+            ks = str(k)
+            safe_key = ks
+            if _is_exact_cardno(ks) and ks not in public_cards:
+                safe_key = "__BACK__"
+            else:
+                safe_key = _mask_cardnos_in_public_text(ks, public_cards)
+            out[safe_key] = _public_sanitize_pending_value(v, public_cards, ks)
+        return out
+    return value
+
+
+def _public_pending_mirror(pending: Any, public_cards: Set[str]) -> list[dict[str, Any]]:
+    """Return pending payloads for public view without changing popup semantics.
+
+    Unlike the old summary path, this keeps kind/options/queue/display fields so
+    server.py can use the same showPending renderer.  Private card identities are
+    replaced with __BACK__ placeholders.
+    """
+    if not isinstance(pending, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for item in pending:
+        if not isinstance(item, dict):
+            continue
+        safe = _public_sanitize_pending_value(item, public_cards)
+        if isinstance(safe, dict):
+            safe["public_sanitized"] = True
+            out.append(safe)
+    return out
+
 def _public_pending_summary(pending: Any, public_cards: Set[str]) -> list[dict[str, Any]]:
     """Mirror public-safe pending windows and hide only private-zone prompts."""
     out: list[dict[str, Any]] = []
@@ -374,10 +442,12 @@ def make_public_state(state: Dict[str, Any]) -> Dict[str, Any]:
     src["resolve_zone_count"] = len(_as_list(src.get("resolve_zone")))
     src["success_zone_count"] = len(_as_list(src.get("success_zone")))
 
-    # Raw pending can leak owner-only card lists.  Keep only summary.
-    src["public_pending"] = _public_pending_summary(src.get("pending"), public_cards)
+    # Preserve the actual pending payload shape so the public window can use the
+    # same modal renderer as the owner window.  Only private-zone card identities
+    # are replaced with card backs.
+    src["pending"] = _public_pending_mirror(src.get("pending"), public_cards)
+    src["public_pending"] = []
     src["public_reveal_events"] = _public_reveal_event_summary(src.get("public_reveal_events"))
-    src["pending"] = []
 
     # Card-number maps are useful for rendering but must not expose hand/deck.
     for key in ["cn2name", "cn2label", "cn2type", "cn2group", "cn2unit", "cn2cost", "cn2score"]:

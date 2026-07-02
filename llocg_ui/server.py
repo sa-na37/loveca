@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: public_pending_mirror_visible_effects_20260701h
+# BUILD_TAG: public_pending_raw_modal_with_card_backs_20260701i
 from __future__ import annotations
 
 """llocg_ui.server
@@ -65,7 +65,7 @@ from .engine import (
     _rule_refresh_main_deck,
 )
 
-APP_VERSION = "debug_feedback_ext_hooks_public_20260701ar"
+APP_VERSION = "public_pending_raw_modal_with_card_backs_20260701i"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -2731,7 +2731,7 @@ HTML = r'''<!doctype html>
   // running stale JS.  Compare the state ui_version and reload once when the
   // server-side bundle changes, so public refresh notices use the current modal
   // layout and owner-OK synchronization.
-  const CLIENT_UI_VERSION = 'debug_feedback_ext_hooks_public_20260701ar';
+  const CLIENT_UI_VERSION = 'public_pending_raw_modal_with_card_backs_20260701i';
   let clientReloadingForVersion = false;
   const urlParams = new URLSearchParams(window.location.search || '');
   const VIEW_MODE = String(urlParams.get('view') || (window.location.pathname === '/public' ? 'public' : 'private')).toLowerCase();
@@ -3083,6 +3083,7 @@ HTML = r'''<!doctype html>
   function cardDisplayText(cn){
     const s = String(cn || '').trim();
     if(!s) return '';
+    if(s === '__BACK__') return '非公開カード';
     const name = cardNameFor(s);
     const t = cnType(s).toUpperCase();
     if(t.includes('MEMBER')){
@@ -5406,6 +5407,7 @@ inner.appendChild(card);
     if(x==null) return false;
     const s = String(x).trim();
     if(!s) return false;
+    if(s === '__BACK__') return true;
     // Exact cardnumber only. Labels like "C: PL!N-bp1-003 ライブ開始時" must NOT match.
     // Prefixes: PL!, PL!N, PL!S, PL!SP, PL!HS, LL (series suffix optional after !)
     return /^(?:PL!|LL)[A-Za-z0-9]*-(?:bp\d+|pb\d+|sd\d+|cl\d+|PR|P\d+)-\d{3}$/i.test(s);
@@ -7408,13 +7410,9 @@ inner.appendChild(card);
 
   function maybeShowPublicPending(){
     if(!IS_PUBLIC_VIEW) return false;
-    const p = (st && Array.isArray(st.public_pending) && st.public_pending.length) ? st.public_pending[0] : null;
-    if(p){
-      showPublicPending(p);
-      return true;
-    }
-    // Public reveal ledger: owner-side reveal ACK may already be gone, but the
-    // public window should still show the revealed cards for a short time.
+    // Pending windows are now sanitized in views.py and rendered through the same
+    // showPending() path as the owner window.  This function is kept only for
+    // short-lived public reveal ledger popups after owner-side ACKs disappear.
     const ev = (st && Array.isArray(st.public_reveal_events) && st.public_reveal_events.length) ? st.public_reveal_events[0] : null;
     if(ev){
       showPublicPending(ev);
@@ -7547,8 +7545,10 @@ inner.appendChild(card);
     if(maybeShowRefreshNotice()){
       // wait for local OK; after closing, render() will continue to pending.
     }else if(IS_PUBLIC_VIEW){
-      if(!maybeShowPublicPending()){
-        maybeShowResolvePopup();
+      if(!maybeShowPending()){
+        if(!maybeShowPublicPending()){
+          maybeShowResolvePopup();
+        }
       }
     }else if(!maybeShowPending()){
       maybeShowResolvePopup();
