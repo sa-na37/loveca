@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: server_public_known_to_hand_topk_ui_20260625d
+# BUILD_TAG: effect_events_detail_log_20260701g
 from __future__ import annotations
 
 """llocg_ui.server
@@ -62,9 +62,10 @@ from .engine import (
     _card_effective_play_cost_from_hand,
     _success_zone_score_sum,
     _ordered_heart_counts,
+    _rule_refresh_main_deck,
 )
 
-APP_VERSION = "public_known_to_hand_topk_ui_20260625d"
+APP_VERSION = "debug_feedback_ext_hooks_public_20260701ar"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -91,6 +92,12 @@ class App:
         self.ui_code = str(code)
         self.deck_code = str(deck_code)
         self.gs, self.rng = new_game(self.root, self.deck_code, seed=seed, debug=debug)
+        # BUILD_TAG: refresh_notice_popup_20260630af
+        # Engine refresh notices need DB metadata for no-bladeheart/live summaries.
+        try:
+            setattr(self.gs, "_cards_db", self.cards_db)
+        except Exception:
+            pass
         self._force_mulligan_start()
         self._apply_start_overrides_from_env()
         # Public-window reveal ledger.  This is intentionally independent from
@@ -107,7 +114,38 @@ class App:
         self._public_hand_revealed_cards: List[str] = []
         self._public_hand_reveal_events: List[Dict[str, Any]] = []
         self._public_hand_reveal_seq: int = 0
+        self._apply_optional_extensions()
         self.save_trace()
+
+    def _apply_optional_extensions(self) -> None:
+        """Load optional out-of-tree extensions.
+
+        This hook is intentionally small: future ChatGPT/Codex changes should
+        prefer adding files under ``llocg_ext/`` and registering behavior via
+        ``llocg_ext.apply_extensions(app)`` rather than replacing core files.
+        Extension failures are logged but do not prevent the base UI from
+        starting.
+        """
+        try:
+            from llocg_ext import apply_extensions  # type: ignore
+        except Exception as e:
+            try:
+                print(f"[EXT] no external extension loaded: {e}")
+            except Exception:
+                pass
+            return
+        try:
+            apply_extensions(self)
+            try:
+                self.gs.log.append("[EXT] loaded llocg_ext extensions")
+            except Exception:
+                pass
+        except Exception as e:
+            try:
+                print(f"[EXT][ERR] extension load failed: {e}")
+                self.gs.log.append(f"[EXT][ERR] extension load failed: {e}")
+            except Exception:
+                pass
 
     def _public_reveal_event_from_pending_item(self, item: Any, reason: str = "") -> Optional[Dict[str, Any]]:
         if not isinstance(item, dict):
@@ -325,9 +363,19 @@ class App:
             ])
 
             if kind == "choose_from_topk":
-                has_filtered_candidates = isinstance(item.get("candidates"), list) and len(item.get("candidates") or []) > 0
+                # BUILD_TAG: public_hand_reveal_strict_metadata_20260701an
+                # A private top-deck lookup may expose candidates to the owner
+                # without making them public.  Do not treat mere candidates as a
+                # public reveal.  Only explicit metadata, or effect text that says
+                # the selected card is revealed/public and added to hand, can keep
+                # the selected card face-up in the public hand row.
+                explicit_metadata = any(bool(item.get(k)) for k in (
+                    "public_reveal_selected_to_hand",
+                    "public_reveal_to_hand",
+                    "reveal_selected_to_public_hand",
+                ))
                 explicit_public_to_hand = ("公開" in public_text and "手札" in public_text)
-                if not (has_filtered_candidates or explicit_public_to_hand):
+                if not (explicit_metadata or explicit_public_to_hand):
                     continue
                 _add_cards(item.get("candidates"))
                 if not out:
@@ -351,7 +399,7 @@ class App:
 
         return out
 
-    def _remember_public_hand_reveals_after_cmd(self, before_hand: List[str], reveal_candidates: List[str], reason: str = "") -> None:
+    def _remember_public_hand_reveals_after_cmd(self, before_hand: List[str], reveal_candidates: List[str], reason: str = "", before_refresh_seq: int = 0) -> None:
         """Keep known cards that reached hand public until MAIN ends.
 
         Cases covered:
@@ -397,7 +445,17 @@ class App:
         # before the command, that public-source count decreased, and the same
         # card's hand count increased, keep it visible in the public hand row
         # until MAIN ends.
-        before_src: Dict[str, int] = getattr(self, "_public_hand_before_source_counts", {}) or {}
+        #
+        # BUILD_TAG: public_hand_reveal_skip_refresh_source_loss_20260701an
+        # Refresh moves the public green room into a hidden deck.  If the same
+        # command then draws a card with the same card number, that is not a
+        # direct public-zone -> hand move and must not become public in hand.
+        try:
+            after_refresh_seq = int(getattr(self.gs, "refresh_notice_seq", 0) or 0)
+        except Exception:
+            after_refresh_seq = 0
+        refresh_happened_during_cmd = bool(before_refresh_seq and after_refresh_seq > int(before_refresh_seq or 0))
+        before_src: Dict[str, int] = {} if refresh_happened_during_cmd else (getattr(self, "_public_hand_before_source_counts", {}) or {})
         after_src = self._public_source_counts_for_hand_reveal()
         for cn, before_src_n in before_src.items():
             try:
@@ -448,6 +506,30 @@ class App:
         self._public_hand_revealed_cards = cards
         return list(cards)
 
+    def _card_intrinsic_orient_for_public(self, cn: str) -> str:
+        """Return UI intrinsic orientation for a known public hand card.
+
+        Public hand rendering cannot always rely on ``cn2type`` surviving view
+        redaction at the exact repaint timing.  Compute the orientation on the
+        server side from the DB and expose it only for cards already registered
+        as public-in-hand.  LIVE cards should be rotated in the portrait hand
+        row just like they are in the owner hand.
+        """
+        try:
+            ci = _get_card(self.cards_db, str(cn or ""))
+            typ = str(getattr(ci, "type", "") or "").upper() if ci else ""
+            if "LIVE" in typ:
+                return "landscape"
+            score = int(getattr(ci, "score", 0) or 0) if ci else 0
+            if score > 0:
+                return "landscape"
+        except Exception:
+            pass
+        return "portrait"
+
+    def _public_hand_revealed_orient_snapshot(self) -> Dict[str, str]:
+        return {cn: self._card_intrinsic_orient_for_public(cn) for cn in self._public_hand_revealed_cards_snapshot()}
+
     def _public_hand_reveal_events_snapshot(self) -> List[Dict[str, Any]]:
         self._sync_public_hand_reveals_turn()
         cur_turn = self._current_turn_int()
@@ -458,6 +540,47 @@ class App:
                 events.append(dict(ev))
         self._public_hand_reveal_events = events
         return [dict(ev) for ev in events]
+
+    def _ack_refresh_notice(self, seq: int) -> None:
+        """Acknowledge refresh notices for synchronized owner/public UI only."""
+        # BUILD_TAG: refresh_notice_owner_public_ack_and_deck_empty_check_20260701ap
+        try:
+            seq_i = int(seq or 0)
+        except Exception:
+            seq_i = 0
+        if seq_i <= 0:
+            return
+        try:
+            cur = int(getattr(self, "_refresh_notice_ack_seq", 0) or 0)
+        except Exception:
+            cur = 0
+        try:
+            self._refresh_notice_ack_seq = max(cur, seq_i)
+        except Exception:
+            pass
+        # BUILD_TAG: refresh_notice_undo_owner_resync_20260701aq
+        # Do not remove notices from the GameState ledger on acknowledgement.
+        # The owner/public UI suppresses acknowledged notices via ack seq.  Keeping
+        # the ledger intact lets undo restore and replay the same notice correctly.
+
+    def _auto_refresh_if_deck_empty_after_cmd(self, reason: str = "post_cmd") -> None:
+        """Apply the rule refresh immediately when command resolution empties the deck."""
+        # BUILD_TAG: refresh_notice_owner_public_ack_and_deck_empty_check_20260701ap
+        try:
+            deck_empty = len(list(getattr(self.gs, "deck", []) or [])) == 0
+            has_green = len(list(getattr(self.gs, "green_room", []) or [])) > 0
+        except Exception:
+            deck_empty = False
+            has_green = False
+        if not (deck_empty and has_green):
+            return
+        try:
+            _rule_refresh_main_deck(self.gs, self.rng, reason=reason)
+        except Exception as e:
+            try:
+                self.gs.log.append(f"[WARN] post-command refresh failed: {e}")
+            except Exception:
+                pass
 
     def save_trace(self) -> None:
         self.outdir.mkdir(parents=True, exist_ok=True)
@@ -570,7 +693,17 @@ class App:
         green_spec = (env.get('LLOCG_START_GREEN') or '').strip()        # waiting room
         success_spec = (env.get('LLOCG_START_SUCCESS') or '').strip()    # success live storage
         decktop_spec = (env.get('LLOCG_START_DECK_TOP') or '').strip()   # put these on top of deck (leftmost = top)
+        # BUILD_TAG: debug_start_empty_deck_exact_and_energy_cap_20260701ai
+        # Treat an explicitly present empty LLOCG_START_DECK_EXACT as an exact empty deck.
+        # Also support a non-empty sentinel/flag because some shells and launchers make
+        # empty-string env debugging ambiguous.
+        deckempty_s = (env.get('LLOCG_START_DECK_EMPTY') or '').strip()
+        deckexact_present = ('LLOCG_START_DECK_EXACT' in env) or (deckempty_s in ('1','true','TRUE','yes','YES'))
         deckexact_spec = (env.get('LLOCG_START_DECK_EXACT') or '').strip() # replace deck exactly (leftmost = top)
+        if deckempty_s in ('1','true','TRUE','yes','YES') or deckexact_spec.upper() in ('__EMPTY__','EMPTY','NONE','NULL'):
+            deckexact_spec = ''
+            deckexact_present = True
+        deckexact_strict_s = (env.get('LLOCG_START_DECK_EXACT_STRICT') or env.get('LLOCG_START_DECK_EXACT_DROP_REST') or '').strip()
         resolve_spec = (env.get('LLOCG_START_RESOLVE') or '').strip()    # resolve zone (cheer)
         stage_spec = (env.get('LLOCG_START_STAGE') or '').strip()        # e.g., "C=CN,L=CN2" or "C:CN"
         stage_l = (env.get('LLOCG_START_STAGE_L') or '').strip()
@@ -584,7 +717,7 @@ class App:
         any_override = any([
             preset_s,
             hand_spec, e_active_s, e_wait_s, opponent_wait_s, opponent_success_s, opponent_success_score_s, opponent_excess_s, turn_order_s, turn_s, phase_s, hand_size_s, shuffle_s, debug_s,
-            green_spec, decktop_spec, deckexact_spec, resolve_spec,
+            green_spec, decktop_spec, deckexact_present, deckexact_spec, deckexact_strict_s, deckempty_s, resolve_spec,
             stage_spec, stage_l, stage_c, stage_r,
         ])
         if not any_override:
@@ -626,9 +759,16 @@ class App:
                 except Exception:
                     pass
 
-            # Debug energy cap (default 99) and starting energy
+            # Debug energy cap (default 99) and starting energy.
+            # BUILD_TAG: debug_start_empty_deck_exact_and_energy_cap_20260630ag_rebased0630
             if not debug_energy_cap_s:
                 debug_energy_cap_s = '99'
+            try:
+                cap_v = _as_int(debug_energy_cap_s, 0)
+                if cap_v > 0:
+                    gs.energy_total = cap_v
+            except Exception:
+                pass
             if (not e_active_s) and (not e_wait_s):
                 e_active_s = debug_energy_cap_s
                 e_wait_s = '0'
@@ -1133,7 +1273,7 @@ class App:
         # Replace deck exactly (leftmost = top). Debug-only convenience.
         # Cards removed from the original deck are moved to waiting room,
         # so total card count is preserved for refresh tests.
-        if deckexact_spec:
+        if deckexact_present:
             exact_cards = _split_cards(deckexact_spec)
             try:
                 cur_deck = list(getattr(gs, 'deck', []) or [])
@@ -1151,12 +1291,17 @@ class App:
                 except Exception:
                     pass
 
+            strict_exact = str(deckexact_strict_s or '').strip() in ('1','true','TRUE','yes','YES')
             try:
                 gs.deck = list(exact_cards)
             except Exception:
                 pass
             try:
-                gs.green_room = list(cur_green) + list(rest)
+                if strict_exact:
+                    gs.green_room = list(cur_green)
+                    gs.log.append('[DEBUG_START] deck_exact strict: dropped original deck remainder')
+                else:
+                    gs.green_room = list(cur_green) + list(rest)
             except Exception:
                 pass
 
@@ -1327,6 +1472,10 @@ class App:
                 _add(item.get("display_cards"))
                 _add(item.get("pool"))
                 _add(item.get("kept"))
+                for key in ("card", "source_cn", "picked_card", "after_source_cn", "resume_source_cn"):
+                    v = item.get(key)
+                    if isinstance(v, str) and v:
+                        cns.add(v)
         except Exception:
             pass
 
@@ -1484,8 +1633,14 @@ class App:
             "success_zone_heart_color": str(getattr(self.gs, "success_zone_heart_color", "") or ""),
             "success_zone_heart_pos": str(getattr(self.gs, "success_zone_heart_pos", "") or ""),
             "pending": list(self.gs.pending),
+            "deck_refreshed_this_turn": bool(getattr(self.gs, "deck_refreshed_this_turn", False)),
+            "refresh_notice_seq": int(getattr(self.gs, "refresh_notice_seq", 0) or 0),
+            "refresh_notice_ack_seq": int(min(int(getattr(self.gs, "refresh_notice_seq", 0) or 0), int(getattr(self, "_refresh_notice_ack_seq", 0) or 0))),
+            "refresh_notices": [dict(x) for x in (getattr(self.gs, "refresh_notices", []) or []) if isinstance(x, dict)],
+            "effect_events": [dict(x) for x in (getattr(self.gs, "effect_events", []) or []) if isinstance(x, dict)][-80:],
             "public_reveal_events": self._public_reveal_events_snapshot(),
             "public_hand_revealed_cards": self._public_hand_revealed_cards_snapshot(),
+            "public_hand_revealed_orient": self._public_hand_revealed_orient_snapshot(),
             "public_hand_reveal_events": self._public_hand_reveal_events_snapshot(),
             "cn2name": self._cn2name(),
             "cn2label": self._cn2label(),
@@ -1677,6 +1832,7 @@ class App:
         }
         before_hand_for_public_reveal: List[str] = []
         reveal_candidates_for_public_hand: List[str] = []
+        before_refresh_notice_seq_for_public_hand: int = 0
         if mutating and name != "toggle_debug":
             # Owner commands can clear a reveal ACK before the public window's
             # next poll.  Preserve it in a short-lived public ledger first.
@@ -1687,6 +1843,10 @@ class App:
                 before_hand_for_public_reveal = []
             reveal_candidates_for_public_hand = self._reveal_candidate_cards_from_pending()
             self._public_hand_before_source_counts = self._public_source_counts_for_hand_reveal()
+            try:
+                before_refresh_notice_seq_for_public_hand = int(getattr(self.gs, "refresh_notice_seq", 0) or 0)
+            except Exception:
+                before_refresh_notice_seq_for_public_hand = 0
             push_undo(self.gs, self.rng)
 
         if name == "play":
@@ -1776,14 +1936,16 @@ class App:
                     if k0 in ack_kinds:
                         cmd_resolve_pending(self.gs, self.cards_db, 0, 'ok')
                         post_process(self.gs)
-                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}")
+                        self._auto_refresh_if_deck_empty_after_cmd(f"post_cmd:{name}")
+                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}", before_refresh_notice_seq_for_public_hand)
                         self.save_trace()
                         return self.state_json()
                     if k0 == 'set_opponent_excess_for_live_success':
                         cur_ex = str(max(0, min(9, int(getattr(self.gs, 'opponent_excess_heart_count', 0) or 0))))
                         cmd_resolve_pending(self.gs, self.cards_db, 0, cur_ex)
                         post_process(self.gs)
-                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}")
+                        self._auto_refresh_if_deck_empty_after_cmd(f"post_cmd:{name}")
+                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}", before_refresh_notice_seq_for_public_hand)
                         self.save_trace()
                         return self.state_json()
                     if k0 == 'set_opponent_success_score_for_live_attempt':
@@ -1792,19 +1954,22 @@ class App:
                             cur_oss_i = 0
                         cmd_resolve_pending(self.gs, self.cards_db, 0, str(max(0, min(20, cur_oss_i))), self.rng)
                         post_process(self.gs)
-                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}")
+                        self._auto_refresh_if_deck_empty_after_cmd(f"post_cmd:{name}")
+                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}", before_refresh_notice_seq_for_public_hand)
                         self.save_trace()
                         return self.state_json()
                     if k0 == 'pick_success_to_store':
                         cmd_resolve_pending(self.gs, self.cards_db, 0, 'skip')
                         post_process(self.gs)
-                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}")
+                        self._auto_refresh_if_deck_empty_after_cmd(f"post_cmd:{name}")
+                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}", before_refresh_notice_seq_for_public_hand)
                         self.save_trace()
                         return self.state_json()
                     if ('skip' in opts or '__skip__' in opts) and (bool(p0.get('optional', False)) or bool(p0.get('allow_skip', False)) or k0 in ('pay_or_skip', 'confirm_effect', 'discard_from_hand')):
                         cmd_resolve_pending(self.gs, self.cards_db, 0, 'skip')
                         post_process(self.gs)
-                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}")
+                        self._auto_refresh_if_deck_empty_after_cmd(f"post_cmd:{name}")
+                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}", before_refresh_notice_seq_for_public_hand)
                         self.save_trace()
                         return self.state_json()
                 if opts:
@@ -1818,7 +1983,8 @@ class App:
                             choice = opts[0]
                         cmd_resolve_pending(self.gs, self.cards_db, 0, choice)
                         post_process(self.gs)
-                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}")
+                        self._auto_refresh_if_deck_empty_after_cmd(f"post_cmd:{name}")
+                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}", before_refresh_notice_seq_for_public_hand)
                         self.save_trace()
                         return self.state_json()
 
@@ -1835,6 +2001,21 @@ class App:
             cmd_end_turn(self.gs, self.rng)
         elif name == "undo":
             do_undo(self.gs, self.rng)
+            # BUILD_TAG: refresh_notice_undo_owner_resync_20260701aq
+            # Server-side public ack must also follow the restored game timeline.
+            # State JSON clamps it, but clamping here prevents stale owner ACKs
+            # from suppressing notices across subsequent polling/commands.
+            try:
+                cur_seq = int(getattr(self.gs, "refresh_notice_seq", 0) or 0)
+                cur_ack = int(getattr(self, "_refresh_notice_ack_seq", 0) or 0)
+                self._refresh_notice_ack_seq = max(0, min(cur_ack, cur_seq))
+            except Exception:
+                pass
+        elif name == "ack_refresh_notice":
+            try:
+                self._ack_refresh_notice(int(payload.get("seq", 0) or 0))
+            except Exception:
+                pass
         elif name == "toggle_debug":
             self.gs.debug = not self.gs.debug
             self.gs.log.append(f"[DEBUG] debug={self.gs.debug}")
@@ -1843,8 +2024,10 @@ class App:
 
         # Post-process to resume deferred prompts (e.g., auto trigger order).
         post_process(self.gs)
+        if mutating and name not in {"toggle_debug", "undo", "ack_refresh_notice"}:
+            self._auto_refresh_if_deck_empty_after_cmd(f"post_cmd:{name}")
         if mutating and name != "toggle_debug":
-            self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, name)
+            self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, name, before_refresh_notice_seq_for_public_hand)
 
         self.save_trace()
         return self.state_json()
@@ -1868,6 +2051,14 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(content)))
+        # BUILD_TAG: public_refresh_notice_reload_nocache_20260701ar
+        # The public window is often kept open while code is patched.  Do not let
+        # the browser reuse an old HTML/JS bundle; stale public JS can render the
+        # legacy refresh popup and miss owner-OK acknowledgement handling.
+        if "text/html" in str(ctype).lower() or "application/json" in str(ctype).lower():
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
         self.end_headers()
         if not self._head_only and content:
             self.wfile.write(content)
@@ -2134,6 +2325,7 @@ HTML = r'''<!doctype html>
     --pmW: 1200px;
     --pmH: 654px;
     --scale: 0.77;
+    --uiScale: 0.77;
     --cardW: 347px;
     --cardH: 485px;
     --gap: 8px;
@@ -2148,23 +2340,23 @@ HTML = r'''<!doctype html>
   /* zone */
   .zone{position:absolute;box-sizing:border-box;}
   .zone.debug{outline:2px dashed rgba(0,0,0,.35);}
-  .label{position:absolute;left:6px;top:6px;padding:2px 6px;font-size:12px;background:rgba(0,0,0,.55);border-radius:6px;pointer-events:none;}
-  .countBadge{position:absolute;right:6px;bottom:6px;padding:2px 6px;font-size:12px;background:rgba(0,0,0,.75);border-radius:6px;pointer-events:none;}
+  .label{position:absolute;left:calc(6px * var(--uiScale));top:calc(6px * var(--uiScale));padding:calc(2px * var(--uiScale)) calc(6px * var(--uiScale));font-size:calc(12px * var(--uiScale));background:rgba(0,0,0,.55);border-radius:calc(6px * var(--uiScale));pointer-events:none;}
+  .countBadge{position:absolute;right:calc(6px * var(--uiScale));bottom:calc(6px * var(--uiScale));padding:calc(2px * var(--uiScale)) calc(6px * var(--uiScale));font-size:calc(12px * var(--uiScale));background:rgba(0,0,0,.75);border-radius:calc(6px * var(--uiScale));pointer-events:none;}
   .zoneInner{position:absolute;inset:0;overflow:hidden;}
 
   /* cards */
   .cardWrap{position:absolute;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.55);user-select:none;cursor:pointer;background:#000;}
   .cardWrap img{position:absolute;left:0;top:0;border-radius:8px;display:block;width:100%;height:100%;pointer-events:none;}
   .cardWrap.selected{box-shadow:0 0 0 5px rgba(0,0,0,.92) inset, 0 0 0 5px rgba(0,0,0,.92); border-radius:12px;}
-  .cap{position:absolute;left:6px;right:6px;bottom:-18px;font-size:11px;line-height:1.1;color:#eee;text-shadow:0 1px 2px rgba(0,0,0,.8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;}
+  .cap{position:absolute;left:calc(6px * var(--uiScale));right:calc(6px * var(--uiScale));bottom:calc(-18px * var(--uiScale));font-size:calc(11px * var(--uiScale));line-height:1.1;color:#eee;text-shadow:0 1px 2px rgba(0,0,0,.8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;}
 
   /* rotation wrappers */
   .rot{position:absolute;left:50%;top:50%;transform-origin:center;}
 
   /* top bar */
-  #topBar{position:absolute;left:10px;top:10px;display:flex;gap:8px;align-items:center;z-index:6000;flex-wrap:wrap;}
-  #topBar .pill{background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:6px 10px;font-size:12px;}
-  #topBar .miniBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:6px 10px;border-radius:10px;cursor:pointer;}
+  #topBar{position:absolute;left:calc(10px * var(--uiScale));top:calc(10px * var(--uiScale));display:flex;gap:calc(8px * var(--uiScale));align-items:center;z-index:6000;flex-wrap:wrap;}
+  #topBar .pill{background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:calc(6px * var(--uiScale)) calc(10px * var(--uiScale));font-size:calc(12px * var(--uiScale));}
+  #topBar .miniBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:calc(6px * var(--uiScale)) calc(10px * var(--uiScale));border-radius:calc(10px * var(--uiScale));font-size:calc(12px * var(--uiScale));cursor:pointer;}
   #topBar .miniBtn:hover{background:rgba(255,255,255,.18);}
   body.publicView #topBar .miniBtn, body.publicView #topBar .oppWaitBtn{opacity:.35;cursor:not-allowed;pointer-events:none;}
   #publicViewBadge{display:none;background:#66d9ef;color:#071014;border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:6px 10px;font-size:12px;font-weight:900;letter-spacing:.04em;}
@@ -2187,82 +2379,101 @@ HTML = r'''<!doctype html>
   #topBar .oppWaitBtn.orderSelected{background:#ffd84d;color:#111;border-color:#ffd84d;box-shadow:0 0 0 2px rgba(0,0,0,.35),0 0 12px rgba(255,216,77,.55);}
 
   /* banner */
-  #banner{position:absolute;left:50%;top:54px;transform:translateX(-50%);padding:10px 16px;border-radius:999px;background:rgba(0,0,0,.72);border:1px solid rgba(255,255,255,.22);z-index:9900;display:none;font-size:18px;font-weight:800;letter-spacing:.5px;pointer-events:none;max-width:85%;text-align:center;}
+  #banner{position:absolute;left:50%;top:calc(54px * var(--uiScale));transform:translateX(-50%);padding:calc(10px * var(--uiScale)) calc(16px * var(--uiScale));border-radius:999px;background:rgba(0,0,0,.72);border:1px solid rgba(255,255,255,.22);z-index:9900;display:none;font-size:calc(18px * var(--uiScale));font-weight:800;letter-spacing:.5px;pointer-events:none;max-width:85%;text-align:center;}
   #banner[data-kind="fail"]{background:rgba(160,20,20,.78);}
   #banner[data-kind="success"]{background:rgba(20,140,60,.78);}
   #banner[data-kind="info"]{background:rgba(0,0,0,.72);}
 
 
   /* log */
-  #logBox{position:absolute;inset:0;overflow:auto;font-size:12px;line-height:1.3;padding:8px;background:rgba(0,0,0,.45);border-radius:10px;white-space:pre-wrap;}
+  #logBox{position:absolute;inset:0;overflow:hidden;font-size:12px;line-height:1.3;padding:8px;background:rgba(0,0,0,.45);border-radius:10px;display:flex;flex-direction:column;gap:6px;}
+  #effectLogPanel{flex:0 0 auto;max-height:92px;overflow:auto;border-radius:8px;background:rgba(102,217,239,.08);border:1px solid rgba(102,217,239,.22);padding:6px 7px;color:#eaffff;}
+  .effectLogHeader{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10px;font-weight:900;letter-spacing:.06em;color:#9eeeff;margin-bottom:4px;text-transform:uppercase;}
+  .effectLogHint{font-size:10px;color:#aaa;font-weight:600;text-transform:none;letter-spacing:0;}
+  .effectLogRow{display:grid;grid-template-columns:auto 1fr;gap:5px 7px;align-items:start;padding:3px 0;border-top:1px solid rgba(255,255,255,.06);}
+  .effectLogRow:first-of-type{border-top:0;}
+  .effectLogType{font-size:10px;font-weight:900;color:#111;background:#9eeeff;border-radius:999px;padding:1px 6px;white-space:nowrap;line-height:1.45;}
+  .effectLogBody{min-width:0;font-size:11px;line-height:1.35;color:#e8faff;}
+  .effectLogDetail{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .effectLogMeta{margin-top:1px;color:#b9c7cc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  #rawLogText{flex:1 1 auto;min-height:0;overflow:auto;white-space:pre-wrap;color:#ddd;}
 
   /* energy UI */
-  .energyUI{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-start;gap:8px;padding:26px 10px 10px 10px;}
-  .energyUI .energyText{font-size:14px;line-height:1.2;background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:8px 10px;color:#eee;}
-  .energyUI .btn{background:rgba(0,0,0,.65);color:#eee;border:1px solid rgba(255,255,255,.14);padding:10px 10px;border-radius:12px;cursor:pointer;font-size:13px;text-align:center;}
+  .energyUI{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-start;gap:calc(8px * var(--uiScale));padding:calc(26px * var(--uiScale)) calc(10px * var(--uiScale)) calc(10px * var(--uiScale)) calc(10px * var(--uiScale));}
+  .energyUI .energyText{font-size:calc(14px * var(--uiScale));line-height:1.2;background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.12);border-radius:calc(12px * var(--uiScale));padding:calc(8px * var(--uiScale)) calc(10px * var(--uiScale));color:#eee;}
+  .energyUI .btn{background:rgba(0,0,0,.65);color:#eee;border:1px solid rgba(255,255,255,.14);padding:calc(10px * var(--uiScale)) calc(10px * var(--uiScale));border-radius:calc(12px * var(--uiScale));cursor:pointer;font-size:calc(13px * var(--uiScale));text-align:center;}
   .energyUI .btn.primary{background:#ffd54a;color:#111;border-color:rgba(0,0,0,.3);}
   .cardWrap.underEnergy{pointer-events:none;}
 
   /* small activation button on stage card */
-  .actBtn{position:absolute;left:6px;right:6px;bottom:6px;padding:6px 6px;border-radius:10px;border:1px solid rgba(255,255,255,.18);
-          background:rgba(0,0,0,.6);color:#fff;font-size:12px;cursor:pointer;}
+  .actBtn{position:absolute;left:calc(6px * var(--uiScale));right:calc(6px * var(--uiScale));bottom:calc(6px * var(--uiScale));padding:calc(6px * var(--uiScale)) calc(6px * var(--uiScale));border-radius:calc(10px * var(--uiScale));border:1px solid rgba(255,255,255,.18);
+          background:rgba(0,0,0,.6);color:#fff;font-size:calc(12px * var(--uiScale));cursor:pointer;}
   .actBtn:hover{background:rgba(0,0,0,.74);}
-  .toggleActiveBtn{position:absolute;top:4px;left:4px;width:24px;height:24px;border-radius:50%;border:1px solid rgba(255,255,255,.4);
-                   background:rgba(0,0,0,.55);color:#fff;font-size:14px;line-height:22px;text-align:center;cursor:pointer;padding:0;z-index:10;}
+  .toggleActiveBtn{position:absolute;top:calc(4px * var(--uiScale));left:calc(4px * var(--uiScale));width:calc(24px * var(--uiScale));height:calc(24px * var(--uiScale));border-radius:50%;border:1px solid rgba(255,255,255,.4);
+                   background:rgba(0,0,0,.55);color:#fff;font-size:calc(14px * var(--uiScale));line-height:calc(22px * var(--uiScale));text-align:center;cursor:pointer;padding:0;z-index:10;}
   .toggleActiveBtn:hover{background:rgba(80,180,255,.7);}
 
   /* popups */
   #mask{position:absolute;left:0;top:0;bottom:0;right:var(--sideW);background:rgba(0,0,0,.55);display:none;z-index:9000;}
-  #modal{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(92%, calc(var(--pmW) - var(--sideW) - 140px));max-height:min(64%, calc(var(--pmH) - 160px));overflow:hidden;background:#1b1b1b;border:1px solid rgba(255,255,255,.15);border-radius:16px;padding:12px;box-shadow:0 14px 60px rgba(0,0,0,.7);display:flex;flex-direction:column;}
-  #modalTitle{font-weight:700;flex:0 0 auto;}
-  #modalMain{display:flex;gap:16px;flex:1 1 auto;min-height:0;overflow:hidden;margin-top:10px;}
-  #modalLead{display:none;flex:0 0 160px;max-width:160px;min-width:160px;flex-direction:column;gap:8px;align-items:flex-start;}
+  #modal{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(94%, calc(var(--pmW) - var(--sideW) - calc(80px * var(--uiScale))));max-height:min(84%, calc(var(--pmH) - calc(64px * var(--uiScale))));overflow:hidden;background:#1b1b1b;border:1px solid rgba(255,255,255,.15);border-radius:calc(16px * var(--uiScale));padding:calc(12px * var(--uiScale));box-shadow:0 calc(14px * var(--uiScale)) calc(60px * var(--uiScale)) rgba(0,0,0,.7);display:flex;flex-direction:column;font-size:calc(16px * var(--uiScale));}
+  #modalTitle{font-weight:700;flex:0 0 auto;font-size:calc(20px * var(--uiScale));line-height:1.25;}
+  #modalMain{display:flex;gap:calc(16px * var(--uiScale));flex:1 1 auto;min-height:0;overflow:hidden;margin-top:calc(10px * var(--uiScale));}
+  #modalLead{display:none;flex:0 0 calc(160px * var(--uiScale));max-width:calc(160px * var(--uiScale));min-width:calc(160px * var(--uiScale));flex-direction:column;gap:calc(8px * var(--uiScale));align-items:flex-start;}
   #modalLead.visible{display:flex;}
-  #modalCond{display:none;margin:6px 0 8px 0;padding:8px 10px;border-radius:10px;font-size:12px;line-height:1.45;border:1px solid rgba(255,255,255,.14);}
+  #modalCond{display:none;margin:calc(6px * var(--uiScale)) 0 calc(8px * var(--uiScale)) 0;padding:calc(8px * var(--uiScale)) calc(10px * var(--uiScale));border-radius:calc(10px * var(--uiScale));font-size:calc(12px * var(--uiScale));line-height:1.45;border:1px solid rgba(255,255,255,.14);}
   #modalCond.condMet{display:block;background:rgba(30,120,60,.18);color:#b8f3c7;border-color:rgba(90,220,130,.45);}
   #modalCond.condUnmet{display:block;background:rgba(140,40,40,.18);color:#ffbcbc;border-color:rgba(255,110,110,.45);}
   #modalCond.condNeutral{display:block;background:rgba(255,255,255,.06);color:#ddd;border-color:rgba(255,255,255,.18);}
-  #modalCardTextWrap{display:none;margin:2px 0 10px 0;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);}
+  #modalCardTextWrap{display:none;margin:calc(2px * var(--uiScale)) 0 calc(10px * var(--uiScale)) 0;padding:calc(10px * var(--uiScale)) calc(12px * var(--uiScale));border-radius:calc(10px * var(--uiScale));background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);}
   #modalCardTextWrap.visible{display:block;}
-  #modalCardTextTitle{font-size:11px;font-weight:bold;letter-spacing:.04em;color:#bbb;margin-bottom:6px;}
-  #modalCardText{font-size:12px;color:#ddd;line-height:1.55;white-space:pre-wrap;max-height:220px;overflow:auto;}
-  #modalSourceCard{width:150px;min-width:150px;}
-  #modalSourceCard img{display:block;width:150px;height:auto;max-height:220px;object-fit:cover;border-radius:12px;border:1px solid rgba(255,255,255,.14);box-shadow:0 8px 24px rgba(0,0,0,.35);}
-  #modalSourceName{width:150px;font-weight:700;color:#fff;font-size:13px;line-height:1.35;white-space:normal;word-break:break-word;}
-  #modalSourceMeta{width:150px;font-size:11px;color:#aaa;line-height:1.35;white-space:pre-wrap;}
+  #modalCardTextTitle{font-size:calc(11px * var(--uiScale));font-weight:bold;letter-spacing:.04em;color:#bbb;margin-bottom:calc(6px * var(--uiScale));}
+  #modalCardText{font-size:calc(12px * var(--uiScale));color:#ddd;line-height:1.55;white-space:pre-wrap;max-height:calc(220px * var(--uiScale));overflow:auto;}
+  #modalSourceCard{width:calc(150px * var(--uiScale));min-width:calc(150px * var(--uiScale));}
+  #modalSourceCard img{display:block;width:calc(150px * var(--uiScale));height:auto;max-height:calc(220px * var(--uiScale));object-fit:cover;border-radius:calc(12px * var(--uiScale));border:1px solid rgba(255,255,255,.14);box-shadow:0 calc(8px * var(--uiScale)) calc(24px * var(--uiScale)) rgba(0,0,0,.35);}
+  #modalSourceName{width:calc(150px * var(--uiScale));font-weight:700;color:#fff;font-size:calc(13px * var(--uiScale));line-height:1.35;white-space:normal;word-break:break-word;}
+  #modalSourceMeta{width:calc(150px * var(--uiScale));font-size:calc(11px * var(--uiScale));color:#aaa;line-height:1.35;white-space:pre-wrap;}
   #modalContent{display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0;overflow:hidden;}
-  #modalText{white-space:pre-wrap;line-height:1.45;color:#ddd;font-size:13px;margin-top:0;flex:0 0 auto;}
-  #modalCards{margin-top:10px;overflow-x:auto;overflow-y:auto;padding-bottom:6px;flex:1 1 auto;min-height:0;} 
+  #modalText{white-space:pre-wrap;line-height:1.45;color:#ddd;font-size:calc(13px * var(--uiScale));margin-top:0;flex:0 0 auto;}
+  .yellRevealDrawNotice{display:inline-flex;align-items:center;gap:calc(7px * var(--uiScale));margin-top:calc(6px * var(--uiScale));padding:calc(4px * var(--uiScale)) calc(8px * var(--uiScale));border-radius:999px;background:rgba(92,200,255,.12);border:1px solid rgba(92,200,255,.42);color:#dff7ff;font-size:calc(12px * var(--uiScale));font-weight:800;line-height:1.15;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .yellRevealDrawNotice .tag{background:rgba(92,200,255,.86);color:#061018;border-radius:999px;padding:calc(2px * var(--uiScale)) calc(6px * var(--uiScale));font-size:calc(10px * var(--uiScale));font-weight:900;letter-spacing:.05em;flex:0 0 auto;}
+  #modalCards{margin-top:calc(10px * var(--uiScale));overflow-x:auto;overflow-y:auto;padding-bottom:calc(6px * var(--uiScale));flex:1 1 auto;min-height:0;} 
   #modalCards .surf{position:relative;height:1px;}
-  #modalActions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap;flex:0 0 auto;}
-  #modalActions .miniBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:6px 10px;border-radius:10px;cursor:pointer;}
-  #popupPeekBtn{position:absolute;right:6px;top:6px;z-index:9800;display:none;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.20);background:rgba(0,0,0,.68);color:#eee;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.35);}
+  #modalActions{display:flex;gap:calc(8px * var(--uiScale));justify-content:flex-end;margin-top:calc(10px * var(--uiScale));flex-wrap:wrap;flex:0 0 auto;}
+  #modalActions .miniBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:calc(6px * var(--uiScale)) calc(10px * var(--uiScale));border-radius:calc(10px * var(--uiScale));font-size:calc(13px * var(--uiScale));cursor:pointer;}
+  #popupPeekBtn{position:absolute;right:calc(6px * var(--uiScale));top:calc(6px * var(--uiScale));z-index:9800;display:none;align-items:center;gap:calc(6px * var(--uiScale));padding:calc(7px * var(--uiScale)) calc(10px * var(--uiScale));border-radius:999px;border:1px solid rgba(255,255,255,.20);background:rgba(0,0,0,.68);color:#eee;font-size:calc(12px * var(--uiScale));font-weight:700;cursor:pointer;box-shadow:0 calc(6px * var(--uiScale)) calc(20px * var(--uiScale)) rgba(0,0,0,.35);}
   #popupPeekBtn:hover{background:rgba(40,40,40,.86);}
   #popupPeekBtn.active{display:flex;background:#ffd54a;color:#111;border-color:rgba(0,0,0,.35);}
   #popupPeekBtn.inspecting{display:flex;background:rgba(80,180,255,.85);color:#fff;border-color:rgba(255,255,255,.28);}
   .popupPeekHidden{visibility:hidden !important;pointer-events:none !important;}
   /* secondary inspect popup (can coexist with pending/effect popup) */
   #viewerLayer{position:absolute;inset:0;display:none;z-index:9200;pointer-events:none;}
-  #viewerModal{position:absolute;right:18px;top:74px;width:min(46%, 560px);max-height:min(74%, calc(var(--pmH) - 120px));overflow:hidden;background:#1b1b1b;border:1px solid rgba(255,255,255,.15);border-radius:16px;padding:12px;box-shadow:0 14px 60px rgba(0,0,0,.72);display:flex;flex-direction:column;pointer-events:auto;}
+  #viewerModal{position:absolute;right:calc(18px * var(--uiScale));top:calc(74px * var(--uiScale));width:min(46%, calc(560px * var(--uiScale)));max-height:min(74%, calc(var(--pmH) - calc(120px * var(--uiScale))));overflow:hidden;background:#1b1b1b;border:1px solid rgba(255,255,255,.15);border-radius:calc(16px * var(--uiScale));padding:calc(12px * var(--uiScale));box-shadow:0 calc(14px * var(--uiScale)) calc(60px * var(--uiScale)) rgba(0,0,0,.72);display:flex;flex-direction:column;pointer-events:auto;font-size:calc(16px * var(--uiScale));}
   #viewerHeader{display:flex;align-items:center;justify-content:space-between;gap:12px;flex:0 0 auto;}
   #viewerTitle{font-weight:700;min-width:0;}
   #viewerClose{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:6px 10px;border-radius:10px;cursor:pointer;}
-  #viewerText{white-space:pre-wrap;line-height:1.45;color:#ddd;font-size:13px;margin-top:10px;flex:0 0 auto;}
+  #viewerText{white-space:pre-wrap;line-height:1.45;color:#ddd;font-size:calc(13px * var(--uiScale));margin-top:calc(10px * var(--uiScale));flex:0 0 auto;}
   #viewerCards{margin-top:10px;overflow-x:auto;overflow-y:auto;padding-bottom:6px;flex:1 1 auto;min-height:0;}
   #viewerCards .surf{position:relative;height:1px;}
   #viewerActions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap;flex:0 0 auto;}
-  #viewerActions .miniBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:6px 10px;border-radius:10px;cursor:pointer;}
+  #viewerActions .miniBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:calc(6px * var(--uiScale)) calc(10px * var(--uiScale));border-radius:calc(10px * var(--uiScale));font-size:calc(13px * var(--uiScale));cursor:pointer;}
 /* UI_FIX_PENDING_CARD_CHOICES */
   /* pending card choice list (image buttons) */
-  .choiceRow{display:inline-flex;gap:8px;align-items:flex-start;overflow-x:auto;overflow-y:hidden;max-width:min(72vw, 1060px);padding:6px 2px 10px 2px;}
+  .choiceRow{display:inline-flex;gap:calc(8px * var(--uiScale));align-items:flex-start;overflow-x:auto;overflow-y:hidden;max-width:min(72vw, calc(1060px * var(--uiScale)));padding:calc(6px * var(--uiScale)) calc(2px * var(--uiScale)) calc(10px * var(--uiScale)) calc(2px * var(--uiScale));}
   .choiceBtn{border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);border-radius:12px;padding:0;cursor:pointer;position:relative;flex:0 0 auto;box-shadow:0 6px 16px rgba(0,0,0,.35);}
   .choiceBtn:hover{outline:3px solid rgba(255,255,255,.22);outline-offset:-3px;}
   .choiceBtn.orderedSelected{outline:5px solid #ffe066;outline-offset:-5px;box-shadow:0 0 0 3px rgba(0,0,0,.65),0 0 22px rgba(255,224,102,.95),0 8px 20px rgba(0,0,0,.45);}
   .choiceBtn img{width:100%;height:100%;object-fit:cover;display:block;border-radius:12px;}
-  .choiceCap{position:absolute;left:0;right:0;bottom:0;font-size:11px;padding:4px 6px;background:linear-gradient(to top, rgba(0,0,0,.65), rgba(0,0,0,.05));color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6);border-bottom-left-radius:12px;border-bottom-right-radius:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .choiceCap{position:absolute;left:0;right:0;bottom:0;font-size:calc(11px * var(--uiScale));padding:calc(4px * var(--uiScale)) calc(6px * var(--uiScale));background:linear-gradient(to top, rgba(0,0,0,.65), rgba(0,0,0,.05));color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6);border-bottom-left-radius:calc(12px * var(--uiScale));border-bottom-right-radius:calc(12px * var(--uiScale));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .choiceBtn.orderedSelected .choiceCap{font-size:13px;font-weight:900;background:linear-gradient(to top, rgba(0,0,0,.92), rgba(0,0,0,.35));color:#ffe066;text-shadow:0 2px 3px rgba(0,0,0,.95);}
-  .orderBadge{position:absolute;left:6px;top:6px;display:none;align-items:center;justify-content:center;min-width:28px;height:28px;padding:0 6px;border-radius:999px;background:#ffe066;color:#111;font-size:17px;font-weight:900;line-height:1;border:2px solid #111;box-shadow:0 0 0 2px rgba(255,255,255,.92),0 3px 9px rgba(0,0,0,.72);z-index:4;pointer-events:none;}
+  .orderBadge{position:absolute;left:calc(6px * var(--uiScale));top:calc(6px * var(--uiScale));display:none;align-items:center;justify-content:center;min-width:calc(28px * var(--uiScale));height:calc(28px * var(--uiScale));padding:0 calc(6px * var(--uiScale));border-radius:999px;background:#ffe066;color:#111;font-size:calc(17px * var(--uiScale));font-weight:900;line-height:1;border:2px solid #111;box-shadow:0 0 0 2px rgba(255,255,255,.92),0 3px 9px rgba(0,0,0,.72);z-index:4;pointer-events:none;}
   .choiceBtn.orderedSelected .orderBadge{display:flex;}
+  /* BUILD_TAG: responsive_ui_scale_20260701ak */
+  /* Additional responsive popup/chrome sizing. Existing inline popup UIs should prefer uiCalc(px). */
+  .effectChoiceBtn{border-radius:calc(12px * var(--uiScale));padding:calc(10px * var(--uiScale)) calc(12px * var(--uiScale));gap:calc(10px * var(--uiScale));font-size:calc(13px * var(--uiScale));}
+  .effectChoiceBullet{font-size:calc(12px * var(--uiScale));}
+  .effectChoiceText{font-size:calc(13px * var(--uiScale));}
+  .effectChoiceMeta{font-size:calc(11px * var(--uiScale));}
+  .miniBtn{font-size:calc(13px * var(--uiScale));}
   .choiceTile{display:flex;flex-direction:column;align-items:stretch;gap:6px;flex:0 0 auto;max-width:240px;}
   /* effect-mode choices: text choices, not card-list tiles */
   .effectChoiceList{display:flex;flex-direction:column;gap:8px;max-width:min(76vw, 920px);padding:4px 2px 8px 2px;}
@@ -2294,6 +2505,153 @@ HTML = r'''<!doctype html>
   #cdMeta span{background:rgba(255,255,255,.08);padding:2px 7px;border-radius:6px;}
   #cdAbilities{font-size:11px;color:#ddd;line-height:1.55;white-space:pre-wrap;}
   #cdClose{position:absolute;top:6px;right:8px;background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:50%;width:22px;height:22px;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:1;}
+
+
+  /* BUILD_TAG: responsive_ui_scale_full_chrome_20260701al */
+  /* Final responsive overrides. Some legacy rules below/above used fixed px and
+     overrode the earlier scaled declarations. Keep all chrome/popup parts tied
+     to --uiScale so resizing the window changes cards, text and controls together. */
+  #publicViewBadge{
+    padding:calc(6px * var(--uiScale)) calc(10px * var(--uiScale)) !important;
+    font-size:calc(12px * var(--uiScale)) !important;
+  }
+  .publicPendingNote{
+    margin-top:calc(10px * var(--uiScale)) !important;
+    padding:calc(10px * var(--uiScale)) calc(12px * var(--uiScale)) !important;
+    border-radius:calc(10px * var(--uiScale)) !important;
+    font-size:calc(13px * var(--uiScale)) !important;
+  }
+  .publicKnownHandPanel{
+    right:calc(var(--sideW) + calc(14px * var(--uiScale))) !important;
+    bottom:calc(18px * var(--uiScale)) !important;
+    gap:calc(8px * var(--uiScale)) !important;
+    padding:calc(9px * var(--uiScale)) calc(10px * var(--uiScale)) calc(10px * var(--uiScale)) !important;
+    border-radius:calc(12px * var(--uiScale)) !important;
+  }
+  .publicKnownHandPanel .publicKnownTitle{font-size:calc(12px * var(--uiScale)) !important;}
+  .publicRevealFloat{
+    padding:calc(12px * var(--uiScale)) calc(16px * var(--uiScale)) !important;
+    border-radius:calc(16px * var(--uiScale)) !important;
+    gap:calc(12px * var(--uiScale)) !important;
+    box-shadow:0 calc(10px * var(--uiScale)) calc(30px * var(--uiScale)) rgba(0,0,0,.62),0 0 calc(28px * var(--uiScale)) rgba(255,216,77,.38) !important;
+  }
+  .publicRevealFloatTitle{font-size:calc(16px * var(--uiScale)) !important;}
+  #topBar .oppWaitPill{gap:calc(6px * var(--uiScale)) !important;}
+  #topBar .oppWaitBtn{
+    min-width:calc(24px * var(--uiScale)) !important;
+    height:calc(22px * var(--uiScale)) !important;
+    padding:0 calc(7px * var(--uiScale)) !important;
+    line-height:calc(18px * var(--uiScale)) !important;
+    font-size:calc(13px * var(--uiScale)) !important;
+  }
+  #topBar .turnOrderBtn{min-width:calc(42px * var(--uiScale)) !important;}
+  #logBox{
+    font-size:calc(12px * var(--uiScale)) !important;
+    padding:calc(8px * var(--uiScale)) !important;
+    border-radius:calc(10px * var(--uiScale)) !important;
+    gap:calc(6px * var(--uiScale)) !important;
+  }
+  #effectLogPanel{
+    max-height:calc(96px * var(--uiScale)) !important;
+    padding:calc(6px * var(--uiScale)) calc(7px * var(--uiScale)) !important;
+    border-radius:calc(8px * var(--uiScale)) !important;
+  }
+  .effectLogHeader{font-size:calc(10px * var(--uiScale)) !important;margin-bottom:calc(4px * var(--uiScale)) !important;}
+  .effectLogHint,.effectLogType{font-size:calc(10px * var(--uiScale)) !important;}
+  .effectLogBody{font-size:calc(11px * var(--uiScale)) !important;}
+  #viewerHeader{gap:calc(12px * var(--uiScale)) !important;}
+  #viewerTitle{font-size:calc(16px * var(--uiScale)) !important;}
+  #viewerClose{
+    padding:calc(6px * var(--uiScale)) calc(10px * var(--uiScale)) !important;
+    border-radius:calc(10px * var(--uiScale)) !important;
+    font-size:calc(13px * var(--uiScale)) !important;
+  }
+  #viewerCards{margin-top:calc(10px * var(--uiScale)) !important;padding-bottom:calc(6px * var(--uiScale)) !important;}
+  #viewerActions{gap:calc(8px * var(--uiScale)) !important;margin-top:calc(10px * var(--uiScale)) !important;}
+  #modal button, #viewerModal button, #topBar button, .energyUI button, #popupPeekBtn{
+    font-size:calc(13px * var(--uiScale)) !important;
+  }
+  #modalActions .miniBtn, .miniBtn, .energyUI .btn{
+    padding:calc(6px * var(--uiScale)) calc(10px * var(--uiScale)) !important;
+    border-radius:calc(10px * var(--uiScale)) !important;
+  }
+  .energyUI .btn.primary{font-size:calc(13px * var(--uiScale)) !important;}
+  /* BUILD_TAG: energy_undo_next_large_touch_targets_20260701am */
+  .energyUI .btn{
+    min-height:calc(54px * var(--uiScale)) !important;
+    padding:calc(16px * var(--uiScale)) calc(10px * var(--uiScale)) !important;
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    line-height:1.15 !important;
+    font-weight:800 !important;
+  }
+  .energyUI .energyText div{font-size:calc(12px * var(--uiScale)) !important;margin-top:calc(2px * var(--uiScale)) !important;}
+  .choiceTile{gap:calc(6px * var(--uiScale)) !important;max-width:calc(240px * var(--uiScale)) !important;}
+  .choiceBtn{
+    border-radius:calc(12px * var(--uiScale)) !important;
+    box-shadow:0 calc(6px * var(--uiScale)) calc(16px * var(--uiScale)) rgba(0,0,0,.35) !important;
+  }
+  .choiceBtn img{border-radius:calc(12px * var(--uiScale)) !important;}
+  .choiceBtn.orderedSelected .choiceCap{font-size:calc(13px * var(--uiScale)) !important;}
+  .effectChoiceList{
+    gap:calc(8px * var(--uiScale)) !important;
+    max-width:min(76vw, calc(920px * var(--uiScale))) !important;
+    padding:calc(4px * var(--uiScale)) calc(2px * var(--uiScale)) calc(8px * var(--uiScale)) calc(2px * var(--uiScale)) !important;
+  }
+  .effectChoiceBtn{
+    grid-template-columns:calc(28px * var(--uiScale)) 1fr !important;
+    gap:calc(10px * var(--uiScale)) !important;
+    border-radius:calc(12px * var(--uiScale)) !important;
+    padding:calc(10px * var(--uiScale)) calc(12px * var(--uiScale)) !important;
+    box-shadow:0 calc(4px * var(--uiScale)) calc(14px * var(--uiScale)) rgba(0,0,0,.28) !important;
+  }
+  .effectChoiceBullet{
+    width:calc(22px * var(--uiScale)) !important;
+    height:calc(22px * var(--uiScale)) !important;
+    font-size:calc(12px * var(--uiScale)) !important;
+  }
+  .effectChoiceText{font-size:calc(13px * var(--uiScale)) !important;}
+  .effectChoiceMeta{margin-top:calc(6px * var(--uiScale)) !important;font-size:calc(11px * var(--uiScale)) !important;}
+  .massInlineCount{padding:0 calc(4px * var(--uiScale)) !important;margin:0 calc(1px * var(--uiScale)) !important;border-radius:calc(5px * var(--uiScale)) !important;}
+  .reorderHint{font-size:calc(12px * var(--uiScale)) !important;margin-bottom:calc(6px * var(--uiScale)) !important;gap:calc(6px * var(--uiScale)) !important;}
+  .reorderHint .arrow{font-size:calc(16px * var(--uiScale)) !important;}
+  .reorderRow{gap:calc(10px * var(--uiScale)) !important;padding:calc(8px * var(--uiScale)) calc(4px * var(--uiScale)) calc(12px * var(--uiScale)) calc(4px * var(--uiScale)) !important;min-height:calc(60px * var(--uiScale)) !important;}
+  .reorderCard{border-radius:calc(12px * var(--uiScale)) !important;box-shadow:0 calc(6px * var(--uiScale)) calc(18px * var(--uiScale)) rgba(0,0,0,.4) !important;}
+  .reorderCard .idxBadge{top:calc(4px * var(--uiScale)) !important;left:calc(4px * var(--uiScale)) !important;font-size:calc(11px * var(--uiScale)) !important;padding:calc(2px * var(--uiScale)) calc(6px * var(--uiScale)) !important;border-radius:calc(6px * var(--uiScale)) !important;}
+  .reorderCard .cnCap{font-size:calc(10px * var(--uiScale)) !important;padding:calc(3px * var(--uiScale)) calc(5px * var(--uiScale)) !important;border-bottom-left-radius:calc(10px * var(--uiScale)) !important;border-bottom-right-radius:calc(10px * var(--uiScale)) !important;}
+  #cardDetail{
+    width:calc(340px * var(--uiScale)) !important;
+    max-height:min(80vh, calc(var(--pmH) - calc(32px * var(--uiScale)))) !important;
+    border-radius:calc(14px * var(--uiScale)) !important;
+    box-shadow:0 calc(16px * var(--uiScale)) calc(60px * var(--uiScale)) rgba(0,0,0,.75) !important;
+  }
+  #cdImgWrap{width:calc(132px * var(--uiScale)) !important;min-width:calc(132px * var(--uiScale)) !important;}
+  #cdBody{padding:calc(12px * var(--uiScale)) calc(14px * var(--uiScale)) !important;gap:calc(8px * var(--uiScale)) !important;}
+  #cdTitle{font-size:calc(15px * var(--uiScale)) !important;}
+  #cdNo{font-size:calc(11px * var(--uiScale)) !important;}
+  #cdMeta{gap:calc(4px * var(--uiScale)) !important;}
+  #cdMeta span{padding:calc(2px * var(--uiScale)) calc(7px * var(--uiScale)) !important;border-radius:calc(6px * var(--uiScale)) !important;font-size:calc(11px * var(--uiScale)) !important;}
+  #cdAbilities{font-size:calc(12px * var(--uiScale)) !important;}
+
+  /* BUILD_TAG: card_detail_responsive_scale_20260701ap */
+  #cardDetail{
+    width:calc(340px * var(--uiScale)) !important;
+    max-width:min(92vw, calc(520px * var(--uiScale))) !important;
+    max-height:min(80vh, calc(var(--pmH) - calc(32px * var(--uiScale)))) !important;
+    border-radius:calc(14px * var(--uiScale)) !important;
+    box-shadow:0 calc(16px * var(--uiScale)) calc(60px * var(--uiScale)) rgba(0,0,0,.75) !important;
+  }
+  #cdImg{width:calc(140px * var(--uiScale)) !important;min-width:calc(140px * var(--uiScale)) !important;}
+  #cdImg img{border-radius:calc(14px * var(--uiScale)) 0 0 calc(14px * var(--uiScale)) !important;}
+  #cdBody{padding:calc(12px * var(--uiScale)) calc(14px * var(--uiScale)) !important;gap:calc(8px * var(--uiScale)) !important;}
+  #cdName{font-size:calc(14px * var(--uiScale)) !important;line-height:1.3 !important;}
+  #cdMeta{gap:calc(4px * var(--uiScale)) !important;}
+  #cdMeta span{padding:calc(2px * var(--uiScale)) calc(7px * var(--uiScale)) !important;border-radius:calc(6px * var(--uiScale)) !important;font-size:calc(11px * var(--uiScale)) !important;}
+  #cdAbilities{font-size:calc(11px * var(--uiScale)) !important;line-height:1.55 !important;}
+  #cdClose{top:calc(6px * var(--uiScale)) !important;right:calc(8px * var(--uiScale)) !important;width:calc(22px * var(--uiScale)) !important;height:calc(22px * var(--uiScale)) !important;font-size:calc(13px * var(--uiScale)) !important;}
+
+
 </style>
 </head>
 <body>
@@ -2368,6 +2726,13 @@ HTML = r'''<!doctype html>
 (()=>{
   const BASE_W = 1560;
   const BASE_H = 851;
+  // BUILD_TAG: public_refresh_notice_client_version_reload_20260701ar
+  // If a public window was left open across a local patch/restart, it may keep
+  // running stale JS.  Compare the state ui_version and reload once when the
+  // server-side bundle changes, so public refresh notices use the current modal
+  // layout and owner-OK synchronization.
+  const CLIENT_UI_VERSION = 'debug_feedback_ext_hooks_public_20260701ar';
+  let clientReloadingForVersion = false;
   const urlParams = new URLSearchParams(window.location.search || '');
   const VIEW_MODE = String(urlParams.get('view') || (window.location.pathname === '/public' ? 'public' : 'private')).toLowerCase();
   const IS_PUBLIC_VIEW = (VIEW_MODE === 'public');
@@ -2560,16 +2925,20 @@ HTML = r'''<!doctype html>
     elCardDetail.classList.add('visible');
     applyPopupPeekState();
 
-    // Position near the anchor element
+    // Position near the anchor element.  Use actual scaled panel dimensions, not fixed px.
+    // BUILD_TAG: card_detail_responsive_scale_20260701ap
     if(anchorEl){
+      elCardDetail.style.transform = '';
       const rect = anchorEl.getBoundingClientRect();
-      let left = rect.right + 8;
+      const w = Math.max(1, elCardDetail.offsetWidth || 340);
+      const h = Math.max(1, elCardDetail.offsetHeight || 400);
+      const gap = Math.max(4, Number(getComputedStyle(document.documentElement).getPropertyValue('--uiScale') || 1) * 8);
+      let left = rect.right + gap;
       let top  = rect.top;
-      // keep inside viewport
-      if(left + 350 > window.innerWidth)  left = rect.left - 350;
-      if(top  + 400 > window.innerHeight) top  = window.innerHeight - 410;
-      elCardDetail.style.left = Math.max(4, left) + 'px';
-      elCardDetail.style.top  = Math.max(4, top)  + 'px';
+      if(left + w > window.innerWidth - gap) left = rect.left - w - gap;
+      if(top + h > window.innerHeight - gap) top = window.innerHeight - h - gap;
+      elCardDetail.style.left = Math.max(gap, left) + 'px';
+      elCardDetail.style.top  = Math.max(gap, top)  + 'px';
     } else {
       elCardDetail.style.left = '50%';
       elCardDetail.style.top  = '50%';
@@ -2623,6 +2992,12 @@ HTML = r'''<!doctype html>
     document.documentElement.style.setProperty('--pmW', pmW + 'px');
     document.documentElement.style.setProperty('--pmH', pmH + 'px');
     document.documentElement.style.setProperty('--scale', s.toFixed(6));
+    // BUILD_TAG: responsive_ui_scale_full_chrome_20260701al
+    // UI chrome, popups, buttons, labels and popup-inner text/icons must track
+    // the same scale as the playmat. Do not clamp this separately: a clamp makes
+    // cards resize while text/buttons appear fixed, especially on large/small windows.
+    const uiS = Math.max(0.38, s);
+    document.documentElement.style.setProperty('--uiScale', uiS.toFixed(6));
     document.documentElement.style.setProperty('--cardW', (451*s).toFixed(2) + 'px');
     document.documentElement.style.setProperty('--cardH', (630*s).toFixed(2) + 'px');
     // right-side panel width in pixels (scaled)
@@ -2639,7 +3014,16 @@ HTML = r'''<!doctype html>
   async function apiState(){
     const url = IS_PUBLIC_VIEW ? '/state?view=public' : '/state';
     const r = await fetch(url, {cache:'no-store'});
-    return await r.json();
+    const data = await r.json();
+    // BUILD_TAG: public_refresh_notice_client_version_reload_20260701ar
+    try{
+      const serverVer = String((data && data.ui_version) || '');
+      if(serverVer && serverVer !== CLIENT_UI_VERSION && !clientReloadingForVersion){
+        clientReloadingForVersion = true;
+        window.location.reload();
+      }
+    }catch(e){}
+    return data;
   }
   async function apiCmd(cmd, payload={}){
     // /public and ?view=public are read-only viewer modes.
@@ -2658,9 +3042,30 @@ HTML = r'''<!doctype html>
   function cnType(cn){
     try{ return String((st && st.cn2type && st.cn2type[cn]) || ''); }catch(e){ return ''; }
   }
-  function intrinsicOrient(cn){
+  function publicKnownOrient(cn){
+    try{
+      const m = st && st.public_hand_revealed_orient;
+      const v = m ? String(m[cn] || '') : '';
+      if(v === 'landscape' || v === 'portrait') return v;
+    }catch(e){}
+    return '';
+  }
+  function cardLooksLive(cn){
+    if(!cn || cn === '__BACK__' || cn === '__ENERGY__') return false;
+    const po = publicKnownOrient(cn);
+    if(po === 'landscape') return true;
     const t = cnType(cn).toUpperCase();
-    if(t.includes('LIVE')) return 'landscape';
+    if(t.includes('LIVE')) return true;
+    try{
+      const sc = st && st.cn2score ? Number(st.cn2score[cn] || 0) : 0;
+      if(sc > 0) return true;
+    }catch(e){}
+    return false;
+  }
+  function intrinsicOrient(cn){
+    const po = publicKnownOrient(cn);
+    if(po === 'landscape' || po === 'portrait') return po;
+    if(cardLooksLive(cn)) return 'landscape';
     return 'portrait';
   }
   function imgUrl(cn){
@@ -2675,11 +3080,25 @@ HTML = r'''<!doctype html>
     const name = (m && m[cn]) ? String(m[cn]).trim() : '';
     return name || String(cn || '');
   }
+  function cardDisplayText(cn){
+    const s = String(cn || '').trim();
+    if(!s) return '';
+    const name = cardNameFor(s);
+    const t = cnType(s).toUpperCase();
+    if(t.includes('MEMBER')){
+      const cost = cardCostFor(s);
+      const costLabel = Number.isFinite(cost) && cost > 0 ? `${cost}コスト` : 'コスト不明';
+      return `${costLabel} ${name}`;
+    }
+    if(t.includes('LIVE')) return name;
+    return name || s;
+  }
   function choiceTextLabel(raw){
     const s = String(raw || '').trim();
     const low = s.toLowerCase();
     if(!s) return '';
-    if(looksLikeCardNo(s)) return cardNameFor(s);
+    if(looksLikeCardNo(s)) return cardDisplayText(s);
+    if(HEART_LABEL_BY_COLOR[low]) return `${HEART_LABEL_BY_COLOR[low]}ハート`;
     if(low === 'skip' || low === '__skip__') return 'スキップ';
     if(low === 'pay' || low === 'yes' || low === 'y' || low === '1' || low === 'true' || low === 'apply' || low === 'use') return '使う';
     if(low === 'no' || low === 'n' || low === '0' || low === 'false') return '使わない';
@@ -2696,8 +3115,21 @@ HTML = r'''<!doctype html>
     if(low === 'keep') return 'デッキ上に残す';
     return s;
   }
+  function choiceRichLabel(raw){
+    const s = String(raw || '').trim();
+    const low = s.toLowerCase();
+    const token = HEART_TOKEN_BY_COLOR[low];
+    if(token){
+      const span = document.createElement('span');
+      span.style.cssText = 'display:inline-flex;align-items:center;gap:6px;';
+      span.appendChild(makeTextIconImg(token, HEART_LABEL_BY_COLOR[low] || low, '1.2em'));
+      span.appendChild(document.createTextNode(`${HEART_LABEL_BY_COLOR[low] || low}ハート`));
+      return span;
+    }
+    return document.createTextNode(choiceTextLabel(s));
+  }
   function cardChoiceCaption(cn, nth, tot){
-    const name = cardNameFor(cn);
+    const name = cardDisplayText(cn);
     if(tot && tot > 1) return `${name} (${nth}/${tot})`;
     return name;
   }
@@ -2972,6 +3404,17 @@ HTML = r'''<!doctype html>
   function cardGroupFor(cn){ try{ return String((st && st.cn2group && st.cn2group[cn]) || ''); }catch(e){ return ''; } }
   function cardUnitFor(cn){ try{ return String((st && st.cn2unit && st.cn2unit[cn]) || ''); }catch(e){ return ''; } }
   function cardCostFor(cn){ try{ return Number((st && st.cn2cost && st.cn2cost[cn]) || 0); }catch(e){ return 0; } }
+  function cardGroupKeysFor(cn){
+    const vals = [cardGroupFor(cn), cardUnitFor(cn)];
+    const out = [];
+    vals.forEach(v=>{
+      String(v || '').replace(/／/g, '/').split('/').forEach(part=>{
+        const s = String(part || '').trim();
+        if(s && s !== '-' && !out.includes(s)) out.push(s);
+      });
+    });
+    return out;
+  }
   function formatCostBadgeText(baseCost, effectiveCost){
     const base = Number(baseCost || 0);
     const eff = Number(effectiveCost || 0);
@@ -3180,11 +3623,20 @@ HTML = r'''<!doctype html>
   }
   function pendingEffectText(p){
     if(!p || typeof p !== 'object') return '';
-    const direct = String((p.effect_text || p.effect || p.after_effect_template || '') || '').trim();
+    // BUILD_TAG: modal_current_effect_detail_text_20260626s
+    // Effect-resolution modal must show only the currently resolving effect.
+    // Use structured pending-level effect fields, including detail_text, but do
+    // not fetch/fallback to the source card's full ability list.
+    const direct = String((p.effect_text || p.effect || p.after_effect_template || p.detail_text || '') || '').trim();
     if(direct) return direct;
     const prm = (p.prompt && typeof p.prompt === 'object') ? p.prompt : null;
     if(prm){
-      const t = String((prm.effect_text || prm.after_effect_template || prm.effect || prm.text || '') || '').trim();
+      const t = String((prm.effect_text || prm.after_effect_template || prm.effect || prm.detail_text || '') || '').trim();
+      if(t) return t;
+    }
+    const ctx = (p.ctx && typeof p.ctx === 'object') ? p.ctx : null;
+    if(ctx){
+      const t = String((ctx.effect_text || ctx.detail_text || '') || '').trim();
       if(t) return t;
     }
     return '';
@@ -3229,17 +3681,12 @@ ${text}`;
       elModalCardTextWrap.classList.add('visible');
       return;
     }
+    // Do not fall back to the source card's full ability text here.
+    // Effect-resolution popups must show only the currently resolving effect
+    // or the short instruction from pendingTextFor().  Full source-card text
+    // makes target lists unreadable and violates the modal contract.
     if(pendingHasInlineAutoEffectDetail(p)) return;
-    const cn = pendingSourceCn(p);
-    if(!cn) return;
-    const info = await getCardInfoCached(cn);
-    if(token != null && token !== modalContextToken) return;
-    if(!info) return;
-    const txt = Array.isArray(info.abilities) && info.abilities.length ? info.abilities.join('\n\n') : '（効果なし）';
-    if(token != null && token !== modalContextToken) return;
-    if(elModalCardTextTitle) elModalCardTextTitle.textContent = 'カードテキスト';
-    elModalCardText.textContent = txt;
-    elModalCardTextWrap.classList.add('visible');
+    return;
   }
   function setModalChoiceHoverHint(msg){
     const s = String(msg || '').trim();
@@ -3439,12 +3886,100 @@ ${text}`;
     return d;
   }
 
-  function renderLog(zoneEl, lines){
+  function shortCardListForLog(cards, maxN){
+    const arr = Array.isArray(cards) ? cards.map(x=>String(x||'').trim()).filter(Boolean) : [];
+    if(!arr.length) return '';
+    const n = Number.isFinite(Number(maxN)) ? Math.max(1, Number(maxN)) : 3;
+    const head = arr.slice(0, n).map(cn => cardDisplayText(cn));
+    if(arr.length > n) head.push(`他${arr.length - n}枚`);
+    return head.join(' / ');
+  }
+
+  function effectEventLabel(ev){
+    const t = String(ev && ev.type || '').trim();
+    const map = {
+      yell: 'YELL',
+      additional_yell: 'ADD YELL',
+      reroll_yell: 'RE-YELL',
+      yell_bladeheart_loss: 'LOSS',
+      yell_bladeheart_loss_warn: 'WARN'
+    };
+    return map[t] || (t ? t.toUpperCase().slice(0, 12) : 'EFFECT');
+  }
+
+  function effectEventBody(ev){
+    if(!ev || typeof ev !== 'object') return {detail:'', meta:''};
+    const type = String(ev.type || '');
+    const detail = String(ev.detail || '');
+    const src = String(ev.source_cn || '').trim();
+    let meta = '';
+    if(type === 'yell' || type === 'additional_yell'){
+      const revealed = shortCardListForLog(ev.revealed, 3);
+      const drew = Array.isArray(ev.drawn) ? ev.drawn.length : Number(ev.drew_count || ev.drew || 0) || 0;
+      const drawIcons = Number(ev.draw_icons || ev.draw_icon_count || 0) || 0;
+      meta = `${revealed || '公開カードなし'}${drawIcons ? ` / ドローアイコン×${drawIcons}` : ''}${drew ? ` / ${drew}枚ドロー` : ''}`;
+    }else if(type === 'reroll_yell'){
+      meta = `${src ? cardDisplayText(src) + ' / ' : ''}${shortCardListForLog(ev.moved, 3)}${ev.extra_count ? ` / 追加エール${ev.extra_count}枚` : ''}`;
+    }else if(type === 'yell_bladeheart_loss' || type === 'yell_bladeheart_loss_warn'){
+      meta = `${shortCardListForLog(ev.cards, 3)}${ev.lost_draw_icons ? ` / 失う対象にドローアイコン×${ev.lost_draw_icons}` : ''}`;
+    }else{
+      const cards = ev.cards || ev.revealed || ev.moved || [];
+      meta = `${src ? cardDisplayText(src) : ''}${cards && cards.length ? (src ? ' / ' : '') + shortCardListForLog(cards, 3) : ''}`;
+    }
+    return {detail, meta};
+  }
+
+  function renderEffectEvents(container, events){
+    const list = Array.isArray(events) ? events.filter(ev=>ev && typeof ev === 'object') : [];
+    if(!list.length) return;
+    const panel = document.createElement('div');
+    panel.id = 'effectLogPanel';
+    const header = document.createElement('div');
+    header.className = 'effectLogHeader';
+    const title = document.createElement('span');
+    title.textContent = 'EFFECT EVENTS';
+    const hint = document.createElement('span');
+    hint.className = 'effectLogHint';
+    hint.textContent = '最新8件';
+    header.appendChild(title);
+    header.appendChild(hint);
+    panel.appendChild(header);
+
+    for(const ev of list.slice(-8).reverse()){
+      const row = document.createElement('div');
+      row.className = 'effectLogRow';
+      const type = document.createElement('div');
+      type.className = 'effectLogType';
+      type.textContent = effectEventLabel(ev);
+      const body = document.createElement('div');
+      body.className = 'effectLogBody';
+      const obj = effectEventBody(ev);
+      const detail = document.createElement('div');
+      detail.className = 'effectLogDetail';
+      const seq = ev.seq ? `#${ev.seq} ` : '';
+      detail.textContent = `${seq}${obj.detail || effectEventLabel(ev)}`;
+      const meta = document.createElement('div');
+      meta.className = 'effectLogMeta';
+      meta.textContent = obj.meta || `${ev.phase || ''}${ev.turn ? ` / turn ${ev.turn}` : ''}`;
+      body.appendChild(detail);
+      body.appendChild(meta);
+      row.appendChild(type);
+      row.appendChild(body);
+      panel.appendChild(row);
+    }
+    container.appendChild(panel);
+  }
+
+  function renderLog(zoneEl, lines, events){
     const inner = zoneEl.querySelector('.zoneInner');
     const box = document.createElement('div');
     box.id = 'logBox';
-    const tail = (lines||[]).slice(-28).join('\n');
-    box.textContent = tail;
+    renderEffectEvents(box, events || []);
+    const raw = document.createElement('div');
+    raw.id = 'rawLogText';
+    const tailN = (events && events.length) ? 20 : 28;
+    raw.textContent = (lines||[]).slice(-tailN).join('\n');
+    box.appendChild(raw);
     inner.appendChild(box);
   }
 
@@ -3603,7 +4138,12 @@ ${text}`;
       const cn = (ri >= 0 && ri < revealedShow.length) ? revealedShow[ri] : '__BACK__';
       const isKnown = cn !== '__BACK__';
       const cap = isKnown ? labelFor(cn) : '';
-      const card = makeCard(cn, 'portrait', x, y, sz.w, sz.h, cap, null, false, 100+i, true, 'portrait');
+      // Public-known cards in hand must use their real intrinsic orientation.
+      // LIVE cards are force-marked as landscape by publicKnownOrient/cardLooksLive,
+      // so they rotate into the portrait hand slot.  Only the non-public back
+      // image is forced to portrait.
+      const forceIntr = isKnown ? (cardLooksLive(cn) ? 'landscape' : 'portrait') : 'portrait';
+      const card = makeCard(cn, 'portrait', x, y, sz.w, sz.h, cap, null, false, 100+i, true, forceIntr);
       if(isKnown){
         card.classList.add('publicKnownHandCard');
       }
@@ -3668,6 +4208,240 @@ ${text}`;
   }
 
   let lastPublicHandRevealSeq = 0;
+  // BUILD_TAG: refresh_notice_undo_owner_resync_20260701aq
+  // Keep the refresh acknowledgement local to the current browser lifecycle.
+  // Persisting it in sessionStorage made undo/replay suppress a freshly restored
+  // notice with the same seq.  The server-side ack is only used to close public
+  // windows after the owner presses OK.
+  let lastRefreshNoticeSeq = 0;
+  function setLastRefreshNoticeSeq(v){
+    const n = Math.max(0, Number(v || 0) || 0);
+    lastRefreshNoticeSeq = n;
+  }
+  function ownerAckedRefreshSeq(){
+    return Number(st && st.refresh_notice_ack_seq || 0) || 0;
+  }
+
+  function latestUnseenRefreshNotice(){
+    // BUILD_TAG: refresh_notice_undo_replay_reset_20260701am
+    // Undo restores an older game snapshot.  If the browser-side acknowledged
+    // seq remains larger than the restored state seq, repeating the same action
+    // can create the same refresh seq again and the popup would be suppressed.
+    // Clamp the local acknowledgement back to the state timeline before looking
+    // for unseen refresh notices.
+    if(st){
+      const stateSeq = Number(st.refresh_notice_seq || 0);
+      if(isFinite(stateSeq) && stateSeq < lastRefreshNoticeSeq){
+        setLastRefreshNoticeSeq(stateSeq);
+      }
+    }
+    // BUILD_TAG: refresh_notice_undo_owner_resync_20260701aq
+    // Owner-side display must not be suppressed by the synchronized public ack;
+    // after undo, the owner may legitimately need to see the same seq again.
+    // Public windows, however, should obey the owner's ack and close/ignore it.
+    const ackFloor = IS_PUBLIC_VIEW
+      ? Math.max(Number(lastRefreshNoticeSeq || 0) || 0, ownerAckedRefreshSeq())
+      : (Number(lastRefreshNoticeSeq || 0) || 0);
+    if(!st || !Array.isArray(st.refresh_notices)) return null;
+    let best = null;
+    st.refresh_notices.forEach(ev=>{
+      if(!ev || typeof ev !== 'object') return;
+      const seq = Number(ev.seq || 0);
+      if(seq > ackFloor && (!best || seq > Number(best.seq || 0))) best = ev;
+    });
+    return best;
+  }
+
+  function liveCardsFromRefreshNotice(ev){
+    const arr = (ev && Array.isArray(ev.returned_live_cards)) ? ev.returned_live_cards : [];
+    return arr.map(x=>({cardnumber:String((x && x.cardnumber) || '').trim(), count:Number((x && x.count) || 0)})).filter(x=>x.cardnumber && x.count > 0);
+  }
+
+  function uiCalc(px){
+    return `calc(${Number(px) || 0}px * var(--uiScale))`;
+  }
+
+  function showRefreshNoticePopup(ev){
+    if(!ev) return false;
+    const seq = Number(ev.seq || 0);
+    popup = {type:'refresh_notice', seq:seq, closable:false};
+    clearModalLead();
+    elModalTitle.textContent = 'リフレッシュ';
+    elModalActions.innerHTML = '';
+    elModalCards.innerHTML = '';
+    elModalCardTextWrap.classList.remove('visible');
+    // BUILD_TAG: responsive_ui_scale_20260701ak
+    // Refresh notices are summary UIs, not effect-resolution UIs.  Keep the text
+    // compact, remove internal reason keys, align count values, and show returned
+    // LIVE cards as a scroll-safe compact list so 4+ kinds / 10+ cards do not clip.
+    elModalCond.textContent = '';
+    elModalCond.style.display = 'none';
+
+    const total = Number(ev.returned_total || 0);
+    const noBh = Number(ev.returned_no_bladeheart_count || 0);
+    setRichText(elModalText, 'リフレッシュを行いました。');
+
+    const summary = document.createElement('div');
+    summary.style.cssText = [
+      'display:grid',
+      `grid-template-columns:minmax(${uiCalc(220)},auto) ${uiCalc(96)}`,
+      `gap:${uiCalc(8)} ${uiCalc(14)}`,
+      'align-items:center',
+      `margin:${uiCalc(10)} 0 ${uiCalc(14)} 0`,
+      `padding:${uiCalc(12)} ${uiCalc(14)}`,
+      'border:1px solid rgba(255,255,255,.18)',
+      `border-radius:${uiCalc(12)}`,
+      'background:rgba(255,255,255,.045)',
+      `max-width:${uiCalc(560)}`
+    ].join(';');
+    const addSummaryRow = (label, value)=>{
+      const lab = document.createElement('div');
+      lab.textContent = label;
+      lab.style.cssText = `font-size:${uiCalc(16)};line-height:1.35;color:rgba(255,255,255,.88);white-space:normal;`;
+      const val = document.createElement('div');
+      val.textContent = `${value}枚`;
+      val.style.cssText = [
+        'justify-self:end',
+        `min-width:${uiCalc(76)}`,
+        `padding:${uiCalc(5)} ${uiCalc(10)}`,
+        'border-radius:999px',
+        'background:rgba(255,214,64,.18)',
+        'border:1px solid rgba(255,214,64,.55)',
+        'color:#ffe066',
+        `font-size:${uiCalc(20)}`,
+        'font-weight:900',
+        'line-height:1',
+        'text-align:right',
+        'font-variant-numeric:tabular-nums'
+      ].join(';');
+      summary.appendChild(lab);
+      summary.appendChild(val);
+    };
+    addSummaryRow('山札に戻った総枚数', total);
+    addSummaryRow('ブレードハートを持たないカード', noBh);
+    elModalCards.appendChild(summary);
+
+    const lives = liveCardsFromRefreshNotice(ev);
+    const section = document.createElement('div');
+    section.style.cssText = [
+      `margin-top:${uiCalc(6)}`,
+      'border:1px solid rgba(111,210,255,.34)',
+      `border-radius:${uiCalc(12)}`,
+      'background:rgba(20,70,80,.24)',
+      'overflow:hidden',
+      `max-width:${uiCalc(720)}`
+    ].join(';');
+    const head = document.createElement('div');
+    head.textContent = lives.length ? '山札に戻ったライブカード' : '山札に戻ったライブカード: なし';
+    head.style.cssText = [
+      `padding:${uiCalc(9)} ${uiCalc(12)}`,
+      `font-size:${uiCalc(17)}`,
+      'font-weight:800',
+      'color:#e9fbff',
+      'background:rgba(111,210,255,.12)',
+      'border-bottom:1px solid rgba(111,210,255,.22)'
+    ].join(';');
+    section.appendChild(head);
+
+    if(lives.length){
+      const list = document.createElement('div');
+      list.style.cssText = [
+        'display:grid',
+        'grid-template-columns:repeat(auto-fit,minmax(270px,1fr))',
+        `gap:${uiCalc(8)}`,
+        `padding:${uiCalc(10)}`,
+        `max-height:min(calc(var(--pmH) * 0.40), ${uiCalc(360)})`,
+        'overflow-y:auto',
+        'overflow-x:hidden',
+        'box-sizing:border-box'
+      ].join(';');
+      lives.forEach((it)=>{
+        const cn = it.cardnumber;
+        const row = document.createElement('div');
+        row.style.cssText = [
+          'display:grid',
+          `grid-template-columns:${uiCalc(58)} minmax(0,1fr) ${uiCalc(46)}`,
+          'align-items:center',
+          `gap:${uiCalc(9)}`,
+          `min-height:${uiCalc(48)}`,
+          `padding:${uiCalc(6)} ${uiCalc(8)}`,
+          'border:1px solid rgba(255,255,255,.14)',
+          `border-radius:${uiCalc(10)}`,
+          'background:rgba(0,0,0,.18)',
+          'box-sizing:border-box'
+        ].join(';');
+        const img = document.createElement('img');
+        img.src = imgUrl(cn);
+        img.alt = cn;
+        img.style.cssText = `width:${uiCalc(58)};height:${uiCalc(38)};object-fit:contain;border-radius:${uiCalc(5)};background:rgba(255,255,255,.04);`;
+        const nameBox = document.createElement('div');
+        nameBox.style.cssText = 'min-width:0;display:flex;flex-direction:column;gap:2px;';
+        const name = document.createElement('div');
+        name.textContent = cardNameFor(cn) || cn;
+        name.style.cssText = `font-size:${uiCalc(15)};line-height:1.25;color:#fff;white-space:normal;overflow:visible;word-break:break-word;`;
+        const code = document.createElement('div');
+        code.textContent = cn;
+        code.style.cssText = `font-size:${uiCalc(11)};line-height:1.15;color:rgba(255,255,255,.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;`;
+        nameBox.appendChild(name);
+        nameBox.appendChild(code);
+        const cnt = document.createElement('div');
+        cnt.textContent = `×${it.count}`;
+        cnt.style.cssText = [
+          'justify-self:end',
+          `min-width:${uiCalc(38)}`,
+          `padding:${uiCalc(4)} ${uiCalc(7)}`,
+          'border-radius:999px',
+          'background:rgba(255,255,255,.12)',
+          'border:1px solid rgba(255,255,255,.24)',
+          'color:#fff',
+          `font-size:${uiCalc(17)}`,
+          'font-weight:900',
+          'font-variant-numeric:tabular-nums',
+          'text-align:right'
+        ].join(';');
+        row.appendChild(img);
+        row.appendChild(nameBox);
+        row.appendChild(cnt);
+        list.appendChild(row);
+      });
+      section.appendChild(list);
+    }
+    elModalCards.appendChild(section);
+
+    const ok = document.createElement('button');
+    ok.className = 'miniBtn';
+    ok.textContent = 'OK';
+    ok.addEventListener('click', async (ev2)=>{
+      ev2.stopPropagation();
+      setLastRefreshNoticeSeq(Math.max(lastRefreshNoticeSeq, seq));
+      if(!IS_PUBLIC_VIEW){
+        try{
+          st = await apiCmd('ack_refresh_notice', {seq});
+          updateTop();
+        }catch(e){ console.warn(e); }
+      }
+      closePopup();
+      render();
+    });
+    elModalActions.appendChild(ok);
+    elMask.style.display = 'block';
+    applyPopupPeekState();
+    return true;
+  }
+
+  function maybeShowRefreshNotice(){
+    const ev = latestUnseenRefreshNotice();
+    if(ev){
+      if(popup && popup.type === 'refresh_notice' && Number(popup.seq || 0) === Number(ev.seq || 0)) return true;
+      showRefreshNoticePopup(ev);
+      return true;
+    }
+    if(popup && popup.type === 'refresh_notice'){
+      // If the owner window acknowledged the notice, public windows close it on poll.
+      closePopup();
+    }
+    return false;
+  }
 
   function publicHandRevealedCards(){
     if(!st || !Array.isArray(st.public_hand_revealed_cards)) return [];
@@ -4089,7 +4863,7 @@ inner.appendChild(card);
               'display:inline-flex',
               'align-items:center',
               'justify-content:center',
-              'min-width:38px',
+              `min-width:${uiCalc(38)}`,
               'height:18px',
               'padding:1px 5px',
               'border-radius:999px',
@@ -4188,6 +4962,24 @@ inner.appendChild(card);
     btnUndo.addEventListener('click', async (ev)=>{
       ev.stopPropagation();
       st = await apiCmd('undo', {});
+      // BUILD_TAG: refresh_notice_undo_owner_resync_20260701aq
+      // Undo may restore a snapshot where the same refresh notice seq is present
+      // again.  If so, lower the local acknowledgement below that notice, not
+      // merely to the state seq, so the popup is shown again.
+      try{
+        const notices = Array.isArray(st && st.refresh_notices) ? st.refresh_notices : [];
+        let restoredNoticeSeq = 0;
+        notices.forEach((ev)=>{
+          const seq = Number(ev && ev.seq || 0);
+          if(isFinite(seq) && seq > restoredNoticeSeq) restoredNoticeSeq = seq;
+        });
+        if(restoredNoticeSeq > 0){
+          setLastRefreshNoticeSeq(Math.min(lastRefreshNoticeSeq, Math.max(0, restoredNoticeSeq - 1)));
+        }else{
+          const stateSeq = Number(st && st.refresh_notice_seq || 0);
+          if(isFinite(stateSeq)) setLastRefreshNoticeSeq(Math.min(lastRefreshNoticeSeq, stateSeq));
+        }
+      }catch(e){}
       selHand = [];
       updateTop();
       render();
@@ -4210,6 +5002,26 @@ inner.appendChild(card);
     wrap.appendChild(btnUndo);
     wrap.appendChild(btnNext);
     inner.appendChild(wrap);
+  }
+
+  function appendYellRevealDrawNotice(p){
+    if(!p) return;
+    const n = Number(p.yell_draw_icon_count || 0);
+    if(!Number.isFinite(n) || n <= 0) return;
+    const drew = Number(p.yell_draw_drew_count || 0);
+    const label = String(p.yell_draw_notice_label || `ドローアイコン×${n} → ${Number.isFinite(drew) ? drew : 0}枚ドロー済み`);
+    const note = document.createElement('div');
+    note.className = 'yellRevealDrawNotice';
+    note.title = String(p.yell_draw_notice_text || `このエールで公開されたドローアイコン×${n}は処理済みです。`);
+    const tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.textContent = 'DRAW';
+    const body = document.createElement('span');
+    body.textContent = label;
+    note.appendChild(tag);
+    note.appendChild(body);
+    elModalText.appendChild(document.createElement('br'));
+    elModalText.appendChild(note);
   }
 
   function openCardListPopup(title, cards, {closable=true, helperText='', forcePortrait=false, forceLandscape=false, confirmClose=false } = {}){
@@ -4619,6 +5431,7 @@ inner.appendChild(card);
         closable: false,
         helperText
       });
+      appendYellRevealDrawNotice(p);
       popup = {type:'pending', closable:false};
       const btnOk = document.createElement('button');
       btnOk.className = 'miniBtn';
@@ -4688,6 +5501,139 @@ inner.appendChild(card);
       const dimsL = standardSize('landscape');
       const maxW  = Math.max(dimsP.w, dimsL.w);
       const maxH  = Math.max(dimsP.h, dimsL.h);
+      const pickCount = Number((p && p.pick_count) || 1);
+      const minPickCount = Number((p && p.min_pick_count) || 0);
+      const maxPickCount = Number((p && p.max_pick_count) || pickCount || 1);
+
+      // BUILD_TAG: server_choose_from_topk_duplicate_index_multi_20260701ai
+      // Multi-pick topdeck effects must track selected *indices*, not cardnumbers.
+      // Cardnumbers can appear multiple times in the revealed pool, and selecting a
+      // second copy of the same cardnumber must not toggle the first copy off.
+      if(pickCount > 1){
+        const selected = [];  // indices into displayCards
+        const uniqueByGroup = !!(p && p.unique_by_group);
+        const row = document.createElement('div');
+        row.className = 'choiceRow';
+        row.style.overflowX = 'visible';
+        row.style.overflowY = 'visible';
+        row.style.maxWidth = 'none';
+        row.style.width = 'max-content';
+        const dupCount = {};
+        displayCards.forEach(o=>{ const k=String(o).trim(); dupCount[k]=(dupCount[k]||0)+1; });
+        const dupSeen = {};
+        const cardsByIdx = {};
+        const usedGroupKeys = ()=>{
+          const keys = new Set();
+          selected.forEach(idx => {
+            const cn = String(displayCards[idx] || '').trim();
+            cardGroupKeysFor(cn).forEach(k => keys.add(k));
+          });
+          return keys;
+        };
+        const refreshCards = ()=>{
+          const used = usedGroupKeys();
+          Object.entries(cardsByIdx).forEach(([idxStr, el])=>{
+            const idx = Number(idxStr);
+            const cn = String(displayCards[idx] || '').trim();
+            const isCandidate = candidateSet.has(cn);
+            const isSelected = selected.includes(idx);
+            const groupBlocked = uniqueByGroup && !isSelected && cardGroupKeysFor(cn).some(k => used.has(k));
+            const disabled = !isCandidate || groupBlocked || (!isSelected && selected.length >= maxPickCount);
+            el.classList.toggle('selected', isSelected);
+            el.style.outline = isSelected ? '3px solid #ffe066' : '';
+            el.style.opacity = disabled ? '0.35' : '1';
+            el.style.filter = disabled ? 'grayscale(80%)' : '';
+            el.style.cursor = disabled ? 'not-allowed' : 'pointer';
+            const badge = el.querySelector('.choiceOrderBadge');
+            if(badge){
+              badge.textContent = isSelected ? String(selected.indexOf(idx) + 1) : '';
+              badge.style.display = isSelected ? 'flex' : 'none';
+            }
+          });
+          if(optional && minPickCount <= 0){
+            bDone.textContent = selected.length > 0 ? `確定 (${selected.length}/${maxPickCount}枚)` : '確定せず終了';
+          }else{
+            bDone.textContent = `確定 (${selected.length}/${maxPickCount}枚)`;
+          }
+          bDone.disabled = selected.length < minPickCount || selected.length > maxPickCount;
+          bDone.style.opacity = bDone.disabled ? '0.5' : '1';
+        };
+        displayCards.forEach((rawCn, idx)=>{
+          const cn = String(rawCn).trim();
+          const intr = intrinsicOrient(cn);
+          const d = (intr === 'landscape') ? dimsL : dimsP;
+          const wrap = document.createElement('button');
+          wrap.className = 'choiceBtn';
+          wrap.style.width = d.w + 'px';
+          wrap.style.height = d.h + 'px';
+          wrap.style.position = 'relative';
+          const img = document.createElement('img');
+          img.src = imgUrl(cn);
+          img.alt = cn;
+          dupSeen[cn] = (dupSeen[cn] || 0) + 1;
+          const cap = document.createElement('div');
+          cap.className = 'choiceCap';
+          cap.textContent = cardChoiceCaption(cn, dupSeen[cn], dupCount[cn] || 0);
+          const badge = document.createElement('div');
+          badge.className = 'choiceOrderBadge';
+          badge.style.cssText = 'display:none;position:absolute;left:6px;top:6px;z-index:90;width:24px;height:24px;border-radius:999px;align-items:center;justify-content:center;background:#ffe066;color:#111;font-weight:900;border:1px solid rgba(0,0,0,.35);box-shadow:0 1px 5px rgba(0,0,0,.4);';
+          wrap.appendChild(img);
+          wrap.appendChild(cap);
+          wrap.appendChild(badge);
+          wrap.addEventListener('click', ev=>{
+            ev.stopPropagation();
+            const isCandidate = candidateSet.has(cn);
+            const selIdx = selected.indexOf(idx);
+            if(selIdx >= 0){
+              selected.splice(selIdx, 1);
+              refreshCards();
+              return;
+            }
+            if(!isCandidate) return;
+            if(selected.length >= maxPickCount) return;
+            if(uniqueByGroup){
+              const used = usedGroupKeys();
+              if(cardGroupKeysFor(cn).some(k => used.has(k))) return;
+            }
+            selected.push(idx);
+            refreshCards();
+          });
+          cardsByIdx[idx] = wrap;
+          row.appendChild(wrap);
+        });
+        elModalCards.appendChild(row);
+
+        const bDone = document.createElement('button');
+        bDone.className = 'miniBtn';
+        bDone.addEventListener('click', async ev=>{
+          ev.stopPropagation();
+          if(bDone.disabled) return;
+          const selectedCards = selected.map(idx => String(displayCards[idx] || '').trim()).filter(Boolean);
+          const choice = selectedCards.length ? (selectedCards.join(',') + ',') : 'done';
+          st = await apiCmd('resolve_pending', {idx:0, choice});
+          selHand = [];
+          updateTop();
+          render();
+        });
+        elModalActions.appendChild(bDone);
+
+        if(optional){
+          const bSkip = document.createElement('button');
+          bSkip.className = 'miniBtn';
+          bSkip.textContent = 'スキップ';
+          bSkip.addEventListener('click', async ev => {
+            ev.stopPropagation();
+            st = await apiCmd('resolve_pending', {idx:0, choice:'skip'});
+            selHand = [];
+            updateTop();
+            render();
+          });
+          elModalActions.appendChild(bSkip);
+        }
+        refreshCards();
+        elMask.style.display = 'block';
+        return;
+      }
 
       // surf（カード列）を生成するヘルパー
       function makeSplitSurf(cards, clickable){
@@ -4758,6 +5704,28 @@ inner.appendChild(card);
       elModalCards.appendChild(splitWrap);
 
       if(optional){
+        const pickedCount = Array.isArray(p.picked) ? p.picked.length : 0;
+        const hasDoneOption = Array.isArray(p.options) && p.options.some(o => {
+          const s = String(o || '').trim();
+          const low = s.toLowerCase();
+          return low === 'done' || low === '__done__' || low === 'confirm' || s === '確定';
+        });
+        if(hasDoneOption || pickedCount > 0){
+          const bDone = document.createElement('button');
+          bDone.className = 'miniBtn';
+          bDone.textContent = pickedCount > 0 ? `確定 (${pickedCount}枚)` : '確定';
+          let _cfDoneSubmitting = false;
+          bDone.addEventListener('click', async ev => {
+            ev.stopPropagation();
+            if(_cfDoneSubmitting) return;
+            _cfDoneSubmitting = true;
+            st = await apiCmd('resolve_pending', {idx:0, choice:'done'});
+            selHand = [];
+            updateTop();
+            render();
+          });
+          elModalActions.appendChild(bDone);
+        }
         const bSkip = document.createElement('button');
         bSkip.className = 'miniBtn';
         bSkip.textContent = 'スキップ';
@@ -5738,6 +6706,182 @@ inner.appendChild(card);
 
     const allCardNo = opts.length && opts.every(o=>looksLikeCardNo(o));
 
+    if(kind === 'choose_revealed_for_heart_colors_to_stage_named'){
+      const displayCards = Array.isArray(p.display_cards) ? p.display_cards : (Array.isArray(p.pool) ? p.pool : opts);
+      const candidateSet2 = new Set((Array.isArray(p.candidates) ? p.candidates : opts).map(c => String(c).trim()));
+      popup = {type:'pending', closable:false};
+      elModalTitle.textContent = '公開カードを選択';
+      setRichText(elModalText, pendText || '公開されたカードのうち、条件に合うカードを選んでください。');
+      elModalCards.innerHTML = '';
+      elModalActions.innerHTML = '';
+      const row = document.createElement('div');
+      row.className = 'choiceRow';
+      row.style.overflowX = 'visible';
+      row.style.overflowY = 'visible';
+      row.style.maxWidth = 'none';
+      row.style.width = 'max-content';
+      const dimsP = standardSize('portrait');
+      const dimsL = standardSize('landscape');
+      const dupCount = {};
+      displayCards.forEach(o=>{ const k=String(o).trim(); dupCount[k]=(dupCount[k]||0)+1; });
+      const dupSeen = {};
+      displayCards.forEach(rawCn=>{
+        const cn = String(rawCn).trim();
+        const intr = intrinsicOrient(cn);
+        const d = (intr === 'landscape') ? dimsL : dimsP;
+        const b = document.createElement('button');
+        b.className = 'choiceBtn';
+        b.style.width = d.w + 'px';
+        b.style.height = d.h + 'px';
+        const selectable = candidateSet2.has(cn);
+        if(!selectable){
+          b.style.opacity = '0.35';
+          b.style.filter = 'grayscale(80%)';
+          b.style.cursor = 'not-allowed';
+        }
+        const img = document.createElement('img');
+        img.src = imgUrl(cn);
+        img.alt = cn;
+        dupSeen[cn] = (dupSeen[cn] || 0) + 1;
+        const cap = document.createElement('div');
+        cap.className = 'choiceCap';
+        cap.textContent = cardChoiceCaption(cn, dupSeen[cn], dupCount[cn] || 0);
+        b.appendChild(img);
+        b.appendChild(cap);
+        b.addEventListener('click', async ev=>{
+          ev.stopPropagation();
+          if(!selectable) return;
+          st = await apiCmd('resolve_pending', {idx:0, choice:cn});
+          selHand=[]; updateTop(); render();
+        });
+        row.appendChild(b);
+      });
+      elModalCards.appendChild(row);
+      elMask.style.display = 'block';
+      return;
+    }
+
+    if(kind === 'choose_stage_named_for_picked_hearts'){
+      const picked = String((p && p.picked_card) || '').trim();
+      const posOpts = opts.filter(o => ['L','C','R'].includes(String(o).toUpperCase()));
+      popup = {type:'pending', closable:false};
+      elModalTitle.textContent = '付与するメンバーを選択';
+      setRichText(elModalText, pendText || `${cardDisplayText(picked)} が持つ色のハートを付与するステージ上メンバーを選んでください。`);
+      elModalCards.innerHTML = '';
+      elModalActions.innerHTML = '';
+      const row = document.createElement('div');
+      row.className = 'choiceRow';
+      row.style.overflowX = 'visible';
+      row.style.overflowY = 'visible';
+      row.style.maxWidth = 'none';
+      row.style.width = 'max-content';
+      const dimsP = standardSize('portrait');
+      const dimsL = standardSize('landscape');
+      posOpts.forEach(rawPos=>{
+        const pos = String(rawPos).toUpperCase();
+        const slot = st && st.stage ? st.stage[pos] : null;
+        const cn = slot && slot.cardnumber ? String(slot.cardnumber) : '';
+        const label = {L:'レフトエリア', C:'センターエリア', R:'ライトエリア'}[pos] || pos;
+        const intr = intrinsicOrient(cn);
+        const d = (intr === 'landscape') ? dimsL : dimsP;
+        const b = document.createElement('button');
+        b.className = 'choiceBtn';
+        b.style.width = d.w + 'px';
+        b.style.height = d.h + 'px';
+        const img = document.createElement('img');
+        img.src = imgUrl(cn);
+        img.alt = cn;
+        const cap = document.createElement('div');
+        cap.className = 'choiceCap';
+        cap.textContent = `${label} / ${cardDisplayText(cn)}`;
+        b.appendChild(img);
+        b.appendChild(cap);
+        b.title = `${cardDisplayText(picked)} が持つ色のハートを ${label} の ${cardDisplayText(cn)} に付与`;
+        b.addEventListener('click', async ev=>{
+          ev.stopPropagation();
+          st = await apiCmd('resolve_pending', {idx:0, choice:pos});
+          selHand=[]; updateTop(); render();
+        });
+        row.appendChild(b);
+      });
+      elModalCards.appendChild(row);
+      elMask.style.display = 'block';
+      return;
+    }
+
+    if(kind === 'confirm_repeat_mill_top1_gain_blade_wait_if_live'){
+      const displayCards = Array.isArray(p.display_cards) ? p.display_cards : [];
+      if(displayCards.length){
+        const helper = pendText || '直前に控え室へ置いたカードを確認し、続けるか選んでください。';
+        openCardListPopup('効果処理結果', displayCards, {closable:false, helperText:helper});
+        popup = {type:'pending', closable:false};
+        elModalActions.innerHTML = '';
+        const bUse = document.createElement('button');
+        bUse.className = 'miniBtn';
+        bUse.textContent = '続ける';
+        bUse.addEventListener('click', async ev=>{
+          ev.stopPropagation();
+          st = await apiCmd('resolve_pending', {idx:0, choice:'使う'});
+          selHand=[]; updateTop(); render();
+        });
+        const bSkip = document.createElement('button');
+        bSkip.className = 'miniBtn';
+        bSkip.textContent = '終了';
+        bSkip.addEventListener('click', async ev=>{
+          ev.stopPropagation();
+          st = await apiCmd('resolve_pending', {idx:0, choice:'スキップ'});
+          selHand=[]; updateTop(); render();
+        });
+        elModalActions.appendChild(bUse);
+        elModalActions.appendChild(bSkip);
+        return;
+      }
+    }
+
+    if(kind === 'topk_stage_or_hand'){
+      const cardCn = String((p && p.card) || '').trim();
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;flex-direction:column;gap:10px;align-items:stretch;max-width:720px;';
+      const choices = [];
+      if(opts.some(o => String(o).toLowerCase() === 'hand')){
+        choices.push({choice:'hand', title:'手札に加える', body:`${cardDisplayText(cardCn)} を手札に加えます。`});
+      }
+      ['L','C','R'].forEach(pos=>{
+        if(opts.some(o => String(o).toUpperCase() === pos)){
+          const posLabel = {L:'レフトエリア', C:'センターエリア', R:'ライトエリア'}[pos] || pos;
+          choices.push({choice:pos, title:`${posLabel}に登場させる`, body:`メンバーのいない${posLabel}に ${cardDisplayText(cardCn)} を登場させます。`});
+        }
+      });
+      choices.forEach(it=>{
+        const b = document.createElement('button');
+        b.className = 'miniBtn';
+        b.style.cssText = 'text-align:left;padding:12px 14px;border-radius:12px;line-height:1.45;background:rgba(255,255,255,.08);';
+        const title = document.createElement('div');
+        title.style.cssText = 'font-weight:900;color:#fff;font-size:14px;';
+        title.textContent = it.title;
+        const body = document.createElement('div');
+        body.style.cssText = 'font-size:12px;color:#cfcfcf;margin-top:4px;';
+        body.textContent = it.body;
+        b.appendChild(title);
+        b.appendChild(body);
+        b.addEventListener('click', async ev=>{
+          ev.stopPropagation();
+          st = await apiCmd('resolve_pending', {idx:0, choice:it.choice});
+          selHand=[]; updateTop(); render();
+        });
+        row.appendChild(b);
+      });
+      if(!choices.length){
+        const note = document.createElement('div');
+        note.style.cssText = 'color:#ddd;font-size:13px;';
+        note.textContent = '選択できる移動先がありません。';
+        row.appendChild(note);
+      }
+      elModalCards.appendChild(row);
+      elMask.style.display = 'block';
+      return;
+    }
+
     // position_change: show stage position choices as image buttons (same style as stage-choice UI)
     if(kind === 'position_change'){
       const stagePosHasSkipPC = opts.some(o => String(o).toLowerCase() === 'skip');
@@ -5984,7 +7128,7 @@ inner.appendChild(card);
     }
 
     // choose_*_from_green: card images + optional Skip button when 1枚まで/optional
-    if(kind === 'choose_live_from_green' || kind === 'choose_member_from_green'){
+    if(kind === 'choose_live_from_green' || kind === 'choose_member_from_green' || kind === 'choose_live_from_green_to_deck_nth'){
       const cardOpts = opts.filter(o => looksLikeCardNo(String(o)));
       const hasSkip = !!(p && (p.allow_skip || p.allow_less || p.optional)) || opts.some(o => String(o).toLowerCase() === 'skip');
       const row = document.createElement('div');
@@ -6162,7 +7306,12 @@ inner.appendChild(card);
       opts.forEach(opt=>{
         const b = document.createElement('button');
         b.className = 'miniBtn';
-        b.textContent = (kind === 'choose_opponent_wait_count_for_topdeck_green_group_members' || kind === 'opponent_wait_notify') ? String(opt) : choiceTextLabel(opt);
+        if(kind === 'choose_opponent_wait_count_for_topdeck_green_group_members' || kind === 'opponent_wait_notify'){
+          b.textContent = String(opt);
+        }else{
+          b.textContent = '';
+          b.appendChild(choiceRichLabel(opt));
+        }
         b.addEventListener('click', async (ev)=>{
           ev.stopPropagation();
           st = await apiCmd('resolve_pending', {idx:0, choice:String(opt)});
@@ -6311,7 +7460,7 @@ inner.appendChild(card);
       const zd = zoneDiv(z);
       zels[k] = zd;
       elZones.appendChild(zd);
-      if(z.kind==='log') renderLog(zd, st.log || []);
+      if(z.kind==='log') renderLog(zd, st.log || [], st.effect_events || []);
     }
 
     // DECK: public view receives only deck_count, so keep the back-card mask visible.
@@ -6365,8 +7514,11 @@ inner.appendChild(card);
     renderPublicKnownHandPanel();
     consumePublicHandRevealEvents();
 
-    // Pending (choice) takes precedence; public view receives redacted public_pending.
-    if(IS_PUBLIC_VIEW){
+    // Refresh notices are rule-processing results and should be shown before
+    // any follow-up choice pending created by the interrupted effect.
+    if(maybeShowRefreshNotice()){
+      // wait for local OK; after closing, render() will continue to pending.
+    }else if(IS_PUBLIC_VIEW){
       if(!maybeShowPublicPending()){
         maybeShowResolvePopup();
       }
