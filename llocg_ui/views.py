@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: public_pending_raw_modal_with_card_backs_20260701k
+# BUILD_TAG: live_attempt_summary_popup_20260703a
 from __future__ import annotations
 
 """View-state helpers for Loveca UI.
@@ -20,7 +20,7 @@ import re
 from typing import Any, Dict, Iterable, Set
 
 
-PUBLIC_BUILD_TAG = "public_pending_raw_modal_with_card_backs_20260701k"
+PUBLIC_BUILD_TAG = "live_attempt_summary_popup_20260703a"
 
 
 def _as_list(value: Any) -> list:
@@ -159,6 +159,8 @@ def _filter_map_by_public_cards(value: Any, public_cards: Set[str]) -> Dict[str,
 def _pending_title(kind: str) -> str:
     if kind == "show_revealed_cards_ack":
         return "エール公開カード確認"
+    if kind == "live_attempt_summary_ack":
+        return "ライブ成功確認"
     if kind == "auto_order":
         return "解決順を選択"
     if kind in {"pay_or_skip", "confirm_effect"}:
@@ -395,6 +397,8 @@ def _public_pending_summary(pending: Any, public_cards: Set[str]) -> list[dict[s
             "yell_draw_notice_label": item.get("yell_draw_notice_label", ""),
             "yell_draw_notice_text": item.get("yell_draw_notice_text", ""),
             "condition_status": item.get("condition_status", None),
+            "result": item.get("result", ""),
+            "live_attempt_summary": deepcopy(item.get("live_attempt_summary", {})) if isinstance(item.get("live_attempt_summary", {}), dict) else {},
         })
     return out
 
@@ -450,7 +454,7 @@ def make_public_state(state: Dict[str, Any]) -> Dict[str, Any]:
     src["public_reveal_events"] = _public_reveal_event_summary(src.get("public_reveal_events"))
 
     # Card-number maps are useful for rendering but must not expose hand/deck.
-    for key in ["cn2name", "cn2label", "cn2type", "cn2is_live", "cn2group", "cn2unit", "cn2cost", "cn2score"]:
+    for key in ["cn2name", "cn2label", "cn2type", "cn2is_live", "cn2yell_hearts", "cn2yell_draw_icons", "cn2yell_score_icons", "cn2group", "cn2unit", "cn2cost", "cn2score"]:
         src[key] = _filter_map_by_public_cards(src.get(key), public_cards)
 
     # Debug internals should not be part of share view.
