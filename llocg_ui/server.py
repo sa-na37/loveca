@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_attempt_summary_popup_20260706c
+# BUILD_TAG: live_attempt_summary_popup_rebase_20260706f
 from __future__ import annotations
 
 """llocg_ui.server
@@ -65,7 +65,7 @@ from .engine import (
     _rule_refresh_main_deck,
 )
 
-APP_VERSION = "live_attempt_summary_popup_20260706c"
+APP_VERSION = "live_attempt_summary_popup_rebase_20260706f"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -1773,6 +1773,7 @@ class App:
             "set_zone_score_rows": self._set_zone_score_rows_for_ui(),
             "resolve_zone": list(self.gs.resolve_zone),
             "yell_reveal_acknowledged_this_live": bool(getattr(self.gs, "yell_reveal_acknowledged_this_live", False)),
+            "yell_flow_completed_this_live": bool(getattr(self.gs, "yell_flow_completed_this_live", False)),
             "success_zone": list(getattr(self.gs, "success_zone", []) or []),
             "success_zone_score_sum": int(_success_zone_score_sum(self.gs, self.cards_db) or 0),
             "success_zone_heart_color": str(getattr(self.gs, "success_zone_heart_color", "") or ""),
@@ -1950,6 +1951,36 @@ class App:
         cmd_end_turn(self.gs, self.rng)
 
 
+    def _auto_advance_live_attempt_after_yell_flow(self, reason: str = '') -> bool:
+        """Advance directly from a fully acknowledged YELL flow to attempt summary.
+
+        YELL cards intentionally remain in ``resolve_zone`` until live cleanup.
+        Once the one-time YELL reveal acknowledgement and any resumed YELL auto
+        prompts are finished, leaving the UI on an empty LIVE_ATTEMPT board adds an
+        unnecessary NEXT-only pause.  Advance exactly that gap here; choice prompts
+        still block because ``pending`` must be empty.
+        """
+        try:
+            if str(getattr(self.gs, 'phase', '') or '') != 'LIVE_ATTEMPT':
+                return False
+            if list(getattr(self.gs, 'pending', []) or []):
+                return False
+            if not bool(getattr(self.gs, 'yell_reveal_acknowledged_this_live', False)):
+                return False
+            cmd_next(self.gs, self.rng, self.cards_db, [])
+            post_process(self.gs)
+            try:
+                self.gs.log.append(f'[AUTO] YELL flow -> live attempt summary ({reason or "auto"})')
+            except Exception:
+                pass
+            return True
+        except Exception as e:
+            try:
+                self.gs.log.append(f'[WARN] auto live-attempt advance failed: {e}')
+            except Exception:
+                pass
+            return False
+
     def cmd(self, name: str, payload: Dict[str, Any]) -> Dict[str, Any]:        # PATCH_V2_10_GUARD_MAIN_ONLY
         try:
             ph0 = str(getattr(self.gs, 'phase', '') or '')
@@ -2092,6 +2123,7 @@ class App:
                     if k0 in ack_kinds:
                         cmd_resolve_pending(self.gs, self.cards_db, 0, 'ok')
                         post_process(self.gs)
+                        self._auto_advance_live_attempt_after_yell_flow(f'next_ack:{k0}')
                         self._auto_refresh_if_deck_empty_after_cmd(f"post_cmd:{name}")
                         self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}", before_refresh_notice_seq_for_public_hand)
                         self.save_trace()
@@ -2180,6 +2212,8 @@ class App:
 
         # Post-process to resume deferred prompts (e.g., auto trigger order).
         post_process(self.gs)
+        if mutating and name not in {"toggle_debug", "undo", "ack_refresh_notice"}:
+            self._auto_advance_live_attempt_after_yell_flow(f'post_cmd:{name}')
         if mutating and name not in {"toggle_debug", "undo", "ack_refresh_notice"}:
             self._auto_refresh_if_deck_empty_after_cmd(f"post_cmd:{name}")
         if mutating and name != "toggle_debug":
@@ -2619,11 +2653,16 @@ HTML = r'''<!doctype html>
   .liveAttemptNote{font-size:calc(12px * var(--uiScale));color:#bbb;line-height:1.35;}
   .liveAttemptSection{display:flex;flex-direction:column;gap:calc(6px * var(--uiScale));padding:calc(7px * var(--uiScale)) calc(10px * var(--uiScale));border-radius:calc(12px * var(--uiScale));background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);}
   .liveAttemptSectionTitle{font-size:calc(13px * var(--uiScale));font-weight:900;letter-spacing:.04em;color:#f1f1f1;}
-  .liveAttemptHeartGrid{display:grid;grid-template-columns:repeat(7,minmax(calc(74px * var(--uiScale)),1fr));gap:calc(8px * var(--uiScale));}
-  .liveAttemptHeartGrid.withAny{grid-template-columns:repeat(4,minmax(calc(88px * var(--uiScale)),1fr));}
-  .liveAttemptSummary .yellRevealMetric{min-height:calc(76px * var(--uiScale));}
+  .liveAttemptHeartGrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr)) minmax(calc(92px * var(--uiScale)),.82fr);gap:calc(7px * var(--uiScale));width:100%;align-items:stretch;}
+  .liveAttemptSummary .yellRevealMetric{min-width:0;min-height:calc(76px * var(--uiScale));padding-left:calc(5px * var(--uiScale));padding-right:calc(5px * var(--uiScale));}
+  .liveAttemptSummary .yellRevealMetricLabel{font-size:calc(15px * var(--uiScale));}
   .liveAttemptSummary .yellRevealMetricCount{font-size:calc(28px * var(--uiScale));font-variant-numeric:tabular-nums;}
   .liveAttemptSummary .yellRevealMetricSub{min-height:calc(13px * var(--uiScale));}
+  .liveAttemptHeartTotal{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:calc(3px * var(--uiScale));min-width:0;min-height:calc(76px * var(--uiScale));padding:calc(6px * var(--uiScale));border-radius:calc(12px * var(--uiScale));box-sizing:border-box;background:linear-gradient(135deg,rgba(255,213,74,.20),rgba(255,255,255,.055));border:2px solid rgba(255,213,74,.72);box-shadow:inset 0 0 0 1px rgba(0,0,0,.24),0 0 calc(14px * var(--uiScale)) rgba(255,213,74,.08);}
+  .liveAttemptHeartTotalLabel{display:flex;align-items:center;gap:calc(5px * var(--uiScale));font-size:calc(14px * var(--uiScale));font-weight:900;letter-spacing:.06em;color:#ffe89a;line-height:1;white-space:nowrap;}
+  .liveAttemptHeartTotalMark{display:inline-flex;align-items:center;justify-content:center;width:calc(20px * var(--uiScale));height:calc(20px * var(--uiScale));border-radius:999px;background:rgba(255,213,74,.20);border:1px solid rgba(255,213,74,.58);font-size:calc(13px * var(--uiScale));font-weight:900;color:#fff3bd;}
+  .liveAttemptHeartTotalCount{font-size:calc(34px * var(--uiScale));font-weight:950;line-height:1;color:#fff;font-variant-numeric:tabular-nums;}
+  .liveAttemptHeartTotalSub{font-size:calc(10px * var(--uiScale));font-weight:800;color:#d8c98d;line-height:1;white-space:nowrap;}
   .yellRevealCardRow .cardWrap{position:relative !important;left:auto !important;top:auto !important;flex:0 0 auto;}
   .heartChoiceGrid{display:grid;gap:calc(10px * var(--uiScale));align-items:stretch;justify-content:center;margin:0 auto;max-width:min(78vw, calc(980px * var(--uiScale)));width:100%;}
   #modalCards{margin-top:calc(10px * var(--uiScale));overflow-x:auto;overflow-y:auto;padding-bottom:calc(6px * var(--uiScale));flex:1 1 auto;min-height:0;} 
@@ -2921,7 +2960,7 @@ HTML = r'''<!doctype html>
   // running stale JS.  Compare the state ui_version and reload once when the
   // server-side bundle changes, so public refresh notices use the current modal
   // layout and owner-OK synchronization.
-  const CLIENT_UI_VERSION = 'live_attempt_summary_popup_20260706c';
+  const CLIENT_UI_VERSION = 'live_attempt_summary_popup_rebase_20260706f';
   let clientReloadingForVersion = false;
   const urlParams = new URLSearchParams(window.location.search || '');
   const VIEW_MODE = String(urlParams.get('view') || (window.location.pathname === '/public' ? 'public' : 'private')).toLowerCase();
@@ -5450,6 +5489,13 @@ inner.appendChild(card);
     const reqTotal = mkCounts(summary.required_hearts_total);
     const reqEffective = Object.keys(mkCounts(reqTotal.effective)).length ? mkCounts(reqTotal.effective) : addCounts(summary.live_cards, 'required_effective');
     const reqOriginal = Object.keys(mkCounts(reqTotal.original)).length ? mkCounts(reqTotal.original) : addCounts(summary.live_cards, 'required_original');
+    const sumHeartCounts = (obj, keys)=> keys.reduce((acc, key)=>acc + Number((obj && obj[key]) || 0), 0);
+    const ownedCountTotal = Number.isFinite(Number(owned.count_total))
+      ? Number(owned.count_total)
+      : sumHeartCounts(total, colorsOwned);
+    const requiredCountTotal = Number.isFinite(Number(reqTotal.effective_count))
+      ? Number(reqTotal.effective_count)
+      : sumHeartCounts(reqEffective, colorsRequired);
 
     const makeLiveMetric = ({col='', label='', token='', countText='0', sub=''})=>{
       const box = document.createElement('div');
@@ -5474,26 +5520,46 @@ inner.appendChild(card);
       return box;
     };
 
+    const makeHeartTotalMetric = ({countText='0', sub=''})=>{
+      const box = document.createElement('div');
+      box.className = 'liveAttemptHeartTotal';
+      const lab = document.createElement('div');
+      lab.className = 'liveAttemptHeartTotalLabel';
+      const mark = document.createElement('span');
+      mark.className = 'liveAttemptHeartTotalMark';
+      mark.textContent = 'Σ';
+      const txt = document.createElement('span');
+      txt.textContent = '総数';
+      lab.appendChild(mark);
+      lab.appendChild(txt);
+      const cnt = document.createElement('div');
+      cnt.className = 'liveAttemptHeartTotalCount';
+      cnt.textContent = String(countText);
+      const subEl = document.createElement('div');
+      subEl.className = 'liveAttemptHeartTotalSub';
+      subEl.textContent = String(sub || '');
+      box.appendChild(lab);
+      box.appendChild(cnt);
+      box.appendChild(subEl);
+      return box;
+    };
+
     const ownedSec = document.createElement('div');
     ownedSec.className = 'liveAttemptSection';
     const ownedTitle = document.createElement('div');
     ownedTitle.className = 'liveAttemptSectionTitle';
     ownedTitle.textContent = '所持ハート合計（盤面＋エール）';
     const ownedGrid = document.createElement('div');
-    const hasOwnedAny = Number(stage.any || 0) + Number(yell.any || 0) + Number(total.any || 0) > 0;
-    ownedGrid.className = 'liveAttemptHeartGrid' + (hasOwnedAny ? ' withAny' : '');
+    // Owned hearts are the six colors plus ALL; required hearts are the six
+    // colors plus unspecified/any.  Both rows therefore always have 7 slots.
+    ownedGrid.className = 'liveAttemptHeartGrid';
     colorsOwned.forEach(col=>{
       const st = Number(stage[col] || 0);
       const ye = Number(yell[col] || 0);
       const tt = Number(total[col] || 0);
       ownedGrid.appendChild(makeLiveMetric({col, countText:`${st}+${ye}`, sub:`合計 ${tt}`}));
     });
-    if(hasOwnedAny){
-      const st = Number(stage.any || 0);
-      const ye = Number(yell.any || 0);
-      const tt = Number(total.any || 0);
-      ownedGrid.appendChild(makeLiveMetric({col:'any', countText:`${st}+${ye}`, sub:`合計 ${tt}`}));
-    }
+    ownedGrid.appendChild(makeHeartTotalMetric({countText:String(ownedCountTotal), sub:'所持ハート'}));
     ownedSec.appendChild(ownedTitle);
     ownedSec.appendChild(ownedGrid);
     wrap.appendChild(ownedSec);
@@ -5506,13 +5572,14 @@ inner.appendChild(card);
     const reqGrid = document.createElement('div');
     // Required-heart comparison always includes the unspecified/any-heart slot.
     // Hiding the zero column made the rules-facing category disappear entirely.
-    reqGrid.className = 'liveAttemptHeartGrid withAny';
+    reqGrid.className = 'liveAttemptHeartGrid';
     colorsRequired.forEach(col=>{
       const eff = Number(reqEffective[col] || 0);
       const orig = Number(reqOriginal[col] || 0);
       const sub = (orig !== eff) ? `元 ${orig}` : '';
       reqGrid.appendChild(makeLiveMetric({col, countText:String(eff), sub}));
     });
+    reqGrid.appendChild(makeHeartTotalMetric({countText:String(requiredCountTotal), sub:'必要ハート'}));
     reqSec.appendChild(reqTitle);
     reqSec.appendChild(reqGrid);
     wrap.appendChild(reqSec);
