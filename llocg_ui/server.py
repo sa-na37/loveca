@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_attempt_summary_popup_20260703b
+# BUILD_TAG: live_attempt_summary_popup_20260706c
 from __future__ import annotations
 
 """llocg_ui.server
@@ -65,7 +65,7 @@ from .engine import (
     _rule_refresh_main_deck,
 )
 
-APP_VERSION = "live_attempt_summary_popup_20260703b"
+APP_VERSION = "live_attempt_summary_popup_20260706c"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -1772,6 +1772,7 @@ class App:
             "live_set_limit": int(getattr(self.gs, "live_set_limit", 3) or 3),
             "set_zone_score_rows": self._set_zone_score_rows_for_ui(),
             "resolve_zone": list(self.gs.resolve_zone),
+            "yell_reveal_acknowledged_this_live": bool(getattr(self.gs, "yell_reveal_acknowledged_this_live", False)),
             "success_zone": list(getattr(self.gs, "success_zone", []) or []),
             "success_zone_score_sum": int(_success_zone_score_sum(self.gs, self.cards_db) or 0),
             "success_zone_heart_color": str(getattr(self.gs, "success_zone_heart_color", "") or ""),
@@ -1977,6 +1978,7 @@ class App:
             "opponent_wait_delta",
             "opponent_success_delta",
             "turn_order_set",
+            "ack_yell_reveal",
         }
         before_hand_for_public_reveal: List[str] = []
         reveal_candidates_for_public_hand: List[str] = []
@@ -2037,6 +2039,12 @@ class App:
             try:
                 self.gs.opponent_success_count = newv
                 self.gs.log.append(f"[UI] opponent_success_count {cur} -> {newv}")
+            except Exception:
+                pass
+        elif name == "ack_yell_reveal":
+            try:
+                self.gs.yell_reveal_acknowledged_this_live = True
+                self.gs.log.append('[ACK] yell reveal fallback acknowledged')
             except Exception:
                 pass
         elif name == "turn_order_set":
@@ -2616,9 +2624,6 @@ HTML = r'''<!doctype html>
   .liveAttemptSummary .yellRevealMetric{min-height:calc(76px * var(--uiScale));}
   .liveAttemptSummary .yellRevealMetricCount{font-size:calc(28px * var(--uiScale));font-variant-numeric:tabular-nums;}
   .liveAttemptSummary .yellRevealMetricSub{min-height:calc(13px * var(--uiScale));}
-  .liveAttemptJudgeLine{display:flex;align-items:center;gap:calc(8px * var(--uiScale));flex-wrap:wrap;font-size:calc(14px * var(--uiScale));font-weight:800;line-height:1.35;}
-  .liveAttemptJudgeLine.success{color:#d9ffe8;}
-  .liveAttemptJudgeLine.fail{color:#ffe0e2;}
   .yellRevealCardRow .cardWrap{position:relative !important;left:auto !important;top:auto !important;flex:0 0 auto;}
   .heartChoiceGrid{display:grid;gap:calc(10px * var(--uiScale));align-items:stretch;justify-content:center;margin:0 auto;max-width:min(78vw, calc(980px * var(--uiScale)));width:100%;}
   #modalCards{margin-top:calc(10px * var(--uiScale));overflow-x:auto;overflow-y:auto;padding-bottom:calc(6px * var(--uiScale));flex:1 1 auto;min-height:0;} 
@@ -2916,7 +2921,7 @@ HTML = r'''<!doctype html>
   // running stale JS.  Compare the state ui_version and reload once when the
   // server-side bundle changes, so public refresh notices use the current modal
   // layout and owner-OK synchronization.
-  const CLIENT_UI_VERSION = 'live_attempt_summary_popup_20260703b';
+  const CLIENT_UI_VERSION = 'live_attempt_summary_popup_20260706c';
   let clientReloadingForVersion = false;
   const urlParams = new URLSearchParams(window.location.search || '');
   const VIEW_MODE = String(urlParams.get('view') || (window.location.pathname === '/public' ? 'public' : 'private')).toLowerCase();
@@ -5418,11 +5423,8 @@ inner.appendChild(card);
     top.appendChild(res);
     const scoreBox = document.createElement('div');
     scoreBox.className = 'liveAttemptScore';
-    const cardTotal = Number(score.card_total || 0);
-    const stageBonus = Number(score.stage_bonus || 0);
-    const yellScore = Number(score.yell_score_icons || 0);
     const liveTotal = Number(score.live_total || 0);
-    scoreBox.textContent = `スコア: ${cardTotal}` + (stageBonus ? ` + 盤面${stageBonus}` : '') + (yellScore ? ` + エール${yellScore}` : '') + ` = ${liveTotal}`;
+    scoreBox.textContent = `スコア: ${liveTotal}`;
     top.appendChild(scoreBox);
     const note = document.createElement('div');
     note.className = 'liveAttemptNote';
@@ -5502,10 +5504,10 @@ inner.appendChild(card);
     reqTitle.className = 'liveAttemptSectionTitle';
     reqTitle.textContent = '必要ハート合計';
     const reqGrid = document.createElement('div');
-    const hasReqAny = Number(reqEffective.any || 0) > 0 || Number(reqOriginal.any || 0) > 0;
-    reqGrid.className = 'liveAttemptHeartGrid' + (hasReqAny ? ' withAny' : '');
+    // Required-heart comparison always includes the unspecified/any-heart slot.
+    // Hiding the zero column made the rules-facing category disappear entirely.
+    reqGrid.className = 'liveAttemptHeartGrid withAny';
     colorsRequired.forEach(col=>{
-      if(col === 'any' && !hasReqAny) return;
       const eff = Number(reqEffective[col] || 0);
       const orig = Number(reqOriginal[col] || 0);
       const sub = (orig !== eff) ? `元 ${orig}` : '';
@@ -5514,16 +5516,6 @@ inner.appendChild(card);
     reqSec.appendChild(reqTitle);
     reqSec.appendChild(reqGrid);
     wrap.appendChild(reqSec);
-
-    const judge = document.createElement('div');
-    judge.className = 'liveAttemptJudgeLine ' + (ok ? 'success' : 'fail');
-    judge.textContent = ok ? '判定: 成功' : '判定: 失敗（必要ハート不足）';
-    if(!ok){
-      const reasons = Array.isArray(summary.failure_reasons) ? summary.failure_reasons.map(x=>String(x||'').trim()).filter(Boolean) : [];
-      const shown = reasons.filter(x=>x !== 'not reached');
-      if(shown.length){ judge.textContent += ` / ${shown.join(' / ')}`; }
-    }
-    wrap.appendChild(judge);
 
     elModalCards.appendChild(wrap);
     const btnOk = document.createElement('button');
@@ -7998,6 +7990,10 @@ inner.appendChild(card);
 
   function maybeShowResolvePopup(){
     const rz = (st && Array.isArray(st.resolve_zone)) ? st.resolve_zone.map(x=>String(x||'')).filter(Boolean) : [];
+    if(!!(st && st.yell_reveal_acknowledged_this_live)){
+      if(popup && popup.type==='yell_reveal_fallback') closePopup();
+      return false;
+    }
     if(rz.length <= 0){
       if(popup && popup.type==='yell_reveal_fallback') closePopup();
       if(popup && popup.type==='cardlist' && !popup.closable && String(popup.title || '') === '解決領域') closePopup();
@@ -8024,7 +8020,7 @@ inner.appendChild(card);
       ev.stopPropagation();
       if(submitting) return;
       submitting = true;
-      st = await apiCmd('next', {indices: selHand.slice()});
+      st = await apiCmd('ack_yell_reveal', {});
       selHand = [];
       updateTop();
       render();

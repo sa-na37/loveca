@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_attempt_summary_popup_20260703b
+# BUILD_TAG: live_attempt_summary_popup_20260706c
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -4633,6 +4633,10 @@ class GameState:
     turn_order: str = "first"  # current turn perspective: first/sente or second/gote
     next_turn_order: str = ""  # set by success-store decision; applied at next turn start
     resolve_zone: List[str] = field(default_factory=list)
+    # True after the current live's YELL reveal confirmation has been acknowledged.
+    # Keep resolve_zone intact until LIVE_RESOLVE cleanup; this flag prevents the
+    # dedicated YELL confirmation popup from being synthesized repeatedly.
+    yell_reveal_acknowledged_this_live: bool = False
     pending: List[Dict[str, Any]] = field(default_factory=list)
     live_start_prompted: bool = False
     # per-turn temporary (compat)
@@ -4767,6 +4771,7 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
         "turn_order": str(getattr(gs, "turn_order", "first") or "first"),
         "next_turn_order": str(getattr(gs, "next_turn_order", "") or ""),
         "resolve_zone": list(gs.resolve_zone),
+        "yell_reveal_acknowledged_this_live": bool(getattr(gs, "yell_reveal_acknowledged_this_live", False)),
         "pending": json.loads(json.dumps(gs.pending)) if gs.pending else [],
         "live_start_prompted": bool(gs.live_start_prompted),
         "turn": int(gs.turn),
@@ -4834,6 +4839,7 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
     gs.turn_order = _normalize_turn_order(snap.get("turn_order", getattr(gs, "turn_order", "first")))
     gs.next_turn_order = _normalize_turn_order(snap.get("next_turn_order", getattr(gs, "next_turn_order", "")), allow_empty=True)
     gs.resolve_zone = list(snap.get("resolve_zone", gs.resolve_zone))
+    gs.yell_reveal_acknowledged_this_live = bool(snap.get("yell_reveal_acknowledged_this_live", getattr(gs, "yell_reveal_acknowledged_this_live", False)))
     gs.pending = list(snap.get("pending", gs.pending) or [])
     gs.live_start_prompted = bool(snap.get("live_start_prompted", gs.live_start_prompted))
     gs.turn = int(snap.get("turn", gs.turn))
@@ -8028,6 +8034,7 @@ def _clear_end_of_live_buffs(gs: GameState, cards_db: Optional[Dict[str, CardInf
         gs.yell_heart_convert_target_color_this_live = ''
         gs.vivid_world_blue_mode_this_live = False
         gs.vivid_world_bonus_this_live = 0
+        gs.yell_reveal_acknowledged_this_live = False
     except Exception:
         pass
 def cmd_play(gs: GameState, cards_db: Dict[str, CardInfo], hand_idx: int, pos: str) -> None:
@@ -9879,6 +9886,10 @@ def cmd_set(gs: GameState, rng: random.Random, indices: List[int]) -> None:
     drawn = draw(gs, len(picked), rng)
     gs.log.append(f"[SET] set {len(picked)} cards (limit={limit}, total_in_set={len(gs.set_zone)}), drew {drawn}")
 def cmd_yell(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo]) -> None:
+    # A new YELL reveal gets exactly one confirmation cycle.  The revealed cards
+    # remain in resolve_zone until LIVE_RESOLVE cleanup, so acknowledgement state
+    # is tracked separately from the zone contents.
+    gs.yell_reveal_acknowledged_this_live = False
     # ライブ開始時プロンプトが未処理なら先に処理させる（ブレード変化が確定してからYELL）
     if _enqueue_live_start_prompts(gs, cards_db) > 0:
         gs.log.append("[INFO] yell: live-start prompts queued, resolve them first.")
@@ -9925,7 +9936,23 @@ def cmd_yell(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo]) -
     gs.log.append(f"[YELL-DEBUG] drawn_cards={drawn_cards} deck_after_draw n={len(getattr(gs, 'deck', []) or [])} hand_n={len(getattr(gs, 'hand', []) or [])}")
     gs.log.append(f"[YELL] revealed {len(revealed)} (blade={n}), draw+{draw_n} -> drew {got}")
     _append_effect_event(gs, 'yell', detail=f'revealed {len(revealed)} cards; draw icons {draw_n}; drew {got}', revealed=revealed, drawn=drawn_cards, base_count=base_n, effective_count=n)
-    _enqueue_yell_revealed_body_auto_triggers(gs, cards_db, revealed, draw_icon_count=draw_n, drew_count=got, drawn_cards=drawn_cards)
+    queued_yell_auto = _enqueue_yell_revealed_body_auto_triggers(gs, cards_db, revealed, draw_icon_count=draw_n, drew_count=got, drawn_cards=drawn_cards)
+    # Normal YELL without an auto trigger previously relied on the resolve_zone
+    # UI fallback.  That fallback could reopen after attempt/success/store prompts
+    # because the zone intentionally stays populated.  Queue the real ACK here so
+    # every ordinary YELL is confirmed exactly once.
+    if revealed and int(queued_yell_auto or 0) <= 0:
+        _draw_notice = _yell_draw_notice_payload(cards_db, revealed, draw_icon_count=draw_n, drew_count=got, drawn_cards=drawn_cards)
+        gs.pending.append({
+            'kind': 'show_revealed_cards_ack',
+            'label': 'エール公開カード確認',
+            'yell_reveal_ack': True,
+            'text': 'エールで公開されたカードを確認してから、NEXTで次へ進みます。',
+            'display_cards': list(revealed),
+            'options': ['ok'],
+            **_draw_notice,
+        })
+        gs.log.append('[PROMPT] yell reveal confirmation queued')
 
 def _source_cn_or_default(source_cn: str, fallback: str = '') -> str:
     s = str(source_cn or '').strip()
@@ -12617,6 +12644,7 @@ def _enqueue_yell_revealed_body_auto_triggers(gs: GameState, cards_db: Dict[str,
         gs.pending.append({
             'kind': 'show_revealed_cards_ack',
             'label': 'エール公開カード確認',
+            'yell_reveal_ack': True,
             'text': 'エールで公開されたカードを確認してから、エール時自動効果を解決します。',
             'display_cards': list(cur_revealed),
             'options': ['ok'],
@@ -14455,6 +14483,12 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         return
     if kind == 'show_revealed_cards_ack':
         gs.log.append('[ACT] show_revealed_cards_ack: ok')
+        try:
+            if bool((p or {}).get('yell_reveal_ack')) or str((p or {}).get('label', '') or '') == 'エール公開カード確認':
+                gs.yell_reveal_acknowledged_this_live = True
+                gs.log.append('[ACK] yell reveal confirmation acknowledged')
+        except Exception:
+            pass
         _r = p.get('_resume') if isinstance(p, dict) else None
         if isinstance(_r, dict) and _r:
             gs.pending.append(_r)

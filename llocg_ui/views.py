@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_attempt_summary_popup_20260703b
+# BUILD_TAG: live_attempt_summary_popup_20260706c
 from __future__ import annotations
 
 """View-state helpers for Loveca UI.
@@ -20,7 +20,7 @@ import re
 from typing import Any, Dict, Iterable, Set
 
 
-PUBLIC_BUILD_TAG = "live_attempt_summary_popup_20260703b"
+PUBLIC_BUILD_TAG = "live_attempt_summary_popup_20260706c"
 
 
 def _as_list(value: Any) -> list:
