@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_attempt_summary_popup_20260703a
+# BUILD_TAG: live_attempt_summary_popup_20260703b
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -12940,9 +12940,23 @@ def _build_live_attempt_summary_pending(
             'score_delta': int(score_delta),
             'score': int(score_eff),
         })
+    required_original_total: Dict[str, int] = {}
+    required_effective_total: Dict[str, int] = {}
+    spent_total: Dict[str, int] = {}
+    failure_reasons: List[str] = []
+    for row in live_cards:
+        for k, v in dict(row.get('required_original', {}) or {}).items():
+            required_original_total[str(k)] = int(required_original_total.get(str(k), 0) or 0) + int(v or 0)
+        for k, v in dict(row.get('required_effective', {}) or {}).items():
+            required_effective_total[str(k)] = int(required_effective_total.get(str(k), 0) or 0) + int(v or 0)
+        for k, v in dict(row.get('spent_hearts', {}) or {}).items():
+            spent_total[str(k)] = int(spent_total.get(str(k), 0) or 0) + int(v or 0)
+        fr = str(row.get('failure_reason', '') or '').strip()
+        if fr and fr not in failure_reasons:
+            failure_reasons.append(fr)
     result = 'success' if bool(ok_all) else 'fail'
     title = 'ライブ成功確認'
-    text = '必要ハート・所持ハート・判定結果・スコアを確認してください。ライブ成功時効果はこの確認後に発生します。'
+    text = '所持ハート合計と必要ハート合計、判定結果・スコアを確認してください。ライブ成功時効果はこの確認後に発生します。'
     return {
         'kind': 'live_attempt_summary_ack',
         'label': title,
@@ -12954,7 +12968,15 @@ def _build_live_attempt_summary_pending(
         'live_attempt_summary': {
             'result': result,
             'ok': bool(ok_all),
+            # Keep card details in payload for debugging / future use, but the UI intentionally
+            # renders the rules-facing aggregate requirement instead of a per-card table.
             'live_cards': live_cards,
+            'required_hearts_total': {
+                'original': _live_attempt_full_heart_counts(required_original_total, include_all=False),
+                'effective': _live_attempt_full_heart_counts(required_effective_total, include_all=False),
+                'spent': _live_attempt_full_heart_counts(spent_total, include_all=True),
+            },
+            'failure_reasons': failure_reasons,
             'owned_hearts': {
                 'stage': _live_attempt_full_heart_counts(base_hearts, include_all=True),
                 'yell': _live_attempt_full_heart_counts(yell_hearts, include_all=True),

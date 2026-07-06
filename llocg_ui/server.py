@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_attempt_summary_popup_20260703a
+# BUILD_TAG: live_attempt_summary_popup_20260703b
 from __future__ import annotations
 
 """llocg_ui.server
@@ -65,7 +65,7 @@ from .engine import (
     _rule_refresh_main_deck,
 )
 
-APP_VERSION = "live_attempt_summary_popup_20260703a"
+APP_VERSION = "live_attempt_summary_popup_20260703b"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -2602,29 +2602,23 @@ HTML = r'''<!doctype html>
   .yellRevealCardRow::-webkit-scrollbar{height:calc(10px * var(--uiScale));}
   .yellRevealCardRow::-webkit-scrollbar-thumb{background:rgba(255,255,255,.16);border-radius:999px;}
 
-  .liveAttemptSummary{display:flex;flex-direction:column;gap:calc(14px * var(--uiScale));width:min(calc(980px * var(--uiScale)),92vw);max-width:100%;box-sizing:border-box;}
-  .liveAttemptTop{display:flex;align-items:center;justify-content:space-between;gap:calc(12px * var(--uiScale));flex-wrap:wrap;padding:calc(10px * var(--uiScale)) calc(12px * var(--uiScale));border-radius:calc(12px * var(--uiScale));background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.12);}
+  .liveAttemptSummary{display:flex;flex-direction:column;gap:calc(10px * var(--uiScale));width:min(calc(980px * var(--uiScale)),92vw);max-width:100%;box-sizing:border-box;}
+  .liveAttemptTop{display:flex;align-items:center;justify-content:space-between;gap:calc(12px * var(--uiScale));flex-wrap:wrap;padding:calc(9px * var(--uiScale)) calc(12px * var(--uiScale));border-radius:calc(12px * var(--uiScale));background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.12);}
   .liveAttemptResult{font-size:calc(22px * var(--uiScale));font-weight:900;letter-spacing:.04em;padding:calc(7px * var(--uiScale)) calc(13px * var(--uiScale));border-radius:999px;border:1px solid rgba(255,255,255,.18);}
   .liveAttemptResult.success{background:rgba(55,190,120,.22);color:#d9ffe8;}
   .liveAttemptResult.fail{background:rgba(230,80,85,.22);color:#ffe0e2;}
   .liveAttemptScore{font-size:calc(18px * var(--uiScale));font-weight:800;color:#fff;}
   .liveAttemptNote{font-size:calc(12px * var(--uiScale));color:#bbb;line-height:1.35;}
-  .liveAttemptSection{border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.18);border-radius:calc(12px * var(--uiScale));padding:calc(10px * var(--uiScale));}
-  .liveAttemptSectionTitle{font-size:calc(15px * var(--uiScale));font-weight:900;color:#fff;margin-bottom:calc(8px * var(--uiScale));}
-  .liveAttemptHeartTable{display:grid;grid-template-columns:minmax(calc(70px * var(--uiScale)),.7fr) repeat(3,minmax(calc(76px * var(--uiScale)),1fr));gap:calc(6px * var(--uiScale));align-items:center;}
-  .liveAttemptHeartCell{min-height:calc(34px * var(--uiScale));display:flex;align-items:center;justify-content:center;gap:calc(4px * var(--uiScale));padding:calc(5px * var(--uiScale));border-radius:calc(8px * var(--uiScale));background:rgba(255,255,255,.055);font-size:calc(14px * var(--uiScale));font-weight:700;box-sizing:border-box;}
-  .liveAttemptHeartHead{background:rgba(255,255,255,.10);color:#ddd;font-size:calc(12px * var(--uiScale));letter-spacing:.02em;}
-  .liveAttemptCardList{display:flex;flex-direction:column;gap:calc(8px * var(--uiScale));}
-  .liveAttemptCardRow{display:grid;grid-template-columns:minmax(calc(210px * var(--uiScale)),1.3fr) minmax(calc(190px * var(--uiScale)),1fr) minmax(calc(190px * var(--uiScale)),1fr) minmax(calc(90px * var(--uiScale)),.55fr);gap:calc(8px * var(--uiScale));align-items:stretch;}
-  .liveAttemptCardBox{padding:calc(8px * var(--uiScale));border-radius:calc(10px * var(--uiScale));background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.10);box-sizing:border-box;min-width:0;}
-  .liveAttemptCardName{font-size:calc(14px * var(--uiScale));font-weight:900;color:#fff;line-height:1.25;white-space:normal;word-break:break-word;}
-  .liveAttemptCardNo{font-size:calc(11px * var(--uiScale));color:#aaa;margin-top:calc(3px * var(--uiScale));}
-  .liveAttemptMiniLabel{font-size:calc(11px * var(--uiScale));color:#aaa;margin-bottom:calc(4px * var(--uiScale));font-weight:800;}
-  .liveAttemptIconLine{display:flex;align-items:center;gap:calc(6px * var(--uiScale));flex-wrap:wrap;font-size:calc(14px * var(--uiScale));font-weight:800;color:#f5f5f5;}
-  .liveAttemptStatus{display:flex;align-items:center;justify-content:center;font-size:calc(18px * var(--uiScale));font-weight:900;border-radius:calc(10px * var(--uiScale));}
-  .liveAttemptStatus.success{background:rgba(55,190,120,.20);color:#d9ffe8;}
-  .liveAttemptStatus.fail{background:rgba(230,80,85,.20);color:#ffe0e2;}
-  @media(max-width:900px){.liveAttemptCardRow{grid-template-columns:1fr;}.liveAttemptHeartTable{grid-template-columns:1fr repeat(3,1fr);}}
+  .liveAttemptSection{display:flex;flex-direction:column;gap:calc(6px * var(--uiScale));padding:calc(7px * var(--uiScale)) calc(10px * var(--uiScale));border-radius:calc(12px * var(--uiScale));background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);}
+  .liveAttemptSectionTitle{font-size:calc(13px * var(--uiScale));font-weight:900;letter-spacing:.04em;color:#f1f1f1;}
+  .liveAttemptHeartGrid{display:grid;grid-template-columns:repeat(7,minmax(calc(74px * var(--uiScale)),1fr));gap:calc(8px * var(--uiScale));}
+  .liveAttemptHeartGrid.withAny{grid-template-columns:repeat(4,minmax(calc(88px * var(--uiScale)),1fr));}
+  .liveAttemptSummary .yellRevealMetric{min-height:calc(76px * var(--uiScale));}
+  .liveAttemptSummary .yellRevealMetricCount{font-size:calc(28px * var(--uiScale));font-variant-numeric:tabular-nums;}
+  .liveAttemptSummary .yellRevealMetricSub{min-height:calc(13px * var(--uiScale));}
+  .liveAttemptJudgeLine{display:flex;align-items:center;gap:calc(8px * var(--uiScale));flex-wrap:wrap;font-size:calc(14px * var(--uiScale));font-weight:800;line-height:1.35;}
+  .liveAttemptJudgeLine.success{color:#d9ffe8;}
+  .liveAttemptJudgeLine.fail{color:#ffe0e2;}
   .yellRevealCardRow .cardWrap{position:relative !important;left:auto !important;top:auto !important;flex:0 0 auto;}
   .heartChoiceGrid{display:grid;gap:calc(10px * var(--uiScale));align-items:stretch;justify-content:center;margin:0 auto;max-width:min(78vw, calc(980px * var(--uiScale)));width:100%;}
   #modalCards{margin-top:calc(10px * var(--uiScale));overflow-x:auto;overflow-y:auto;padding-bottom:calc(6px * var(--uiScale));flex:1 1 auto;min-height:0;} 
@@ -2922,7 +2916,7 @@ HTML = r'''<!doctype html>
   // running stale JS.  Compare the state ui_version and reload once when the
   // server-side bundle changes, so public refresh notices use the current modal
   // layout and owner-OK synchronization.
-  const CLIENT_UI_VERSION = 'live_attempt_summary_popup_20260703a';
+  const CLIENT_UI_VERSION = 'live_attempt_summary_popup_20260703b';
   let clientReloadingForVersion = false;
   const urlParams = new URLSearchParams(window.location.search || '');
   const VIEW_MODE = String(urlParams.get('view') || (window.location.pathname === '/public' ? 'public' : 'private')).toLowerCase();
@@ -5408,7 +5402,7 @@ inner.appendChild(card);
     const ok = !!(summary.ok || result === 'success');
     popup = {type:'pending', title:'ライブ成功確認', closable:false};
     elModalTitle.textContent = 'ライブ成功確認';
-    setRichText(elModalText, String((p && p.text) || '必要ハート・所持ハート・成功/失敗・スコアを確認してください。'));
+    setRichText(elModalText, String((p && p.text) || '所持ハート合計と必要ハート合計、成功/失敗・スコアを確認してください。'));
     elModalActions.innerHTML = '';
     elModalCards.innerHTML = '';
 
@@ -5436,97 +5430,100 @@ inner.appendChild(card);
     top.appendChild(note);
     wrap.appendChild(top);
 
-    const owned = summary.owned_hearts || {};
+    const colorsOwned = ['pink','red','yellow','green','blue','purple','all'];
+    const colorsRequired = ['pink','red','yellow','green','blue','purple','any'];
     const mkCounts = (x)=> x && typeof x === 'object' ? x : {};
+    const addCounts = (rows, key)=>{
+      const out = {};
+      (Array.isArray(rows) ? rows : []).forEach(row=>{
+        const obj = mkCounts(row && row[key]);
+        Object.keys(obj).forEach(k=>{ out[k] = Number(out[k] || 0) + Number(obj[k] || 0); });
+      });
+      return out;
+    };
+    const owned = summary.owned_hearts || {};
     const stage = mkCounts(owned.stage);
     const yell = mkCounts(owned.yell);
     const total = mkCounts(owned.total);
-    const heartSec = document.createElement('div');
-    heartSec.className = 'liveAttemptSection';
-    const heartTitle = document.createElement('div');
-    heartTitle.className = 'liveAttemptSectionTitle';
-    heartTitle.textContent = '所持ハート（盤面＋エール）';
-    heartSec.appendChild(heartTitle);
-    const table = document.createElement('div');
-    table.className = 'liveAttemptHeartTable';
-    [['色',''],['盤面',''],['エール',''],['合計','']].forEach(([txt])=>{
-      const c = document.createElement('div'); c.className = 'liveAttemptHeartCell liveAttemptHeartHead'; c.textContent = txt; table.appendChild(c);
-    });
-    const colors = ['pink','red','yellow','green','blue','purple','any','all'];
-    colors.forEach(col=>{
-      const showAny = col === 'any' && (Number(stage[col]||0)+Number(yell[col]||0)+Number(total[col]||0) <= 0);
-      if(showAny) return;
-      const lab = document.createElement('div');
-      lab.className = 'liveAttemptHeartCell';
-      const token = HEART_TOKEN_BY_COLOR[col];
-      if(token) lab.appendChild(makeTextIconImg(token, HEART_LABEL_BY_COLOR[col] || col, '1.15em'));
-      const span = document.createElement('span'); span.textContent = HEART_LABEL_BY_COLOR[col] || col; lab.appendChild(span);
-      table.appendChild(lab);
-      [stage,yell,total].forEach(src=>{
-        const cell = document.createElement('div');
-        cell.className = 'liveAttemptHeartCell';
-        cell.textContent = String(Number(src[col] || 0));
-        table.appendChild(cell);
-      });
-    });
-    heartSec.appendChild(table);
-    wrap.appendChild(heartSec);
+    const reqTotal = mkCounts(summary.required_hearts_total);
+    const reqEffective = Object.keys(mkCounts(reqTotal.effective)).length ? mkCounts(reqTotal.effective) : addCounts(summary.live_cards, 'required_effective');
+    const reqOriginal = Object.keys(mkCounts(reqTotal.original)).length ? mkCounts(reqTotal.original) : addCounts(summary.live_cards, 'required_original');
 
-    const reqLine = (counts)=>{
-      const line = document.createElement('div');
-      line.className = 'liveAttemptIconLine';
-      const obj = counts && typeof counts === 'object' ? counts : {};
-      let any = false;
-      ['pink','red','yellow','green','blue','purple','any'].forEach(col=>{
-        const n = Number(obj[col] || 0);
-        if(n <= 0) return;
-        any = true;
-        const chip = document.createElement('span');
-        chip.style.display = 'inline-flex'; chip.style.alignItems = 'center'; chip.style.gap = '3px';
-        const token = HEART_TOKEN_BY_COLOR[col];
-        if(token) chip.appendChild(makeTextIconImg(token, HEART_LABEL_BY_COLOR[col] || col, '1.12em'));
-        const t = document.createElement('span'); t.textContent = `×${n}`; chip.appendChild(t);
-        line.appendChild(chip);
-      });
-      if(!any){ const z = document.createElement('span'); z.textContent = 'なし'; line.appendChild(z); }
-      return line;
+    const makeLiveMetric = ({col='', label='', token='', countText='0', sub=''})=>{
+      const box = document.createElement('div');
+      box.className = 'yellRevealMetric';
+      const lab = document.createElement('div');
+      lab.className = 'yellRevealMetricLabel';
+      const tk = token || HEART_TOKEN_BY_COLOR[col];
+      const lb = label || HEART_LABEL_BY_COLOR[col] || col;
+      if(tk) lab.appendChild(makeTextIconImg(tk, lb, '1.15em'));
+      const text = document.createElement('span');
+      text.textContent = lb;
+      lab.appendChild(text);
+      const cnt = document.createElement('div');
+      cnt.className = 'yellRevealMetricCount';
+      cnt.textContent = String(countText);
+      box.appendChild(lab);
+      box.appendChild(cnt);
+      const s = document.createElement('div');
+      s.className = 'yellRevealMetricSub';
+      s.textContent = sub || '';
+      box.appendChild(s);
+      return box;
     };
 
-    const cardSec = document.createElement('div');
-    cardSec.className = 'liveAttemptSection';
-    const cardTitle = document.createElement('div');
-    cardTitle.className = 'liveAttemptSectionTitle';
-    cardTitle.textContent = 'ライブカード別判定';
-    cardSec.appendChild(cardTitle);
-    const list = document.createElement('div');
-    list.className = 'liveAttemptCardList';
-    const rows = Array.isArray(summary.live_cards) ? summary.live_cards : [];
-    rows.forEach(row=>{
-      const rOk = !!row.success;
-      const rr = document.createElement('div'); rr.className = 'liveAttemptCardRow';
-      const nameBox = document.createElement('div'); nameBox.className = 'liveAttemptCardBox';
-      const nm = document.createElement('div'); nm.className = 'liveAttemptCardName'; nm.textContent = String(row.cardname || row.cardnumber || 'LIVE'); nameBox.appendChild(nm);
-      const cn = document.createElement('div'); cn.className = 'liveAttemptCardNo'; cn.textContent = String(row.cardnumber || ''); nameBox.appendChild(cn);
-      rr.appendChild(nameBox);
-      const reqBox = document.createElement('div'); reqBox.className = 'liveAttemptCardBox';
-      const reqLab = document.createElement('div'); reqLab.className = 'liveAttemptMiniLabel'; reqLab.textContent = '必要ハート'; reqBox.appendChild(reqLab);
-      reqBox.appendChild(reqLine(row.required_effective || row.required_original || {}));
-      rr.appendChild(reqBox);
-      const spentBox = document.createElement('div'); spentBox.className = 'liveAttemptCardBox';
-      const spentLab = document.createElement('div'); spentLab.className = 'liveAttemptMiniLabel'; spentLab.textContent = rOk ? '使用ハート' : '不足/未達'; spentBox.appendChild(spentLab);
-      if(rOk){ spentBox.appendChild(reqLine(row.spent_hearts || {})); }
-      else { const t = document.createElement('div'); t.className='liveAttemptIconLine'; t.textContent = String(row.failure_reason || '必要ハート不足'); spentBox.appendChild(t); }
-      rr.appendChild(spentBox);
-      const status = document.createElement('div'); status.className = 'liveAttemptStatus ' + (rOk ? 'success' : 'fail');
-      status.textContent = (rOk ? '成功' : '失敗') + ` / ${Number(row.score || 0)}`;
-      rr.appendChild(status);
-      list.appendChild(rr);
+    const ownedSec = document.createElement('div');
+    ownedSec.className = 'liveAttemptSection';
+    const ownedTitle = document.createElement('div');
+    ownedTitle.className = 'liveAttemptSectionTitle';
+    ownedTitle.textContent = '所持ハート合計（盤面＋エール）';
+    const ownedGrid = document.createElement('div');
+    const hasOwnedAny = Number(stage.any || 0) + Number(yell.any || 0) + Number(total.any || 0) > 0;
+    ownedGrid.className = 'liveAttemptHeartGrid' + (hasOwnedAny ? ' withAny' : '');
+    colorsOwned.forEach(col=>{
+      const st = Number(stage[col] || 0);
+      const ye = Number(yell[col] || 0);
+      const tt = Number(total[col] || 0);
+      ownedGrid.appendChild(makeLiveMetric({col, countText:`${st}+${ye}`, sub:`合計 ${tt}`}));
     });
-    if(!rows.length){
-      const empty = document.createElement('div'); empty.className='liveAttemptCardBox'; empty.textContent='ライブカードがありません。'; list.appendChild(empty);
+    if(hasOwnedAny){
+      const st = Number(stage.any || 0);
+      const ye = Number(yell.any || 0);
+      const tt = Number(total.any || 0);
+      ownedGrid.appendChild(makeLiveMetric({col:'any', countText:`${st}+${ye}`, sub:`合計 ${tt}`}));
     }
-    cardSec.appendChild(list);
-    wrap.appendChild(cardSec);
+    ownedSec.appendChild(ownedTitle);
+    ownedSec.appendChild(ownedGrid);
+    wrap.appendChild(ownedSec);
+
+    const reqSec = document.createElement('div');
+    reqSec.className = 'liveAttemptSection';
+    const reqTitle = document.createElement('div');
+    reqTitle.className = 'liveAttemptSectionTitle';
+    reqTitle.textContent = '必要ハート合計';
+    const reqGrid = document.createElement('div');
+    const hasReqAny = Number(reqEffective.any || 0) > 0 || Number(reqOriginal.any || 0) > 0;
+    reqGrid.className = 'liveAttemptHeartGrid' + (hasReqAny ? ' withAny' : '');
+    colorsRequired.forEach(col=>{
+      if(col === 'any' && !hasReqAny) return;
+      const eff = Number(reqEffective[col] || 0);
+      const orig = Number(reqOriginal[col] || 0);
+      const sub = (orig !== eff) ? `元 ${orig}` : '';
+      reqGrid.appendChild(makeLiveMetric({col, countText:String(eff), sub}));
+    });
+    reqSec.appendChild(reqTitle);
+    reqSec.appendChild(reqGrid);
+    wrap.appendChild(reqSec);
+
+    const judge = document.createElement('div');
+    judge.className = 'liveAttemptJudgeLine ' + (ok ? 'success' : 'fail');
+    judge.textContent = ok ? '判定: 成功' : '判定: 失敗（必要ハート不足）';
+    if(!ok){
+      const reasons = Array.isArray(summary.failure_reasons) ? summary.failure_reasons.map(x=>String(x||'').trim()).filter(Boolean) : [];
+      const shown = reasons.filter(x=>x !== 'not reached');
+      if(shown.length){ judge.textContent += ` / ${shown.join(' / ')}`; }
+    }
+    wrap.appendChild(judge);
 
     elModalCards.appendChild(wrap);
     const btnOk = document.createElement('button');
