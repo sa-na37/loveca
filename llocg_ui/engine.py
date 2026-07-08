@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_attempt_summary_popup_rebase_20260706f
+# BUILD_TAG: discard_pending_rules_20260708a
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -32,15 +32,24 @@ import re
 # - Matching is strict (regex anchored with ^...$).
 _EFFECT_RULES = [
     {"id": "draw_n", "pattern": r"^カードを(?P<n>\d+)枚引く。$", "op": "draw"},
+    {"id": "draw_until_hand_size_n", "pattern": r"^(?:自分の)?手札が(?P<n>\d+)枚になるまでカードを引く。$", "op": "draw_until_hand_size"},
+    {"id": "draw_then_draw_if_self_moved_this_turn", "pattern": r"^カードを(?P<n>\d+)枚引く。このターン、このメンバーがエリアを移動して(?:いる|いた)場合、さらにカードを(?P<bonus_n>\d+)枚引く。$", "op": "draw_then_draw_if_self_moved_this_turn"},
     {"id": "draw_n_then_gain_icons_until_end_live", "pattern": r"^カードを(?P<n>\d+)枚引き、ライブ終了時まで、(?P<icons>(?:<(?:\([^)]+\)|[^<>]+)>)+)を得る。$", "op": "draw_then_gain_icons_until_end_live"},
     {"id": "draw_then_stage_group_member_temp_cost", "pattern": r"^カードを(?P<draw_n>\d+)枚引き、ライブ終了時まで、自分のステージにいる『(?P<group>[^』]+)』のメンバー1人のコストを\+(?P<cost_n>\d+)する。$", "op": "draw_then_stage_group_member_temp_cost"},
     {"id": "stage_group_member_cost_equal_original_minus_self_gain_icon_if_gte", "pattern": r"^自分のステージにいる『(?P<group>[^』]+)』のメンバー1人を選ぶ。ライブ終了時まで、このメンバーのコストは、選んだメンバーが元々持つコストより(?P<minus_n>\d+)低い値に等しくなる。これによりこのカードのコストが(?P<threshold>\d+)以上になった場合、ライブ終了時まで、(?P<icons>(?:<(?:\([^)]+\)|[^<>]+)>)+)を得る。$", "op": "stage_group_member_cost_equal_original_minus_self_gain_icon_if_gte"},
     {"id": "self_temp_cost_then_stage_group_cost_sum_gt_opponent_gain_icons", "pattern": r"^ライブ終了時まで、このメンバーのコストを\+(?P<cost_n>\d+)する。その後、自分のステージにいる『(?P<group>[^』]+)』のメンバーのコストの合計が、相手のステージにいるメンバーのコストの合計より高い場合、さらにライブ終了時まで、(?P<icons>(?:<(?:\([^)]+\)|[^<>]+)>)+)を得る。$", "op": "self_temp_cost_then_stage_group_cost_sum_gt_opponent_gain_icons"},
     {"id": "draw_n_discard_m", "pattern": r"^カードを(?P<n>\d+)枚引き、手札を(?P<m>\d+)枚控え室に置く。$", "op": "draw_then_discard"},
+    {"id": "draw_stage_member_count_then_discard_1", "pattern": r"^自分のステージにいるメンバー1人につき、カードを1枚引く。その後、手札を1枚控え室に置く。$", "op": "draw_stage_member_count_then_discard", "discard_n": 1},
+    {"id": "draw2_discard1_if_entry_from_waiting", "pattern": r"^控え室から登場している場合、カードを(?P<n>\d+)枚引き、手札を(?P<m>\d+)枚控え室に置く。$", "op": "draw_discard_if_entry_origin", "entry_origin": "green"},
+    {"id": "draw2_discard2_if_entry_not_from_hand", "pattern": r"^このメンバーが手札以外からステージに登場している場合、カードを(?P<n>\d+)枚引き、手札を(?P<m>\d+)枚控え室に置く。$", "op": "draw_discard_if_entry_origin", "entry_origin": "not_hand"},
+    {"id": "draw_if_other_stage_member_moved_this_turn", "pattern": r"^このターン、自分のステージにいるほかのメンバーがエリアを移動している場合、カードを(?P<n>\d+)枚引く。$", "op": "draw_if_other_stage_member_moved_this_turn"},
+    {"id": "draw_then_gain_icons_if_entry_from_waiting", "pattern": r"^カードを(?P<n>\d+)枚引く。その後、控え室から登場している場合、ライブ終了時まで、(?P<icons>(?:<(?:\([^)]+\)|[^<>]+)>)+)を得る。$", "op": "draw_then_gain_icons_if_entry_origin", "entry_origin": "green"},
     {"id": "discard_hand_n", "pattern": r"^手札を(?P<n>\d+)枚控え室に置く。$", "op": "discard_from_hand"},
     {"id": "retrieve_waiting_live_n", "pattern": r"^自分の控え室からライブカードを(?P<n>\d+)枚手札に加える。$", "op": "retrieve_from_waiting_room", "card_kind": "LIVE"},
     {"id": "retrieve_waiting_member_n", "pattern": r"^自分の控え室からメンバーカードを(?P<n>\d+)枚手札に加える。$", "op": "retrieve_from_waiting_room", "card_kind": "MEMBER"},
     {"id": "retrieve_waiting_live_group_n", "pattern": r"^自分の控え室から『(?P<group>[^』]+)』のライブカードを(?P<n>\d+)枚手札に加える。$", "op": "retrieve_from_waiting_room", "card_kind": "LIVE"},
+    {"id": "retrieve_waiting_live_score_le_1", "pattern": r"^自分の控え室からスコア(?P<score_lim>\d+)以下のライブカードを1枚手札に加える。$", "op": "retrieve_from_waiting_room", "card_kind": "LIVE", "n": 1},
+    {"id": "retrieve_waiting_group_live_score_le_1", "pattern": r"^自分の控え室からスコア(?P<score_lim>\d+)以下の『(?P<group>[^』]+)』のライブカードを1枚手札に加える。$", "op": "retrieve_from_waiting_room", "card_kind": "LIVE", "n": 1},
     {"id": "look_top_k_choose_1_rest_waiting", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から1枚を手札に加え、残りを控え室に置く。$", "op": "look_top_choose"},
     {"id": "look_top_k_choose_1_rest_waiting_sentence_split", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から1枚を手札に加える。残りを控え室に置く。$", "op": "look_top_choose"},
     {"id": "look_top_k_choose_n_rest_waiting", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中からカードを(?P<n>\d+)枚手札に加え、残りを控え室に置く。$", "op": "look_top_choose_n"},
@@ -109,8 +118,16 @@ _EFFECT_RULES = [
     {"id": "green_member_cost_le_any_to_empty_area", "pattern": r"^(?P<energy_icons>(?:<\(E\)>)+)?自分の控え室からコスト(?P<cost_max>\d+)以下のメンバーカードを(?P<count_n>\d+)枚、メンバーのいないエリアに登場させる。$", "op": "green_member_cost_le_to_empty_area"},
     {"id": "energy_activate_n", "pattern": r"^エネルギーを(?P<n>\d+)枚アクティブにする。$", "op": "energy_activate"},
     {"id": "gain_blade_until_end_live", "pattern": r"^ライブ終了時まで、(?P<blades>(?:<\(ブレード\)>)+)を得る。$", "op": "gain_blade_until_end_live"},
+    {"id": "gain_blade_if_self_moved_this_turn", "pattern": r"^このターン、このメンバーがエリアを移動して(?:いる|いた)場合、ライブ終了時まで、(?P<blades>(?:<\(ブレード\)>)+)を得る。$", "op": "gain_blade_if_self_moved_this_turn"},
+    {"id": "moved_stage_members_gain_icons_until_end_live", "pattern": r"^ライブ終了時まで、自分のステージにいる、このターン中にエリアを移動したメンバーは(?P<icons>(?:<(?:\([^)]+\)|[^<>]+)>)+)を得る。$", "op": "moved_stage_members_gain_icons_until_end_live"},
+    {"id": "moved_stage_group_members_gain_icons_until_end_live", "pattern": r"^ライブ終了時まで、自分のステージにいる、このターン中にエリアを移動したすべての『(?P<group>[^』]+)』メンバーは、(?P<icons>(?:<(?:\([^)]+\)|[^<>]+)>)+)を得る。$", "op": "moved_stage_members_gain_icons_until_end_live"},
+    {"id": "choose_heart_for_moved_stage_members_until_end_live", "pattern": r"^(?P<choices>(?:か?<(?:\([^)]+\)|[^<>]+)>)+)のうち、1つを選ぶ。ライブ終了時まで、自分のステージにいる、このターン中にエリアを移動しているすべてのメンバーは、選んだハートを1つ得る。$", "op": "choose_heart_for_moved_stage_members_until_end_live"},
+    {"id": "choose_heart_for_entered_stage_members_except_group_until_end_live", "pattern": r"^(?P<choices>(?:か?<(?:\([^)]+\)|[^<>]+)>)+)のうち、1つを選ぶ。ライブ終了時まで、自分のステージにいるこのターンに登場したメンバーのうち、『(?P<exclude_group>[^』]+)』以外のすべてのメンバーは選んだハートを1つ得る。$", "op": "choose_heart_for_entered_stage_members_except_group_until_end_live"},
+    {"id": "entered_or_moved_stage_group_members_reduce_required_any_per_member", "pattern": r"^自分のステージにいる、このターン中に登場、またはエリアを移動した『(?P<group>[^』]+)』のメンバー1人につき、このカードを成功させるための必要ハートを(?P<anys>(?:<\(任意\)>)+)減らす。$", "op": "entered_or_moved_stage_group_members_reduce_required_any_per_member"},
+    {"id": "live_success_score_if_self_moved_by_group_effect", "pattern": r"^このターン、自分の『(?P<group>[^』]+)』のカードの効果によってこのメンバーがエリアを移動していた場合、ライブの合計スコアを\+(?P<n>\d+)する。$", "op": "live_success_score_if_self_moved_by_group_effect"},
     {"id": "activate_stage_member_upto1", "pattern": r"^自分のステージにいるメンバーを1人までアクティブにする。$", "op": "activate_stage_member"},
     {"id": "activate_stage_member_optional_any", "pattern": r"^メンバー1人をアクティブにしてもよい。$", "op": "activate_stage_member", "optional": True},
+    {"id": "position_change_self", "pattern": r"^このメンバーをポジションチェンジする。$", "op": "position_change_self"},
     {"id": "position_change_stage_member_optional_any", "pattern": r"^メンバー1人をポジションチェンジさせてもよい。$", "op": "position_change_stage_member", "optional": True},
     {"id": "optional_discard_one_from_hand_then_effect", "pattern": r"^手札を1枚控え室に置いてもよい。そうした場合、(?P<after>.+)$", "op": "optional_discard_one_from_hand_then_effect"},
     {"id": "optional_discard_one_from_hand_then_effect_direct", "pattern": r"^手札を1枚控え室に置いてもよい。(?P<after>.+)$", "op": "optional_discard_one_from_hand_then_effect", "prefix_text": "手札を1枚控え室に置いてもよい。", "condition_text": "手札を1枚控え室に置いた場合", "timing": "任意コスト"},
@@ -455,7 +472,7 @@ def _is_named_hand_cost_result_effect(effect_text: str) -> bool:
     if not t:
         return False
     patterns = [
-        r'^ライブ終了時まで、「<常時>ライブの合計スコアを\+\d+する。」を得る。$',
+        r'^ライブ終了時まで、(?:「|『)<常時>ライブの合計スコアを\+\d+する。(?:」|』)を得る。$',
         r'^ライブ終了時まで、これ(?:によって|により)控え室に置いた枚数1枚につき(?:<\([^)]+\)>)+を得る。$',
         r'^ライブ終了時まで、これにより控え室に置いたそれらのカードが持つハートの色1つにつき、その色のハートを1つずつ得る。$',
     ]
@@ -542,6 +559,8 @@ def _match_effect_template(effect_text: str):
         return ({'id': 'success_storage_score_sum_wrapper', 'op': 'success_storage_score_sum_wrapper'}, {})
     if _is_success_storage_count_effect_wrapper(s):
         return ({'id': 'success_storage_count_wrapper', 'op': 'success_storage_count_wrapper'}, {})
+    if _is_named_hand_cost_result_effect(s):
+        return ({'id': 'named_hand_cost_result_effect', 'op': 'named_hand_cost_result_effect'}, {})
     # Activation-cost reduction text is not part of the resolved effect. Strip it
     # before matching the inner effect so BODY activated abilities can be queued.
     # Only enter the activation-cost-reduction wrapper when the text actually
@@ -557,6 +576,37 @@ def _match_effect_template(effect_text: str):
         return ({'id': 'activated_success_score_sum_condition_wrapper', 'op': 'activated_success_score_sum_condition_wrapper'}, {})
     if re.match(r'^自分のステージにほかの『[^』]+』のメンバーがいる場合、.+$', _normalize_icon_token_text(s).replace('\n','')):
         return ({'id': 'stage_has_other_group_or_unit_member_wrapper', 'op': 'stage_has_other_group_or_unit_member_wrapper'}, {})
+    s_stage_cond = _normalize_icon_token_text(s).replace('\n','')
+    m_stage_count = re.match(r'^自分のステージにメンバーが\d+人以上いる場合、(?P<inner>.+)$', s_stage_cond)
+    if m_stage_count and _match_effect_template(str(m_stage_count.group('inner') or '').strip()):
+        return ({'id': 'stage_member_count_gte_wrapper', 'op': 'stage_member_count_gte_wrapper'}, {})
+    m_stage_group = re.match(r'^自分のステージに『[^』]+』のメンバーがいる場合、(?P<inner>.+)$', s_stage_cond)
+    if m_stage_group and _match_effect_template(str(m_stage_group.group('inner') or '').strip()):
+        return ({'id': 'stage_has_group_or_unit_member_wrapper', 'op': 'stage_has_group_or_unit_member_wrapper'}, {})
+    m_stage_group_entered = re.match(r'^このターン、自分のステージに『[^』]+』のメンバーが登場している場合、(?P<inner>.+)$', s_stage_cond)
+    if m_stage_group_entered and _match_effect_template(str(m_stage_group_entered.group('inner') or '').strip()):
+        return ({'id': 'stage_group_entered_this_turn_wrapper', 'op': 'stage_group_entered_this_turn_wrapper'}, {})
+    m_stage_enter_count = re.match(r'^このターン、自分のステージにメンバーが\d+回以上登場している場合、(?P<inner>.+)$', s_stage_cond)
+    if m_stage_enter_count and _match_effect_template(str(m_stage_enter_count.group('inner') or '').strip()):
+        return ({'id': 'stage_enter_count_gte_this_turn_wrapper', 'op': 'stage_enter_count_gte_this_turn_wrapper'}, {})
+    m_stage_enter_exact_event = re.match(r'^このターン、自分のステージにメンバーが\d+回登場したとき、(?P<inner>.+)$', s_stage_cond)
+    if m_stage_enter_exact_event and _match_effect_template(str(m_stage_enter_exact_event.group('inner') or '').strip()):
+        return ({'id': 'stage_enter_count_exact_event_wrapper', 'op': 'stage_enter_count_exact_event_wrapper'}, {})
+    m_self_wait_then = re.match(r'^このメンバーをウェイトにする。その後、(?P<inner>.+)$', s_stage_cond)
+    if m_self_wait_then and _match_effect_template(str(m_self_wait_then.group('inner') or '').strip()):
+        return ({'id': 'self_wait_then_effect_wrapper', 'op': 'self_wait_then_effect_wrapper'}, {})
+    m_stage_moved_event = re.match(r'^このメンバーがエリアを移動(?:したとき|するたび)、(?P<inner>.+)$', s_stage_cond)
+    if m_stage_moved_event and _match_effect_template(str(m_stage_moved_event.group('inner') or '').strip()):
+        return ({'id': 'stage_movement_self_event_wrapper', 'op': 'stage_movement_self_event_wrapper'}, {})
+    m_enter_or_stage_moved_event = re.match(r'^このメンバーが登場か、エリアを移動(?:したとき|するたび)、(?P<inner>.+)$', s_stage_cond)
+    if m_enter_or_stage_moved_event and _match_effect_template(str(m_enter_or_stage_moved_event.group('inner') or '').strip()):
+        return ({'id': 'enter_or_stage_movement_self_event_wrapper', 'op': 'enter_or_stage_movement_self_event_wrapper'}, {})
+    m_main_phase_stage_moved_event = re.match(r'^自分のメインフェイズの間、このメンバーがエリアを移動したとき、(?P<inner>.+)$', s_stage_cond)
+    if m_main_phase_stage_moved_event and _match_effect_template(str(m_main_phase_stage_moved_event.group('inner') or '').strip()):
+        return ({'id': 'main_phase_stage_movement_self_event_wrapper', 'op': 'main_phase_stage_movement_self_event_wrapper'}, {})
+    m_moved_or_energy_event = re.match(r'^自分のカードの効果によって、このメンバーがエリアを移動するか自分のエネルギー置き場にエネルギーが置かれたとき、(?P<inner>.+)$', s_stage_cond)
+    if m_moved_or_energy_event and _match_effect_template(str(m_moved_or_energy_event.group('inner') or '').strip()):
+        return ({'id': 'stage_movement_or_energy_placed_self_event_wrapper', 'op': 'stage_movement_or_energy_placed_self_event_wrapper'}, {})
     candidates = [s]
     s_norm = _normalize_icon_token_text(s)
     if s_norm != s:
@@ -1476,7 +1526,7 @@ def _is_member_ci(ci: Optional[CardInfo]) -> bool:
     if not ci:
         return False
     return "MEMBER" in str(getattr(ci, 'type', '') or '').upper() or "メンバー" in str(getattr(ci, 'type', '') or '')
-def _green_candidates(gs: 'GameState', cards_db: Dict[str, CardInfo], kind: str, group: str = "") -> List[str]:
+def _green_candidates(gs: 'GameState', cards_db: Dict[str, CardInfo], kind: str, group: str = "", score_lim: Optional[int] = None) -> List[str]:
     out = []
     for cn in list(gs.green_room):
         ci = _get_card(cards_db, cn)
@@ -1488,6 +1538,13 @@ def _green_candidates(gs: 'GameState', cards_db: Dict[str, CardInfo], kind: str,
             continue
         if group and not _ci_matches_group_or_unit(ci, group):
             continue
+        if kind == 'LIVE' and score_lim is not None:
+            try:
+                score = int(getattr(ci, 'score', 0) or 0)
+            except Exception:
+                score = 0
+            if score > int(score_lim):
+                continue
         out.append(cn)
     return out
 def _success_has_group(gs: 'GameState', cards_db: Dict[str, CardInfo], group: str) -> bool:
@@ -1501,18 +1558,61 @@ def _success_has_group(gs: 'GameState', cards_db: Dict[str, CardInfo], group: st
         if group in str(getattr(ci, 'group', '') or ''):
             return True
     return False
-def _enqueue_discard_from_hand(gs: 'GameState', n: int, label: str = "") -> None:
+def _enqueue_discard_from_hand(
+    gs: 'GameState',
+    n: int,
+    label: str = "",
+    ctx: Optional[Dict[str, Any]] = None,
+    after_effect_template: str = '',
+    after_ctx: Optional[Dict[str, Any]] = None,
+    after_source_cn: str = '',
+    optional: bool = False,
+    allow_skip: bool = False,
+) -> None:
     n = int(n or 0)
     if n <= 0:
         return
     if not gs.hand:
         gs.log.append('[ERR] discard: hand empty')
         return
+    text = label or f'手札を{n}枚控え室に置く'
+    auto_detail = str((ctx or {}).get('auto_effect_detail', '') or '').strip()
+    after_ctx2 = dict(after_ctx or ctx or {})
+    source_cn = str(after_source_cn or (ctx or {}).get('source_cn', '') or '')
+    multi_text = text + (('支払わない場合はスキップ。' if text.endswith(('。', '\n')) else '。支払わない場合はスキップ。') if (optional or allow_skip) else ('。' if not text.endswith('。') else ''))
+    if n > 1:
+        gs.pending.append({
+            'kind': 'choose_member_from_green_multi_up_to',
+            'source_zone': 'hand',
+            'action': 'discard_from_hand',
+            'min_picks': 0 if (optional or allow_skip) else n,
+            'max_picks': min(n, len(getattr(gs, 'hand', []) or [])),
+            'exact_or_zero': bool(optional or allow_skip),
+            'text': _auto_effect_detail_block(ctx, multi_text),
+            'options': list(gs.hand),
+            'after_effect_template': str(after_effect_template or ''),
+            'after_ctx': after_ctx2,
+            'after_source_cn': source_cn,
+            'source_cn': source_cn,
+            'skip_if_no_picks': bool(optional or allow_skip),
+            'auto_effect_detail': auto_detail,
+            'suppress_card_text': bool(auto_detail),
+        })
+        gs.log.append(f'[PENDING] discard_from_hand multi n={n} hand={len(gs.hand)}')
+        return
     gs.pending.append({
         'kind': 'discard_from_hand',
         'remaining': n,
-        'text': (label or f'コストとして、手札を{n}枚控え室に置く'),
+        'text': _auto_effect_detail_block(ctx, text),
         'options': list(gs.hand),
+        'after_effect_template': str(after_effect_template or ''),
+        'after_ctx': after_ctx2,
+        'after_source_cn': source_cn,
+        'source_cn': source_cn,
+        'auto_effect_detail': auto_detail,
+        'suppress_card_text': bool(auto_detail),
+        'optional': bool(optional),
+        'allow_skip': bool(allow_skip),
     })
     gs.log.append(f'[PENDING] discard_from_hand remaining={n} hand={len(gs.hand)}')
 def _auto_effect_detail_block(ctx: Optional[Dict[str, Any]], action_text: str = '') -> str:
@@ -1601,9 +1701,15 @@ def _mill_followup_condition_label(cond: str, gd: Dict[str, str]) -> str:
         return f'控え室に置いたカードがすべて『{group}』のカードである' if group else '控え室に置いたカードがすべて指定グループのカードである'
     return cond0 or '-'
 
-def _enqueue_choose_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo], kind: str, n: int = 1, group: str = "", ctx: Optional[Dict[str, Any]] = None, allow_less: bool = False, resume: Optional[Dict[str, Any]] = None, after_effect_template: str = '', after_ctx: Optional[Dict[str, Any]] = None) -> None:
+def _enqueue_choose_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo], kind: str, n: int = 1, group: str = "", ctx: Optional[Dict[str, Any]] = None, allow_less: bool = False, resume: Optional[Dict[str, Any]] = None, after_effect_template: str = '', after_ctx: Optional[Dict[str, Any]] = None, score_lim: Optional[int] = None) -> None:
     n = int(n or 1)
-    cands = _green_candidates(gs, cards_db, kind=kind, group=group)
+    score_limit = None
+    try:
+        if score_lim is not None:
+            score_limit = int(score_lim)
+    except Exception:
+        score_limit = None
+    cands = _green_candidates(gs, cards_db, kind=kind, group=group, score_lim=score_limit)
     if not cands:
         gs.log.append(f'[INFO] retrieve: no {kind} in waiting room' + (' (optional skip)' if allow_less else ''))
         # Some sequential effects continue after the retrieve instruction even
@@ -1624,6 +1730,8 @@ def _enqueue_choose_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo], k
         action_text = f'控え室の{("ライブ" if kind=="LIVE" else "メンバー")}カードを1枚まで手札に加える'
     if group:
         action_text += f'（{group}）'
+    if kind == 'LIVE' and score_limit is not None:
+        action_text += f'（スコア{score_limit}以下）'
     auto_detail = str((ctx or {}).get('auto_effect_detail', '') or '').strip()
     prm = {
         'kind': f'choose_{kind.lower()}_from_green',
@@ -1631,6 +1739,7 @@ def _enqueue_choose_from_green(gs: 'GameState', cards_db: Dict[str, CardInfo], k
         'options': cands,
         'want_kind': kind,
         'want_group': group,
+        'score_lim': score_limit,
         'remaining_picks': n,
         'source_cn': str((ctx or {}).get('source_cn', '') or ''),
         'auto_effect_detail': auto_detail,
@@ -2302,6 +2411,29 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         got = draw(gs, n, rng)
         gs.log.append(f'[AUTO] draw {n} -> drew {got}')
         return
+    if op == 'draw_until_hand_size':
+        target = int(gd.get('n', 0) or 0)
+        before = len(getattr(gs, 'hand', []) or [])
+        n = max(0, target - before)
+        got = draw(gs, n, rng) if n > 0 else 0
+        after = len(getattr(gs, 'hand', []) or [])
+        gs.log.append(f'[AUTO] draw until hand {target}: hand {before}->{after}; drew {got}')
+        return
+    if op == 'draw_then_draw_if_self_moved_this_turn':
+        n = int(gd.get('n', 0) or 0)
+        bonus_n = int(gd.get('bonus_n', 0) or 0)
+        got = draw(gs, n, rng) if n > 0 else 0
+        pos = str((ctx or {}).get('pos', '') or '').upper()
+        src = str((ctx or {}).get('source_cn', '') or '')
+        slot = gs.stage.get(pos) if pos in ('L','C','R') else None
+        src_cn = _canon_cardno(src or (getattr(slot, 'cardnumber', '') if slot else '') or '')
+        moved_set = {_canon_cardno(str(x or '')) for x in list(getattr(gs, 'stage_moved_cardnumbers_this_turn', []) or [])}
+        moved_set = {x for x in moved_set if x}
+        moved_any = bool(getattr(gs, 'stage_moved_this_turn', False))
+        moved_ok = bool(src_cn and src_cn in moved_set) or (moved_any and not moved_set)
+        bonus_got = draw(gs, bonus_n, rng) if moved_ok and bonus_n > 0 else 0
+        gs.log.append(f'[AUTO] draw {n} -> drew {got}; self moved={moved_ok} -> bonus draw {bonus_n if moved_ok else 0} (drew {bonus_got})')
+        return
     if op == 'draw_then_gain_icons_until_end_live':
         n = int(gd.get('n', 0) or 0)
         icons_blob = str(gd.get('icons', '') or '')
@@ -2319,6 +2451,40 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         for col, cnt in heart_counts.items():
             _grant_temp_heart(slot, col, cnt)
         gs.log.append(f'[AUTO] draw {n} -> drew {got}; {pos}: gain icons {icons_blob} (until end_of_live; blades={b} hearts={heart_counts})')
+        return
+    if op == 'draw_discard_if_entry_origin':
+        n = int(gd.get('n', 0) or 0)
+        m = int(gd.get('m', 0) or 0)
+        origin = str((ctx or {}).get('entry_origin', 'hand') or 'hand').strip().lower()
+        required = str(rule.get('entry_origin', '') or '').strip().lower()
+        ok = (required in ('green', 'waiting') and origin in ('green', 'waiting')) or (required == 'not_hand' and origin != 'hand')
+        if not ok:
+            src = str((ctx or {}).get('source_cn', '') or '')
+            gs.log.append(f'[SKIP] {src}: entry origin {origin or "hand"} does not match {required or "condition"}')
+            return
+        got = draw(gs, n, rng) if n > 0 else 0
+        gs.log.append(f'[AUTO] entry origin {origin}: draw {n} -> drew {got}; then discard {m}')
+        if m > 0:
+            _enqueue_discard_from_hand(gs, m, label=f'手札を{m}枚控え室に置く', ctx=ctx)
+        return
+    if op == 'draw_then_gain_icons_if_entry_origin':
+        n = int(gd.get('n', 0) or 0)
+        icons_blob = str(gd.get('icons', '') or '')
+        got = draw(gs, n, rng) if n > 0 else 0
+        origin = str((ctx or {}).get('entry_origin', 'hand') or 'hand').strip().lower()
+        required = str(rule.get('entry_origin', '') or '').strip().lower()
+        ok = (required in ('green', 'waiting') and origin in ('green', 'waiting')) or (required == 'not_hand' and origin != 'hand')
+        if not ok:
+            src = str((ctx or {}).get('source_cn', '') or '')
+            gs.log.append(f'[AUTO] draw {n} -> drew {got}; [SKIP] {src}: entry origin {origin or "hand"} does not match {required or "condition"}')
+            return
+        pos = str((ctx or {}).get('pos', '') or '').upper()
+        slot = gs.stage.get(pos) if pos in ('L', 'C', 'R') else None
+        if not slot:
+            gs.log.append(f'[WARN] draw_then_gain_icons_if_entry_origin: no source slot after drawing {got}')
+            return
+        b, hs = _grant_temp_icons_to_slot(slot, icons_blob, 1)
+        gs.log.append(f'[AUTO] draw {n} -> drew {got}; entry origin {origin}: {pos} gain {icons_blob} until end_of_live (blades={b}, hearts={hs})')
         return
     if op == 'draw_then_stage_group_member_temp_cost':
         draw_n = int(gd.get('draw_n', 0) or 0)
@@ -2360,20 +2526,39 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         m = int(gd.get('m', 0) or 0)
         got = draw(gs, n, rng)
         gs.log.append(f'[AUTO] draw {n} -> drew {got}; then discard {m}')
-        _enqueue_discard_from_hand(gs, m)
+        _enqueue_discard_from_hand(gs, m, label=f'手札を{m}枚控え室に置く', ctx=ctx)
+        return
+    if op == 'draw_stage_member_count_then_discard':
+        n = int(_stage_member_count(gs, cards_db) or 0)
+        discard_n = int(rule.get('discard_n', gd.get('discard_n', 1)) or 1)
+        got = draw(gs, n, rng) if n > 0 else 0
+        gs.log.append(f'[AUTO] stage member count {n} -> draw {n} (drew {got}); then discard {discard_n}')
+        if discard_n > 0:
+            _enqueue_discard_from_hand(gs, discard_n, label=f'手札を{discard_n}枚控え室に置く', ctx=ctx)
+        return
+    if op == 'draw_if_other_stage_member_moved_this_turn':
+        n = int(gd.get('n', 0) or 0)
+        src_pos = str((ctx or {}).get('pos', '') or '').upper()
+        moved = _moved_stage_member_positions_this_turn(gs, cards_db, exclude_pos=src_pos)
+        if not moved:
+            gs.log.append('[SKIP] other stage member moved this turn -> condition not met')
+            return
+        got = draw(gs, n, rng) if n > 0 else 0
+        gs.log.append(f'[AUTO] other moved stage members={moved} -> draw {n} (drew {got})')
         return
     if op == 'discard_from_hand':
         n = int(gd.get('n', 0) or 0)
-        _enqueue_discard_from_hand(gs, n)
+        _enqueue_discard_from_hand(gs, n, label=f'手札を{n}枚控え室に置く', ctx=ctx)
         return
     if op == 'retrieve_from_waiting_room':
         kind = str(rule.get('card_kind', '') or '').upper() or 'ANY'
-        n = int(gd.get('n', 1) or 1)
+        n = int(gd.get('n', rule.get('n', 1)) or 1)
         group = str(gd.get('group', '') or '')
+        score_lim = gd.get('score_lim', rule.get('score_lim', None))
         if kind not in ('LIVE','MEMBER'):
             gs.log.append('[WARN] retrieve: unsupported kind')
             return
-        _enqueue_choose_from_green(gs, cards_db, kind=kind, n=n, group=group, ctx=ctx)
+        _enqueue_choose_from_green(gs, cards_db, kind=kind, n=n, group=group, ctx=ctx, score_lim=score_lim)
         return
     if op == 'optional_discard_one_from_hand_then_effect':
         after = str(gd.get('after', '') or '').strip()
@@ -3644,6 +3829,128 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         slot.temp_until = 'end_of_live'
         gs.log.append(f'[AUTO] {pos}: gain blade +{b} (until end_of_live)')
         return
+    if op == 'gain_blade_if_self_moved_this_turn':
+        blades_blob = gd.get('blades', '')
+        b = _count_blade_icons_from_tagblob(blades_blob)
+        pos = str(ctx.get('pos', '') or '').upper()
+        src = str((ctx or {}).get('source_cn', '') or '')
+        slot = gs.stage.get(pos) if pos in ('L','C','R') else None
+        if not slot:
+            gs.log.append(f'[WARN] {src}: moved-self blade has no source slot')
+            return
+        src_cn = _canon_cardno(src or getattr(slot, 'cardnumber', '') or '')
+        moved_set = {_canon_cardno(str(x or '')) for x in list(getattr(gs, 'stage_moved_cardnumbers_this_turn', []) or [])}
+        moved_set = {x for x in moved_set if x}
+        moved_any = bool(getattr(gs, 'stage_moved_this_turn', False))
+        moved_ok = bool(src_cn and src_cn in moved_set) or (moved_any and not moved_set)
+        if not moved_ok:
+            gs.log.append(f'[SKIP] {src_cn or src}: self moved this turn -> condition not met')
+            return
+        slot.temp_blade += int(b)
+        slot.temp_until = 'end_of_live'
+        gs.log.append(f'[AUTO] {pos}: self moved this turn -> gain blade +{b} (until end_of_live)')
+        return
+    if op == 'moved_stage_members_gain_icons_until_end_live':
+        icons_blob = str(gd.get('icons', '') or '')
+        group_name = str(gd.get('group', '') or '').strip()
+        positions = _moved_stage_member_positions_this_turn(gs, cards_db, tag=group_name)
+        if not positions:
+            gs.log.append('[SKIP] moved stage members gain icons: no moved staged member' + (f' for 『{group_name}』' if group_name else ''))
+            return
+        applied = []
+        for pos2 in positions:
+            slot2 = gs.stage.get(pos2)
+            if not slot2:
+                continue
+            b2, hs2 = _grant_temp_icons_to_slot(slot2, icons_blob, 1)
+            applied.append(f'{pos2}(blade+{b2}, hearts={hs2})')
+        gs.log.append(f'[AUTO] moved stage members {positions} gain {icons_blob} until end_of_live: {applied}')
+        return
+    if op == 'choose_heart_for_moved_stage_members_until_end_live':
+        positions = _moved_stage_member_positions_this_turn(gs, cards_db)
+        if not positions:
+            gs.log.append('[SKIP] choose heart for moved stage members: no moved staged member')
+            return
+        choices_blob = str(gd.get('choices', '') or '')
+        opts: List[str] = []
+        for m0 in re.finditer(r'<(?:\(([^)]+)\)|([^<>]+))>', choices_blob):
+            jp = str((m0.group(1) or m0.group(2) or '')).strip()
+            if jp in _HEART_JP_MAP and jp not in opts:
+                opts.append(jp)
+        if not opts:
+            opts = ['桃', '赤', '黄', '緑', '青', '紫']
+        src = str((ctx or {}).get('source_cn', '') or '')
+        gs.pending.append({
+            'kind': 'choose_heart_color_for_moved_stage_members',
+            'text': _auto_effect_detail_block(ctx, f'このターン中にエリアを移動したステージ上メンバーへ与えるハートを選んでください。対象: {positions}'),
+            'options': list(opts),
+            'target_positions': list(positions),
+            'source_cn': src,
+            'auto_effect_detail': str((ctx or {}).get('auto_effect_detail', '') or ''),
+            'suppress_card_text': bool(str((ctx or {}).get('auto_effect_detail', '') or '')),
+        })
+        gs.log.append(f'[PENDING] {src}: choose heart color for moved stage members {positions}')
+        return
+    if op == 'choose_heart_for_entered_stage_members_except_group_until_end_live':
+        exclude_group = str(gd.get('exclude_group', '') or '').strip()
+        positions = _entered_stage_member_positions_this_turn(gs, cards_db, exclude_tag=exclude_group)
+        if not positions:
+            gs.log.append(f'[SKIP] choose heart for entered stage members: no entered staged member outside 『{exclude_group}』')
+            return
+        choices_blob = str(gd.get('choices', '') or '')
+        opts: List[str] = []
+        for m0 in re.finditer(r'<(?:\(([^)]+)\)|([^<>]+))>', choices_blob):
+            jp = str((m0.group(1) or m0.group(2) or '')).strip()
+            if jp in _HEART_JP_MAP and jp not in opts:
+                opts.append(jp)
+        if not opts:
+            opts = ['桃', '赤', '黄', '緑', '青', '紫']
+        src = str((ctx or {}).get('source_cn', '') or '')
+        gs.pending.append({
+            'kind': 'choose_heart_color_for_stage_positions',
+            'text': _auto_effect_detail_block(ctx, f'このターン中に登場した対象メンバーへ与えるハートを選んでください。対象: {positions}'),
+            'options': list(opts),
+            'target_positions': list(positions),
+            'source_cn': src,
+            'auto_effect_detail': str((ctx or {}).get('auto_effect_detail', '') or ''),
+            'suppress_card_text': bool(str((ctx or {}).get('auto_effect_detail', '') or '')),
+        })
+        gs.log.append(f'[PENDING] {src}: choose heart color for entered stage members {positions} excluding {exclude_group}')
+        return
+    if op == 'live_success_score_if_self_moved_by_group_effect':
+        group_name = str(gd.get('group', '') or '').strip()
+        n = int(gd.get('n', 0) or 0)
+        src = str((ctx or {}).get('source_cn', '') or '')
+        pos = str((ctx or {}).get('pos', '') or '').upper()
+        if not _self_moved_by_group_effect_this_turn(gs, cards_db, src, group_name):
+            gs.log.append(f'[SKIP] {src}: not moved by 『{group_name}』 effect this turn')
+            return
+        _add_live_success_total_score_bonus(gs, cards_db, n, detail=f'{src} moved by 『{group_name}』 effect this turn', source_cn=src, pos=pos)
+        return
+    if op == 'entered_or_moved_stage_group_members_reduce_required_any_per_member':
+        group_name = str(gd.get('group', '') or '').strip()
+        per = len(re.findall(r'<\(任意\)>', str(gd.get('anys', '') or ''))) or 1
+        positions = _entered_or_moved_stage_member_positions_this_turn(gs, cards_db, tag=group_name)
+        total = int(len(positions) * per)
+        src = _canon_cardno(str((ctx or {}).get('source_cn', '') or ''))
+        set_idx = (ctx or {}).get('set_idx', None)
+        if total <= 0:
+            gs.log.append(f'[SKIP] required any reduction: no entered/moved staged 『{group_name}』 member')
+            return
+        try:
+            if set_idx is not None:
+                rmap = dict(getattr(gs, 'live_start_required_any_reduction_by_set_idx', {}) or {})
+                k = int(set_idx)
+                rmap[k] = int(rmap.get(k, 0) or 0) + total
+                gs.live_start_required_any_reduction_by_set_idx = rmap
+            elif src:
+                rmap = dict(getattr(gs, 'live_start_required_any_reduction_by_cn', {}) or {})
+                rmap[src] = int(rmap.get(src, 0) or 0) + total
+                gs.live_start_required_any_reduction_by_cn = rmap
+        except Exception:
+            pass
+        gs.log.append(f'[AUTO] {src or "LIVE"}: entered/moved 『{group_name}』 members {positions} -> required <任意> -{total}')
+        return
     if op == 'activate_stage_member':
         opts = [p for p in ('L','C','R') if gs.stage.get(p) and not bool(getattr(gs.stage.get(p), 'active', True))]
         if not opts:
@@ -3660,6 +3967,24 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
             'suppress_card_text': bool(str((ctx or {}).get('auto_effect_detail', '') or '')),
         })
         gs.log.append('[PENDING] choose WAIT stage member to activate')
+        return
+    if op == 'position_change_self':
+        pos = str((ctx or {}).get('pos', '') or '').upper()
+        src = str((ctx or {}).get('source_cn', '') or '')
+        if pos not in ('L', 'C', 'R') or not gs.stage.get(pos):
+            gs.log.append(f'[WARN] {src}: position_change_self has no source slot')
+            return
+        dst_opts = [p for p in ('L', 'C', 'R') if p != pos]
+        gs.pending.append({
+            'kind': 'position_change',
+            'src_pos': pos,
+            'source_cn': src or getattr(gs.stage.get(pos), 'cardnumber', ''),
+            'text': _auto_effect_detail_block(ctx, f'{pos}: {src or "このメンバー"} の移動先を選んでください。移動先にメンバーがいる場合は入れ替わります。'),
+            'options': dst_opts,
+            'auto_effect_detail': str((ctx or {}).get('auto_effect_detail', '') or ''),
+            'suppress_card_text': bool(str((ctx or {}).get('auto_effect_detail', '') or '')),
+        })
+        gs.log.append(f'[PENDING] {src}: position_change_self source={pos} -> choose destination')
         return
     if op == 'position_change_stage_member':
         opts = [p for p in ('L','C','R') if gs.stage.get(p)]
@@ -4358,6 +4683,85 @@ def try_apply_effect_template(gs: 'GameState', rng: random.Random, cards_db: Dic
         gs.log.append(f'[SKIP] success-zone <スコア+1> 『{group_name}』 cards={got} -> condition not met')
         return True
 
+    # Conditional wrappers based on current own stage members.
+    m_stage_count = re.match(r'^自分のステージにメンバーが(?P<count>\d+)人以上いる場合、(?P<inner>.+)$', text_norm)
+    if m_stage_count:
+        need = int(m_stage_count.group('count') or 0)
+        got = int(_stage_member_count(gs, cards_db) or 0)
+        inner = str(m_stage_count.group('inner') or '').strip()
+        if got >= need:
+            gs.log.append(f'[AUTO] stage member count {got}/{need} -> apply inner effect')
+            ctx2 = _with_auto_effect_detail(ctx, _auto_effect_detail_for_condition(ctx, text_norm, f'ステージのメンバー {got}/{need}人', '自動効果'))
+            return bool(try_apply_effect_template(gs, rng, cards_db, inner, ctx2))
+        gs.log.append(f'[SKIP] stage member count {got}/{need} -> condition not met')
+        return True
+
+    m_stage_group = re.match(r'^自分のステージに『(?P<tag>[^』]+)』のメンバーがいる場合、(?P<inner>.+)$', text_norm)
+    if m_stage_group:
+        tag = str(m_stage_group.group('tag') or '').strip()
+        inner = str(m_stage_group.group('inner') or '').strip()
+        if _stage_has_group_or_unit_member(gs, cards_db, tag):
+            gs.log.append(f'[AUTO] stage has 『{tag}』 member -> apply inner effect')
+            ctx2 = _with_auto_effect_detail(ctx, _auto_effect_detail_for_condition(ctx, text_norm, f'ステージに『{tag}』メンバーがいる', '自動効果'))
+            return bool(try_apply_effect_template(gs, rng, cards_db, inner, ctx2))
+        gs.log.append(f'[SKIP] stage has 『{tag}』 member -> condition not met')
+        return True
+
+    m_stage_group_entered = re.match(r'^このターン、自分のステージに『(?P<tag>[^』]+)』のメンバーが登場している場合、(?P<inner>.+)$', text_norm)
+    if m_stage_group_entered:
+        tag = str(m_stage_group_entered.group('tag') or '').strip()
+        inner = str(m_stage_group_entered.group('inner') or '').strip()
+        if _stage_group_or_unit_entered_this_turn(gs, cards_db, tag):
+            gs.log.append(f'[AUTO] this turn stage entered 『{tag}』 member -> apply inner effect')
+            ctx2 = _with_auto_effect_detail(ctx, _auto_effect_detail_for_condition(ctx, text_norm, f'このターンに『{tag}』メンバーが登場している', '自動効果'))
+            return bool(try_apply_effect_template(gs, rng, cards_db, inner, ctx2))
+        gs.log.append(f'[SKIP] this turn stage entered 『{tag}』 member -> condition not met')
+        return True
+
+    m_stage_enter_count_gte = re.match(r'^このターン、自分のステージにメンバーが(?P<count>\d+)回以上登場している場合、(?P<inner>.+)$', text_norm)
+    if m_stage_enter_count_gte:
+        need = int(m_stage_enter_count_gte.group('count') or 0)
+        got = int(getattr(gs, 'stage_enter_count_this_turn', 0) or 0)
+        inner = str(m_stage_enter_count_gte.group('inner') or '').strip()
+        if got >= need:
+            gs.log.append(f'[AUTO] this turn stage enter count {got}/{need} -> apply inner effect')
+            ctx2 = _with_auto_effect_detail(ctx, _auto_effect_detail_for_condition(ctx, text_norm, f'このターンの登場回数 {got}/{need}', '自動効果'))
+            return bool(try_apply_effect_template(gs, rng, cards_db, inner, ctx2))
+        gs.log.append(f'[SKIP] this turn stage enter count {got}/{need} -> condition not met')
+        return True
+
+    m_stage_enter_count_exact_event = re.match(r'^このターン、自分のステージにメンバーが(?P<count>\d+)回登場したとき、(?P<inner>.+)$', text_norm)
+    if m_stage_enter_count_exact_event:
+        need = int(m_stage_enter_count_exact_event.group('count') or 0)
+        got = int(getattr(gs, 'stage_enter_count_this_turn', 0) or 0)
+        inner = str(m_stage_enter_count_exact_event.group('inner') or '').strip()
+        if got == need:
+            gs.log.append(f'[AUTO] this turn stage enter count reached {got}/{need} -> apply inner effect')
+            ctx2 = _with_auto_effect_detail(ctx, _auto_effect_detail_for_condition(ctx, text_norm, f'このターンの登場回数 {got}/{need}', '自動効果'))
+            return bool(try_apply_effect_template(gs, rng, cards_db, inner, ctx2))
+        gs.log.append(f'[SKIP] this turn stage enter count {got}/{need} -> exact event condition not met')
+        return True
+
+    m_self_wait_then = re.match(r'^このメンバーをウェイトにする。その後、(?P<inner>.+)$', text_norm)
+    if m_self_wait_then:
+        pos = str((ctx or {}).get('pos', '') or '').upper()
+        src = str((ctx or {}).get('source_cn', '') or '')
+        slot = gs.stage.get(pos) if pos in ('L', 'C', 'R') else None
+        if not slot:
+            gs.log.append(f'[WARN] {src}: self wait then effect has no source slot')
+            return True
+        slot.active = False
+        inner = str(m_self_wait_then.group('inner') or '').strip()
+        gs.log.append(f'[AUTO] {src}: stage {pos} set WAIT; apply follow-up')
+        ctx2 = _with_auto_effect_detail(ctx, _auto_effect_detail_for_condition(ctx, text_norm, 'このメンバーをウェイトにした', '自動効果'))
+        return bool(try_apply_effect_template(gs, rng, cards_db, inner, ctx2))
+
+    m_enter_or_stage_moved_event = re.match(r'^このメンバーが登場か、エリアを移動(?:したとき|するたび)、(?P<inner>.+)$', text_norm)
+    if m_enter_or_stage_moved_event:
+        inner = str(m_enter_or_stage_moved_event.group('inner') or '').strip()
+        ctx2 = _with_auto_effect_detail(ctx, _auto_effect_detail_for_condition(ctx, text_norm, 'このメンバーが登場した、またはエリアを移動した', '自動効果'))
+        return bool(try_apply_effect_template(gs, rng, cards_db, inner, ctx2))
+
     # Activation-only condition wrapper: check condition, then apply the inner effect.
     cond_thr = int(_activated_success_score_sum_condition(text_norm) or 0)
     if cond_thr:
@@ -4390,7 +4794,7 @@ def try_apply_effect_template(gs: 'GameState', rng: random.Random, cards_db: Dic
 
     # Cost-result: gain total live score while this source member remains in the live.
     # e.g. ライブ終了時まで、「<常時>ライブの合計スコアを+3する。」を得る。
-    m_score = re.match(r'^ライブ終了時まで、「<常時>ライブの合計スコアを\+(?P<n>\d+)する。」を得る。$', text_norm)
+    m_score = re.match(r'^ライブ終了時まで、(?:「|『)<常時>ライブの合計スコアを\+(?P<n>\d+)する。(?:」|』)を得る。$', text_norm)
     if m_score:
         pos = str((ctx or {}).get('pos', '') or '').upper()
         slot = gs.stage.get(pos) if pos in ('L', 'C', 'R') else None
@@ -4887,6 +5291,8 @@ class GameState:
     stage_moved_this_turn: bool = False
     stage_moved_cardnumbers_this_turn: List[str] = field(default_factory=list)
     stage_movement_log_this_turn: List[Dict[str, Any]] = field(default_factory=list)
+    stage_enter_count_this_turn: int = 0
+    stage_entered_cardnumbers_this_turn: List[str] = field(default_factory=list)
     # Detailed effect/event ledger for UI debugging.  Keep this compact and
     # bounded; the text log remains the primary historical trace.
     effect_events: List[Dict[str, Any]] = field(default_factory=list)
@@ -5020,6 +5426,8 @@ def snapshot_state(gs: GameState) -> Dict[str, Any]:
         "stage_moved_this_turn": bool(getattr(gs, "stage_moved_this_turn", False)),
         "stage_moved_cardnumbers_this_turn": list(getattr(gs, "stage_moved_cardnumbers_this_turn", []) or []),
         "stage_movement_log_this_turn": [dict(x) for x in (getattr(gs, "stage_movement_log_this_turn", []) or []) if isinstance(x, dict)],
+        "stage_enter_count_this_turn": int(getattr(gs, "stage_enter_count_this_turn", 0) or 0),
+        "stage_entered_cardnumbers_this_turn": list(getattr(gs, "stage_entered_cardnumbers_this_turn", []) or []),
         "effect_events": [dict(x) for x in (getattr(gs, "effect_events", []) or []) if isinstance(x, dict)],
         "effect_event_seq": int(getattr(gs, "_effect_event_seq", 0) or 0),
         "last_attempt_lives": list(getattr(gs, 'last_attempt_lives', []) or []),
@@ -5098,6 +5506,11 @@ def restore_state(gs: GameState, snap: Dict[str, Any]) -> None:
         gs.stage_movement_log_this_turn = [dict(x) for x in list(snap.get("stage_movement_log_this_turn", getattr(gs, "stage_movement_log_this_turn", []) or []) or []) if isinstance(x, dict)]
     except Exception:
         gs.stage_movement_log_this_turn = []
+    gs.stage_enter_count_this_turn = _safe_int(snap.get("stage_enter_count_this_turn", getattr(gs, "stage_enter_count_this_turn", 0)), 0)
+    try:
+        gs.stage_entered_cardnumbers_this_turn = [str(x) for x in list(snap.get("stage_entered_cardnumbers_this_turn", getattr(gs, "stage_entered_cardnumbers_this_turn", []) or []) or []) if str(x or '').strip()]
+    except Exception:
+        gs.stage_entered_cardnumbers_this_turn = []
     try:
         gs.effect_events = [dict(x) for x in list(snap.get("effect_events", getattr(gs, "effect_events", []) or []) or []) if isinstance(x, dict)]
     except Exception:
@@ -5203,6 +5616,8 @@ def begin_turn(gs: GameState, rng: Optional[random.Random] = None) -> None:
     gs.stage_moved_this_turn = False
     gs.stage_moved_cardnumbers_this_turn = []
     gs.stage_movement_log_this_turn = []
+    gs.stage_enter_count_this_turn = 0
+    gs.stage_entered_cardnumbers_this_turn = []
     # Keep refresh_notices until UI-side acknowledgement; public viewers may poll late.
     try:
         gs.live_set_limit = 3
@@ -6239,7 +6654,85 @@ def _stage_has_other_group_or_unit_member(gs: 'GameState', cards_db: Dict[str, C
             return True
     return False
 
-def _record_stage_area_movement(gs: 'GameState', cards: List[str], src_pos: str = '', dst_pos: str = '', reason: str = '') -> None:
+def _record_stage_member_enter(gs: 'GameState', cn: str, pos: str = '', origin: str = '') -> None:
+    canon = _canon_cardno(str(cn or ''))
+    if not canon:
+        return
+    try:
+        gs.stage_enter_count_this_turn = int(getattr(gs, 'stage_enter_count_this_turn', 0) or 0) + 1
+    except Exception:
+        gs.stage_enter_count_this_turn = 1
+    try:
+        cur = [str(x) for x in list(getattr(gs, 'stage_entered_cardnumbers_this_turn', []) or []) if str(x or '').strip()]
+    except Exception:
+        cur = []
+    cur.append(canon)
+    try:
+        gs.stage_entered_cardnumbers_this_turn = cur
+    except Exception:
+        pass
+    gs.log.append(f'[STATE] stage enter this turn count={int(getattr(gs, "stage_enter_count_this_turn", 0) or 0)} cn={canon} pos={str(pos or "").upper()} origin={str(origin or "")}')
+
+def _stage_group_or_unit_entered_this_turn(gs: 'GameState', cards_db: Dict[str, CardInfo], tag: str) -> bool:
+    tag = str(tag or '').strip()
+    if not tag:
+        return False
+    entered = [_canon_cardno(str(x or '')) for x in list(getattr(gs, 'stage_entered_cardnumbers_this_turn', []) or [])]
+    entered = [x for x in entered if x]
+    for cn in entered:
+        ci = _get_card(cards_db, cn)
+        if ci and _is_member_ci(ci) and _ci_matches_group_or_unit(ci, tag):
+            return True
+    return False
+
+def _entered_stage_member_positions_this_turn(gs: 'GameState', cards_db: Dict[str, CardInfo], exclude_tag: str = '') -> List[str]:
+    entered = [_canon_cardno(str(x or '')) for x in list(getattr(gs, 'stage_entered_cardnumbers_this_turn', []) or [])]
+    entered = [x for x in entered if x]
+    if not entered:
+        return []
+    exclude_tag = str(exclude_tag or '').strip()
+    out: List[str] = []
+    for pos, slot in (getattr(gs, 'stage', {}) or {}).items():
+        pos_u = str(pos or '').upper()
+        if pos_u not in ('L', 'C', 'R') or not slot:
+            continue
+        cn = _canon_cardno(str(getattr(slot, 'cardnumber', '') or ''))
+        if not cn or cn not in entered:
+            continue
+        ci = _get_card(cards_db, cn)
+        if not ci or not _is_member_ci(ci):
+            continue
+        if exclude_tag and _ci_matches_group_or_unit(ci, exclude_tag):
+            continue
+        if pos_u not in out:
+            out.append(pos_u)
+    return out
+
+def _entered_or_moved_stage_member_positions_this_turn(gs: 'GameState', cards_db: Dict[str, CardInfo], tag: str = '') -> List[str]:
+    entered = {_canon_cardno(str(x or '')) for x in list(getattr(gs, 'stage_entered_cardnumbers_this_turn', []) or [])}
+    moved = {_canon_cardno(str(x or '')) for x in list(getattr(gs, 'stage_moved_cardnumbers_this_turn', []) or [])}
+    touched = {x for x in (entered | moved) if x}
+    if not touched:
+        return []
+    tag = str(tag or '').strip()
+    out: List[str] = []
+    for pos, slot in (getattr(gs, 'stage', {}) or {}).items():
+        pos_u = str(pos or '').upper()
+        if pos_u not in ('L', 'C', 'R') or not slot:
+            continue
+        cn = _canon_cardno(str(getattr(slot, 'cardnumber', '') or ''))
+        if not cn or cn not in touched:
+            continue
+        ci = _get_card(cards_db, cn)
+        if not ci or not _is_member_ci(ci):
+            continue
+        if tag and not _ci_matches_group_or_unit(ci, tag):
+            continue
+        if pos_u not in out:
+            out.append(pos_u)
+    return out
+
+def _record_stage_area_movement(gs: 'GameState', cards: List[str], src_pos: str = '', dst_pos: str = '', reason: str = '', source_cn: str = '') -> None:
     """Record that one or more stage members moved between stage areas this turn."""
     moved: List[str] = []
     for cn0 in list(cards or []):
@@ -6273,11 +6766,81 @@ def _record_stage_area_movement(gs: 'GameState', cards: List[str], src_pos: str 
         'src_pos': str(src_pos or '').upper(),
         'dst_pos': str(dst_pos or '').upper(),
         'reason': str(reason or 'stage-area-move'),
+        'source_cn': _canon_cardno(source_cn),
     })
     try:
         gs.stage_movement_log_this_turn = log
     except Exception:
         pass
+
+def _stage_position_of_card(gs: 'GameState', cn: str) -> str:
+    canon = _canon_cardno(cn)
+    if not canon:
+        return ''
+    for pos, slot in (getattr(gs, 'stage', {}) or {}).items():
+        if slot and _canon_cardno(str(getattr(slot, 'cardnumber', '') or '')) == canon:
+            return str(pos or '').upper()
+    return ''
+
+def _collect_stage_movement_auto_triggers(gs: 'GameState', cards_db: Dict[str, CardInfo], moved_cards: List[str]) -> List[Dict[str, Any]]:
+    triggers: List[Dict[str, Any]] = []
+    seen = set()
+    for cn0 in list(moved_cards or []):
+        cn = _canon_cardno(cn0)
+        if not cn or cn in seen:
+            continue
+        seen.add(cn)
+        pos = _stage_position_of_card(gs, cn)
+        if not pos:
+            continue
+        ci = _get_card(cards_db, cn)
+        if not ci:
+            continue
+        for ab in list(getattr(ci, 'abilities', []) or []):
+            if not isinstance(ab, dict):
+                continue
+            if 'BODY' not in str(ab.get('trigger', '') or '') and 'BODY' not in str(ab.get('ability_type', '') or ''):
+                continue
+            for cl in list(ab.get('clauses', []) or []):
+                if not isinstance(cl, dict):
+                    continue
+                eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+                eff_norm = _normalize_icon_token_text(eff).replace('\n', '')
+                m = re.match(r'^(?:このメンバーがエリアを移動|このメンバーが登場か、エリアを移動)(?:したとき|するたび)、(?P<inner>.+)$', eff_norm)
+                if not m:
+                    m = re.match(r'^自分のカードの効果によって、このメンバーがエリアを移動するか自分のエネルギー置き場にエネルギーが置かれたとき、(?P<inner>.+)$', eff_norm)
+                if not m:
+                    m = re.match(r'^自分のメインフェイズの間、このメンバーがエリアを移動したとき、(?P<inner>.+)$', eff_norm)
+                    if m and str(getattr(gs, 'phase', '') or '').upper() != 'MAIN':
+                        continue
+                if not m:
+                    continue
+                inner = str(m.group('inner') or '').strip()
+                if not inner or not _match_effect_template(inner):
+                    continue
+                triggers.append({
+                    'kind': 'stage_movement_auto',
+                    'source_cn': cn,
+                    'pos': pos,
+                    'effect': inner,
+                    'effect_text': eff_norm,
+                    'label': f'{cn}[移動時]',
+                })
+    return triggers
+
+def _enqueue_stage_movement_auto_triggers(gs: 'GameState', cards_db: Dict[str, CardInfo], moved_cards: List[str]) -> int:
+    triggers = _collect_stage_movement_auto_triggers(gs, cards_db, moved_cards)
+    if not triggers:
+        return 0
+    opts = [_auto_trigger_option_text(t) for t in triggers if _auto_trigger_option_text(t)]
+    gs.pending.append({
+        'kind': 'auto_order',
+        'text': 'エリア移動時の自動効果が発生：解決するカードを選択（1つずつ）',
+        'options': opts,
+        'queue': list(triggers),
+    })
+    gs.log.append(f'[PENDING] stage movement auto triggers={len(triggers)}')
+    return int(len(triggers))
 
 def _stage_has_moved_group_or_unit_member_this_turn(gs: 'GameState', cards_db: Dict[str, CardInfo], tag: str = '') -> bool:
     """Return True if a currently staged member of tag moved areas this turn."""
@@ -6298,6 +6861,54 @@ def _stage_has_moved_group_or_unit_member_this_turn(gs: 'GameState', cards_db: D
         if not ci or not _is_member_ci(ci):
             continue
         if not tag or _ci_matches_group_or_unit(ci, tag):
+            return True
+    return False
+
+def _moved_stage_member_positions_this_turn(gs: 'GameState', cards_db: Dict[str, CardInfo], tag: str = '', exclude_pos: str = '') -> List[str]:
+    if not bool(getattr(gs, 'stage_moved_this_turn', False)):
+        return []
+    tag = str(tag or '').strip()
+    exclude_pos = str(exclude_pos or '').upper()
+    moved_set = {_canon_cardno(str(x or '')) for x in list(getattr(gs, 'stage_moved_cardnumbers_this_turn', []) or [])}
+    moved_set = {x for x in moved_set if x}
+    if not moved_set:
+        return []
+    out: List[str] = []
+    for pos, slot in (getattr(gs, 'stage', {}) or {}).items():
+        pos0 = str(pos or '').upper()
+        if exclude_pos and pos0 == exclude_pos:
+            continue
+        if not slot or not getattr(slot, 'cardnumber', ''):
+            continue
+        canon = _canon_cardno(getattr(slot, 'cardnumber', '') or '')
+        if canon not in moved_set:
+            continue
+        ci = _get_card(cards_db, canon)
+        if not ci or not _is_member_ci(ci):
+            continue
+        if tag and not _ci_matches_group_or_unit(ci, tag):
+            continue
+        out.append(pos0)
+    return out
+
+def _self_moved_by_group_effect_this_turn(gs: 'GameState', cards_db: Dict[str, CardInfo], source_cn: str, group: str) -> bool:
+    src = _canon_cardno(source_cn)
+    group = str(group or '').strip()
+    if not src or not bool(getattr(gs, 'stage_moved_this_turn', False)):
+        return False
+    logs = [x for x in list(getattr(gs, 'stage_movement_log_this_turn', []) or []) if isinstance(x, dict)]
+    for ev in logs:
+        cards = {_canon_cardno(str(x or '')) for x in list(ev.get('cards', []) or [])}
+        if src not in cards:
+            continue
+        eff_src = _canon_cardno(str(ev.get('source_cn', '') or ''))
+        ci_eff = _get_card(cards_db, eff_src) if eff_src else None
+        if ci_eff and (not group or _ci_matches_group_or_unit(ci_eff, group)):
+            return True
+    moved_set = {_canon_cardno(str(x or '')) for x in list(getattr(gs, 'stage_moved_cardnumbers_this_turn', []) or [])}
+    if src in moved_set:
+        ci_self = _get_card(cards_db, src)
+        if ci_self and (not group or _ci_matches_group_or_unit(ci_self, group)):
             return True
     return False
 
@@ -8335,6 +8946,7 @@ def cmd_play(gs: GameState, cards_db: Dict[str, CardInfo], hand_idx: int, pos: s
             gs.log.append(f"[BATON] {pos}: {baton_old_cn} -> green room; reduce {cost} by {baton_old_cost} => pay {pay_cost}")
     gs.hand.pop(hand_idx)
     gs.stage[pos] = StageSlot(cardnumber=(c.cardnumber if c else cn), active=True)
+    _record_stage_member_enter(gs, c.cardnumber if c else cn, pos=pos, origin='hand')
     try:
         if int(printed_cost or 0) != int(cost or 0):
             gs.log.append(f"[PLAYCOST] {cn}: hand effective cost {cost} (printed {printed_cost})")
@@ -8349,7 +8961,7 @@ def cmd_play(gs: GameState, cards_db: Dict[str, CardInfo], hand_idx: int, pos: s
             triggers.extend(_collect_auto_triggers_on_member_leave_stage(gs, cards_db, left_pos=pos, left_cn=baton_old_cn, baton_new_cn=cn))
         except Exception:
             pass
-    triggers.extend(_collect_auto_triggers_on_member_enter(gs, cards_db, entered_pos=pos, entered_cn=cn, baton_old_cn=baton_old_cn or '', baton_old_cost=baton_old_cost))
+    triggers.extend(_collect_auto_triggers_on_member_enter(gs, cards_db, entered_pos=pos, entered_cn=cn, baton_old_cn=baton_old_cn or '', baton_old_cost=baton_old_cost, entry_origin='hand'))
     if len(triggers) >= 2:
         opts2: List[str] = []
         for t in triggers:
@@ -8414,7 +9026,7 @@ def _has_supported_enter_auto(ci: Optional[CardInfo]) -> bool:
             if ('以下から' in eff) and ('選ぶ' in eff):
                 return True
     return False
-def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn: str, rng: Optional[random.Random] = None, baton_old_cn: str = '', baton_old_cost: int = 0) -> None:
+def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn: str, rng: Optional[random.Random] = None, baton_old_cn: str = '', baton_old_cost: int = 0, entry_origin: str = 'hand') -> None:
     # Handle [登場] auto abilities for a member that just entered stage.
     canon = _canon_cardno(cn)
     if rng is None:
@@ -8459,7 +9071,7 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
                 'text': f"{canon}[登場]: 効果を1つ選ぶ",
                 'options': list(mode_labels),
                 'effects': list(mode_effects),
-                'ctx': {'pos': pos.upper(), 'source_cn': canon, 'baton_old_cn': _canon_cardno(str(baton_old_cn or '')), 'baton_old_cost': int(baton_old_cost or 0)},
+                'ctx': {'pos': pos.upper(), 'source_cn': canon, 'baton_old_cn': _canon_cardno(str(baton_old_cn or '')), 'baton_old_cost': int(baton_old_cost or 0), 'entry_origin': str(entry_origin or 'hand')},
                 'source_cn': canon,
             })
             gs.log.append(f"[PENDING] {canon}[登場]: choose mode from {len(mode_effects)} effects")
@@ -8492,7 +9104,7 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
                 if n <= 0 and ("手札を1枚控え室に置いてもよい" in cost):
                     n = 1
                 if group_cost and _match_effect_template(eff):
-                    ctx = {'pos': pos.upper(), 'source_cn': canon, 'baton_old_cn': _canon_cardno(str(baton_old_cn or '')), 'baton_old_cost': int(baton_old_cost or 0)}
+                    ctx = {'pos': pos.upper(), 'source_cn': canon, 'baton_old_cn': _canon_cardno(str(baton_old_cn or '')), 'baton_old_cost': int(baton_old_cost or 0), 'entry_origin': str(entry_origin or 'hand')}
                     group = str(group_cost.get('group', '') or '')
                     kind2 = str(group_cost.get('kind', 'ANY') or 'ANY')
                     cands = _hand_candidates_by_kind(gs, cards_db, kind=kind2, group=group)
@@ -8529,7 +9141,7 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
                     gs.log.append(f"[PENDING] {canon}[登場]: optional group discard cost picker then {eff}")
                     return
                 if m_live and _match_effect_template(eff):
-                    ctx = {'pos': pos.upper(), 'source_cn': canon, 'baton_old_cn': _canon_cardno(str(baton_old_cn or '')), 'baton_old_cost': int(baton_old_cost or 0)}
+                    ctx = {'pos': pos.upper(), 'source_cn': canon, 'baton_old_cn': _canon_cardno(str(baton_old_cn or '')), 'baton_old_cost': int(baton_old_cost or 0), 'entry_origin': str(entry_origin or 'hand')}
                     n_live = int(m_live.group(1) or 1)
                     cands = _hand_candidates_by_kind(gs, cards_db, kind='LIVE')
                     prompt_text = _pretty_optional_effect_prompt_text('登場', canon, cost, eff) + '\nコストとして控え室に置くライブカードを選んでください。支払わない場合はスキップ。'
@@ -8564,7 +9176,7 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
                     gs.log.append(f"[PENDING] {canon}[登場]: optional live-card discard cost picker then {eff}")
                     return
                 if n > 0:
-                    ctx = {'pos': pos.upper(), 'source_cn': canon, 'baton_old_cn': _canon_cardno(str(baton_old_cn or '')), 'baton_old_cost': int(baton_old_cost or 0)}
+                    ctx = {'pos': pos.upper(), 'source_cn': canon, 'baton_old_cn': _canon_cardno(str(baton_old_cn or '')), 'baton_old_cost': int(baton_old_cost or 0), 'entry_origin': str(entry_origin or 'hand')}
                     combo_self_wait = _cost_requires_self_wait(cost) and not _cost_requires_self_to_green(cost)
                     if combo_self_wait:
                         gs.pending.append({
@@ -8582,23 +9194,22 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
                     # Optional hand-discard costs on auto effects should open the actual
                     # cost-payment screen immediately.  Declining the effect is represented
                     # by the Skip button on that same hand-selection screen.
-                    gs.pending.append({
-                        'kind': 'discard_from_hand',
-                        'remaining': n,
-                        'text': _pretty_optional_effect_prompt_text('登場', canon, cost, eff) + '\nコストとして控え室に置く手札を選んでください。支払わない場合はスキップ。',
-                        'options': list(gs.hand),
-                        'after_effect_template': eff,
-                        'after_ctx': ctx,
-                        'after_source_cn': canon,
-                        'allow_skip': True,
-                        'optional': True,
-                        'skip_reason': 'optional hand discard enter-auto cost',
-                    })
+                    _enqueue_discard_from_hand(
+                        gs,
+                        n,
+                        label=_pretty_optional_effect_prompt_text('登場', canon, cost, eff) + '\nコストとして控え室に置く手札を選んでください。',
+                        ctx=ctx,
+                        after_effect_template=eff,
+                        after_ctx=ctx,
+                        after_source_cn=canon,
+                        optional=True,
+                        allow_skip=True,
+                    )
                     gs.log.append(f"[PENDING] {canon}[登場]: optional discard cost picker {n} then {eff}")
                     return
                 e_cost = _parse_energy_cost(cost)
                 if e_cost > 0 and _match_effect_template(eff):
-                    ctx = {'pos': pos.upper(), 'source_cn': canon, 'baton_old_cn': _canon_cardno(str(baton_old_cn or '')), 'baton_old_cost': int(baton_old_cost or 0)}
+                    ctx = {'pos': pos.upper(), 'source_cn': canon, 'baton_old_cn': _canon_cardno(str(baton_old_cn or '')), 'baton_old_cost': int(baton_old_cost or 0), 'entry_origin': str(entry_origin or 'hand')}
                     gs.pending.append({
                         'kind': 'pay_or_skip',
                         'text': _pretty_optional_effect_prompt_text('登場', canon, cost, eff),
@@ -8612,7 +9223,7 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
                     gs.log.append(f"[PENDING] {canon}[登場]: pay/skip -> energy {e_cost} then {eff}")
                     return
                 if _cost_requires_self_wait(cost) and not _cost_requires_self_to_green(cost):
-                    ctx = {'pos': pos.upper(), 'source_cn': canon, 'baton_old_cn': _canon_cardno(str(baton_old_cn or '')), 'baton_old_cost': int(baton_old_cost or 0)}
+                    ctx = {'pos': pos.upper(), 'source_cn': canon, 'baton_old_cn': _canon_cardno(str(baton_old_cn or '')), 'baton_old_cost': int(baton_old_cost or 0), 'entry_origin': str(entry_origin or 'hand')}
                     gs.pending.append({
                         'kind': 'pay_or_skip',
                         'text': _pretty_optional_effect_prompt_text('登場', canon, cost, eff),
@@ -8637,6 +9248,7 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
                 'auto_effect_detail': f'【{canon}】登場時効果\n効果：{eff}',
                 'baton_old_cn': _canon_cardno(str(baton_old_cn or '')),
                 'baton_old_cost': int(baton_old_cost or 0),
+                'entry_origin': str(entry_origin or 'hand'),
             }
             if try_apply_effect_template(gs, rng, cards_db, eff, ctx):
                 skipped_reason = str(ctx.get('_effect_skipped_reason', '') or '').strip()
@@ -8863,7 +9475,7 @@ def _collect_auto_triggers_on_member_leave_stage(gs: GameState, cards_db: Dict[s
                 'baton_new_cn': _canon_cardno(str(baton_new_cn or '')),
             })
     return out
-def _collect_auto_triggers_on_member_enter(gs: GameState, cards_db: Dict[str, CardInfo], entered_pos: str, entered_cn: str, baton_old_cn: str = '', baton_old_cost: int = 0) -> List[Dict[str, Any]]:
+def _collect_auto_triggers_on_member_enter(gs: GameState, cards_db: Dict[str, CardInfo], entered_pos: str, entered_cn: str, baton_old_cn: str = '', baton_old_cost: int = 0, entry_origin: str = 'hand') -> List[Dict[str, Any]]:
     """Collect auto triggers that happen when a MEMBER enters your stage.
     Triggers are collected as individual instances (not de-duplicated), so that
     multiple copies of the same card (e.g., 2× 宮下愛) can be resolved separately
@@ -8880,6 +9492,7 @@ def _collect_auto_triggers_on_member_enter(gs: GameState, cards_db: Dict[str, Ca
             'cn': entered_cn,
             'baton_old_cn': _canon_cardno(str(baton_old_cn or '')),
             'baton_old_cost': int(baton_old_cost or 0),
+            'entry_origin': str(entry_origin or 'hand'),
         })
     # Generic: one trigger per unused member whose BODY says "when a cost-10 member enters, draw 1"
     for src_pos in _list_active_cost10_member_enter_draw_positions(gs, cards_db, entered_cn):
@@ -8892,6 +9505,42 @@ def _collect_auto_triggers_on_member_enter(gs: GameState, cards_db: Dict[str, Ca
             'entered_pos': str(entered_pos or 'C').upper(),
             'entered_cn': entered_cn,
         })
+    enter_count = int(getattr(gs, 'stage_enter_count_this_turn', 0) or 0)
+    for src_pos, slot in (getattr(gs, 'stage', {}) or {}).items():
+        pos_u = str(src_pos or '').upper()
+        if pos_u not in ('L', 'C', 'R') or not slot:
+            continue
+        src_cn = _canon_cardno(str(getattr(slot, 'cardnumber', '') or ''))
+        ci_src = _get_card(cards_db, src_cn)
+        if not ci_src or _is_live_ci(ci_src):
+            continue
+        for ab in list(getattr(ci_src, 'abilities', []) or []):
+            if not isinstance(ab, dict):
+                continue
+            if 'BODY' not in str(ab.get('trigger', '') or '') and 'BODY' not in str(ab.get('ability_type', '') or ''):
+                continue
+            for cl in list(ab.get('clauses', []) or []):
+                if not isinstance(cl, dict):
+                    continue
+                eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+                eff_norm = _normalize_icon_token_text(eff).replace('\n', '')
+                m = re.match(r'^このターン、自分のステージにメンバーが(?P<count>\d+)回登場したとき、(?P<inner>.+)$', eff_norm)
+                if not m:
+                    continue
+                need = int(m.group('count') or 0)
+                inner = str(m.group('inner') or '').strip()
+                if enter_count != need or not inner or not _match_effect_template(inner):
+                    continue
+                out.append({
+                    'kind': 'stage_enter_count_auto',
+                    'source_cn': src_cn,
+                    'pos': pos_u,
+                    'effect': inner,
+                    'effect_text': eff_norm,
+                    'label': f'{src_cn}[登場{need}回目]',
+                    'entered_pos': str(entered_pos or 'C').upper(),
+                    'entered_cn': entered_cn,
+                })
     return out
 def _auto_trigger_effect_text(t: Dict[str, Any]) -> str:
     """Return only the specific effect text represented by one queued auto trigger.
@@ -8959,6 +9608,7 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
             cn,
             baton_old_cn=str(trig.get('baton_old_cn', '') or ''),
             baton_old_cost=int(trig.get('baton_old_cost', 0) or 0),
+            entry_origin=str(trig.get('entry_origin', 'hand') or 'hand'),
         )
         return
     if kind == 'cost10_enter_draw1_auto':
@@ -8994,6 +9644,40 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
                 ctx['baton_new_cn'] = bnew
             try_apply_effect_template(gs, rng2, cards_db, eff, ctx)
             gs.log.append(f"[AUTO] {src_cn or '?'}[stage->green]: applied {eff}")
+        return
+    if kind == 'stage_movement_auto':
+        eff = str((trig or {}).get('effect', '') or '').strip()
+        full_eff = str((trig or {}).get('effect_text', '') or '').strip()
+        src_cn = str((trig or {}).get('source_cn', '') or '').strip()
+        pos = str((trig or {}).get('pos', '') or '').upper()
+        if eff:
+            try:
+                rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0) + 29)
+            except Exception:
+                rng2 = random.Random(29)
+            detail = _auto_effect_detail_for_condition({'source_cn': src_cn}, full_eff or eff, 'このメンバーがエリアを移動した', timing='移動時')
+            ctx = {'source_cn': src_cn, 'auto_effect_detail': detail}
+            if pos:
+                ctx.update({'pos': pos, 'src_pos': pos})
+            try_apply_effect_template(gs, rng2, cards_db, eff, ctx)
+            gs.log.append(f"[AUTO] {src_cn or '?'}[移動時]: applied {eff}")
+        return
+    if kind == 'stage_enter_count_auto':
+        eff = str((trig or {}).get('effect', '') or '').strip()
+        full_eff = str((trig or {}).get('effect_text', '') or '').strip()
+        src_cn = str((trig or {}).get('source_cn', '') or '').strip()
+        pos = str((trig or {}).get('pos', '') or '').upper()
+        if eff:
+            try:
+                rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0) + 31)
+            except Exception:
+                rng2 = random.Random(31)
+            detail = _auto_effect_detail_for_condition({'source_cn': src_cn}, full_eff or eff, 'このターンの登場回数条件を満たした', timing='登場時')
+            ctx = {'source_cn': src_cn, 'auto_effect_detail': detail}
+            if pos:
+                ctx.update({'pos': pos, 'src_pos': pos})
+            try_apply_effect_template(gs, rng2, cards_db, eff, ctx)
+            gs.log.append(f"[AUTO] {src_cn or '?'}[登場回数]: applied {eff}")
         return
     if kind == 'live_start_apply_effect':
         eff = str((trig or {}).get('effect', '') or '').strip()
@@ -14179,8 +14863,9 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         except Exception:
             moved_cards = []
         stage[src_pos], stage[dst_pos] = dst_slot, src_slot
-        _record_stage_area_movement(gs, moved_cards, src_pos=src_pos, dst_pos=dst_pos, reason='position_change')
+        _record_stage_area_movement(gs, moved_cards, src_pos=src_pos, dst_pos=dst_pos, reason='position_change', source_cn=source_cn)
         gs.log.append(f"[POSITION_CHANGE] {source_cn or '?'} {src_pos} -> {dst_pos}; moved_this_turn={bool(getattr(gs, 'stage_moved_this_turn', False))}")
+        _enqueue_stage_movement_auto_triggers(gs, cards_db, moved_cards)
         return
     if kind == 'auto_order':
         queue = list(p.get('queue', []) or [])
@@ -14583,15 +15268,15 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                 return
             slot.active = False
             gs.log.append(f"[COST] {pos}: {getattr(slot,'cardnumber','?')} -> WAIT (self-wait cost)")
-            gs.pending.append({
-                'kind': 'discard_from_hand',
-                'remaining': cost_n,
-                'text': f'コストとして、手札を{cost_n}枚控え室に置く',
-                'options': list(gs.hand),
-                'after_effect_template': after_eff,
-                'after_ctx': ctx0,
-                'after_source_cn': src,
-            })
+            _enqueue_discard_from_hand(
+                gs,
+                cost_n,
+                label=f'コストとして、手札を{cost_n}枚控え室に置く',
+                ctx=ctx0,
+                after_effect_template=after_eff,
+                after_ctx=ctx0,
+                after_source_cn=src,
+            )
             return
 
         if cost_kind == 'discard_from_hand':
@@ -14601,15 +15286,15 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             if len(gs.hand) < cost_n:
                 gs.log.append(f"[ERR] pay_or_skip: not enough cards in hand (need {cost_n})")
                 return
-            gs.pending.append({
-                'kind': 'discard_from_hand',
-                'remaining': cost_n,
-                'text': f'コストとして、手札を{cost_n}枚控え室に置く',
-                'options': list(gs.hand),
-                'after_effect_template': after_eff,
-                'after_ctx': ctx0,
-                'after_source_cn': src,
-            })
+            _enqueue_discard_from_hand(
+                gs,
+                cost_n,
+                label=f'コストとして、手札を{cost_n}枚控え室に置く',
+                ctx=ctx0,
+                after_effect_template=after_eff,
+                after_ctx=ctx0,
+                after_source_cn=src,
+            )
             return
         if cost_kind == 'self_wait':
             pos = str(ctx0.get('pos', '') or '').upper()
@@ -15267,7 +15952,8 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             _enqueue_choose_from_green(gs, cards_db, kind=want_kind, n=remaining_picks,
                                        group=str(p.get('want_group', '') or ''),
                                        ctx={'source_cn': str(p.get('source_cn', '') or ''), 'auto_effect_detail': str(p.get('auto_effect_detail', '') or '')},
-                                       allow_less=bool(p.get('allow_skip', False) or p.get('allow_less', False) or p.get('optional', False)))
+                                       allow_less=bool(p.get('allow_skip', False) or p.get('allow_less', False) or p.get('optional', False)),
+                                       score_lim=p.get('score_lim', None))
             return
         after_eff = str(p.get('after_effect_template', '') or '').strip()
         if after_eff:
@@ -16028,6 +16714,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             gs.hand.append(cn)
             return
         gs.stage[choice] = StageSlot(cardnumber=(getattr(ci_pick, 'cardnumber', '') or cn), active=True)
+        _record_stage_member_enter(gs, getattr(ci_pick, 'cardnumber', '') or cn, pos=choice, origin='deck')
         gs.log.append(f'[ACT] topk_stage_or_hand: {cn} -> stage {choice} (no play cost)')
         return
     if kind == 'hand_member_to_former_area_then_energy_under':
@@ -16081,12 +16768,13 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         gs.hand.pop(hand_idx)
         placed_cn = str(getattr(ci_pick, 'cardnumber', '') or cn)
         gs.stage[pos] = StageSlot(cardnumber=placed_cn, active=True)
+        _record_stage_member_enter(gs, placed_cn, pos=pos, origin='hand')
         moved = _move_energy_zone_to_under_self(gs, pos, energy_n, reason=f'effect {src or ""}'.strip())
         gs.log.append(f'[ACT] {src or "effect"}: hand {placed_cn} -> stage {pos}; energy under +{moved}')
         if moved < energy_n:
             gs.log.append(f'[WARN] hand_member_to_former_area_then_energy_under: moved only {moved}/{energy_n}')
         try:
-            triggers = _collect_auto_triggers_on_member_enter(gs, cards_db, entered_pos=pos, entered_cn=placed_cn)
+            triggers = _collect_auto_triggers_on_member_enter(gs, cards_db, entered_pos=pos, entered_cn=placed_cn, entry_origin='hand')
         except Exception:
             triggers = []
         if len(triggers) >= 2:
@@ -16198,9 +16886,10 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         ci_pick = _get_card(cards_db, pick_cn or cn)
         placed_cn = str(getattr(ci_pick, 'cardnumber', '') or pick_cn or cn)
         gs.stage[pos] = StageSlot(cardnumber=placed_cn, active=True)
+        _record_stage_member_enter(gs, placed_cn, pos=pos, origin='hand')
         gs.log.append(f'[ACT] {src or "effect"}: hand {placed_cn} -> stage {pos} (effect entry; no play cost)')
         try:
-            triggers = _collect_auto_triggers_on_member_enter(gs, cards_db, entered_pos=pos, entered_cn=placed_cn)
+            triggers = _collect_auto_triggers_on_member_enter(gs, cards_db, entered_pos=pos, entered_cn=placed_cn, entry_origin='hand')
         except Exception:
             triggers = []
         if len(triggers) >= 2:
@@ -16274,9 +16963,10 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                 pass
         placed_cn = str(getattr(ci_pick, 'cardnumber', '') or pick_cn or cn)
         gs.stage[pos] = StageSlot(cardnumber=placed_cn, active=True)
+        _record_stage_member_enter(gs, placed_cn, pos=pos, origin='green')
         gs.log.append(f'[ACT] {src or "effect"}: waiting room {placed_cn} -> stage {pos} (no play cost)')
         try:
-            triggers = _collect_auto_triggers_on_member_enter(gs, cards_db, entered_pos=pos, entered_cn=placed_cn)
+            triggers = _collect_auto_triggers_on_member_enter(gs, cards_db, entered_pos=pos, entered_cn=placed_cn, entry_origin='green')
         except Exception:
             triggers = []
         if len(triggers) >= 2:
@@ -16380,9 +17070,10 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         ci_pick = _get_card(cards_db, pick_cn or cn)
         placed_cn = str(getattr(ci_pick, 'cardnumber', '') or pick_cn or cn)
         gs.stage[pos] = StageSlot(cardnumber=placed_cn, active=True)
+        _record_stage_member_enter(gs, placed_cn, pos=pos, origin='green')
         gs.log.append(f'[ACT] {src or "effect"}: waiting room {placed_cn} -> stage {pos} (no play cost)')
         try:
-            triggers = _collect_auto_triggers_on_member_enter(gs, cards_db, entered_pos=pos, entered_cn=placed_cn)
+            triggers = _collect_auto_triggers_on_member_enter(gs, cards_db, entered_pos=pos, entered_cn=placed_cn, entry_origin='green')
         except Exception:
             triggers = []
         if len(triggers) >= 2:
@@ -17468,15 +18159,19 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                 if len(live_in_hand) < cost_n:
                     gs.log.append(f"[ERR] live_start_pay_effect: not enough live cards in hand (need {cost_n}, have {len(live_in_hand)})")
                     return
-                gs.pending.append({
-                    'kind': 'discard_from_hand',
-                    'remaining': cost_n,
-                    'text': f'手札のライブカードを{cost_n}枚控え室に置く',
-                    'options': live_in_hand,
-                    'after_effect_template': eff,
-                    'after_ctx': after_ctx,
-                    'after_source_cn': src_cn,
-                })
+                _enqueue_discard_from_hand(
+                    gs,
+                    cost_n,
+                    label=f'手札のライブカードを{cost_n}枚控え室に置く',
+                    ctx=after_ctx,
+                    after_effect_template=eff,
+                    after_ctx=after_ctx,
+                    after_source_cn=src_cn,
+                )
+                try:
+                    gs.pending[-1]['options'] = list(live_in_hand)
+                except Exception:
+                    pass
                 return
             # 手札の指定名カードを捨てるコスト → ユーザーにカードを選ばせる
             if cost_kind == 'discard_named_from_hand':
@@ -17515,29 +18210,15 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                 if len(gs.hand) < cost_n:
                     gs.log.append(f"[ERR] live_start_pay_effect: not enough cards in hand (need {cost_n})")
                     return
-                if cost_n > 1:
-                    gs.pending.append({
-                        'kind': 'choose_member_from_green_multi_up_to',
-                        'source_zone': 'hand',
-                        'action': 'discard_from_hand',
-                        'min_picks': cost_n,
-                        'max_picks': cost_n,
-                        'text': f'コストとして控え室に置く手札のカードを{cost_n}枚クリックして確定してください',
-                        'options': list(gs.hand),
-                        'after_effect_template': eff,
-                        'after_ctx': after_ctx,
-                        'after_source_cn': src_cn,
-                    })
-                else:
-                    gs.pending.append({
-                        'kind': 'discard_from_hand',
-                        'remaining': cost_n,
-                        'text': f'コストとして、手札を{cost_n}枚控え室に置く',
-                        'options': list(gs.hand),
-                        'after_effect_template': eff,
-                        'after_ctx': after_ctx,
-                        'after_source_cn': src_cn,
-                    })
+                _enqueue_discard_from_hand(
+                    gs,
+                    cost_n,
+                    label=f'コストとして、手札を{cost_n}枚控え室に置く',
+                    ctx=after_ctx,
+                    after_effect_template=eff,
+                    after_ctx=after_ctx,
+                    after_source_cn=src_cn,
+                )
                 return
             # self-wait コスト → このメンバーをウェイトにして効果適用
             if cost_kind == 'self_wait':
@@ -17954,6 +18635,40 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             return
         _grant_temp_heart(slot, col, n)
         gs.log.append(f'[AUTO] {pos}: temp heart +{n} {col} (until end_of_live)')
+        return
+    if kind == 'choose_heart_color_for_moved_stage_members':
+        jp = str(choice_str or '').strip()
+        col = _HEART_JP_MAP.get(jp, '')
+        if not col:
+            gs.log.append(f'[ERR] choose_heart_color_for_moved_stage_members: invalid color {choice_str!r}')
+            gs.pending.append(p)
+            return
+        targets = [str(x or '').upper() for x in list(p.get('target_positions', []) or []) if str(x or '').upper() in ('L','C','R')]
+        applied = []
+        for pos2 in targets:
+            slot2 = gs.stage.get(pos2)
+            if not slot2:
+                continue
+            _grant_temp_heart(slot2, col, 1)
+            applied.append(pos2)
+        gs.log.append(f'[AUTO] moved stage members {applied}: temp heart +1 {col} (until end_of_live)')
+        return
+    if kind == 'choose_heart_color_for_stage_positions':
+        jp = str(choice_str or '').strip()
+        col = _HEART_JP_MAP.get(jp, '')
+        if not col:
+            gs.log.append(f'[ERR] choose_heart_color_for_stage_positions: invalid color {choice_str!r}')
+            gs.pending.append(p)
+            return
+        targets = [str(x or '').upper() for x in list(p.get('target_positions', []) or []) if str(x or '').upper() in ('L','C','R')]
+        applied = []
+        for pos2 in targets:
+            slot2 = gs.stage.get(pos2)
+            if not slot2:
+                continue
+            _grant_temp_heart(slot2, col, 1)
+            applied.append(pos2)
+        gs.log.append(f'[AUTO] stage members {applied}: temp heart +1 {col} (until end_of_live)')
         return
     if kind == 'choose_heart_color_for_other':
         src_pos = str(p.get('src_pos', '') or '').upper()

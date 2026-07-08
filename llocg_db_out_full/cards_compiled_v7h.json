@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "source_csv": "llocg_db_merge_work_20260706/cards_min_tokv1.csv",
+  "source_csv": "_db_recovery_1039_20260708/cards_min_tokv1.csv",
   "cards": [
     {
       "cardnumber": "LL-PR-004",
@@ -16338,10 +16338,10 @@
             {
               "optional": false,
               "cost_template": "",
-              "effect_template": "自分が余剰ハートを3つ持っている場合、それらをすべて失い、このカードのスコアを+1する。",
+              "effect_template": "自分が余剰ハートを3つ以上持っている場合、それらをすべて失い、このカードのスコアを+1する。",
               "cost_op": null,
               "effect_op": null,
-              "raw": "自分が余剰ハートを3つ持っている場合、それらをすべて失い、このカードのスコアを+1する。"
+              "raw": "自分が余剰ハートを3つ以上持っている場合、それらをすべて失い、このカードのスコアを+1する。"
             }
           ]
         }
@@ -21274,7 +21274,7 @@
       ]
     },
     {
-      "cardnumber": "PL!SP-bp7-004-P",
+      "cardnumber": "PL!SP-bp7-004",
       "cardname": "平安名すみれ",
       "card_type": "MEMBER",
       "parse_status": "OK",

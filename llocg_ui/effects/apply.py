@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # BUILD_TAG: engine_effect_apply_pass_gd_to_green_search_20260424c
+# BUILD_TAG: apply_unreachable_position_change_removed_20260629ae
 from __future__ import annotations
 
 """llocg_ui.effects.apply
@@ -94,21 +95,6 @@ def try_apply_effect_by_rule_ext(
             pass
         try:
             gs.log.append(f"[AUTO_EXT] confirm -> energy_wait +{added}")
-        except Exception:
-            pass
-        return True
-
-        options = [p for p in ("L", "C", "R") if p != src_pos] + ["skip"]
-        payload = {
-            "kind": "position_change",
-            "src_pos": src_pos,
-            "optional": True,
-            "options": options,
-            "source_cn": str((ctx or {}).get("source_cn") or ""),
-        }
-        try:
-            getattr(gs, 'pending').append(payload)
-            gs.log.append(f"[PENDING] position_change src={src_pos}")
         except Exception:
             pass
         return True

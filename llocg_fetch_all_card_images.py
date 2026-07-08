@@ -8,15 +8,25 @@ Fetch LoveLive! OCG card images from the official site.
 Strategy:
 1) Build target card list from cards_min_tokv1.json (preferred) and compiled DB (union).
 2) If <root>/official_image_manifest.json exists, try exact URLs from that manifest first.
-3) Fall back to heuristic folder / rarity inference only for cards still missing.
-4) For PR-family cards, heuristic rarity tries are restricted to PR / PR2 only.
+3) For known prerelease products, optionally ingest exact preview-image URLs from
+   <root>/official_preview_image_manifest.json into preview_card_images.
+4) Before release, skip heuristic rarity URL probing by default.
+5) For released cards still missing, fall back to heuristic folder / rarity inference.
+6) For PR-family cards, heuristic rarity tries are restricted to PR / PR2 only.
 
 Output layout:
   <root>/card_images/<FOLDER>/<CARDNO>-<RARITY>.png
+  <root>/preview_card_images/<FOLDER>/<CARDNO>-<RARITY|PREVIEW>-PREVIEW*.jpg
+
+Runtime contract:
+  Resolve canonical card_images first, then preview_card_images as fallback.
 """
 from __future__ import annotations
 
+BUILD_TAG = "fetch_card_images_prerelease_pbprefix_fix_20260708d"
+
 import argparse
+import datetime as dt
 import json
 import random
 import re
@@ -33,20 +43,30 @@ except Exception:
 
 BASE_URL = "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist"
 
+# Explicit release-date registry for products whose cards can enter the DB before
+# official raw card images are published. Unknown products keep legacy behavior.
+PRODUCT_RELEASE_DATES = {
+    "BP07": "2026-08-08",
+    "NSD02": "2026-08-08",
+}
+
 DEFAULT_RARITIES = [
-    "SD", "N", "R", "R2", "L", "L2", "PR", "PR2", "P", "P2",
-    "SEC", "SEC2", "SECL", "AR", "RM", "RE", "PE", "PE2", "SECE", "LLE",
+    "SD", "CL", "N", "R", "R2", "L", "L2", "PR", "PR2", "P", "P2",
+    "SEC", "SEC2", "SECL", "SRL", "DUO", "AR", "RM", "RE", "PE", "PE2", "SECE", "LLE",
 ]
 
 KNOWN_FOLDERS = [
-    "BP01", "BP02", "BP03", "BP04", "BP05",
-    "PBSP", "PBLS", "PBLL", "PBnj",
+    "BP01", "BP02", "BP03", "BP04", "BP05", "BP06",
+    "CLHS01",
+    "PBHS", "PBSP", "PBLS", "PBLL", "PBnj",
     "PR",
     "SPSD01", "NSD01", "PLSD01", "LSSD01", "HSSD01", "SSD01",
 ]
 
 PB_PREFIX_TO_FOLDER = {
+    "PL!HS": "PBHS",
     "PL!SP": "PBSP",
+    "PL!S":  "PBLS",
     "PL!LS": "PBLS",
     "PL!N":  "PBnj",
     "PL!":   "PBLL",
@@ -60,6 +80,10 @@ SD_PREFIX_TO_FOLDER = {
     "PL!S":  "SSD01",
     "PL!":   "PLSD01",
 }
+CL_PREFIX_TO_FOLDER = {
+    # PL!HS-cl1-001 -> CLHS01/PL!HS-cl1-001-CL.png
+    "PL!HS": "CLHS01",
+}
 RARITY_ALIAS = {
     "R+": "R2", "R＋": "R2",
     "L+": "L2", "L＋": "L2",
@@ -72,6 +96,7 @@ RARITY_ALIAS = {
 BP_RE = re.compile(r"(?:^|-)bp([1-9][0-9]*)(?:-|$)", re.IGNORECASE)
 SD_RE = re.compile(r"(?:^|-)sd([0-9]+)(?:-|$)", re.IGNORECASE)
 PB_RE = re.compile(r"(?:^|-)pb([0-9]+)(?:-|$)", re.IGNORECASE)
+CL_RE = re.compile(r"(?:^|-)cl([0-9]+)(?:-|$)", re.IGNORECASE)
 
 
 def _uniq_keep_order(xs: Sequence[str]) -> List[str]:
@@ -174,6 +199,8 @@ def _product_family(cardno: str) -> str:
         return "pb"
     if "-bp" in c:
         return "bp"
+    if "-cl" in c:
+        return "cl"
     return "other"
 
 
@@ -286,6 +313,17 @@ def folder_candidates_for_cardno(cardno: str) -> List[str]:
         cand.extend([f for f in KNOWN_FOLDERS if f.endswith(sdtag)])
         return _uniq_keep_order(cand)
 
+    cm = CL_RE.search(c)
+    if cm:
+        pref = _card_prefix(c)
+        folder = CL_PREFIX_TO_FOLDER.get(pref)
+        clnum = cm.group(1).zfill(2)
+        cand: List[str] = []
+        if folder:
+            cand.append(re.sub(r"\d{2}$", clnum, folder))
+        cand.extend([f for f in KNOWN_FOLDERS if f.endswith(clnum) and f.startswith("CL")])
+        return _uniq_keep_order([x for x in cand if x])
+
     if "-PR-" in c:
         return ["PR"]
 
@@ -296,9 +334,14 @@ def folder_candidates_for_cardno(cardno: str) -> List[str]:
     pm = PB_RE.search(c)
     if pm:
         best = PB_PREFIX_TO_FOLDER.get(_card_prefix(c))
-        cand = [best] if best else []
-        cand.extend([f for f in KNOWN_FOLDERS if f.startswith("PB")])
-        return _uniq_keep_order([x for x in cand if x])
+        pbnum = int(pm.group(1))
+        # Product families with a known prefix should stay within that prefix's PB folder.
+        # PB1 keeps the legacy folder name (e.g. PBSP), while PB2+ uses a two-digit
+        # suffix used by the official image tree (e.g. PL!SP-pb2-xxx -> PBSP02).
+        if best:
+            folder = best if pbnum == 1 else f"{best}{pbnum:02d}"
+            return [folder]
+        return _uniq_keep_order([f for f in KNOWN_FOLDERS if f.startswith("PB")])
 
     return list(KNOWN_FOLDERS)
 
@@ -316,8 +359,10 @@ def family_rarities(cardno: str, global_rarities: Sequence[str], manifest_entrie
         # In current local validation, PR cards are covered by PR / PR2 only;
         # trying broader rarity families just generates large numbers of 404s.
         fam_order = ["PR", "PR2"]
+    elif fam == "cl":
+        fam_order = ["CL"]
     elif fam in {"bp", "pb"}:
-        fam_order = ["N", "R", "R2", "L", "L2", "RM", "AR", "SEC", "SEC2", "SECL", "RE", "PE", "PE2", "SECE", "LLE", "P", "P2", "PR", "PR2"]
+        fam_order = ["N", "R", "R2", "L", "L2", "RM", "AR", "SEC", "SEC2", "SECL", "SRL", "DUO", "RE", "PE", "PE2", "SECE", "LLE", "P", "P2", "PR", "PR2"]
     else:
         fam_order = []
     if fam == "pr":
@@ -338,6 +383,13 @@ def remote_filename_variants(folder: str, cardno: str, rarity: str) -> List[str]
     folder_u = (folder or "").strip().upper()
     r = _normalize_rarity_token(rarity)
     out: List[str] = [f"{cardno}-{r}.png"]
+
+    # Official PR image filename exception:
+    # PL!N-PR-022-PR is published with a SAMPLE prefix immediately before
+    # the card number in the raw image filename. Keep this card-scoped so
+    # ordinary PR URL probing remains unchanged.
+    if folder_u == "PR" and cardno.upper() == "PL!N-PR-022":
+        out.append(f"SAMPLE{cardno}-{r}.png")
 
     if folder_u == "PR":
         cn2 = cardno
@@ -378,6 +430,71 @@ def load_official_manifest(root: Path) -> Dict[str, List[Dict[str, Any]]]:
             if isinstance(cn, str) and isinstance(entries, list):
                 out[_norm_cardno_for_filename(cn)] = [e for e in entries if isinstance(e, dict)]
     return out
+
+
+def load_preview_manifest(path: Path) -> Dict[str, List[Dict[str, Any]]]:
+    if not path.exists():
+        return {}
+    try:
+        obj = load_json(path)
+    except Exception:
+        return {}
+    cards = obj.get("cards", {}) if isinstance(obj, dict) else {}
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    if isinstance(cards, dict):
+        for cn, entries in cards.items():
+            if isinstance(cn, str) and isinstance(entries, list):
+                out[_norm_cardno_for_filename(cn)] = [e for e in entries if isinstance(e, dict)]
+    return out
+
+
+def _product_code_for_cardno(cardno: str) -> Optional[str]:
+    bm = BP_RE.search(cardno or "")
+    if bm:
+        return f"BP{int(bm.group(1)):02d}"
+
+    sm = SD_RE.search(cardno or "")
+    if sm:
+        pref = _card_prefix(cardno)
+        base = SD_PREFIX_TO_FOLDER.get(pref)
+        if base:
+            sdnum = int(sm.group(1))
+            if base.endswith("SD01"):
+                return base[:-2] + f"{sdnum:02d}"
+            return base
+    return None
+
+
+def _parse_iso_date(value: str, *, label: str) -> dt.date:
+    try:
+        return dt.date.fromisoformat(str(value).strip())
+    except Exception as e:
+        raise SystemExit(f"[ERROR] invalid {label}: {value!r}; expected YYYY-MM-DD") from e
+
+
+def prerelease_info(cardno: str, as_of: dt.date) -> Optional[Tuple[str, dt.date]]:
+    product = _product_code_for_cardno(cardno)
+    if not product:
+        return None
+    raw = PRODUCT_RELEASE_DATES.get(product)
+    if not raw:
+        return None
+    release_date = _parse_iso_date(raw, label=f"release date for {product}")
+    if as_of < release_date:
+        return product, release_date
+    return None
+
+
+def _preview_suffix_from_url(url: str) -> str:
+    parsed = urllib.parse.urlparse(url or "")
+    query = urllib.parse.parse_qs(parsed.query)
+    fmt = str((query.get("format") or [""])[0]).lower().strip()
+    if fmt in {"png", "jpg", "jpeg", "webp"}:
+        return ".jpg" if fmt == "jpeg" else f".{fmt}"
+    suffix = Path(urllib.parse.unquote(parsed.path)).suffix.lower()
+    if suffix in {".png", ".jpg", ".jpeg", ".webp"}:
+        return ".jpg" if suffix == ".jpeg" else suffix
+    return ".jpg"
 
 
 @dataclass
@@ -488,6 +605,36 @@ def try_manifest_entry(
     return TryResult(False, last_status, last_url, str(out_path), folder, cardno, rarity, "manifest", 0)
 
 
+def try_preview_entry(
+    sess: Optional["requests.Session"],
+    cardno: str,
+    entry: Dict[str, Any],
+    preview_outdir: Path,
+    entry_index: int,
+    skip_existing: bool,
+    timeout: float,
+    allow_insecure_fallback: bool,
+    state: Dict[str, Any],
+) -> TryResult:
+    folder = str(entry.get("folder", "") or "").strip() or (_product_code_for_cardno(cardno) or "PREVIEW")
+    rarity = _normalize_rarity_token(str(entry.get("rarity_norm", "") or entry.get("rarity", "") or ""))
+    url = str(entry.get("image_url", "") or entry.get("exact_url", "") or entry.get("url", "") or "").strip()
+    if not url:
+        return TryResult(False, "BAD_PREVIEW_ENTRY", "", "", folder, cardno, rarity, "preview_manifest", 0)
+
+    suffix = _preview_suffix_from_url(url)
+    serial = f"-{entry_index:02d}" if entry_index > 1 else ""
+    stem = f"{cardno}-{rarity}-PREVIEW" if rarity else f"{cardno}-PREVIEW"
+    out_path = preview_outdir / folder / f"{stem}{serial}{suffix}"
+    if skip_existing and out_path.exists() and out_path.stat().st_size > 0:
+        return TryResult(True, "SKIP_EXISTS", url, str(out_path), folder, cardno, rarity, "preview_manifest", 0)
+
+    ok, status, nbytes = _download_url(sess, url, out_path, timeout, allow_insecure_fallback, state)
+    if ok:
+        return TryResult(True, status, url, str(out_path), folder, cardno, rarity, "preview_manifest", nbytes)
+    return TryResult(False, status, url, str(out_path), folder, cardno, rarity, "preview_manifest", 0)
+
+
 def try_heuristic(
     sess: Optional["requests.Session"],
     cardno: str,
@@ -521,6 +668,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--root", type=Path, required=True, help="Project root (contains cards_min_tokv1.json / cards_compiled_*.json)")
     ap.add_argument("--compiled", type=Path, default=None, help="Optional compiled JSON path")
     ap.add_argument("--outdir", type=Path, default=None, help="Output dir (default: <root>/card_images)")
+    ap.add_argument("--preview-outdir", type=Path, default=None, help="Preview image dir (default: <root>/preview_card_images)")
+    ap.add_argument("--preview-manifest", type=Path, default=None, help="Optional preview manifest JSON (default: <root>/official_preview_image_manifest.json)")
+    ap.add_argument("--skip-prerelease", action="store_true", help="Before release, use exact manifest/preview manifest only and skip heuristic URL probing (default ON)")
+    ap.add_argument("--no-skip-prerelease", dest="skip_prerelease", action="store_false", help="Allow legacy heuristic URL probing before release")
+    ap.set_defaults(skip_prerelease=True)
+    ap.add_argument("--as-of", type=str, default="", help="Date for prerelease judgment, YYYY-MM-DD (default: local today)")
     ap.add_argument("--rarities", type=str, default=None, help="Comma-separated rarities to try (overrides _RARITIES.txt)")
     ap.add_argument("--all-rarities", action="store_true", help="Try to fetch all rarities for each card (default ON)")
     ap.add_argument("--no-all-rarities", dest="all_rarities", action="store_false", help="Stop after first success per card+folder")
@@ -546,7 +699,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     root = args.root.resolve()
     compiled_path = args.compiled.resolve() if args.compiled else find_latest_compiled(root)
     outdir = args.outdir.resolve() if args.outdir else (root / "card_images")
+    preview_outdir = args.preview_outdir.resolve() if args.preview_outdir else (root / "preview_card_images")
+    preview_manifest_path = args.preview_manifest.resolve() if args.preview_manifest else (root / "official_preview_image_manifest.json")
+    as_of = _parse_iso_date(args.as_of, label="--as-of") if args.as_of else dt.date.today()
     outdir.mkdir(parents=True, exist_ok=True)
+    preview_outdir.mkdir(parents=True, exist_ok=True)
 
     global_rarities = load_rarities(root, outdir, args.rarities)
     global_rarities = _uniq_keep_order(_sanitize_rarities(global_rarities)) or list(DEFAULT_RARITIES)
@@ -559,6 +716,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 2
 
     manifest = load_official_manifest(root)
+    preview_manifest = load_preview_manifest(preview_manifest_path)
 
     sess = requests.Session() if requests is not None else None
     state: Dict[str, Any] = {
@@ -574,6 +732,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     fail_attempts = 0
     manifest_success = 0
     heuristic_success = 0
+    preview_success = 0
+    preview_skip_files = 0
+    skipped_prerelease = 0
     manifest_cards = 0
 
     warn_total = 0
@@ -582,6 +743,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     for i, rec in enumerate(target_records, 1):
         cardno = _norm_cardno_for_filename(rec["cardnumber"].strip())
         manifest_entries = manifest.get(cardno, [])
+        preview_entries = preview_manifest.get(cardno, [])
+        pre = prerelease_info(cardno, as_of)
         if manifest_entries:
             manifest_cards += 1
 
@@ -616,8 +779,58 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
                 time.sleep(args.sleep + random.random() * args.jitter)
 
-        # 2) heuristic fallback only if manifest absent or no manifest success
-        if not card_had_success:
+        # 2) prerelease preview manifest. This is intentionally separate from
+        # card_images so X/social preview assets never become canonical raw images.
+        if (not card_had_success) and pre and preview_entries:
+            for preview_index, entry in enumerate(preview_entries, 1):
+                tr = try_preview_entry(
+                    sess=sess,
+                    cardno=cardno,
+                    entry=entry,
+                    preview_outdir=preview_outdir,
+                    entry_index=preview_index,
+                    skip_existing=args.skip_existing,
+                    timeout=args.timeout,
+                    allow_insecure_fallback=allow_fallback,
+                    state=state,
+                )
+                per_card_results.append(tr)
+                if tr.ok:
+                    card_had_success = True
+                    if tr.status == "SKIP_EXISTS":
+                        preview_skip_files += 1
+                    else:
+                        preview_success += 1
+                    if not args.all_rarities:
+                        break
+                else:
+                    fail_attempts += 1
+                time.sleep(args.sleep + random.random() * args.jitter)
+
+        # 3) before release, do not probe guessed rarity URLs when exact official
+        # image/preview metadata could not provide an image.
+        skip_heuristic_for_prerelease = bool(pre and args.skip_prerelease and not card_had_success)
+        if skip_heuristic_for_prerelease:
+            product, release_date = pre
+            folders = folder_candidates_for_cardno(cardno)
+            folder = folders[0] if folders else product
+            per_card_results.append(TryResult(
+                False,
+                "SKIP_PRE_RELEASE",
+                "",
+                "",
+                folder,
+                cardno,
+                "",
+                "prerelease",
+                0,
+            ))
+            skipped_prerelease += 1
+            _log(f"[SKIP_PRE_RELEASE] {cardno} product={product} release={release_date.isoformat()} no usable exact/preview image")
+
+        # 4) heuristic fallback only if manifest/preview absent or unsuccessful, and
+        # prerelease safety did not block guessed URL probing.
+        if (not card_had_success) and (not skip_heuristic_for_prerelease):
             folders = []
             if manifest_entries:
                 folders.extend([str(e.get("folder", "") or "") for e in manifest_entries if str(e.get("folder", "") or "")])
@@ -678,14 +891,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         results.extend(per_card_results)
 
         if i % 100 == 0 or i == 1:
-            _log(f"[{i}/{len(target_records)}] ok_files={ok_files} skipped={skip_files} fail_attempts={fail_attempts} manifest_cards={manifest_cards} ...")
+            _log(f"[{i}/{len(target_records)}] ok_files={ok_files} skipped={skip_files} preview={preview_success} prerelease_skip={skipped_prerelease} fail_attempts={fail_attempts} manifest_cards={manifest_cards} ...")
 
     report = {
         "root": str(root),
         "tokv1": str(tokv1_path) if tokv1_path else "",
         "compiled": str(compiled_path) if compiled_path else "",
         "outdir": str(outdir),
+        "preview_outdir": str(preview_outdir),
         "manifest_present": bool(manifest),
+        "preview_manifest": str(preview_manifest_path),
+        "preview_manifest_present": bool(preview_manifest),
+        "as_of": as_of.isoformat(),
+        "skip_prerelease": bool(args.skip_prerelease),
+        "product_release_dates": PRODUCT_RELEASE_DATES,
         "rarities": global_rarities,
         "counts": {
             "cards_total": len(target_records),
@@ -694,11 +913,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "skipped": skip_files,
             "fail_attempts": fail_attempts,
             "manifest_successes": manifest_success,
+            "preview_successes": preview_success,
+            "preview_skipped_existing": preview_skip_files,
+            "skipped_prerelease": skipped_prerelease,
             "heuristic_successes": heuristic_success,
         },
         "notes": {
             "insecure_mode_used": bool(state.get("insecure_used", False) or state.get("insecure", False)),
-            "strategy": "manifest exact URL first; heuristic folder/rarity fallback only when needed",
+            "strategy": "canonical manifest exact URL first; prerelease preview manifest second; heuristic fallback blocked before known release dates by default",
+            "preview_runtime_contract": "simulator should resolve card_images first, then preview_card_images as fallback",
         },
         "results": [tr.__dict__ for tr in results],
     }
@@ -707,7 +930,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     fail_lines: List[str] = []
     for tr in results:
-        if (not tr.ok) and tr.status != "SKIP_EXISTS":
+        if (not tr.ok) and tr.status not in {"SKIP_EXISTS", "SKIP_PRE_RELEASE"}:
             fail_lines.append(f"{tr.cardno}\t{tr.folder}\t{tr.rarity}\t{tr.mode}\t{tr.status}\t{tr.url}")
     fail_log = outdir / "_failures.log"
     fail_log.write_text("\n".join(fail_lines) + ("\n" if fail_lines else ""), encoding="utf-8")
@@ -716,16 +939,22 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     print("tokv1    :", tokv1_path)
     print("compiled :", compiled_path)
     print("outdir   :", outdir)
+    print("preview  :", preview_outdir)
     print("manifest :", bool(manifest))
+    print("preview_manifest:", bool(preview_manifest), preview_manifest_path)
+    print("as_of    :", as_of.isoformat())
     print("rarities :", ", ".join(global_rarities))
     print("ok_files :", ok_files)
     print("skipped  :", skip_files)
+    print("preview_ok:", preview_success)
+    print("preview_skipped:", preview_skip_files)
+    print("prerelease_skipped:", skipped_prerelease)
     print("failed   :", len(fail_lines))
     print("report   :", rep_path)
     print("fail_log :", fail_log)
 
-    if ok_files == 0 and skip_files == 0:
-        print("[ERR] No files were downloaded or skipped. This usually means target extraction failed or all URLs are unreachable.")
+    if ok_files == 0 and skip_files == 0 and preview_success == 0 and preview_skip_files == 0 and skipped_prerelease == 0:
+        print("[ERR] No files were downloaded, skipped, previewed, or safely skipped as prerelease. This usually means target extraction failed or all URLs are unreachable.")
         return 3
 
     return 0

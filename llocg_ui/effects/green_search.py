@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: green_search_filtered_multi_pick_genericize_20260424f
+# BUILD_TAG: green_search_req_heart_alias_ext_fix_20260626u
+# PATCH_TAG: green_search_multi_alias_and_generic_recovery_20260629z
 from __future__ import annotations
 
 """llocg_ui.effects.green_search
@@ -67,6 +68,7 @@ def _green_room_filtered_cards(
     want_group: str = '',
     cost_max: int | None = None,
     score_max: int | None = None,
+    score_min: int | None = None,
     req_heart_color: str = '',
     req_heart_min: int | None = None,
 ) -> list:
@@ -83,6 +85,8 @@ def _green_room_filtered_cards(
             if cost_max is not None and _card_cost(card, cards_db) > int(cost_max):
                 continue
             if score_max is not None and _card_score(card, cards_db) > int(score_max):
+                continue
+            if score_min is not None and _card_score(card, cards_db) < int(score_min):
                 continue
             if req_color and req_heart_min is not None:
                 req = _card_required_hearts(card, cards_db)
@@ -130,6 +134,16 @@ def _enqueue_green_pick_filtered_to_hand(
     source_name = str(gd.get('source_name') or src or 'カード')
     want_kind = str(gd.get('want_kind') or '').strip().upper()
     want_group = str(gd.get('want_group') or '').strip()
+    cost_max = gd.get('cost_max')
+    try:
+        cost_max = int(str(cost_max).strip()) if str(cost_max).strip() else None
+    except Exception:
+        cost_max = None
+    score_min = gd.get('score_min')
+    try:
+        score_min = int(str(score_min).strip()) if str(score_min).strip() else None
+    except Exception:
+        score_min = None
     score_max = gd.get('score_max')
     try:
         score_max = int(str(score_max).strip()) if str(score_max).strip() else None
@@ -142,7 +156,7 @@ def _enqueue_green_pick_filtered_to_hand(
     except Exception:
         req_heart_min = None
 
-    detail_text = str((ctx or {}).get('detail_text') or (ctx or {}).get('effect_text') or gd.get('detail_text') or '')
+    detail_text = str((ctx or {}).get('detail_text') or (ctx or {}).get('effect_text') or gd.get('detail_text') or gd.get('effect_text') or '')
 
     if _gd_bool(rule, 'require_success_zone', False, gd) and not _success_zone_cards(gs):
         msg = str(gd.get('no_effect_popup_text') or '成功ライブカード置き場にカードがないため、この効果は解決されませんでした。')
@@ -180,15 +194,20 @@ def _enqueue_green_pick_filtered_to_hand(
         cards_db,
         want_kind=want_kind,
         want_group=want_group,
-        cost_max=None,
+        cost_max=cost_max,
         score_max=score_max,
+        score_min=score_min,
         req_heart_color=req_heart_color,
         req_heart_min=req_heart_min,
     )
     if not candidates:
         kind_txt = want_kind or 'CARD'
         group_txt = want_group or 'any'
-        extra = f' score<={score_max}' if score_max is not None else ''
+        extra = f' cost<={cost_max}' if cost_max is not None else ''
+        if score_min is not None:
+            extra += f' score>={score_min}'
+        if score_max is not None:
+            extra += f' score<={score_max}'
         if req_heart_color and req_heart_min is not None:
             extra += f' req[{req_heart_color}]>={req_heart_min}'
         msg = str(gd.get('no_candidates_popup_text') or '条件を満たすカードが控え室にないため、この効果は解決されませんでした。')
@@ -234,6 +253,11 @@ def _enqueue_green_pick_filtered_to_hand_multi(
         cost_max = int(str(cost_max).strip()) if str(cost_max).strip() else None
     except Exception:
         cost_max = None
+    score_min = gd.get('score_min')
+    try:
+        score_min = int(str(score_min).strip()) if str(score_min).strip() else None
+    except Exception:
+        score_min = None
     score_max = gd.get('score_max')
     try:
         score_max = int(str(score_max).strip()) if str(score_max).strip() else None
@@ -248,7 +272,7 @@ def _enqueue_green_pick_filtered_to_hand_multi(
     min_picks = _gd_int(rule, 'min_picks', 0, gd)
     max_picks = max(_gd_int(rule, 'max_picks', 1, gd), 0)
 
-    detail_text = str((ctx or {}).get('detail_text') or (ctx or {}).get('effect_text') or gd.get('detail_text') or '')
+    detail_text = str((ctx or {}).get('detail_text') or (ctx or {}).get('effect_text') or gd.get('detail_text') or gd.get('effect_text') or '')
 
     if _gd_bool(rule, 'require_success_zone', False, gd) and not _success_zone_cards(gs):
         msg = str(gd.get('no_effect_popup_text') or '成功ライブカード置き場にカードがないため、この効果は解決されませんでした。')
@@ -288,6 +312,7 @@ def _enqueue_green_pick_filtered_to_hand_multi(
         want_group=want_group,
         cost_max=cost_max,
         score_max=score_max,
+        score_min=score_min,
         req_heart_color=req_heart_color,
         req_heart_min=req_heart_min,
     )
@@ -295,6 +320,8 @@ def _enqueue_green_pick_filtered_to_hand_multi(
         kind_txt = want_kind or 'CARD'
         group_txt = want_group or 'any'
         extra = f' cost<={cost_max}' if cost_max is not None else ''
+        if score_min is not None:
+            extra += f' score>={score_min}'
         if score_max is not None:
             extra += f' score<={score_max}'
         if req_heart_color and req_heart_min is not None:
@@ -344,9 +371,39 @@ def try_apply_green_search_ext(
     if ext_key == "green_pick_filtered_to_hand_multi":
         return _enqueue_green_pick_filtered_to_hand_multi(gs, cards_db, rule, gd or {}, ctx)
 
+    if ext_key == "enter_pick_cost_le2_member_from_green_up_to_2":
+        gd2: Dict[str, Any] = dict(gd or {})
+        gd2.update({
+            'source_name': gd2.get('source_name') or str((ctx or {}).get('source_cn') or '') or 'コスト2以下メンバー回収',
+            'want_kind': 'MEMBER',
+            'cost_max': '2',
+            'min_picks': '0',
+            'max_picks': '2',
+            'pending_label': gd2.get('pending_label') or '控え室からコスト2以下のメンバーカードを2枚まで選んでください',
+            'effect_text': gd2.get('effect_text') or '自分の控え室からコスト2以下のメンバーカードを2枚まで手札に加える。',
+        })
+        return _enqueue_green_pick_filtered_to_hand_multi(gs, cards_db, {'ext_key': 'green_pick_filtered_to_hand_multi'}, gd2, ctx)
+
     if ext_key == "green_pick_filtered_to_hand":
         return _enqueue_green_pick_filtered_to_hand(gs, cards_db, rule, gd or {}, ctx)
 
+    # Legacy registry aliases.  These used to fall through to engine.py and log
+    # "effect op not implemented: __ext__" even though the generic green-search
+    # handler can resolve them safely.
+    if ext_key in ("body_pick_live_req_yellow_ge3_from_green", "body_pick_live_req_pink_ge3_from_green"):
+        color_key = "yellow" if "yellow" in ext_key else "pink"
+        color_jp = "黄" if color_key == "yellow" else "桃"
+        src = str((ctx or {}).get('source_cn') or '')
+        gd2: Dict[str, Any] = dict(gd or {})
+        gd2.update({
+            'source_name': gd2.get('source_name') or src or '必要ハート条件ライブ回収',
+            'want_kind': 'LIVE',
+            'req_heart_color': color_key,
+            'req_heart_min': '3',
+            'pending_label': gd2.get('pending_label') or f'控え室から必要ハートに<{color_jp}>を3以上含むライブカードを1枚選んでください',
+            'effect_text': gd2.get('effect_text') or f'控え室から必要ハートに<{color_jp}>を3以上含むライブカードを1枚手札に加える。',
+        })
+        return _enqueue_green_pick_filtered_to_hand(gs, cards_db, {'ext_key': 'green_pick_filtered_to_hand'}, gd2, ctx)
 
     if ext_key == "green_pick_filtered_to_hand__resolve":
         chosen_cn = str((ctx or {}).get("choice") or (ctx or {}).get("chosen_cn") or "").strip()

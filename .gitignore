@@ -19,3 +19,9 @@ llocg_ui_jank/
 # root-level generated db artifacts (canonical files live under llocg_db_out_full/)
 /cards_compiled_v7h.json
 /cards_min_tokv1.json
+
+# Loveca local caches / recovery work
+.cache_llocg/
+.cache_llocg_fresh_*/
+_db_recovery_*/
+_backup_db_*/

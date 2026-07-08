@@ -54,6 +54,7 @@ runtime 修正で compiled DB を参照する場合、root 直下ではなく `.
 ## 現在の重要前提
 
 - 最新通過版を必ず土台にする。
+- 実装前・デバッグ対応前・完了前に `docs/notes/loveca_runtime_implementation_rules_20260708.md` を確認する。
 - ユーザーが未適用と言ったパッチは正本扱いしない。
 - 旧い ZIP や途中パッチがローカルに残っている前提で作業しない。
 - 作業前に `git status` と変更対象ファイルの BUILD_TAG を確認する。

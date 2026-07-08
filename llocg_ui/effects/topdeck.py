@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: topdeck_get_card_from_engine_globals_20260610g
+# BUILD_TAG: topdeck_modal_contract_cleanup_20260629ae
 from __future__ import annotations
 
 """llocg_ui.effects.topdeck
@@ -15,6 +15,56 @@ from typing import Any, Dict
 from .helpers import *  # noqa: F403
 
 
+
+
+def _topdeck_modal_common(gd: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Common payload for effect-resolution modals.
+
+    Topdeck extension effects must not create a bespoke card picker that loses
+    source/effect context.  Every pending created here carries source_cn and the
+    currently resolving effect text so the shared modal lead/card-text panels are
+    rendered by server.py.
+    """
+    gd = gd or {}
+    ctx = ctx or {}
+    src = str(ctx.get('source_cn') or gd.get('source_cn') or '').strip()
+    detail = str(
+        ctx.get('detail_text')
+        or ctx.get('effect_text')
+        or gd.get('detail_text')
+        or gd.get('effect_text')
+        or ''
+    ).strip()
+    if not detail:
+        auto_detail = str(ctx.get('auto_effect_detail') or '').strip()
+        if '効果：' in auto_detail:
+            detail = auto_detail.split('効果：', 1)[1].strip()
+        elif auto_detail:
+            detail = auto_detail
+    trigger = str(ctx.get('trigger') or ctx.get('timing') or gd.get('trigger') or gd.get('timing') or '').strip()
+    if not trigger:
+        auto_detail = str(ctx.get('auto_effect_detail') or '')
+        if '登場' in auto_detail:
+            trigger = '登場時'
+        elif 'ライブ開始' in auto_detail:
+            trigger = 'ライブ開始時'
+        elif 'ライブ成功' in auto_detail:
+            trigger = 'ライブ成功時'
+    payload: Dict[str, Any] = {'ctx': dict(ctx)}
+    if src:
+        payload['source_cn'] = src
+        payload['ctx'].setdefault('source_cn', src)
+    if detail:
+        payload['detail_text'] = detail
+        payload['effect_text'] = detail
+        payload['ctx'].setdefault('detail_text', detail)
+        payload['ctx'].setdefault('effect_text', detail)
+    if trigger:
+        payload['trigger'] = trigger
+        payload['ctx'].setdefault('trigger', trigger)
+    return payload
+
+
 def try_apply_topdeck_ext(
     eng: Dict[str, Any],
     gs: Any,
@@ -24,7 +74,8 @@ def try_apply_topdeck_ext(
     gd: Dict[str, str],
     ctx: Dict[str, Any],
     ext_key: str,
-) -> bool:
+ ) -> bool:
+    common_modal = _topdeck_modal_common(gd, ctx)
 
     # mill top{k} -> green_room
     if ext_key == "mill_topk_to_green":
@@ -60,6 +111,77 @@ def try_apply_topdeck_ext(
         return True
 
 
+    # look top{k}, choose N to hand, rest to green (generic non-public reveal path)
+    # BUILD_TAG: topdeck_generic_choose_n_to_hand_rest_green_20260629aa
+    if ext_key == 'topk_choose_n_to_hand_rest_green':
+        try:
+            k = int(gd.get('topk') or 0)
+        except Exception:
+            k = 0
+        try:
+            pick_n = int(gd.get('pick_count') or gd.get('pick_n') or 1)
+        except Exception:
+            pick_n = 1
+        try:
+            min_pick = int(gd.get('min_pick_count') or pick_n)
+        except Exception:
+            min_pick = pick_n
+        try:
+            max_pick = int(gd.get('max_pick_count') or pick_n)
+        except Exception:
+            max_pick = pick_n
+        if k <= 0:
+            k = max(1, pick_n)
+        if pick_n <= 0:
+            pick_n = 1
+        label = gd.get('source_name') or f'top{k} choose{pick_n}'
+        try:
+            refresh = eng.get('_rule_refresh_for_top_access')
+            if callable(refresh):
+                refresh(gs, rng, k, reason='look_top_choose_n_rest_green')
+            deck = getattr(gs, 'deck', None)
+            if not deck:
+                gs.log.append(f'[INFO] {label}: deck empty')
+                return True
+            pool = []
+            for _ in range(min(k, len(deck))):
+                pool.append(deck.pop(0))
+            if not pool:
+                gs.log.append(f'[INFO] {label}: no cards after refresh')
+                return True
+            detail_text = str(ctx.get('detail_text') or ctx.get('effect_text') or gd.get('effect_text') or common_modal.get('detail_text') or '')
+            # Even when the pool is small, keep the shared effect popup route.
+            # One-candidate effects still need source/effect context and user confirmation.
+            optional_raw = str(gd.get('optional') or '0').strip().lower()
+            optional = optional_raw in ('1', 'true', 'yes', 'on')
+            opts = list(pool)
+            if optional and min_pick <= 0:
+                opts = list(pool) + ['done', 'skip']
+            pending = {
+                **common_modal,
+                'kind': 'choose_from_topk',
+                'text': str(gd.get('pending_label') or f'デッキ上から{len(pool)}枚を見る：その中から{min_pick if min_pick == max_pick else str(min_pick)+"〜"+str(max_pick)}枚を手札に加え、残りを控え室に置く'),
+                'options': opts,
+                'pool': list(pool),
+                'display_cards': list(pool),
+                'candidates': list(pool),
+                'optional': optional,
+                'pick_count': max_pick,
+                'min_pick_count': min_pick,
+                'max_pick_count': max_pick,
+            }
+            if detail_text:
+                pending['detail_text'] = detail_text
+                pending['effect_text'] = detail_text
+            gs.pending.append(pending)
+            gs.log.append(f"[AUTO_EXT] {label}: inline choose_from_top{len(pool)} pick {min_pick}..{max_pick} pending")
+        except Exception as e:
+            try:
+                gs.log.append(f"[ERR] {label}: inline topk_choose_n_to_hand_rest_green failed: {e}")
+            except Exception:
+                pass
+        return True
+
     # look top{k}, choose 1 to hand, rest to green
     if ext_key == 'topk_choose_one_to_hand_rest_green':
         try:
@@ -83,13 +205,10 @@ def try_apply_topdeck_ext(
             if not pool:
                 gs.log.append(f'[INFO] {label}: no cards after refresh')
                 return True
-            if len(pool) == 1:
-                pick = pool[0]
-                gs.hand.append(pick)
-                gs.log.append(f'[AUTO_EXT] {label}: only 1 -> hand {pick}')
-                return True
-            detail_text = str(ctx.get('detail_text') or ctx.get('effect_text') or '')
-            gs.pending.append({
+            # One-candidate effects still use the shared popup route.
+            detail_text = str(ctx.get('detail_text') or ctx.get('effect_text') or gd.get('detail_text') or gd.get('effect_text') or common_modal.get('detail_text') or '')
+            pending = {
+                **common_modal,
                 'kind': 'choose_from_topk',
                 'text': f'デッキ上から{len(pool)}枚を見る：その中から1枚を手札に加え、残りを控え室に置く',
                 'options': list(pool),
@@ -97,9 +216,11 @@ def try_apply_topdeck_ext(
                 'display_cards': list(pool),
                 'candidates': list(pool),
                 'optional': False,
-                'detail_text': detail_text,
-                'effect_text': detail_text,
-            })
+            }
+            if detail_text:
+                pending['detail_text'] = detail_text
+                pending['effect_text'] = detail_text
+            gs.pending.append(pending)
             gs.log.append(f"[AUTO_EXT] {label}: inline choose_from_top{len(pool)} pending")
         except Exception as e:
             try:
@@ -128,15 +249,9 @@ def try_apply_topdeck_ext(
                     pass
                 return True
             pool = [gs.deck.pop(0) for _ in range(min(k, len(gs.deck)))]
-            if len(pool) < 3:
-                gs.hand.extend(pool)
-                try:
-                    gs.log.append(f'[AUTO] look_top_3way: only {len(pool)} cards -> all to hand')
-                except Exception:
-                    pass
-                return True
-            detail_text = str(ctx.get('detail_text') or ctx.get('effect_text') or '')
-            gs.pending.append({
+            detail_text = str(ctx.get('detail_text') or ctx.get('effect_text') or gd.get('detail_text') or gd.get('effect_text') or common_modal.get('detail_text') or '')
+            pending = {
+                **common_modal,
                 'kind': 'look_top_3way_step',
                 'text': f'手札に加えるカードを選ぶ（デッキ上{len(pool)}枚から1枚）',
                 'options': list(pool),
@@ -145,9 +260,11 @@ def try_apply_topdeck_ext(
                 'step': 'hand',
                 'picked_hand': '',
                 'picked_top': '',
-                'detail_text': detail_text,
-                'effect_text': detail_text,
-            })
+            }
+            if detail_text:
+                pending['detail_text'] = detail_text
+                pending['effect_text'] = detail_text
+            gs.pending.append(pending)
             try:
                 gs.log.append(f"[AUTO_EXT] {label}: enqueue look_top_3way_split top{k} (legacy step UI + clearer labels)")
                 gs.log.append(f'[PENDING] look_top_3way: pool={pool}')
@@ -173,7 +290,7 @@ def try_apply_topdeck_ext(
         label = gd.get('source_name') or f'top{k} reorder'
         if callable(fn):
             try:
-                fn(gs, k, rng)
+                fn(gs, k, rng, ctx=ctx)
                 gs.log.append(f"[AUTO_EXT] {label}: enqueue reorder_from_top{k}")
             except Exception as e:
                 try:
@@ -222,7 +339,7 @@ def try_apply_topdeck_ext(
             f'top{k} filtered optional pick'
         )
 
-        detail_text = str(ctx.get('detail_text') or ctx.get('effect_text') or '')
+        detail_text = str(ctx.get('detail_text') or ctx.get('effect_text') or gd.get('detail_text') or gd.get('effect_text') or common_modal.get('detail_text') or '')
         try:
             refresh = eng.get('_rule_refresh_for_top_access')
             if callable(refresh):
@@ -313,22 +430,26 @@ def try_apply_topdeck_ext(
             label_text = ''.join(label_parts) if label_parts else 'カード'
 
             if not candidates:
-                gs.pending.append({
+                pending = {
+                    **common_modal,
                     'kind': 'view_topk_no_match',
                     'text': f'デッキ上{len(pool)}枚を公開（{label_text}なし）→ 全て控え室へ',
                     'options': ['確認'],
                     'pool': list(pool),
                     'display_cards': list(pool),
-                    'detail_text': detail_text,
-                    'effect_text': detail_text,
-                })
+                }
+                if detail_text:
+                    pending['detail_text'] = detail_text
+                    pending['effect_text'] = detail_text
+                gs.pending.append(pending)
                 gs.log.append(f'[PENDING] {label}: no match in top{len(pool)}')
                 return True
 
             opts = list(candidates)
             if optional:
                 opts.append('skip')
-            gs.pending.append({
+            pending = {
+                **common_modal,
                 'kind': 'choose_from_topk',
                 'text': f'デッキ上{len(pool)}枚から{label_text}を1枚公開して手札へ' + ('（スキップ可）' if optional else ''),
                 'options': opts,
@@ -337,9 +458,11 @@ def try_apply_topdeck_ext(
                 'display_pool_all': list(pool),
                 'candidates': list(candidates),
                 'optional': optional,
-                'detail_text': detail_text,
-                'effect_text': detail_text,
-            })
+            }
+            if detail_text:
+                pending['detail_text'] = detail_text
+                pending['effect_text'] = detail_text
+            gs.pending.append(pending)
             gs.log.append(f"[AUTO_EXT] {label}: enqueue choose_from_top{k} kind={filter_kind or '-'} group={filter_group or '-'} names={filter_names or '-'} cost_min={cost_min} cost_max={cost_max} optional={optional}")
         except Exception as e:
             try:

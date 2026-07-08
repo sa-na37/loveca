@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # BUILD_TAG: stage_cost_lower_draw2_top_20260624b
+# PATCH_TAG: effect_registry_generic_green_recovery_20260629z
 from __future__ import annotations
 
 """llocg_ui.effects.registry
@@ -638,6 +639,132 @@ def _try_match_generic_stage_member_temp_bonus(effect_text: str) -> Optional[Tup
         gd,
     )
 
+
+
+def _try_match_generic_topdeck_choose_to_hand_rest_green(effect_text: str):
+    # BUILD_TAG: registry_generic_topdeck_choose_n_20260629aa
+    import re as _re
+    t = _norm_ws(effect_text or '')
+    if not t or '公開' in t:
+        return None
+    m = _re.match(
+        r'^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から(?:カードを)?(?P<n>\d+)枚(?P<upto>まで)?(?:を)?手札に加え(?:、|る。)残りを控え室に置く。?$',
+        t,
+    )
+    if not m:
+        return None
+    k = str(m.group('k') or '')
+    n = str(m.group('n') or '')
+    upto = bool(m.group('upto'))
+    gd = {
+        'source_name': f'デッキ上{k}枚から{n}枚回収',
+        'topk': k,
+        'pick_count': n,
+        'min_pick_count': '0' if upto else n,
+        'max_pick_count': n,
+        'optional': '1' if upto else '0',
+        'effect_text': t,
+    }
+    return ({'id': 'generic_topdeck_choose_n_to_hand_rest_green', 'op': '__ext__', 'ext_key': 'topk_choose_n_to_hand_rest_green'}, gd)
+
+
+def _try_match_generic_green_recovery(effect_text: str):
+    """Generic matcher for safe one-card / up-to-N green-room recovery.
+
+    This catches wording variants not worth enumerating as card-specific rules,
+    while still restricting to green-room -> hand effects only.
+    """
+    import re as _re
+    t = _norm_ws(effect_text or '')
+    if not t:
+        return None
+
+    def _kind_from_jp(kind_jp: str) -> str:
+        return 'LIVE' if 'ライブ' in kind_jp else ('MEMBER' if 'メンバー' in kind_jp else '')
+
+    # 自分の控え室からコスト2以下のメンバーカードを2枚まで手札に加える。
+    m = _re.match(r'^自分の控え室(?:から|にある)、?(?:(?:コスト(?P<cost>\d+)以下)|(?:(?P<cost2>\d+)コスト以下))の(?:(?:『(?P<group>[^』]+)』の))?メンバーカードを(?P<n>\d+)枚まで手札に加える。?$', t)
+    if m:
+        gd = {
+            'source_name': '控え室回収',
+            'want_kind': 'MEMBER',
+            'cost_max': str((m.groupdict().get('cost') or m.groupdict().get('cost2') or '')),
+            'min_picks': '0',
+            'max_picks': str(m.group('n') or '1'),
+            'effect_text': t,
+        }
+        if m.group('group'):
+            gd['want_group'] = m.group('group').strip()
+        return ({'id': 'generic_green_cost_le_member_upto_n', 'op': '__ext__', 'ext_key': 'green_pick_filtered_to_hand_multi'}, gd)
+
+    # 自分の控え室からコスト2以下のメンバーカードを1枚手札に加える。
+    m = _re.match(r'^自分の控え室(?:から|にある)、?(?:(?:コスト(?P<cost>\d+)以下)|(?:(?P<cost2>\d+)コスト以下))の(?:(?:『(?P<group>[^』]+)』の))?メンバーカード(?:を1枚|1枚を)手札に加える。?$', t)
+    if m:
+        gd = {
+            'source_name': '控え室回収',
+            'want_kind': 'MEMBER',
+            'cost_max': str((m.groupdict().get('cost') or m.groupdict().get('cost2') or '')),
+            'effect_text': t,
+        }
+        if m.group('group'):
+            gd['want_group'] = m.group('group').strip()
+        return ({'id': 'generic_green_cost_le_member_one', 'op': '__ext__', 'ext_key': 'green_pick_filtered_to_hand'}, gd)
+
+    # 自分の控え室から、スコア6以上のライブカードを1枚手札に加える。
+    m = _re.match(r'^自分の控え室(?:から|にある)、?スコア(?P<score>\d+)(?P<cmp>以上|以下)の(?:(?:『(?P<group>[^』]+)』の))?ライブカード(?:を1枚|1枚を)手札に加える。?$', t)
+    if m:
+        gd = {
+            'source_name': '控え室回収',
+            'want_kind': 'LIVE',
+            'effect_text': t,
+        }
+        if m.group('cmp') == '以上':
+            gd['score_min'] = str(m.group('score') or '')
+        else:
+            gd['score_max'] = str(m.group('score') or '')
+        if m.group('group'):
+            gd['want_group'] = m.group('group').strip()
+        return ({'id': 'generic_green_live_score_threshold_one', 'op': '__ext__', 'ext_key': 'green_pick_filtered_to_hand'}, gd)
+
+    # 控え室から必要ハートに<(黄)>を3以上含むライブカードを1枚手札に加える。
+    m = _re.match(r'^(?:自分の)?控え室(?:から|にある)、?必要ハートに<\(?(?P<color>[^)>]+)\)?>を(?P<n>\d+)以上含むライブカード(?:を1枚|1枚を)手札に加える。?$', t)
+    if m:
+        color = str(m.group('color') or '').strip()
+        color_map = {'桃': 'pink', '赤': 'red', '黄': 'yellow', '緑': 'green', '青': 'blue', '紫': 'purple'}
+        gd = {
+            'source_name': '必要ハート条件ライブ回収',
+            'want_kind': 'LIVE',
+            'req_heart_color': color_map.get(color, color),
+            'req_heart_min': str(m.group('n') or '1'),
+            'effect_text': t,
+        }
+        return ({'id': 'generic_green_live_required_heart_threshold_one', 'op': '__ext__', 'ext_key': 'green_pick_filtered_to_hand'}, gd)
+
+    # 自分の控え室にあるライブカードを1枚手札に加える。
+    # 自分の控え室から『Liella!』のライブカードを1枚手札に加える。
+    m = _re.match(r'^自分の控え室(?:から|にある)、?(?:(?:『(?P<group>[^』]+)』の))?(?P<kind>ライブ|メンバー)カード(?:を1枚|1枚を)手札に加える。?$', t)
+    if m:
+        gd = {
+            'source_name': '控え室回収',
+            'want_kind': _kind_from_jp(m.group('kind') or ''),
+            'effect_text': t,
+        }
+        if m.group('group'):
+            gd['want_group'] = m.group('group').strip()
+        return ({'id': 'generic_green_kind_one', 'op': '__ext__', 'ext_key': 'green_pick_filtered_to_hand'}, gd)
+
+    # 自分の控え室から『みらくらぱーく！』のカードを1枚手札に加える。
+    m = _re.match(r'^自分の控え室(?:から|にある)、?『(?P<group>[^』]+)』のカード(?:を1枚|1枚を)手札に加える。?$', t)
+    if m:
+        gd = {
+            'source_name': '控え室回収',
+            'want_group': m.group('group').strip(),
+            'effect_text': t,
+        }
+        return ({'id': 'generic_green_group_card_one', 'op': '__ext__', 'ext_key': 'green_pick_filtered_to_hand'}, gd)
+
+    return None
+
 def try_match_effect_template_ext(
     eng: Dict[str, Any],
     effect_text: str,
@@ -668,6 +795,14 @@ def try_match_effect_template_ext(
             gd0 = dict(r.get("gd") or {})
             gd0.setdefault("effect_text", s_norm)
             return ({"id": r.get("id"), "op": "__ext__", "ext_key": r.get("ext_key")}, gd0)
+
+    generic_topdeck_choose = _try_match_generic_topdeck_choose_to_hand_rest_green(s_norm)
+    if generic_topdeck_choose is not None:
+        return generic_topdeck_choose
+
+    generic_green_recovery = _try_match_generic_green_recovery(s_norm)
+    if generic_green_recovery is not None:
+        return generic_green_recovery
 
     generic_conditional_stage_bonus = _try_match_generic_conditional_stage_member_temp_bonus(s_norm)
     if generic_conditional_stage_bonus is not None:
