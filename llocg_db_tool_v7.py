@@ -6,9 +6,11 @@ LL-OCG DB Tool (single-file) v7
 Subcommands:
   scrape    : wiki -> cards_min.csv/json  (with normalize columns if enabled)
   normalize : postprocess effect_tokens_json: (E)/(ALL)/(ブレード)/(スコア+N)
+              + normalize blade-heart special metadata (draw/score/colorless)
               + classify effect text into NO_ABILITY / HAS_TEXT
   mine      : mine frequent effect templates -> CSV + stub YAML
   audit     : audit CSV (missing, json parse, unknown tokens, cardno format)
+  db-generation-audit : compare canonical 5 DB files for cardnumber generation drift
   all       : scrape -> normalize -> mine -> audit
 
 Deps:
@@ -17,14 +19,19 @@ Deps:
 
 from __future__ import annotations
 
-BUILD_TAG = "db_tool_manual_card_text_overrides_20260608c"
+BUILD_TAG = "db_generation_consistency_audit_20260708e"
 
 import argparse
+import csv
 import hashlib
 import json
+import random
 import re
 import time
 import urllib.parse
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 from collections import Counter
@@ -43,10 +50,125 @@ CONFIG = {
     "delay": 2.5,
     "checkpoint_every": 50,
     "max_fail": 500,
+    "max_429": 3,
     "user_agent": "LL-OCG-DB-Build/1.0 (polite crawler; contact: your_email@example.com)",
     "normalize_suffix": "_tokv1",
     "manual_overrides": "manual_overrides/loveca_card_text_overrides.json",
 }
+
+TRANSIENT_HTTP_STATUSES = {500, 502, 503, 504}
+TRANSIENT_MAX_RETRIES = 3
+TRANSIENT_BASE_BACKOFF_SEC = 5.0
+TRANSIENT_MAX_BACKOFF_SEC = 60.0
+RATE_LIMIT_BASE_BACKOFF_SEC = 300.0
+RATE_LIMIT_MAX_BACKOFF_SEC = 1800.0
+FAILURE_LOG_COLUMNS = [
+    "url",
+    "stage",
+    "status_code",
+    "error_type",
+    "attempts",
+    "last_error",
+    "timestamp",
+]
+
+
+class FetchSafetyStop(RuntimeError):
+    """Raised when repeated HTTP 429 responses require a safe stop."""
+
+
+@dataclass
+class FetchFailure:
+    url: str
+    stage: str
+    status_code: str
+    error_type: str
+    attempts: int
+    last_error: str
+    timestamp: str
+
+    def as_row(self) -> Dict[str, Any]:
+        return {
+            "url": self.url,
+            "stage": self.stage,
+            "status_code": self.status_code,
+            "error_type": self.error_type,
+            "attempts": self.attempts,
+            "last_error": self.last_error,
+            "timestamp": self.timestamp,
+        }
+
+
+class FetchState:
+    """Execution-scoped HTTP retry/failure state."""
+
+    def __init__(self, failure_csv: Optional[Path], max_429: int = 3):
+        self.failure_csv = failure_csv
+        self.max_429 = max(1, int(max_429))
+        self.consecutive_429 = 0
+        self.failures: Dict[Tuple[str, str], FetchFailure] = {}
+        self._load_existing()
+
+    def _load_existing(self) -> None:
+        if not self.failure_csv or not self.failure_csv.exists():
+            return
+        try:
+            with self.failure_csv.open("r", encoding="utf-8-sig", newline="") as f:
+                for row in csv.DictReader(f):
+                    url = str(row.get("url", "") or "").strip()
+                    stage = str(row.get("stage", "") or "unknown").strip() or "unknown"
+                    if not url:
+                        continue
+                    try:
+                        attempts = int(row.get("attempts", 0) or 0)
+                    except Exception:
+                        attempts = 0
+                    self.failures[(url, stage)] = FetchFailure(
+                        url=url,
+                        stage=stage,
+                        status_code=str(row.get("status_code", "") or ""),
+                        error_type=str(row.get("error_type", "") or ""),
+                        attempts=attempts,
+                        last_error=str(row.get("last_error", "") or ""),
+                        timestamp=str(row.get("timestamp", "") or ""),
+                    )
+        except Exception as e:
+            print(f"[WARN] failed_fetches.csv load failed: {e}")
+
+    def flush(self) -> None:
+        if not self.failure_csv:
+            return
+        self.failure_csv.parent.mkdir(parents=True, exist_ok=True)
+        rows = [v.as_row() for _, v in sorted(self.failures.items())]
+        with self.failure_csv.open("w", encoding="utf-8-sig", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=FAILURE_LOG_COLUMNS)
+            writer.writeheader()
+            writer.writerows(rows)
+
+    def record_failure(
+        self,
+        *,
+        url: str,
+        stage: str,
+        status_code: Optional[int],
+        error_type: str,
+        attempts: int,
+        last_error: str,
+    ) -> None:
+        self.failures[(url, stage)] = FetchFailure(
+            url=url,
+            stage=stage,
+            status_code="" if status_code is None else str(status_code),
+            error_type=error_type,
+            attempts=int(attempts),
+            last_error=str(last_error),
+            timestamp=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        )
+        self.flush()
+
+    def clear_failure(self, url: str, stage: str) -> None:
+        if self.failures.pop((url, stage), None) is not None:
+            self.flush()
 
 # Manual corrections for known upstream/wiki typos.
 # External JSON at CONFIG["manual_overrides"] can add/override entries.
@@ -122,7 +244,137 @@ def apply_card_text_overrides_to_dataframe(df: pd.DataFrame, overrides: Dict[str
 CARDNO_IN_TEXT = re.compile(
     r"\b([A-Z]{1,4}(?:!(?:[A-Z0-9]{0,8})?)?-[A-Za-z0-9]+-\d{3}(?:-[A-Za-z0-9]+)?)\b"
 )
+
 AUDIT_CARDNO_RE = re.compile(r"^[A-Z]{1,4}(?:!(?:[A-Z0-9]{0,8})?)?-[A-Za-z0-9]+-\d{3}(?:-[A-Za-z0-9]+)?$")
+
+# A wiki page title may temporarily include a rarity suffix in the cardnumber
+# itself, especially on prerelease pages. Runtime/compiled DB cardnumbers are
+# rarity-agnostic, so known rarity tails are stripped only when there is no
+# canonical-cardnumber collision in the same record batch.
+CARDNUMBER_RARITY_SUFFIXES = {
+    "SD", "CL", "N", "R", "R2", "L", "L2", "PR", "PR2", "P", "P2",
+    "SEC", "SEC2", "SECL", "SRL", "DUO", "AR", "RM", "RE", "PE", "PE2",
+    "SECE", "LLE",
+}
+_CARDNUMBER_RARITY_ALT = "|".join(
+    re.escape(x) for x in sorted(CARDNUMBER_RARITY_SUFFIXES, key=len, reverse=True)
+)
+CARDNUMBER_RARITY_SUFFIX_RE = re.compile(
+    rf"^(?P<base>[A-Z]{{1,4}}(?:!(?:[A-Z0-9]{{0,8}})?)?-[A-Za-z0-9]+-\d{{3}})-(?P<rarity>{_CARDNUMBER_RARITY_ALT})$",
+    re.IGNORECASE,
+)
+
+
+def split_cardnumber_rarity_suffix(cardnumber: str) -> Tuple[str, str]:
+    """Return (canonical_cardnumber, rarity_suffix) for a known rarity tail."""
+    cn = str(cardnumber or "").strip()
+    m = CARDNUMBER_RARITY_SUFFIX_RE.match(cn)
+    if not m:
+        return cn, ""
+    return m.group("base"), m.group("rarity").upper()
+
+
+def _write_cardnumber_canonicalization_audit(
+    outdir: Optional[Path],
+    rows: List[Dict[str, Any]],
+    label: str,
+) -> None:
+    if outdir is None:
+        return
+    outdir.mkdir(parents=True, exist_ok=True)
+    slug = re.sub(r"[^A-Za-z0-9]+", "_", str(label or "run")).strip("_").lower() or "run"
+    json_path = outdir / f"cardnumber_canonicalization_audit_{slug}.json"
+    tsv_path = outdir / f"cardnumber_canonicalization_audit_{slug}.tsv"
+
+    json_path.write_text(
+        json.dumps(rows, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    fields = [
+        "source_cardnumber",
+        "canonical_cardnumber",
+        "rarity_suffix",
+        "status",
+        "collision_cardnumbers",
+        "cardname",
+        "source_url",
+    ]
+    with tsv_path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fields, delimiter="\t", extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def canonicalize_cardnumbers_in_records(
+    records: List[Dict[str, Any]],
+    outdir: Optional[Path] = None,
+    label: str = "",
+) -> Tuple[int, int, List[Dict[str, Any]]]:
+    """
+    Safely strip known rarity suffixes from record cardnumbers.
+
+    Collision policy:
+    - If only one distinct source cardnumber maps to a canonical cardnumber,
+      rewrite it automatically.
+    - If the canonical cardnumber already exists, or multiple distinct rarity-
+      suffixed cardnumbers map to the same canonical value, leave the records
+      unchanged and report COLLISION_NO_CHANGE.
+    """
+    all_cardnumbers: Set[str] = {
+        str(r.get("cardnumber", "") or "").strip()
+        for r in records
+        if isinstance(r, dict) and str(r.get("cardnumber", "") or "").strip()
+    }
+    candidate_sources: Dict[str, Set[str]] = {}
+    candidates: List[Tuple[Dict[str, Any], str, str, str]] = []
+
+    for rec in records:
+        if not isinstance(rec, dict):
+            continue
+        source_cn = str(rec.get("cardnumber", "") or "").strip()
+        canonical_cn, rarity = split_cardnumber_rarity_suffix(source_cn)
+        if not rarity or canonical_cn == source_cn:
+            continue
+        candidates.append((rec, source_cn, canonical_cn, rarity))
+        candidate_sources.setdefault(canonical_cn, set()).add(source_cn)
+
+    audit_rows: List[Dict[str, Any]] = []
+    rewritten = 0
+    collisions = 0
+
+    for rec, source_cn, canonical_cn, rarity in candidates:
+        colliders = set(candidate_sources.get(canonical_cn, set()))
+        if canonical_cn in all_cardnumbers:
+            colliders.add(canonical_cn)
+        is_collision = len(colliders) > 1
+
+        if is_collision:
+            status = "COLLISION_NO_CHANGE"
+            collisions += 1
+        else:
+            rec["cardnumber"] = canonical_cn
+            status = "RARITY_SUFFIX_STRIPPED"
+            rewritten += 1
+
+        audit_rows.append({
+            "source_cardnumber": source_cn,
+            "canonical_cardnumber": canonical_cn,
+            "rarity_suffix": rarity,
+            "status": status,
+            "collision_cardnumbers": "|".join(sorted(colliders)) if is_collision else "",
+            "cardname": str(rec.get("cardname", "") or ""),
+            "source_url": str(rec.get("source_url", "") or ""),
+        })
+
+    _write_cardnumber_canonicalization_audit(outdir, audit_rows, label=label)
+
+    if audit_rows:
+        print(
+            f"[CARDNO] rarity-suffix candidates={len(audit_rows)} "
+            f"rewritten={rewritten} collisions={collisions}"
+            + (f" ({label})" if label else "")
+        )
+    return rewritten, collisions, audit_rows
 
 START_MARKERS = ["▼効果テキスト", "▼カードテキスト", "▼テキスト"]
 STOP_HEADINGS = {
@@ -178,6 +430,26 @@ COLOR_MAP = {
     "ALL": "all", "(ALL)": "all",
 }
 
+# Blade-heart-only special icons.
+# IMPORTANT: colorless is intentionally NOT an alias of `any`.
+# `any` is a requirement category/flexible heart representation used elsewhere;
+# a colorless heart contributes to the total heart count but never satisfies a
+# colored minimum by itself. The new double-colorless blade heart therefore
+# normalizes to colorless=2.
+BLADE_HEART_SPECIAL_KEYS = ("draw", "score", "colorless")
+DOUBLE_COLORLESS_ALIASES = {
+    "ダブル無色",
+    "ダブル無色ハート",
+    "DOUBLECOLORLESS",
+    "DOUBLECOLORLESSHEART",
+}
+SINGLE_COLORLESS_ALIASES = {
+    "無色",
+    "無色ハート",
+    "COLORLESS",
+    "COLORLESSHEART",
+}
+
 # Accept both old normalized icons '<(桃)>×2' and new official-like icons '<桃> 2'.
 ICON_COUNT_RE = re.compile(r"<\s*\(?\s*([^<>（）()]+?)\s*\)?\s*>\s*(?:(?:×|x|X)\s*)?([0-9０-９]+)?")
 TOTAL_RE = re.compile(r"\(合計\s*(\d+)\)")
@@ -204,7 +476,10 @@ OFFICIAL_CARDLIST_MORE_URL = OFFICIAL_BASE_URL + "/cardlist/cardsearch_ex"
 
 PB_PREFIX_TO_OFFICIAL_EXPANSION = {
     "PL!SP": "PBSP",
+    "PL!HS": "PBHS",
     "PL!LS": "PBLS",
+    # Current official image assets for PL!S-pb1 are also under PBLS.
+    "PL!S": "PBLS",
     "PL!N": "PBnj",
     "PL!": "PBLL",
     "LL": "PBLL",
@@ -248,7 +523,14 @@ def official_expansion_from_cardno(cardno: str) -> Optional[str]:
         return f"BP{n:02d}"
     m = re.search(r"(?:^|-)pb([1-9][0-9]*)(?:-|$)", c, re.IGNORECASE)
     if m:
-        return PB_PREFIX_TO_OFFICIAL_EXPANSION.get(_card_prefix_from_cardno(c))
+        n = int(m.group(1))
+        base = PB_PREFIX_TO_OFFICIAL_EXPANSION.get(_card_prefix_from_cardno(c))
+        if not base:
+            return None
+        # Official PB product/image folder codes keep the legacy unsuffixed
+        # name for pb1, then append a zero-padded product number from pb2 on.
+        # Example: PL!SP-pb1 -> PBSP, PL!SP-pb2 -> PBSP02.
+        return base if n == 1 else f"{base}{n:02d}"
     m = re.search(r"(?:^|-)sd([1-9][0-9]*)(?:-|$)", c, re.IGNORECASE)
     if m:
         n = int(m.group(1))
@@ -282,35 +564,98 @@ def infer_rarity_from_filename(filename: str) -> str:
     return official_normalize_rarity_token(tail)
 
 
-def parse_official_cardlist_items(html: str, expansion: str, wanted_cardnos: Optional[Set[str]] = None) -> List[Dict[str, Any]]:
+def infer_cardnumber_from_official_filename(
+    filename: str,
+    wanted_cardnos: Optional[Set[str]] = None,
+) -> str:
+    stem = Path(urllib.parse.unquote(filename or "")).stem.strip()
+    if not stem:
+        return ""
+
+    if wanted_cardnos:
+        direct = [
+            cn for cn in wanted_cardnos
+            if stem == cn or stem.startswith(cn + "-")
+        ]
+        if direct:
+            return max(direct, key=len)
+
+        nums = re.findall(r"(?<!\d)(\d{3})(?!\d)", stem)
+        for num in reversed(nums):
+            candidates = []
+            for cn in wanted_cardnos:
+                if not re.search(rf"(?:^|-){re.escape(num)}(?:-|$)", cn):
+                    continue
+                prefix = re.sub(rf"-{re.escape(num)}(?:-[A-Za-z0-9]+)?$", "", cn)
+                if prefix and stem.startswith(prefix + "-"):
+                    candidates.append(cn)
+            if len(candidates) == 1:
+                return candidates[0]
+
+    m = re.search(
+        r"(?P<cardno>[A-Z]{1,4}(?:!(?:[A-Z0-9]{0,8})?)?-[A-Za-z0-9]+-\d{3}(?:-[A-Za-z0-9]+)?)",
+        stem,
+    )
+    return m.group("cardno") if m else ""
+
+
+def parse_official_cardlist_items(
+    html: str,
+    expansion: str,
+    wanted_cardnos: Optional[Set[str]] = None,
+) -> List[Dict[str, Any]]:
     soup = BeautifulSoup(html, "lxml")
     items: List[Dict[str, Any]] = []
     seen: Set[Tuple[str, str, str]] = set()
 
-    for node in soup.select(".cardlist-Result_Item.image-Item[card]"):
+    # The official site has changed wrapper classes several times.  The stable
+    # signals are the `card` attribute and a card image inside the item.
+    for node in soup.select("[card]"):
         display_card = (node.get("card") or "").strip()
-        if not display_card:
-            continue
-        base_cardno, rarity_display = split_display_card_and_rarity(display_card)
-        if wanted_cardnos is not None and base_cardno not in wanted_cardnos:
-            continue
         img = node.find("img")
         if not img:
             continue
         src = (img.get("src") or "").strip()
         if not src:
             continue
+
         parsed = urllib.parse.urlparse(src)
         remote_filename = Path(urllib.parse.unquote(parsed.path)).name
         if not remote_filename:
             continue
-        rarity_norm = infer_rarity_from_filename(remote_filename) or official_normalize_rarity_token(rarity_display)
+
+        base_cardno, rarity_display = split_display_card_and_rarity(display_card)
+        if wanted_cardnos is not None and base_cardno not in wanted_cardnos:
+            inferred = infer_cardnumber_from_official_filename(
+                remote_filename,
+                wanted_cardnos=wanted_cardnos,
+            )
+            if inferred:
+                base_cardno = inferred
+
+        if not base_cardno:
+            base_cardno = infer_cardnumber_from_official_filename(
+                remote_filename,
+                wanted_cardnos=wanted_cardnos,
+            )
+        if not base_cardno:
+            continue
+        if wanted_cardnos is not None and base_cardno not in wanted_cardnos:
+            continue
+
+        rarity_norm = (
+            infer_rarity_from_filename(remote_filename)
+            or official_normalize_rarity_token(rarity_display)
+        )
         folder = expansion
-        # If the live src already contains the /cardlist/<folder>/ segment, trust it.
         mm = re.search(r"/cardlist/([^/]+)/[^/]+$", parsed.path)
         if mm:
             folder = mm.group(1)
-        exact_url = f"{OFFICIAL_BASE_URL}/wordpress/wp-content/images/cardlist/{folder}/{remote_filename}"
+
+        exact_url = (
+            f"{OFFICIAL_BASE_URL}/wordpress/wp-content/images/cardlist/"
+            f"{folder}/{remote_filename}"
+        )
         key = (base_cardno, rarity_norm, remote_filename)
         if key in seen:
             continue
@@ -358,10 +703,18 @@ def load_cardnumbers_from_db(db_json: Optional[Path], db_csv: Optional[Path]) ->
                 out.extend([str(x).strip() for x in df["cardnumber"].dropna().tolist() if str(x).strip()])
         except Exception:
             pass
+    # Canonicalize known rarity tails before manifest grouping so a stale
+    # prerelease cardnumber such as PL!SP-bp7-004-P does not poison exact-image
+    # lookup.  Manifest loading is set-like; collisions naturally de-duplicate.
+    canonical_out: List[str] = []
+    for cn in out:
+        canonical_cn, _rarity = split_cardnumber_rarity_suffix(cn)
+        canonical_out.append(canonical_cn)
+
     # de-dup keep order
     seen = set()
     uniq: List[str] = []
-    for cn in out:
+    for cn in canonical_out:
         if cn not in seen:
             uniq.append(cn)
             seen.add(cn)
@@ -377,10 +730,14 @@ def cmd_official_image_manifest(
     user_agent: str,
     timeout: float = 25.0,
     per_card_fallback: bool = True,
+    fetch_state: Optional[FetchState] = None,
 ) -> Path:
     wanted_cardnos = load_cardnumbers_from_db(db_json, db_csv)
     if not wanted_cardnos:
         raise SystemExit("[ERROR] no cardnumber rows found for official image manifest generation")
+
+    if fetch_state is None:
+        fetch_state = FetchState(outdir / "failed_fetches.csv", max_429=CONFIG["max_429"])
 
     wanted_set = set(wanted_cardnos)
     expansion_to_cards: Dict[str, Set[str]] = {}
@@ -398,41 +755,109 @@ def cmd_official_image_manifest(
     def push_items(items: List[Dict[str, Any]]) -> None:
         for item in items:
             cn = item["cardnumber"]
+            if cn not in wanted_set:
+                continue
             cards_map.setdefault(cn, [])
             key = (item["rarity_norm"], item["remote_filename"], item["folder"])
-            seen_keys = {(x["rarity_norm"], x["remote_filename"], x["folder"]) for x in cards_map[cn]}
+            seen_keys = {
+                (x["rarity_norm"], x["remote_filename"], x["folder"])
+                for x in cards_map[cn]
+            }
             if key not in seen_keys:
                 cards_map[cn].append(item)
 
     for expansion in sorted(expansion_to_cards.keys()):
-        first_url = f"{OFFICIAL_CARDLIST_SEARCH_URL}?expansion={urllib.parse.quote(expansion)}&view=image&sort=new"
-        html = fetch(first_url, cache_dir, delay=delay, user_agent=user_agent, timeout=timeout)
-        page_items = parse_official_cardlist_items(html, expansion, wanted_cardnos=expansion_to_cards[expansion])
-        push_items(page_items)
-        max_page = extract_official_max_page(html)
-        pages_done = 1
-        if max_page >= 2:
+        wanted_for_expansion = expansion_to_cards[expansion]
+        variants: List[str] = []
+        pages_done = 0
+        max_page_seen = 1
+
+        for query_key in ("title", "expansion"):
+            first_url = (
+                f"{OFFICIAL_CARDLIST_SEARCH_URL}?"
+                f"{query_key}={urllib.parse.quote(expansion)}&view=image&sort=new"
+            )
+            html = fetch(
+                first_url,
+                cache_dir,
+                delay=delay,
+                user_agent=user_agent,
+                timeout=timeout,
+                stage="official_manifest",
+                fetch_state=fetch_state,
+            )
+            page_items = parse_official_cardlist_items(
+                html,
+                expansion,
+                wanted_cardnos=wanted_for_expansion,
+            )
+            push_items(page_items)
+            max_page = extract_official_max_page(html)
+            max_page_seen = max(max_page_seen, max_page)
+            pages_done += 1
+            variants.append(
+                f"{first_url} :: items={len(page_items)} max_page={max_page}"
+            )
+
             for page in range(2, max_page + 1):
-                more_url = f"{OFFICIAL_CARDLIST_MORE_URL}?expansion={urllib.parse.quote(expansion)}&view=image&page={page}"
-                more_html = fetch(more_url, cache_dir, delay=delay, user_agent=user_agent, timeout=timeout)
-                push_items(parse_official_cardlist_items(more_html, expansion, wanted_cardnos=expansion_to_cards[expansion]))
+                more_url = (
+                    f"{OFFICIAL_CARDLIST_MORE_URL}?"
+                    f"{query_key}={urllib.parse.quote(expansion)}"
+                    f"&view=image&page={page}"
+                )
+                more_html = fetch(
+                    more_url,
+                    cache_dir,
+                    delay=delay,
+                    user_agent=user_agent,
+                    timeout=timeout,
+                    stage="official_manifest",
+                    fetch_state=fetch_state,
+                )
+                more_items = parse_official_cardlist_items(
+                    more_html,
+                    expansion,
+                    wanted_cardnos=wanted_for_expansion,
+                )
+                push_items(more_items)
                 pages_done += 1
+                variants.append(f"{more_url} :: items={len(more_items)}")
+
         expansions_summary[expansion] = {
-            "cards_wanted": len(expansion_to_cards[expansion]),
+            "cards_wanted": len(wanted_for_expansion),
             "pages_fetched": pages_done,
-            "max_page": max_page,
+            "max_page": max_page_seen,
+            "variants": variants,
         }
 
     missing_after_expansion = [cn for cn in wanted_cardnos if cn not in cards_map]
-    # per-card fallback is reserved for unmatched prefixes / stubborn misses (PR etc.)
     if per_card_fallback and missing_after_expansion:
         for cn in missing_after_expansion:
-            url = f"{OFFICIAL_CARDLIST_SEARCH_URL}?cardno={urllib.parse.quote(cn)}&view=image&sort=new"
+            url = (
+                f"{OFFICIAL_CARDLIST_SEARCH_URL}?"
+                f"cardno={urllib.parse.quote(cn)}&view=image&sort=new"
+            )
             try:
-                html = fetch(url, cache_dir, delay=delay, user_agent=user_agent, timeout=timeout)
+                html = fetch(
+                    url,
+                    cache_dir,
+                    delay=delay,
+                    user_agent=user_agent,
+                    timeout=timeout,
+                    stage="official_per_card",
+                    fetch_state=fetch_state,
+                )
+            except FetchSafetyStop:
+                raise
             except Exception:
                 continue
-            push_items(parse_official_cardlist_items(html, official_expansion_from_cardno(cn) or "UNKNOWN", wanted_cardnos={cn}))
+            push_items(
+                parse_official_cardlist_items(
+                    html,
+                    official_expansion_from_cardno(cn) or "UNKNOWN",
+                    wanted_cardnos={cn},
+                )
+            )
 
     manifest = {
         "version": 1,
@@ -444,16 +869,24 @@ def cmd_official_image_manifest(
         "base_url": f"{OFFICIAL_BASE_URL}/wordpress/wp-content/images/cardlist",
         "cards_total_in_db": len(wanted_cardnos),
         "cards_with_manifest": len(cards_map),
-        "cards_missing_manifest": len([cn for cn in wanted_cardnos if cn not in cards_map]),
+        "cards_missing_manifest": len(
+            [cn for cn in wanted_cardnos if cn not in cards_map]
+        ),
         "expansions": expansions_summary,
-        "cards": {cn: cards_map.get(cn, []) for cn in wanted_cardnos if cards_map.get(cn)},
+        "cards": {
+            cn: cards_map.get(cn, [])
+            for cn in wanted_cardnos
+            if cards_map.get(cn)
+        },
     }
 
     outdir.mkdir(parents=True, exist_ok=True)
     out_path = outdir / "official_image_manifest.json"
-    out_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    out_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
-    # also emit a compact TSV for quick inspection / grep
     flat_rows: List[Dict[str, Any]] = []
     for cn, entries in manifest["cards"].items():
         for e in entries:
@@ -466,7 +899,17 @@ def cmd_official_image_manifest(
                 "exact_url": e.get("exact_url", ""),
             })
     flat_path = outdir / "official_image_manifest.tsv"
-    pd.DataFrame(flat_rows).to_csv(flat_path, index=False, encoding="utf-8-sig", sep="\t")
+    pd.DataFrame(
+        flat_rows,
+        columns=[
+            "cardnumber",
+            "rarity_norm",
+            "rarity_display",
+            "folder",
+            "remote_filename",
+            "exact_url",
+        ],
+    ).to_csv(flat_path, index=False, encoding="utf-8-sig", sep="\t")
     print(f"[DONE] official image manifest -> {out_path}")
     print(f"[DONE] official image manifest TSV -> {flat_path}")
     return out_path
@@ -477,17 +920,203 @@ def sha_path(cache_dir: Path, url: str) -> Path:
     return cache_dir / f"{h}.html"
 
 
-def fetch(url: str, cache_dir: Path, delay: float, user_agent: str, timeout: float = 25.0) -> str:
+def _parse_retry_after_seconds(value: Optional[str]) -> Optional[float]:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    try:
+        return max(0.0, float(int(raw)))
+    except Exception:
+        pass
+    try:
+        dt = parsedate_to_datetime(raw)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+        return max(0.0, (dt.astimezone(timezone.utc) - now).total_seconds())
+    except Exception:
+        return None
+
+def _request_delay_seconds(delay: float) -> float:
+    base = max(0.0, float(delay))
+    if base <= 0:
+        return 0.0
+    return base + random.uniform(0.0, base * 0.5)
+
+def _transient_backoff_seconds(retry_index: int) -> float:
+    base = min(
+        TRANSIENT_MAX_BACKOFF_SEC,
+        TRANSIENT_BASE_BACKOFF_SEC * (2 ** max(0, retry_index)),
+    )
+    return base + random.uniform(0.0, min(5.0, base * 0.25))
+
+def _rate_limit_backoff_seconds(consecutive_429: int) -> float:
+    base = min(
+        RATE_LIMIT_MAX_BACKOFF_SEC,
+        RATE_LIMIT_BASE_BACKOFF_SEC * (2 ** max(0, consecutive_429 - 1)),
+    )
+    return base + random.uniform(0.0, min(60.0, base * 0.25))
+
+def fetch(
+    url: str,
+    cache_dir: Path,
+    delay: float,
+    user_agent: str,
+    timeout: float = 25.0,
+    *,
+    stage: str = "unknown",
+    fetch_state: Optional[FetchState] = None,
+) -> str:
     cache_dir.mkdir(parents=True, exist_ok=True)
     p = sha_path(cache_dir, url)
     if p.exists():
+        if fetch_state is not None:
+            fetch_state.clear_failure(url, stage)
         return p.read_text(encoding="utf-8", errors="ignore")
-    time.sleep(delay)
-    r = requests.get(url, headers={"User-Agent": user_agent}, timeout=timeout)
-    r.raise_for_status()
-    html = r.text
-    p.write_text(html, encoding="utf-8")
-    return html
+
+    attempts = 0
+    transient_retry_index = 0
+    local_consecutive_429 = 0
+
+    while True:
+        wait_before = _request_delay_seconds(delay)
+        if wait_before > 0:
+            time.sleep(wait_before)
+
+        attempts += 1
+        try:
+            r = requests.get(
+                url,
+                headers={"User-Agent": user_agent},
+                timeout=timeout,
+            )
+        except (requests.Timeout, requests.ConnectionError) as e:
+            if transient_retry_index < TRANSIENT_MAX_RETRIES:
+                wait_sec = _transient_backoff_seconds(transient_retry_index)
+                transient_retry_index += 1
+                print(
+                    f"[WARN] transient network error stage={stage} "
+                    f"attempt={attempts} retry_in={wait_sec:.1f}s url={url} ({e})"
+                )
+                time.sleep(wait_sec)
+                continue
+
+            if fetch_state is not None:
+                fetch_state.record_failure(
+                    url=url,
+                    stage=stage,
+                    status_code=None,
+                    error_type=type(e).__name__,
+                    attempts=attempts,
+                    last_error=str(e),
+                )
+            raise
+
+        status = int(r.status_code)
+
+        if status == 429:
+            if fetch_state is not None:
+                fetch_state.consecutive_429 += 1
+                consecutive_429 = fetch_state.consecutive_429
+                max_429 = fetch_state.max_429
+            else:
+                local_consecutive_429 += 1
+                consecutive_429 = local_consecutive_429
+                max_429 = int(CONFIG["max_429"])
+
+            if consecutive_429 >= max_429:
+                msg = (
+                    f"HTTP 429 repeated {consecutive_429} times "
+                    f"(max_429={max_429}) stage={stage} url={url}"
+                )
+                if fetch_state is not None:
+                    fetch_state.record_failure(
+                        url=url,
+                        stage=stage,
+                        status_code=status,
+                        error_type="HTTP429SafetyStop",
+                        attempts=attempts,
+                        last_error=msg,
+                    )
+                raise FetchSafetyStop(msg)
+
+            retry_after = _parse_retry_after_seconds(r.headers.get("Retry-After"))
+            if retry_after is not None:
+                wait_sec = retry_after
+                wait_source = "Retry-After"
+            else:
+                wait_sec = _rate_limit_backoff_seconds(consecutive_429)
+                wait_source = "exponential-backoff"
+
+            print(
+                f"[RATE-LIMIT] 429 stage={stage} count={consecutive_429}/{max_429} "
+                f"wait={wait_sec:.1f}s source={wait_source} url={url}"
+            )
+            time.sleep(wait_sec)
+            continue
+
+        if status in TRANSIENT_HTTP_STATUSES:
+            if transient_retry_index < TRANSIENT_MAX_RETRIES:
+                wait_sec = _transient_backoff_seconds(transient_retry_index)
+                transient_retry_index += 1
+                print(
+                    f"[WARN] HTTP {status} stage={stage} attempt={attempts} "
+                    f"retry_in={wait_sec:.1f}s url={url}"
+                )
+                time.sleep(wait_sec)
+                continue
+
+            err = requests.HTTPError(
+                f"{status} Server Error after {attempts} attempts for url: {url}",
+                response=r,
+            )
+            if fetch_state is not None:
+                fetch_state.record_failure(
+                    url=url,
+                    stage=stage,
+                    status_code=status,
+                    error_type="HTTPServerError",
+                    attempts=attempts,
+                    last_error=str(err),
+                )
+            raise err
+
+        if 400 <= status < 500:
+            try:
+                r.raise_for_status()
+            except requests.HTTPError as e:
+                if fetch_state is not None:
+                    fetch_state.record_failure(
+                        url=url,
+                        stage=stage,
+                        status_code=status,
+                        error_type="HTTPClientError",
+                        attempts=attempts,
+                        last_error=str(e),
+                    )
+                raise
+
+        try:
+            r.raise_for_status()
+        except requests.HTTPError as e:
+            if fetch_state is not None:
+                fetch_state.record_failure(
+                    url=url,
+                    stage=stage,
+                    status_code=status,
+                    error_type="HTTPError",
+                    attempts=attempts,
+                    last_error=str(e),
+                )
+            raise
+
+        if fetch_state is not None:
+            fetch_state.consecutive_429 = 0
+            fetch_state.clear_failure(url, stage)
+
+        html = r.text
+        p.write_text(html, encoding="utf-8")
+        return html
 
 
 def norm_url(href: str) -> Optional[str]:
@@ -631,6 +1260,96 @@ def parse_heart_expr(raw: str) -> Tuple[Dict[str, int], Optional[int], List[str]
         else:
             tags.append(f"({raw_token})")
     return counts, total, tags
+
+
+def _normalize_blade_heart_token(raw_token: str) -> str:
+    return (
+        str(raw_token or "")
+        .translate(FW_DIGITS)
+        .translate(PLUS_MINUS_MAP)
+        .replace(" ", "")
+        .replace("×", "X")
+        .replace("ｘ", "X")
+        .replace("Ｘ", "X")
+        .strip()
+    )
+
+
+def parse_blade_heart_expr(
+    raw: str,
+) -> Tuple[Dict[str, int], Optional[int], List[str], Dict[str, int]]:
+    """Normalize blade-heart icons, including non-heart special icons.
+
+    Returns:
+      heart_counts: colored / ALL hearts only
+      heart_total : explicit total when present, otherwise colored/ALL + colorless
+      unknown_tags: blade-heart tokens not recognized by this parser
+      special_counts: {draw, score, colorless}
+
+    The BP07 "double colorless heart" is represented as colorless=2.
+    Colorless hearts are deliberately kept separate from `any`: runtime heart
+    matching can add colorless to the total-heart pool without using it for any
+    colored minimum.
+    """
+    counts, explicit_total, _ = parse_heart_expr(raw)
+    special = {key: 0 for key in BLADE_HEART_SPECIAL_KEYS}
+    unknown_tags: List[str] = []
+
+    if not raw or not isinstance(raw, str):
+        return counts, explicit_total, unknown_tags, special
+
+    s = raw.translate(FW_DIGITS)
+    for m in ICON_COUNT_RE.finditer(s):
+        raw_token = str(m.group(1) or "").strip().replace(" ", "")
+        token = raw_token if raw_token in COLOR_MAP else f"({raw_token})"
+        icon_n = int(str(m.group(2)).translate(FW_DIGITS)) if m.group(2) else 1
+
+        if token in COLOR_MAP:
+            continue
+
+        normalized = _normalize_blade_heart_token(raw_token)
+
+        draw_m = re.fullmatch(r"(?:ドロー|DRAW)(?:\+?([0-9]+))?", normalized, re.IGNORECASE)
+        if draw_m:
+            per_icon = int(draw_m.group(1)) if draw_m.group(1) else 1
+            special["draw"] += per_icon * icon_n
+            continue
+
+        score_m = re.fullmatch(r"(?:スコア|SCORE)(?:\+?([0-9]+))?", normalized, re.IGNORECASE)
+        if score_m:
+            per_icon = int(score_m.group(1)) if score_m.group(1) else 1
+            special["score"] += per_icon * icon_n
+            continue
+
+        normalized_upper = normalized.upper()
+
+        double_colorless_m = re.fullmatch(
+            r"(?:ダブル無色(?:ハート)?|DOUBLECOLORLESS(?:HEART)?)(?:X?([0-9]+))?",
+            normalized_upper,
+            re.IGNORECASE,
+        )
+        if double_colorless_m:
+            repeated = int(double_colorless_m.group(1)) if double_colorless_m.group(1) else 1
+            special["colorless"] += 2 * repeated * icon_n
+            continue
+
+        colorless_m = re.fullmatch(
+            r"(?:無色(?:ハート)?|COLORLESS(?:HEART)?)(?:X?([0-9]+))?",
+            normalized_upper,
+            re.IGNORECASE,
+        )
+        if colorless_m:
+            repeated = int(colorless_m.group(1)) if colorless_m.group(1) else 1
+            special["colorless"] += repeated * icon_n
+            continue
+
+        unknown_tags.append(f"({raw_token})")
+
+    heart_total = explicit_total
+    if heart_total is None:
+        heart_total = sum(counts.values()) + int(special["colorless"])
+
+    return counts, heart_total, unknown_tags, special
 
 
 def _has_text_value(v: Any) -> bool:
@@ -804,7 +1523,7 @@ def parse_card_page(url: str, html: str, key_set: Set[str], do_normalize: bool) 
 
         base_counts, base_total, base_tags = parse_heart_expr(base_raw)
         req_counts, req_total, req_tags = parse_heart_expr(req_raw)
-        bh_counts, bh_total, bh_tags = parse_heart_expr(bh_raw)
+        bh_counts, bh_total, bh_tags, bh_special = parse_blade_heart_expr(bh_raw)
 
         rec["base_hearts_counts_json"] = json.dumps(base_counts, ensure_ascii=False)
         rec["base_hearts_total"] = base_total if base_total is not None else sum(base_counts.values())
@@ -817,6 +1536,10 @@ def parse_card_page(url: str, html: str, key_set: Set[str], do_normalize: bool) 
         rec["blade_heart_counts_json"] = json.dumps(bh_counts, ensure_ascii=False)
         rec["blade_heart_total"] = bh_total if bh_total is not None else sum(bh_counts.values())
         rec["blade_heart_tags_json"] = json.dumps(bh_tags, ensure_ascii=False)
+        rec["blade_heart_special_counts_json"] = json.dumps(bh_special, ensure_ascii=False)
+        rec["blade_heart_draw_n"] = int(bh_special.get("draw", 0) or 0)
+        rec["blade_heart_score_n"] = int(bh_special.get("score", 0) or 0)
+        rec["blade_heart_colorless_n"] = int(bh_special.get("colorless", 0) or 0)
 
         eff_norm = normalize_effect_text(effect_text)
         eff_status = classify_effect_text_status(effect_text, eff_norm)
@@ -828,30 +1551,82 @@ def parse_card_page(url: str, html: str, key_set: Set[str], do_normalize: bool) 
     return rec
 
 
-def load_resume_urls(resume_csv: Path, resume_json: Path) -> Set[str]:
-    urls: Set[str] = set()
-    if resume_csv.exists():
-        try:
-            df = pd.read_csv(resume_csv)
-            if "source_url" in df.columns:
-                urls.update([u for u in df["source_url"].dropna().astype(str).tolist() if u])
-        except Exception:
-            pass
+def load_resume_records(resume_csv: Path, resume_json: Path) -> List[Dict[str, Any]]:
+    records: List[Dict[str, Any]] = []
+
     if resume_json.exists():
         try:
             data = json.loads(resume_json.read_text(encoding="utf-8"))
             if isinstance(data, list):
-                apply_card_text_overrides_to_records(data, overrides, label="normalize/json")
-                for r in data:
-                    if isinstance(r, dict) and r.get("source_url"):
-                        urls.add(str(r["source_url"]))
-        except Exception:
-            pass
-    return urls
+                records = [r for r in data if isinstance(r, dict)]
+        except Exception as e:
+            print(f"[WARN] resume JSON load failed: {resume_json} ({e})")
+
+    if not records and resume_csv.exists():
+        try:
+            df = pd.read_csv(resume_csv)
+            records = df.to_dict(orient="records")
+        except pd.errors.EmptyDataError:
+            records = []
+        except Exception as e:
+            print(f"[WARN] resume CSV load failed: {resume_csv} ({e})")
+
+    if not records:
+        return []
+
+    df = pd.DataFrame(records)
+    if "source_url" in df.columns:
+        df = df.drop_duplicates(subset=["source_url"], keep="last")
+    if "cardnumber" in df.columns:
+        df = df.drop_duplicates(subset=["cardnumber"], keep="last")
+    return df.to_dict(orient="records")
+
+def load_resume_urls_from_records(records: List[Dict[str, Any]]) -> Set[str]:
+    return {
+        str(r.get("source_url", "") or "").strip()
+        for r in records
+        if str(r.get("source_url", "") or "").strip()
+    }
+
+def _write_failed_urls(outdir: Path, failed: List[str]) -> None:
+    outdir.mkdir(parents=True, exist_ok=True)
+    uniq: List[str] = []
+    seen: Set[str] = set()
+    for url in failed:
+        u = str(url or "").strip()
+        if u and u not in seen:
+            uniq.append(u)
+            seen.add(u)
+    (outdir / "failed_urls.txt").write_text("\n".join(uniq), encoding="utf-8")
+
+def _write_scrape_checkpoint(
+    outdir: Path,
+    records: List[Dict[str, Any]],
+    keys_found: Set[str],
+    failed: List[str],
+) -> None:
+    outdir.mkdir(parents=True, exist_ok=True)
+    if records:
+        pd.DataFrame(records).to_csv(
+            outdir / "cards_min_checkpoint.csv",
+            index=False,
+            encoding="utf-8-sig",
+        )
+    if keys_found:
+        (outdir / "keys_found.txt").write_text(
+            "\n".join(sorted(keys_found)),
+            encoding="utf-8",
+        )
+    _write_failed_urls(outdir, failed)
 
 
 def finalize_outputs(outdir: Path, records: List[Dict[str, Any]], keys_found: Set[str], failed: List[str], manual_overrides: Optional[Path] = None) -> Tuple[Path, Path]:
     outdir.mkdir(parents=True, exist_ok=True)
+    canonicalize_cardnumbers_in_records(
+        records,
+        outdir=outdir,
+        label="scrape_finalize",
+    )
     overrides = load_card_text_overrides(manual_overrides)
     apply_card_text_overrides_to_records(records, overrides, label="scrape/finalize")
     df = pd.DataFrame(records)
@@ -867,74 +1642,144 @@ def finalize_outputs(outdir: Path, records: List[Dict[str, Any]], keys_found: Se
 
     if keys_found:
         (outdir / "keys_found.txt").write_text("\n".join(sorted(keys_found)), encoding="utf-8")
-    if failed:
-        (outdir / "failed_urls.txt").write_text("\n".join(failed), encoding="utf-8")
+    _write_failed_urls(outdir, failed)
     return out_csv, out_json
 
 
-def cmd_scrape(products_url: str, outdir: Path, cache_dir: Path, delay: float,
-              checkpoint_every: int, max_fail: int, user_agent: str,
-              limit_products: int = 0, limit_cards: int = 0, no_normalize: bool = False,
-              manual_overrides: Optional[Path] = None) -> Tuple[Path, Path]:
-
+def cmd_scrape(
+    products_url: str,
+    outdir: Path,
+    cache_dir: Path,
+    delay: float,
+    checkpoint_every: int,
+    max_fail: int,
+    user_agent: str,
+    limit_products: int = 0,
+    limit_cards: int = 0,
+    no_normalize: bool = False,
+    fresh: bool = False,
+    fetch_state: Optional[FetchState] = None,
+    manual_overrides: Optional[Path] = None,
+) -> Tuple[Path, Path]:
     outdir.mkdir(parents=True, exist_ok=True)
+    if fetch_state is None:
+        fetch_state = FetchState(
+            outdir / "failed_fetches.csv",
+            max_429=CONFIG["max_429"],
+        )
+
     resume_csv = outdir / "cards_min.csv"
     resume_json = outdir / "cards_min.json"
-    resume_urls = load_resume_urls(resume_csv, resume_json)
+    resume_records = [] if fresh else load_resume_records(resume_csv, resume_json)
+    resume_urls = load_resume_urls_from_records(resume_records)
 
-    records: List[Dict[str, Any]] = []
+    records: List[Dict[str, Any]] = list(resume_records)
     keys_found: Set[str] = set()
     failed: List[str] = []
 
-    prod_html = fetch(products_url, cache_dir, delay=delay, user_agent=user_agent)
-    product_urls = extract_product_urls(prod_html, products_url)
-    if limit_products:
-        product_urls = product_urls[:limit_products]
-    print(f"[INFO] product pages: {len(product_urls)}")
+    print(
+        f"[INFO] scrape mode: {'fresh' if fresh else 'resume'} "
+        f"resume_records={len(resume_records)}"
+    )
 
-    card_urls: Set[str] = set()
-    for i, pu in enumerate(product_urls, 1):
-        try:
-            h = fetch(pu, cache_dir, delay=delay, user_agent=user_agent)
-            card_urls.update(extract_card_links_from_product(h))
-        except Exception as e:
-            failed.append(pu)
-            print(f"[WARN] product fetch failed: {pu} ({e})")
-            if len(failed) >= max_fail:
-                raise SystemExit("[ERROR] too many failures")
-        if i % 20 == 0:
-            print(f"[INFO] processed products {i}/{len(product_urls)}")
+    try:
+        prod_html = fetch(
+            products_url,
+            cache_dir,
+            delay=delay,
+            user_agent=user_agent,
+            stage="products",
+            fetch_state=fetch_state,
+        )
+        product_urls = extract_product_urls(prod_html, products_url)
+        if limit_products:
+            product_urls = product_urls[:limit_products]
+        print(f"[INFO] product pages: {len(product_urls)}")
 
-    card_list = sorted(card_urls)
-    if limit_cards:
-        card_list = card_list[:limit_cards]
-    print(f"[INFO] card pages: {len(card_list)}")
+        card_urls: Set[str] = set()
+        for i, pu in enumerate(product_urls, 1):
+            try:
+                h = fetch(
+                    pu,
+                    cache_dir,
+                    delay=delay,
+                    user_agent=user_agent,
+                    stage="product_page",
+                    fetch_state=fetch_state,
+                )
+                card_urls.update(extract_card_links_from_product(h))
+            except FetchSafetyStop:
+                raise
+            except Exception as e:
+                failed.append(pu)
+                print(f"[WARN] product fetch failed: {pu} ({e})")
+                if len(failed) >= max_fail:
+                    raise SystemExit("[ERROR] too many failures")
+            if i % 20 == 0:
+                print(f"[INFO] processed products {i}/{len(product_urls)}")
 
-    todo = [u for u in card_list if u not in resume_urls]
-    print(f"[INFO] to process: {len(todo)}")
+        card_list = sorted(card_urls)
+        if limit_cards:
+            card_list = card_list[:limit_cards]
+        print(f"[INFO] card pages: {len(card_list)}")
 
-    since_ck = 0
-    for idx, cu in enumerate(todo, 1):
-        try:
-            h = fetch(cu, cache_dir, delay=delay, user_agent=user_agent)
-            rec = parse_card_page(cu, h, keys_found, do_normalize=(not no_normalize))
-            records.append(rec)
-        except Exception as e:
-            failed.append(cu)
-            print(f"[WARN] card fetch failed: {cu} ({e})")
-            if len(failed) >= max_fail:
-                raise SystemExit("[ERROR] too many failures")
+        todo = [u for u in card_list if u not in resume_urls]
+        print(f"[INFO] to process: {len(todo)}")
 
-        since_ck += 1
-        if checkpoint_every and since_ck >= checkpoint_every:
-            pd.DataFrame(records).to_csv(outdir / "cards_min_checkpoint.csv", index=False, encoding="utf-8-sig")
-            since_ck = 0
-            print(f"[INFO] checkpoint: records={len(records)} failed={len(failed)}")
+        since_ck = 0
+        for idx, cu in enumerate(todo, 1):
+            try:
+                h = fetch(
+                    cu,
+                    cache_dir,
+                    delay=delay,
+                    user_agent=user_agent,
+                    stage="card_page",
+                    fetch_state=fetch_state,
+                )
+                rec = parse_card_page(
+                    cu,
+                    h,
+                    keys_found,
+                    do_normalize=(not no_normalize),
+                )
+                records.append(rec)
+            except FetchSafetyStop:
+                raise
+            except Exception as e:
+                failed.append(cu)
+                print(f"[WARN] card fetch failed: {cu} ({e})")
+                if len(failed) >= max_fail:
+                    raise SystemExit("[ERROR] too many failures")
 
-        if idx % 200 == 0:
-            print(f"[INFO] processed cards {idx}/{len(todo)}")
+            since_ck += 1
+            if checkpoint_every and since_ck >= checkpoint_every:
+                _write_scrape_checkpoint(
+                    outdir,
+                    records,
+                    keys_found,
+                    failed,
+                )
+                since_ck = 0
+                print(
+                    f"[INFO] checkpoint: records={len(records)} "
+                    f"failed={len(failed)}"
+                )
 
-    out_csv, out_json = finalize_outputs(outdir, records, keys_found, failed, manual_overrides=manual_overrides)
+            if idx % 200 == 0:
+                print(f"[INFO] processed cards {idx}/{len(todo)}")
+
+    except FetchSafetyStop:
+        _write_scrape_checkpoint(outdir, records, keys_found, failed)
+        print(
+            f"[SAFE-STOP] scrape checkpoint preserved: "
+            f"records={len(records)} failed={len(failed)} outdir={outdir}"
+        )
+        raise
+
+    out_csv, out_json = finalize_outputs(
+        outdir, records, keys_found, failed, manual_overrides=manual_overrides
+    )
     print("[DONE] records=", len(pd.read_csv(out_csv)))
     print("  CSV :", out_csv)
     print("  JSON:", out_json)
@@ -1014,6 +1859,13 @@ def process_tokens(obj: Dict[str, Any]) -> Dict[str, Any]:
 
 def cmd_normalize(csv_path: Path, json_path: Optional[Path], outdir: Path, suffix: str, manual_overrides: Optional[Path] = None) -> Tuple[Path, Optional[Path]]:
     df = pd.read_csv(csv_path)
+    csv_records = df.to_dict(orient="records")
+    canonicalize_cardnumbers_in_records(
+        csv_records,
+        outdir=outdir,
+        label="normalize_csv",
+    )
+    df = pd.DataFrame(csv_records)
     overrides = load_card_text_overrides(manual_overrides)
     df = apply_card_text_overrides_to_dataframe(df, overrides, label="normalize/csv")
     if "effect_tokens_json" not in df.columns:
@@ -1021,6 +1873,9 @@ def cmd_normalize(csv_path: Path, json_path: Optional[Path], outdir: Path, suffi
 
     new_tokens_json = []
     tok_blade, tok_energy, tok_all, tok_score_delta, tok_unknown_n = [], [], [], [], []
+    blade_heart_counts_json, blade_heart_totals, blade_heart_tags_json = [], [], []
+    blade_heart_special_json = []
+    blade_heart_draw_n, blade_heart_score_n, blade_heart_colorless_n = [], [], []
     effect_statuses, effect_no_ability_flags = [], []
     repaired_type_norms, repaired_type_raws = [], []
     bad_json = 0
@@ -1033,8 +1888,9 @@ def cmd_normalize(csv_path: Path, json_path: Optional[Path], outdir: Path, suffi
     blade_series = df["blade"].tolist() if "blade" in df.columns else [""] * len(df)
     base_series = df["base_hearts_raw"].tolist() if "base_hearts_raw" in df.columns else [""] * len(df)
     raw_type_series = df["card_type_raw"].tolist() if "card_type_raw" in df.columns else [""] * len(df)
+    blade_heart_raw_series = df["blade_heart_raw"].tolist() if "blade_heart_raw" in df.columns else [""] * len(df)
 
-    for s, eff_norm, req_raw, score, cost, blade, base_raw, raw_type in zip(
+    for s, eff_norm, req_raw, score, cost, blade, base_raw, raw_type, bh_raw in zip(
         df["effect_tokens_json"].tolist(),
         eff_norm_series,
         req_series,
@@ -1043,6 +1899,7 @@ def cmd_normalize(csv_path: Path, json_path: Optional[Path], outdir: Path, suffi
         blade_series,
         base_series,
         raw_type_series,
+        blade_heart_raw_series,
     ):
         ok, obj = safe_json_loads(s)
         if (not ok) or (obj is None) or (not isinstance(obj, dict)):
@@ -1058,6 +1915,16 @@ def cmd_normalize(csv_path: Path, json_path: Optional[Path], outdir: Path, suffi
         tok_unknown_n.append(len(unk) if isinstance(unk, list) else 0)
 
         new_tokens_json.append(json.dumps(obj2, ensure_ascii=False))
+
+        bh_counts, bh_total, bh_tags, bh_special = parse_blade_heart_expr(str(bh_raw or ""))
+        blade_heart_counts_json.append(json.dumps(bh_counts, ensure_ascii=False))
+        blade_heart_totals.append(int(bh_total or 0))
+        blade_heart_tags_json.append(json.dumps(bh_tags, ensure_ascii=False))
+        blade_heart_special_json.append(json.dumps(bh_special, ensure_ascii=False))
+        blade_heart_draw_n.append(int(bh_special.get("draw", 0) or 0))
+        blade_heart_score_n.append(int(bh_special.get("score", 0) or 0))
+        blade_heart_colorless_n.append(int(bh_special.get("colorless", 0) or 0))
+
         st = classify_effect_text_status(eff_norm, eff_norm)
         effect_statuses.append(st)
         effect_no_ability_flags.append(1 if st == "NO_ABILITY" else 0)
@@ -1074,6 +1941,13 @@ def cmd_normalize(csv_path: Path, json_path: Optional[Path], outdir: Path, suffi
         repaired_type_raws.append(canonical_raw or str(raw_type or ""))
 
     df["effect_tokens_json"] = new_tokens_json
+    df["blade_heart_counts_json"] = blade_heart_counts_json
+    df["blade_heart_total"] = blade_heart_totals
+    df["blade_heart_tags_json"] = blade_heart_tags_json
+    df["blade_heart_special_counts_json"] = blade_heart_special_json
+    df["blade_heart_draw_n"] = blade_heart_draw_n
+    df["blade_heart_score_n"] = blade_heart_score_n
+    df["blade_heart_colorless_n"] = blade_heart_colorless_n
     df["effect_text_status"] = effect_statuses
     df["effect_text_is_no_ability"] = effect_no_ability_flags
     df["card_type_norm"] = repaired_type_norms
@@ -1094,6 +1968,11 @@ def cmd_normalize(csv_path: Path, json_path: Optional[Path], outdir: Path, suffi
         try:
             data = json.loads(json_path.read_text(encoding="utf-8"))
             if isinstance(data, list):
+                canonicalize_cardnumbers_in_records(
+                    data,
+                    outdir=outdir,
+                    label="normalize_json",
+                )
                 apply_card_text_overrides_to_records(data, overrides, label="normalize/json")
                 for r in data:
                     if not isinstance(r, dict):
@@ -1102,6 +1981,14 @@ def cmd_normalize(csv_path: Path, json_path: Optional[Path], outdir: Path, suffi
                     if (not ok) or (obj is None) or (not isinstance(obj, dict)):
                         obj = {}
                     r["effect_tokens_json"] = json.dumps(process_tokens(obj), ensure_ascii=False)
+                    bh_counts, bh_total, bh_tags, bh_special = parse_blade_heart_expr(str(r.get("blade_heart_raw", "") or ""))
+                    r["blade_heart_counts_json"] = json.dumps(bh_counts, ensure_ascii=False)
+                    r["blade_heart_total"] = int(bh_total or 0)
+                    r["blade_heart_tags_json"] = json.dumps(bh_tags, ensure_ascii=False)
+                    r["blade_heart_special_counts_json"] = json.dumps(bh_special, ensure_ascii=False)
+                    r["blade_heart_draw_n"] = int(bh_special.get("draw", 0) or 0)
+                    r["blade_heart_score_n"] = int(bh_special.get("score", 0) or 0)
+                    r["blade_heart_colorless_n"] = int(bh_special.get("colorless", 0) or 0)
                     inferred_type, canonical_raw = infer_card_type(
                         r.get("card_type_raw", ""),
                         required_hearts_raw=r.get("required_hearts_raw", ""),
@@ -1118,6 +2005,10 @@ def cmd_normalize(csv_path: Path, json_path: Optional[Path], outdir: Path, suffi
         except Exception as e:
             print(f"[WARN] failed to update json: {e}")
 
+    _auto_audit_db_generation_if_applicable(
+        outdir,
+        label="post_normalize",
+    )
     return out_csv, out_json
 
 
@@ -1588,8 +2479,14 @@ def cmd_mine(csv_path: Path, outdir: Path, top: int = 150) -> Dict[str, Path]:
         p.write_text("\n".join(stub), encoding="utf-8")
         return p
 
-    cost_top = pd.read_csv(cost_csv) if cost_csv.exists() else pd.DataFrame([])
-    eff_top = pd.read_csv(eff_csv) if eff_csv.exists() else pd.DataFrame([])
+    try:
+        cost_top = pd.read_csv(cost_csv) if cost_csv.exists() else pd.DataFrame([])
+    except pd.errors.EmptyDataError:
+        cost_top = pd.DataFrame([])
+    try:
+        eff_top = pd.read_csv(eff_csv) if eff_csv.exists() else pd.DataFrame([])
+    except pd.errors.EmptyDataError:
+        eff_top = pd.DataFrame([])
 
     cost_stub = write_stub("cost", cost_top, "cost_template", "example_cost_text") if len(cost_top) else (outdir / "cost_patterns_stub.yaml")
     if not len(cost_top):
@@ -1614,6 +2511,176 @@ def cmd_mine(csv_path: Path, outdir: Path, top: int = 150) -> Dict[str, Path]:
 
 
 # -------------------------
+# DB generation consistency audit
+# -------------------------
+CANONICAL_DB_FILENAMES = (
+    "cards_min.csv",
+    "cards_min.json",
+    "cards_min_tokv1.csv",
+    "cards_min_tokv1.json",
+    "cards_compiled_v7h.json",
+)
+
+
+def _load_db_cardnumber_set(path: Path) -> Tuple[Set[str], int]:
+    """Load raw cardnumber values from CSV/JSON without canonicalizing them."""
+    rows: List[Dict[str, Any]] = []
+
+    if path.suffix.lower() == ".csv":
+        with path.open(encoding="utf-8-sig", newline="") as f:
+            rows = [dict(r) for r in csv.DictReader(f)]
+    else:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, list):
+            rows = [r for r in data if isinstance(r, dict)]
+        elif isinstance(data, dict) and isinstance(data.get("cards"), list):
+            rows = [r for r in data["cards"] if isinstance(r, dict)]
+        elif isinstance(data, dict):
+            for key, value in data.items():
+                if not isinstance(value, dict):
+                    continue
+                row = dict(value)
+                row.setdefault("cardnumber", key)
+                rows.append(row)
+
+    cardnumbers = {
+        str(r.get("cardnumber", "")).strip()
+        for r in rows
+        if str(r.get("cardnumber", "")).strip()
+    }
+    return cardnumbers, len(rows)
+
+
+def audit_db_generation_consistency(
+    dbdir: Path,
+    *,
+    strict: bool = False,
+    label: str = "db_generation",
+) -> Dict[str, Any]:
+    """Compare cardnumber sets across the canonical five DB artifacts.
+
+    The report intentionally compares raw cardnumber values.  A stale rarity
+    suffix or a partial-generation file must remain visible instead of being
+    hidden by canonicalization.
+    """
+    dbdir = Path(dbdir)
+    report_json = dbdir / "db_generation_consistency_audit.json"
+    report_tsv = dbdir / "db_generation_consistency_audit.tsv"
+
+    loaded: Dict[str, Set[str]] = {}
+    row_counts: Dict[str, int] = {}
+    errors: Dict[str, str] = {}
+
+    for filename in CANONICAL_DB_FILENAMES:
+        path = dbdir / filename
+        if not path.exists():
+            errors[filename] = "MISSING"
+            continue
+        try:
+            cardnumbers, row_count = _load_db_cardnumber_set(path)
+            loaded[filename] = cardnumbers
+            row_counts[filename] = row_count
+        except Exception as exc:
+            errors[filename] = f"READ_ERROR: {type(exc).__name__}: {exc}"
+
+    union_set: Set[str] = set()
+    for cardnumbers in loaded.values():
+        union_set.update(cardnumbers)
+
+    if loaded:
+        intersection_set = set.intersection(*(set(s) for s in loaded.values()))
+    else:
+        intersection_set = set()
+
+    all_present = len(loaded) == len(CANONICAL_DB_FILENAMES) and not errors
+    sets_equal = bool(loaded) and all(s == next(iter(loaded.values())) for s in loaded.values())
+    passed = all_present and sets_equal
+
+    rows: List[Dict[str, Any]] = []
+    for filename in CANONICAL_DB_FILENAMES:
+        cardnumbers = loaded.get(filename, set())
+        missing = sorted(union_set - cardnumbers) if filename in loaded else sorted(union_set)
+        non_common = sorted(cardnumbers - intersection_set) if filename in loaded else []
+        rows.append({
+            "filename": filename,
+            "status": "OK" if filename in loaded else errors.get(filename, "MISSING"),
+            "row_count": row_counts.get(filename, 0),
+            "unique_cardnumber_count": len(cardnumbers),
+            "missing_from_union_count": len(missing),
+            "non_common_cardnumber_count": len(non_common),
+            "missing_from_union_sample": missing[:20],
+            "non_common_cardnumber_sample": non_common[:20],
+        })
+
+    report = {
+        "label": label,
+        "dbdir": str(dbdir),
+        "build_tag": BUILD_TAG,
+        "passed": passed,
+        "all_present": all_present,
+        "sets_equal": sets_equal,
+        "union_unique_cardnumber_count": len(union_set),
+        "intersection_unique_cardnumber_count": len(intersection_set),
+        "errors": errors,
+        "files": rows,
+    }
+
+    dbdir.mkdir(parents=True, exist_ok=True)
+    report_json.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    fieldnames = [
+        "filename",
+        "status",
+        "row_count",
+        "unique_cardnumber_count",
+        "missing_from_union_count",
+        "non_common_cardnumber_count",
+        "missing_from_union_sample",
+        "non_common_cardnumber_sample",
+    ]
+    with report_tsv.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter="\t")
+        writer.writeheader()
+        for row in rows:
+            tsv_row = dict(row)
+            tsv_row["missing_from_union_sample"] = json.dumps(row["missing_from_union_sample"], ensure_ascii=False)
+            tsv_row["non_common_cardnumber_sample"] = json.dumps(row["non_common_cardnumber_sample"], ensure_ascii=False)
+            writer.writerow(tsv_row)
+
+    status = "PASS" if passed else "WARN"
+    print(
+        f"[DBGEN][{status}] files={len(loaded)}/{len(CANONICAL_DB_FILENAMES)} "
+        f"union={len(union_set)} intersection={len(intersection_set)} "
+        f"sets_equal={sets_equal} ({label})"
+    )
+    for row in rows:
+        if row["status"] != "OK" or row["missing_from_union_count"] or row["non_common_cardnumber_count"]:
+            print(
+                f"  {row['filename']}: status={row['status']} "
+                f"unique={row['unique_cardnumber_count']} "
+                f"missing_from_union={row['missing_from_union_count']} "
+                f"non_common={row['non_common_cardnumber_count']}"
+            )
+    print(f"[DBGEN] report -> {report_tsv}")
+
+    if strict and not passed:
+        raise SystemExit(2)
+    return report
+
+
+def _auto_audit_db_generation_if_applicable(outdir: Path, *, label: str) -> None:
+    """Run a non-strict generation audit in canonical DB directories.
+
+    We trigger when the compiled DB already exists.  This catches the dangerous
+    mixed-generation case where normalize is writing into a live DB directory,
+    while avoiding false alarms in isolated normalization/recovery directories
+    that have not reached the compile step yet.
+    """
+    if (outdir / "cards_compiled_v7h.json").exists():
+        audit_db_generation_consistency(outdir, strict=False, label=label)
+
+
+# -------------------------
 # audit
 # -------------------------
 def cmd_audit(csv_path: Path, top_unknown: int = 30) -> None:
@@ -1633,8 +2700,16 @@ def cmd_audit(csv_path: Path, top_unknown: int = 30) -> None:
     if "cardnumber" in df.columns:
         bad = df["cardnumber"].fillna("").astype(str).apply(lambda x: (x.strip() != "" and not AUDIT_CARDNO_RE.match(x.strip())))
         n_bad = int(bad.sum())
+        suffix_candidates = []
+        for x in df["cardnumber"].fillna("").astype(str).tolist():
+            canonical_cn, rarity = split_cardnumber_rarity_suffix(x)
+            if rarity:
+                suffix_candidates.append((x.strip(), canonical_cn, rarity))
         print("\n[CARDNUMBER FORMAT]")
         print(f"  bad format count: {n_bad}")
+        print(f"  known rarity-suffix candidates: {len(suffix_candidates)}")
+        for source_cn, canonical_cn, rarity in suffix_candidates[:10]:
+            print(f"    {source_cn} -> {canonical_cn} (rarity={rarity})")
 
     if "effect_text_status" in df.columns:
         print("\n[EFFECT TEXT STATUS]")
@@ -1667,6 +2742,11 @@ def cmd_audit(csv_path: Path, top_unknown: int = 30) -> None:
         if col in df.columns:
             print(f"\n[{col}] sum={int(df[col].fillna(0).sum())}")
 
+    for col in ["blade_heart_draw_n", "blade_heart_score_n", "blade_heart_colorless_n"]:
+        if col in df.columns:
+            vals = pd.to_numeric(df[col], errors="coerce").fillna(0)
+            print(f"\n[{col}] rows_nonzero={int((vals > 0).sum())} sum={int(vals.sum())}")
+
     print("\n[DONE]")
 
 
@@ -1684,10 +2764,21 @@ def build_parser() -> argparse.ArgumentParser:
     ps.add_argument("--delay", type=float, default=CONFIG["delay"])
     ps.add_argument("--checkpoint-every", type=int, default=CONFIG["checkpoint_every"])
     ps.add_argument("--max-fail", type=int, default=CONFIG["max_fail"])
+    ps.add_argument(
+        "--max-429",
+        type=int,
+        default=CONFIG["max_429"],
+        help="maximum consecutive HTTP 429 responses before safe stop",
+    )
     ps.add_argument("--user-agent", default=CONFIG["user_agent"])
     ps.add_argument("--limit-products", type=int, default=0)
     ps.add_argument("--limit-cards", type=int, default=0)
     ps.add_argument("--no-normalize", action="store_true")
+    ps.add_argument(
+        "--fresh",
+        action="store_true",
+        help="ignore existing cards_min.csv/json and rebuild from fetched pages",
+    )
     ps.add_argument("--manual-overrides", default=CONFIG["manual_overrides"])
 
     pn = sub.add_parser("normalize")
@@ -1706,6 +2797,14 @@ def build_parser() -> argparse.ArgumentParser:
     pa.add_argument("--csv", required=True)
     pa.add_argument("--top-unknown", type=int, default=30)
 
+    pdg = sub.add_parser("db-generation-audit")
+    pdg.add_argument("--dbdir", default=CONFIG["outdir"])
+    pdg.add_argument(
+        "--strict",
+        action="store_true",
+        help="exit with status 2 when canonical DB files are missing or cardnumber sets differ",
+    )
+
     pim = sub.add_parser("image-manifest")
     pim.add_argument("--json", default="")
     pim.add_argument("--csv", default="")
@@ -1714,6 +2813,12 @@ def build_parser() -> argparse.ArgumentParser:
     pim.add_argument("--delay", type=float, default=CONFIG["delay"])
     pim.add_argument("--user-agent", default=CONFIG["user_agent"])
     pim.add_argument("--timeout", type=float, default=25.0)
+    pim.add_argument(
+        "--max-429",
+        type=int,
+        default=CONFIG["max_429"],
+        help="maximum consecutive HTTP 429 responses before safe stop",
+    )
     pim.add_argument("--no-per-card-fallback", action="store_true")
 
     pall = sub.add_parser("all")
@@ -1723,10 +2828,21 @@ def build_parser() -> argparse.ArgumentParser:
     pall.add_argument("--delay", type=float, default=CONFIG["delay"])
     pall.add_argument("--checkpoint-every", type=int, default=CONFIG["checkpoint_every"])
     pall.add_argument("--max-fail", type=int, default=CONFIG["max_fail"])
+    pall.add_argument(
+        "--max-429",
+        type=int,
+        default=CONFIG["max_429"],
+        help="maximum consecutive HTTP 429 responses before safe stop",
+    )
     pall.add_argument("--user-agent", default=CONFIG["user_agent"])
     pall.add_argument("--limit-products", type=int, default=0)
     pall.add_argument("--limit-cards", type=int, default=0)
     pall.add_argument("--no-normalize", action="store_true")
+    pall.add_argument(
+        "--fresh",
+        action="store_true",
+        help="ignore existing cards_min.csv/json and rebuild from fetched pages",
+    )
     pall.add_argument("--suffix", default=CONFIG["normalize_suffix"])
     pall.add_argument("--mine-top", type=int, default=120)
     pall.add_argument("--top-unknown", type=int, default=30)
@@ -1742,9 +2858,14 @@ def main() -> None:
     args = build_parser().parse_args()
 
     if args.cmd == "scrape":
+        outdir = Path(args.outdir)
+        fetch_state = FetchState(
+            outdir / "failed_fetches.csv",
+            max_429=args.max_429,
+        )
         cmd_scrape(
             products_url=args.products_url,
-            outdir=Path(args.outdir),
+            outdir=outdir,
             cache_dir=Path(args.cache),
             delay=args.delay,
             checkpoint_every=args.checkpoint_every,
@@ -1753,6 +2874,8 @@ def main() -> None:
             limit_products=args.limit_products,
             limit_cards=args.limit_cards,
             no_normalize=args.no_normalize,
+            fresh=args.fresh,
+            fetch_state=fetch_state,
             manual_overrides=Path(args.manual_overrides) if args.manual_overrides else None,
         )
         return
@@ -1774,25 +2897,44 @@ def main() -> None:
         cmd_audit(Path(args.csv), args.top_unknown)
         return
 
+    if args.cmd == "db-generation-audit":
+        audit_db_generation_consistency(
+            Path(args.dbdir),
+            strict=args.strict,
+            label="cli",
+        )
+        return
+
     if args.cmd == "image-manifest":
+        outdir = Path(args.outdir)
+        fetch_state = FetchState(
+            outdir / "failed_fetches.csv",
+            max_429=args.max_429,
+        )
         db_json = Path(args.json) if args.json else None
         db_csv = Path(args.csv) if args.csv else None
         cmd_official_image_manifest(
             db_json=db_json,
             db_csv=db_csv,
-            outdir=Path(args.outdir),
+            outdir=outdir,
             cache_dir=Path(args.cache),
             delay=args.delay,
             user_agent=args.user_agent,
             timeout=args.timeout,
             per_card_fallback=(not args.no_per_card_fallback),
+            fetch_state=fetch_state,
         )
         return
 
     if args.cmd == "all":
+        outdir = Path(args.outdir)
+        fetch_state = FetchState(
+            outdir / "failed_fetches.csv",
+            max_429=args.max_429,
+        )
         out_csv, out_json = cmd_scrape(
             products_url=args.products_url,
-            outdir=Path(args.outdir),
+            outdir=outdir,
             cache_dir=Path(args.cache),
             delay=args.delay,
             checkpoint_every=args.checkpoint_every,
@@ -1801,27 +2943,41 @@ def main() -> None:
             limit_products=args.limit_products,
             limit_cards=args.limit_cards,
             no_normalize=args.no_normalize,
+            fresh=args.fresh,
+            fetch_state=fetch_state,
             manual_overrides=Path(args.manual_overrides) if args.manual_overrides else None,
         )
-        norm_csv, norm_json = cmd_normalize(out_csv, out_json, Path(args.outdir), args.suffix, manual_overrides=Path(args.manual_overrides) if args.manual_overrides else None)
-        cmd_mine(norm_csv, Path(args.outdir), args.mine_top)
+        norm_csv, norm_json = cmd_normalize(out_csv, out_json, outdir, args.suffix, manual_overrides=Path(args.manual_overrides) if args.manual_overrides else None)
+        cmd_mine(norm_csv, outdir, args.mine_top)
         cmd_audit(norm_csv, args.top_unknown)
+        audit_db_generation_consistency(
+            outdir,
+            strict=False,
+            label="all_post_normalize",
+        )
         if not args.no_official_image_manifest:
             try:
                 cmd_official_image_manifest(
                     db_json=norm_json,
                     db_csv=norm_csv,
-                    outdir=Path(args.outdir),
+                    outdir=outdir,
                     cache_dir=Path(args.cache),
                     delay=args.delay,
                     user_agent=args.user_agent,
                     timeout=args.official_timeout,
                     per_card_fallback=(not args.no_per_card_fallback),
+                    fetch_state=fetch_state,
                 )
+            except FetchSafetyStop:
+                raise
             except Exception as e:
                 print(f"[WARN] official image manifest generation failed: {e}")
         return
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except FetchSafetyStop as e:
+        print(f"[SAFE-STOP] {e}")
+        raise SystemExit(75)
