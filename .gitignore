@@ -25,3 +25,9 @@ llocg_ui_jank/
 .cache_llocg_fresh_*/
 _db_recovery_*/
 _backup_db_*/
+llocg_db_out_full/_http_cache/
+llocg_db_out_full/_update_work/
+llocg_db_out_full/_update_backups/
+_x_preview_probe/
+__pycache__/
+*.pyc
