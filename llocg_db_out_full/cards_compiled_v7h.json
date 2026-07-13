@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "source_csv": "llocg_db_out_full/cards_min_tokv1.csv",
+  "source_csv": "/Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full/_update_work/run_20260713_154911/final/cards_min_tokv1.csv",
   "cards": [
     {
       "cardnumber": "LL-PR-004",
@@ -12885,6 +12885,29 @@
       ]
     },
     {
+      "cardnumber": "PL!N-bp7-027",
+      "cardname": "オードリー",
+      "card_type": "LIVE",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ成功時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分のステージにいる『虹ヶ咲』のメンバー1人を選ぶ。そのメンバーが、自分と相手のステージにいるほかのすべてのメンバーより多くの<(ブレード)>を持つ場合、このカードのスコアを+1する。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分のステージにいる『虹ヶ咲』のメンバー1人を選ぶ。そのメンバーが、自分と相手のステージにいるほかのすべてのメンバーより多くの<(ブレード)>\nを持つ場合、このカードのスコアを+1する。"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "cardnumber": "PL!N-pb1-001",
       "cardname": "上原歩夢",
       "card_type": "MEMBER",
@@ -17370,6 +17393,29 @@
       ]
     },
     {
+      "cardnumber": "PL!S-bp7-019",
+      "cardname": "なんどだって約束！",
+      "card_type": "LIVE",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ成功時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分の控え室から『Aqours』のカードを2枚まで好きな順番でデッキの下に置く。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分の控え室から『Aqours』のカードを2枚まで好きな順番でデッキの下に置く。"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "cardnumber": "PL!S-bp7-020",
       "cardname": "HAPPY PARTY TRAIN",
       "card_type": "LIVE",
@@ -17402,6 +17448,29 @@
               "cost_op": null,
               "effect_op": null,
               "raw": "自分のデッキの下からカードを1枚控え室に置く。それが『Aqours』のメンバーカードの場合、このカードの必要ハートを\n<任意>\n減らす。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!S-bp7-021",
+      "cardname": "僕らの旅は終わらない",
+      "card_type": "LIVE",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ開始時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分のステージにメンバーが3人以上いる場合、自分のデッキの下からカードを5枚控え室に置く。それらの中にメンバーカードが3枚以上ある場合、カードを1枚引く。それらがすべてメンバーカードの場合、さらにこのカードのスコアを+1する。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分のステージにメンバーが3人以上いる場合、自分のデッキの下からカードを5枚控え室に置く。それらの中にメンバーカードが3枚以上ある場合、カードを1枚引く。それらがすべてメンバーカードの場合、さらにこのカードのスコアを+1する。"
             }
           ]
         }
