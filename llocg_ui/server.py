@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: live_attempt_summary_popup_rebase_20260706f
+# BUILD_TAG: debug_yell_badge_scaling_20260713b
 from __future__ import annotations
 
 """llocg_ui.server
@@ -1807,6 +1807,7 @@ class App:
                         "type": (_get_card(self.cards_db, v.cardnumber).type if _get_card(self.cards_db, v.cardnumber) else ""),
                         "has_sac": _has_sacrifice_ability(_get_card(self.cards_db, v.cardnumber)),
                         "energy_under": int(getattr(v, "energy_under", 0) or 0),
+                        "under_cards": [str(x) for x in list(getattr(v, "under_cards", []) or []) if str(x or "").strip()],
                         "base_cost": int(getattr(_get_card(self.cards_db, v.cardnumber), "cost", 0) or 0) if _get_card(self.cards_db, v.cardnumber) else 0,
                         "effective_cost": int(_slot_effective_cost(self.gs, self.cards_db, k, v) or 0),
                         "can_activate": can_activate_in_state(self.gs, self.cards_db, k),
@@ -2429,11 +2430,15 @@ class Handler(BaseHTTPRequestHandler):
                 # fallback: 1x1 transparent PNG
                 self._send(200, bytes.fromhex('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c6360000002000154a24f5d0000000049454e44ae426082'), "image/png")
                 return
+            # BUILD_TAG: image_preview_fallback_canonical_priority_20260708a
             p = self.app.img.find(cn)
             if p and p.exists():
                 ctype = "image/png"
-                if str(p).lower().endswith((".jpg", ".jpeg")):
+                p_lower = str(p).lower()
+                if p_lower.endswith((".jpg", ".jpeg")):
                     ctype = "image/jpeg"
+                elif p_lower.endswith(".webp"):
+                    ctype = "image/webp"
                 self._send(200, p.read_bytes(), ctype)
             else:
                 self._send(404, b"", "text/plain")
@@ -3592,27 +3597,27 @@ HTML = r'''<!doctype html>
     const totalW = iconPx + stepPx * Math.max(0, n - 1);
     const wrap = document.createElement('div');
     wrap.title = titleAll || '';
-    wrap.style.cssText = ['position:relative', `width:${totalW}px`, `height:${iconPx}px`, 'flex-shrink:0'].join(';');
+    wrap.style.cssText = ['position:relative', `width:${uiCalc(totalW)}`, `height:${uiCalc(iconPx)}`, 'flex-shrink:0'].join(';');
     iconSpecs.forEach((spec, i)=>{
       const tok = (typeof spec === 'string') ? spec : String(spec.token || '');
       const fb = (typeof spec === 'string') ? textIconLabel(tok, '') : String(spec.alt || spec.fallback || '');
-      const node = makeTextIconImg(tok, fb, `${iconPx}px`);
+      const node = makeTextIconImg(tok, fb, uiCalc(iconPx));
       if(node.nodeType === Node.TEXT_NODE){
         const sp = document.createElement('span');
         sp.textContent = node.textContent || fb || tok;
         sp.style.cssText = [
-          'position:absolute', `left:${stepPx*i}px`, 'top:0', `width:${iconPx}px`, `height:${iconPx}px`,
-          'display:flex', 'align-items:center', 'justify-content:center', `font-size:${Math.max(9, iconPx-6)}px`,
+          'position:absolute', `left:${uiCalc(stepPx*i)}`, 'top:0', `width:${uiCalc(iconPx)}`, `height:${uiCalc(iconPx)}`,
+          'display:flex', 'align-items:center', 'justify-content:center', `font-size:${uiCalc(Math.max(9, iconPx-6))}`,
           'font-weight:700', 'line-height:1', 'color:#fff', `z-index:${10+i}`,
         ].join(';');
         wrap.appendChild(sp);
         return;
       }
       node.style.position = 'absolute';
-      node.style.left = `${stepPx*i}px`;
+      node.style.left = uiCalc(stepPx*i);
       node.style.top = '0';
-      node.style.width = `${iconPx}px`;
-      node.style.height = `${iconPx}px`;
+      node.style.width = uiCalc(iconPx);
+      node.style.height = uiCalc(iconPx);
       node.style.margin = '0';
       node.style.verticalAlign = 'initial';
       node.style.zIndex = String(10+i);
@@ -3623,10 +3628,10 @@ HTML = r'''<!doctype html>
   function makeTextIconRow(signText, stack, titleAll){
     const row = document.createElement('div');
     row.title = titleAll || '';
-    row.style.cssText = 'display:flex;align-items:center;gap:2px;';
+    row.style.cssText = `display:flex;align-items:center;gap:${uiCalc(2)};`;
     const sign = document.createElement('span');
     sign.textContent = signText;
-    sign.style.cssText = ['color:#fff','font-size:11px','font-weight:700','line-height:1','flex-shrink:0'].join(';');
+    sign.style.cssText = ['color:#fff',`font-size:${uiCalc(11)}`,'font-weight:700','line-height:1','flex-shrink:0'].join(';');
     row.appendChild(sign);
     row.appendChild(stack);
     return row;
@@ -4049,6 +4054,20 @@ ${text}`;
     // Prefer the hand card size as the global standard (spec: unify card sizes)
     if(orient==='portrait' && stdPortrait) return stdPortrait;
     if(orient==='landscape' && stdLandscape) return stdLandscape;
+    try{
+      const handZone = layout && layout.zones && layout.zones.hand;
+      if(handZone){
+        const availW = px(handZone.w) - 20;
+        const availH = px(handZone.h) - 22 - 10;
+        const sz = computeDispSize('portrait', availW, availH);
+        if(sz && sz.w > 0 && sz.h > 0){
+          stdPortrait = {w: sz.w, h: sz.h};
+          stdLandscape = {w: sz.h, h: sz.w};
+          if(orient==='landscape') return stdLandscape;
+          return stdPortrait;
+        }
+      }
+    }catch(e){}
     const cw = px(451) * 0.38;
     const ch = px(630) * 0.38;
     if(orient==='landscape') return {w: ch, h: cw};
@@ -4302,7 +4321,7 @@ ${text}`;
     }
   }
 
-  function renderTopCard(zoneEl, cn, wantOrient, countText, onClick){
+  function renderTopCard(zoneEl, cn, wantOrient, countText, onClick, opts={}){
     const inner = zoneEl.querySelector('.zoneInner');
     inner.style.cursor = onClick ? 'pointer' : 'default';
     if(onClick){
@@ -4317,9 +4336,15 @@ ${text}`;
     const padX = 8;
     const availW = zoneW - padX*2;
     const availH = zoneH - padTop - 10;
-    const sz = computeDispSize(wantOrient, availW, availH);
+    let sz = computeDispSize(wantOrient, availW, availH);
+    if(opts && opts.useStandardSize){
+      const std = standardSize(wantOrient);
+      if(std && std.w > 0 && std.h > 0){
+        sz = {w: std.w, h: std.h};
+      }
+    }
     const x = (zoneW - sz.w)/2;
-    const y = padTop + (availH - sz.h)/2;
+    const y = Math.max(padTop, padTop + (availH - sz.h)/2);
 
     const card = makeCard(cn, wantOrient, x, y, sz.w, sz.h, '', (onClick?()=>onClick():null), false, 200);
     inner.appendChild(card);
@@ -4961,15 +4986,15 @@ ${text}`;
       const totalW = ICO2 + STEP2 * (n - 1);
       const wrap = document.createElement('div');
       wrap.title = titleAll;
-      wrap.style.cssText = ['position:relative', `width:${totalW}px`, `height:${ICO2}px`, 'flex-shrink:0'].join(';');
+      wrap.style.cssText = ['position:relative', `width:${uiCalc(totalW)}`, `height:${uiCalc(ICO2)}`, 'flex-shrink:0'].join(';');
       icons.forEach((ico, i)=>{
         const img = document.createElement('img');
         img.src = ico.src; img.alt = ico.alt;
-        img.style.cssText = ['position:absolute', `left:${STEP2*i}px`, 'top:0', `width:${ICO2}px`, `height:${ICO2}px`, 'object-fit:contain', `z-index:${10+i}`].join(';');
+        img.style.cssText = ['position:absolute', `left:${uiCalc(STEP2*i)}`, 'top:0', `width:${uiCalc(ICO2)}`, `height:${uiCalc(ICO2)}`, 'object-fit:contain', `z-index:${10+i}`].join(';');
         img.onerror = ()=>{
           const sp = document.createElement('span');
           sp.textContent = ico.fallbackText;
-          sp.style.cssText = ['position:absolute', `left:${STEP2*i}px`, 'top:0', `width:${ICO2}px`, `height:${ICO2}px`, 'display:flex','align-items:center','justify-content:center',`font-size:${ICO2-2}px`, `color:${ico.fallbackColor}`, `z-index:${10+i}`].join(';');
+          sp.style.cssText = ['position:absolute', `left:${uiCalc(STEP2*i)}`, 'top:0', `width:${uiCalc(ICO2)}`, `height:${uiCalc(ICO2)}`, 'display:flex','align-items:center','justify-content:center',`font-size:${uiCalc(ICO2-2)}`, `color:${ico.fallbackColor}`, `z-index:${10+i}`].join(';');
           img.replaceWith(sp);
         };
         wrap.appendChild(img);
@@ -4979,16 +5004,16 @@ ${text}`;
     const makeIconRow2 = (signText, stack, titleAll)=>{
       const row2 = document.createElement('div');
       row2.title = titleAll;
-      row2.style.cssText = 'display:flex;align-items:center;gap:2px;';
+      row2.style.cssText = `display:flex;align-items:center;gap:${uiCalc(2)};`;
       const sgn = document.createElement('span');
       sgn.textContent = signText;
-      sgn.style.cssText = ['color:#fff','font-size:11px','font-weight:700','line-height:1','flex-shrink:0'].join(';');
+      sgn.style.cssText = ['color:#fff',`font-size:${uiCalc(11)}`,'font-weight:700','line-height:1','flex-shrink:0'].join(';');
       row2.appendChild(sgn);
       row2.appendChild(stack);
       return row2;
     };
     const ov2 = document.createElement('div');
-    ov2.style.cssText = ['position:absolute','right:0','top:14px','display:flex','flex-direction:column','align-items:flex-end','gap:3px','padding:3px 4px','background:rgba(0,0,0,0.62)','border-radius:6px 0 0 6px','pointer-events:none','z-index:50'].join(';');
+    ov2.style.cssText = ['position:absolute','right:0',`top:${uiCalc(14)}`,'display:flex','flex-direction:column','align-items:flex-end',`gap:${uiCalc(3)}`,`padding:${uiCalc(3)} ${uiCalc(4)}`,'background:rgba(0,0,0,0.62)',`border-radius:${uiCalc(6)} 0 0 ${uiCalc(6)}`,'pointer-events:none','z-index:50'].join(';');
     for(const [col, cnt] of orderedHeartEntries(reqDelta)){
       const n = Number(cnt || 0);
       if(!n) continue;
@@ -5063,6 +5088,18 @@ inner.appendChild(card);
           ecard.classList.add('underEnergy');
           inner.appendChild(ecard);
         }
+      }
+      const underCards = Array.isArray(slotObj.under_cards) ? slotObj.under_cards : [];
+      if(underCards.length > 0){
+        const dx = sz.w * 0.055;
+        const dy = sz.w * 0.055;
+        underCards.forEach((ucn, i)=>{
+          const ux = x - dx*(i+1);
+          const uy = y + dy*(i+1);
+          const ucard = makeCard(ucn, 'portrait', ux, uy, sz.w, sz.h, '', null, false, 330+i, true);
+          ucard.classList.add('underEnergy');
+          inner.appendChild(ucard);
+        });
       }
     }catch(e){}
     const card = makeCard(cn, dispOrient, x, y, sz.w, sz.h, labelFor(cn), ()=>doPlayHere(), false, 400);
@@ -7748,7 +7785,7 @@ inner.appendChild(card);
     }
 
     // choose_*_from_green: card images + optional Skip button when 1枚まで/optional
-    if(kind === 'choose_live_from_green' || kind === 'choose_member_from_green' || kind === 'choose_live_from_green_to_deck_nth'){
+    if(kind === 'choose_live_from_green' || kind === 'choose_member_from_green' || kind === 'choose_card_from_green' || kind === 'choose_live_from_green_to_deck_nth'){
       const cardOpts = opts.filter(o => looksLikeCardNo(String(o)));
       const hasSkip = !!(p && (p.allow_skip || p.allow_less || p.optional)) || opts.some(o => String(o).toLowerCase() === 'skip');
       const row = document.createElement('div');
@@ -8138,7 +8175,7 @@ inner.appendChild(card);
     // DECK: public view receives only deck_count, so keep the back-card mask visible.
     const deckCount = IS_PUBLIC_VIEW ? publicCount('deck_count', st.deck||[]) : ((st.deck||[]).length);
     if(deckCount > 0){
-      renderTopCard(zels.deck, '__BACK__', 'portrait', deckCount, null);
+      renderTopCard(zels.deck, '__BACK__', 'portrait', deckCount, null, {useStandardSize:true});
     }else{
       renderEmptyZone(zels.deck, 0, null);
     }
