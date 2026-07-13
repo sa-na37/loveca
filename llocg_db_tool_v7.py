@@ -19,7 +19,7 @@ Deps:
 
 from __future__ import annotations
 
-BUILD_TAG = "db_effect_header_ascii_paren_and_audit_20260710ac"
+BUILD_TAG = "db_product_unknown_release_registry_reuse_20260710af"
 
 import argparse
 import csv
@@ -2064,11 +2064,20 @@ def should_fetch_product_page_incremental(
 
     raw_release = str(old.get("release_date", "") or "").strip()
     if not raw_release:
-        return True, old, "release_date_unknown"
+        # The page has already been scanned and recorded in the page-level
+        # registry. Most release-date-less pages are stable auxiliary or
+        # archive-style product pages. Re-fetching them on every incremental
+        # update is expensive and has repeatedly triggered WIKIWIKI 429s. Treat
+        # them as registry entries with no expiry; use --fresh / --full-refresh
+        # when such pages need to be audited again.
+        return False, old, "release_date_unknown_reused"
     try:
         release_day = date.fromisoformat(raw_release)
     except ValueError:
-        return True, old, "release_date_invalid"
+        # Same policy as unknown dates: keep the last scanned row until an
+        # explicit full refresh. This prevents malformed legacy dates from
+        # becoming a permanent per-run HTTP fetch target.
+        return False, old, "release_date_invalid_reused"
 
     grace_start = today - timedelta(days=max(0, int(released_product_grace_days)))
     if release_day >= grace_start:
