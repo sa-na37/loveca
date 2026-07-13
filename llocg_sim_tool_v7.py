@@ -22,7 +22,7 @@ Dependencies:
 """
 from __future__ import annotations
 
-BUILD_TAG = "sim_tool_cardtype_infer_20260410a"
+BUILD_TAG = "sim_tool_ascii_paren_effect_headers_20260710ad"
 
 import argparse
 import json
@@ -184,6 +184,20 @@ def split_trigger_blocks(effect_text_norm: str) -> List[Dict[str, Any]]:
 
     header_angle = re.compile(r"^<([^<>]+)>$")
     header_kakko = re.compile(r"^[\[\【\（]([^\]\】\）]+)[\]\】\）]$")
+    header_ascii_paren = re.compile(r"^\(([^()]+)\)$")
+
+    def is_known_structural_header(h: str) -> bool:
+        h = h.strip()
+        return (
+            h in ability_headers
+            or h.startswith("自動")
+            or h.startswith("起動")
+            or h.startswith("常時")
+            or h in auto_triggers
+            or bool(eventish_re.search(h))
+            or h in known_conditions
+            or bool(turn_n_re.match(h))
+        )
 
     def parse_header_line(ln: str) -> Optional[str]:
         m = header_angle.match(ln)
@@ -192,6 +206,14 @@ def split_trigger_blocks(effect_text_norm: str) -> List[Dict[str, Any]]:
         m = header_kakko.match(ln)
         if m:
             return m.group(1).strip()
+        # Some WIKIWIKI rows expose structural effect headers as ASCII-parenthesized
+        # text. Accept only known ability/trigger/condition headers so ordinary
+        # parenthetical prose remains body text.
+        m = header_ascii_paren.match(ln)
+        if m:
+            h = m.group(1).strip()
+            if is_known_structural_header(h):
+                return h
         return None
 
     def quote_delta(s: str) -> int:

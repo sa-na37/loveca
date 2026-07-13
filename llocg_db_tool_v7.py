@@ -19,7 +19,7 @@ Deps:
 
 from __future__ import annotations
 
-BUILD_TAG = "db_generation_consistency_audit_20260708e"
+BUILD_TAG = "db_effect_header_ascii_paren_and_audit_20260710ac"
 
 import argparse
 import csv
@@ -30,7 +30,7 @@ import re
 import time
 import urllib.parse
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -47,7 +47,8 @@ CONFIG = {
     "products_url": "https://wikiwiki.jp/llocardgame/%E5%95%86%E5%93%81%E4%B8%80%E8%A6%A7",
     "outdir": "llocg_db_out",
     "cache": ".cache_llocg",
-    "delay": 2.5,
+    "delay": 5.0,
+    "cache_ttl_sec": 21600.0,
     "checkpoint_every": 50,
     "max_fail": 500,
     "max_429": 3,
@@ -62,6 +63,11 @@ TRANSIENT_BASE_BACKOFF_SEC = 5.0
 TRANSIENT_MAX_BACKOFF_SEC = 60.0
 RATE_LIMIT_BASE_BACKOFF_SEC = 300.0
 RATE_LIMIT_MAX_BACKOFF_SEC = 1800.0
+ADAPTIVE_RATE_LIMIT_INITIAL_MULTIPLIER = 2.0
+ADAPTIVE_RATE_LIMIT_STEP = 1.75
+ADAPTIVE_RATE_LIMIT_MAX_MULTIPLIER = 8.0
+ADAPTIVE_RATE_LIMIT_RECOVERY_SUCCESSES = 40
+ADAPTIVE_RATE_LIMIT_RECOVERY_DIVISOR = 1.5
 FAILURE_LOG_COLUMNS = [
     "url",
     "stage",
@@ -106,8 +112,44 @@ class FetchState:
         self.failure_csv = failure_csv
         self.max_429 = max(1, int(max_429))
         self.consecutive_429 = 0
+        self.rate_limit_events = 0
+        self.rate_limit_delay_multiplier = 1.0
+        self.successes_since_429 = 0
         self.failures: Dict[Tuple[str, str], FetchFailure] = {}
         self._load_existing()
+
+    def effective_delay(self, base_delay: float) -> float:
+        return max(0.0, float(base_delay)) * self.rate_limit_delay_multiplier
+
+    def note_rate_limit(self) -> Tuple[float, float]:
+        self.rate_limit_events += 1
+        self.successes_since_429 = 0
+        before = self.rate_limit_delay_multiplier
+        if before <= 1.0:
+            after = ADAPTIVE_RATE_LIMIT_INITIAL_MULTIPLIER
+        else:
+            after = before * ADAPTIVE_RATE_LIMIT_STEP
+        self.rate_limit_delay_multiplier = min(
+            ADAPTIVE_RATE_LIMIT_MAX_MULTIPLIER,
+            max(1.0, after),
+        )
+        return before, self.rate_limit_delay_multiplier
+
+    def note_network_success(self) -> Optional[Tuple[float, float]]:
+        self.consecutive_429 = 0
+        self.successes_since_429 += 1
+        if (
+            self.rate_limit_delay_multiplier > 1.0
+            and self.successes_since_429 >= ADAPTIVE_RATE_LIMIT_RECOVERY_SUCCESSES
+        ):
+            before = self.rate_limit_delay_multiplier
+            self.rate_limit_delay_multiplier = max(
+                1.0,
+                before / ADAPTIVE_RATE_LIMIT_RECOVERY_DIVISOR,
+            )
+            self.successes_since_429 = 0
+            return before, self.rate_limit_delay_multiplier
+        return None
 
     def _load_existing(self) -> None:
         if not self.failure_csv or not self.failure_csv.exists():
@@ -492,6 +534,9 @@ SD_PREFIX_TO_OFFICIAL_EXPANSION = {
     "PL!S": "SSD01",
     "PL!": "PLSD01",
 }
+CL_PREFIX_TO_OFFICIAL_EXPANSION = {
+    "PL!HS": "CLHS01",
+}
 OFFICIAL_RARITY_ALIAS = {
     "R＋": "R2", "R+": "R2",
     "L＋": "L2", "L+": "L2",
@@ -538,6 +583,13 @@ def official_expansion_from_cardno(cardno: str) -> Optional[str]:
         if not base:
             return None
         return re.sub(r"SD\d{2}$", f"SD{n:02d}", base)
+    m = re.search(r"(?:^|-)cl([1-9][0-9]*)(?:-|$)", c, re.IGNORECASE)
+    if m:
+        n = int(m.group(1))
+        base = CL_PREFIX_TO_OFFICIAL_EXPANSION.get(_card_prefix_from_cardno(c))
+        if not base:
+            return None
+        return re.sub(r"\d{2}$", f"{n:02d}", base)
     return None
 
 
@@ -766,8 +818,19 @@ def cmd_official_image_manifest(
             if key not in seen_keys:
                 cards_map[cn].append(item)
 
-    for expansion in sorted(expansion_to_cards.keys()):
+    sorted_expansions = sorted(expansion_to_cards.keys())
+    print(
+        "[IMAGE-MANIFEST] "
+        f"targets={len(wanted_cardnos)} expansions={len(sorted_expansions)} "
+        f"per_card_fallback={per_card_fallback}"
+    )
+    for expansion_index, expansion in enumerate(sorted_expansions, 1):
         wanted_for_expansion = expansion_to_cards[expansion]
+        print(
+            "[IMAGE-MANIFEST] "
+            f"expansion={expansion} {expansion_index}/{len(sorted_expansions)} "
+            f"target_cards={len(wanted_for_expansion)}"
+        )
         variants: List[str] = []
         pages_done = 0
         max_page_seen = 1
@@ -832,7 +895,17 @@ def cmd_official_image_manifest(
 
     missing_after_expansion = [cn for cn in wanted_cardnos if cn not in cards_map]
     if per_card_fallback and missing_after_expansion:
-        for cn in missing_after_expansion:
+        print(
+            "[IMAGE-MANIFEST] "
+            f"per_card_fallback_targets={len(missing_after_expansion)}"
+        )
+        for fallback_index, cn in enumerate(missing_after_expansion, 1):
+            if fallback_index == 1 or fallback_index % 25 == 0 or fallback_index == len(missing_after_expansion):
+                print(
+                    "[IMAGE-MANIFEST] "
+                    f"per_card_fallback={fallback_index}/{len(missing_after_expansion)} "
+                    f"card={cn}"
+                )
             url = (
                 f"{OFFICIAL_CARDLIST_SEARCH_URL}?"
                 f"cardno={urllib.parse.quote(cn)}&view=image&sort=new"
@@ -970,16 +1043,27 @@ def fetch(
     cache_dir.mkdir(parents=True, exist_ok=True)
     p = sha_path(cache_dir, url)
     if p.exists():
-        if fetch_state is not None:
-            fetch_state.clear_failure(url, stage)
-        return p.read_text(encoding="utf-8", errors="ignore")
+        cache_ttl_sec = max(0.0, float(CONFIG.get("cache_ttl_sec", 0.0)))
+        try:
+            cache_age_sec = max(0.0, time.time() - p.stat().st_mtime)
+        except OSError:
+            cache_age_sec = cache_ttl_sec + 1.0
+        if cache_ttl_sec <= 0.0 or cache_age_sec <= cache_ttl_sec:
+            if fetch_state is not None:
+                fetch_state.clear_failure(url, stage)
+            return p.read_text(encoding="utf-8", errors="ignore")
 
     attempts = 0
     transient_retry_index = 0
     local_consecutive_429 = 0
 
     while True:
-        wait_before = _request_delay_seconds(delay)
+        effective_delay = (
+            fetch_state.effective_delay(delay)
+            if fetch_state is not None
+            else max(0.0, float(delay))
+        )
+        wait_before = _request_delay_seconds(effective_delay)
         if wait_before > 0:
             time.sleep(wait_before)
 
@@ -1024,6 +1108,13 @@ def fetch(
                 consecutive_429 = local_consecutive_429
                 max_429 = int(CONFIG["max_429"])
 
+            throttle_before = None
+            throttle_after = None
+            total_rate_limit_events = consecutive_429
+            if fetch_state is not None:
+                throttle_before, throttle_after = fetch_state.note_rate_limit()
+                total_rate_limit_events = fetch_state.rate_limit_events
+
             if consecutive_429 >= max_429:
                 msg = (
                     f"HTTP 429 repeated {consecutive_429} times "
@@ -1048,8 +1139,16 @@ def fetch(
                 wait_sec = _rate_limit_backoff_seconds(consecutive_429)
                 wait_source = "exponential-backoff"
 
+            throttle_text = ""
+            if throttle_after is not None:
+                throttle_text = (
+                    f" total_events={total_rate_limit_events} "
+                    f"normal_delay_multiplier={throttle_after:.2f}x"
+                )
             print(
-                f"[RATE-LIMIT] 429 stage={stage} count={consecutive_429}/{max_429} "
+                f"[RATE-LIMIT] 429 stage={stage} "
+                f"consecutive={consecutive_429}/{max_429}"
+                f"{throttle_text} "
                 f"wait={wait_sec:.1f}s source={wait_source} url={url}"
             )
             time.sleep(wait_sec)
@@ -1111,8 +1210,15 @@ def fetch(
             raise
 
         if fetch_state is not None:
-            fetch_state.consecutive_429 = 0
+            throttle_recovery = fetch_state.note_network_success()
             fetch_state.clear_failure(url, stage)
+            if throttle_recovery is not None:
+                before, after = throttle_recovery
+                print(
+                    f"[THROTTLE] recovered after "
+                    f"{ADAPTIVE_RATE_LIMIT_RECOVERY_SUCCESSES} successful requests "
+                    f"normal_delay_multiplier={before:.2f}x->{after:.2f}x"
+                )
 
         html = r.text
         p.write_text(html, encoding="utf-8")
@@ -1646,6 +1752,333 @@ def finalize_outputs(outdir: Path, records: List[Dict[str, Any]], keys_found: Se
     return out_csv, out_json
 
 
+
+# -------------------------
+# product release registry
+# -------------------------
+PRODUCT_RELEASE_REGISTRY_FILENAME = "product_release_registry.json"
+PRODUCT_RELEASE_REGISTRY_AUDIT_FILENAME = "product_release_registry_audit.tsv"
+_RELEASE_DATE_PATTERNS = [
+    re.compile(r"発売日\s*[：:]?\s*(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日"),
+    re.compile(r"発売日\s*[：:]?\s*(\d{4})[./-](\d{1,2})[./-](\d{1,2})"),
+]
+
+
+def extract_product_page_title(html: str) -> str:
+    soup = BeautifulSoup(html, "lxml")
+    h1 = soup.find("h1")
+    if h1:
+        title = h1.get_text(" ", strip=True)
+        if title:
+            return title
+    title_tag = soup.find("title")
+    title = title_tag.get_text(" ", strip=True) if title_tag else ""
+    title = re.sub(
+        r"\s*-\s*ラブライブ！シリーズ.*$",
+        "",
+        title,
+    ).strip()
+    return title
+
+
+def extract_release_date_from_product_html(html: str) -> str:
+    soup = BeautifulSoup(html, "lxml")
+    text = soup.get_text("\n", strip=True)
+    for pattern in _RELEASE_DATE_PATTERNS:
+        m = pattern.search(text)
+        if not m:
+            continue
+        try:
+            value = datetime(
+                int(m.group(1)),
+                int(m.group(2)),
+                int(m.group(3)),
+            ).date()
+        except ValueError:
+            continue
+        return value.isoformat()
+    return ""
+
+
+def build_product_registry_entry(product_url: str, html: str) -> Dict[str, Any]:
+    card_links = extract_card_links_from_product(html)
+    cardnumbers: List[str] = []
+    code_counts: Counter[str] = Counter()
+    for url in card_links:
+        cardno, _name = cardno_name_from_url(url)
+        cardno = str(cardno or "").strip()
+        if not cardno:
+            continue
+        canonical, _rarity = split_cardnumber_rarity_suffix(cardno)
+        code = official_expansion_from_cardno(canonical)
+        if not code:
+            continue
+        cardnumbers.append(canonical)
+        code_counts[code] += 1
+
+    release_date = extract_release_date_from_product_html(html)
+    title = extract_product_page_title(html)
+
+    product_code = ""
+    status = ""
+    reason = ""
+    if not release_date:
+        status = "NO_RELEASE_DATE"
+        reason = "release date not found on product page"
+    elif not code_counts:
+        status = "NO_PRODUCT_CODE"
+        reason = "no product-code-bearing card links found"
+    else:
+        ordered = code_counts.most_common()
+        best_code, best_count = ordered[0]
+        tied = [code for code, count in ordered if count == best_count]
+        if len(tied) > 1:
+            status = "AMBIGUOUS_PRODUCT_CODE"
+            reason = "multiple product codes tied for most card links"
+        else:
+            product_code = best_code
+            status = "MATCHED"
+            reason = "product code selected from most frequent card-link expansion"
+
+    return {
+        "product_code": product_code,
+        "release_date": release_date,
+        "title": title,
+        "source_url": product_url,
+        "status": status,
+        "reason": reason,
+        "card_link_count": len(cardnumbers),
+        "product_code_counts": dict(sorted(code_counts.items())),
+        "sample_cardnumbers": sorted(set(cardnumbers))[:20],
+    }
+
+
+def write_product_release_registry(
+    outdir: Path,
+    *,
+    products_url: str,
+    entries: List[Dict[str, Any]],
+) -> Tuple[Path, Path]:
+    outdir.mkdir(parents=True, exist_ok=True)
+    registry_path = outdir / PRODUCT_RELEASE_REGISTRY_FILENAME
+    audit_path = outdir / PRODUCT_RELEASE_REGISTRY_AUDIT_FILENAME
+
+    products: Dict[str, Dict[str, Any]] = {}
+    collisions: Dict[str, List[Dict[str, Any]]] = {}
+
+    for entry in entries:
+        if entry.get("status") != "MATCHED":
+            continue
+        code = str(entry.get("product_code", "") or "").strip().upper()
+        if not code:
+            continue
+        if code in products:
+            old = products[code]
+            old_sig = (
+                str(old.get("release_date", "")),
+                str(old.get("source_url", "")),
+            )
+            new_sig = (
+                str(entry.get("release_date", "")),
+                str(entry.get("source_url", "")),
+            )
+            if old_sig != new_sig:
+                collisions.setdefault(code, [old]).append(entry)
+                continue
+        products[code] = {
+            "release_date": entry.get("release_date", ""),
+            "title": entry.get("title", ""),
+            "source_url": entry.get("source_url", ""),
+            "card_link_count": entry.get("card_link_count", 0),
+            "product_code_counts": entry.get("product_code_counts", {}),
+            "sample_cardnumbers": entry.get("sample_cardnumbers", []),
+        }
+
+    for code in collisions:
+        products.pop(code, None)
+
+    # Keep a page-level registry in addition to the product-code registry.
+    # Multiple WIKIWIKI product pages may collapse to the same inferred code or
+    # remain unmatched; those pages still need incremental scan history so they
+    # are not rediscovered as "new_product" on every updater run.
+    page_entries = [
+        dict(entry)
+        for entry in sorted(
+            entries,
+            key=lambda row: str(row.get("source_url", "") or ""),
+        )
+        if str(entry.get("source_url", "") or "").strip()
+    ]
+
+    payload = {
+        "schema_version": 2,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "source_products_url": products_url,
+        "products": dict(sorted(products.items())),
+        "page_entries": page_entries,
+        "collisions": {
+            code: rows for code, rows in sorted(collisions.items())
+        },
+    }
+    registry_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    fields = [
+        "product_code",
+        "release_date",
+        "title",
+        "status",
+        "reason",
+        "card_link_count",
+        "product_code_counts",
+        "source_url",
+    ]
+    with audit_path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fields, delimiter="\t")
+        writer.writeheader()
+        for entry in entries:
+            row = {key: entry.get(key, "") for key in fields}
+            row["product_code_counts"] = json.dumps(
+                entry.get("product_code_counts", {}),
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+            writer.writerow(row)
+
+    print(
+        f"[PRODUCT-REGISTRY] products={len(products)} "
+        f"collisions={len(collisions)} entries={len(entries)} "
+        f"path={registry_path}"
+    )
+    return registry_path, audit_path
+
+
+
+def load_existing_product_registry_entries(
+    registry_path: Path,
+) -> Dict[str, Dict[str, Any]]:
+    """Load prior product-page scan rows keyed by exact source URL.
+
+    Schema v2 stores every product-page row in ``page_entries``. For migration
+    from the earlier registry, recover the full page list from the sibling audit
+    TSV when available, then fall back to the product-code registry.
+    """
+    payload: Dict[str, Any] = {}
+    if registry_path.exists():
+        try:
+            raw_payload = json.loads(registry_path.read_text(encoding="utf-8"))
+            if isinstance(raw_payload, dict):
+                payload = raw_payload
+        except (OSError, json.JSONDecodeError):
+            payload = {}
+
+    out: Dict[str, Dict[str, Any]] = {}
+
+    page_entries = payload.get("page_entries", []) if isinstance(payload, dict) else []
+    if isinstance(page_entries, list):
+        for raw in page_entries:
+            if not isinstance(raw, dict):
+                continue
+            source_url = str(raw.get("source_url", "") or "").strip()
+            if not source_url:
+                continue
+            out[source_url] = dict(raw)
+    if out:
+        return out
+
+    # Migration path: schema v1 wrote all 39 page scan rows to the audit TSV
+    # even though only unique matched product codes were retained in JSON.
+    audit_path = registry_path.with_name(PRODUCT_RELEASE_REGISTRY_AUDIT_FILENAME)
+    if audit_path.exists():
+        try:
+            with audit_path.open("r", encoding="utf-8", newline="") as f:
+                reader = csv.DictReader(f, delimiter="\t")
+                for raw in reader:
+                    source_url = str(raw.get("source_url", "") or "").strip()
+                    if not source_url:
+                        continue
+                    counts_raw = str(raw.get("product_code_counts", "") or "").strip()
+                    try:
+                        counts_obj = json.loads(counts_raw) if counts_raw else {}
+                    except json.JSONDecodeError:
+                        counts_obj = {}
+                    try:
+                        card_link_count = int(raw.get("card_link_count", 0) or 0)
+                    except (TypeError, ValueError):
+                        card_link_count = 0
+                    out[source_url] = {
+                        "product_code": str(raw.get("product_code", "") or "").strip().upper(),
+                        "release_date": str(raw.get("release_date", "") or "").strip(),
+                        "title": str(raw.get("title", "") or "").strip(),
+                        "status": str(raw.get("status", "") or "").strip(),
+                        "reason": "registry_audit_migration",
+                        "card_link_count": card_link_count,
+                        "product_code_counts": counts_obj if isinstance(counts_obj, dict) else {},
+                        "sample_cardnumbers": [],
+                        "source_url": source_url,
+                    }
+        except OSError:
+            out = {}
+    if out:
+        return out
+
+    products = payload.get("products", {}) if isinstance(payload, dict) else {}
+    if not isinstance(products, dict):
+        return {}
+    for code, raw in products.items():
+        if not isinstance(raw, dict):
+            continue
+        source_url = str(raw.get("source_url", "") or "").strip()
+        if not source_url:
+            continue
+        out[source_url] = {
+            "product_code": str(code or "").strip().upper(),
+            "release_date": str(raw.get("release_date", "") or "").strip(),
+            "title": str(raw.get("title", "") or "").strip(),
+            "status": "MATCHED",
+            "reason": "registry_reuse_legacy_products",
+            "card_link_count": int(raw.get("card_link_count", 0) or 0),
+            "product_code_counts": raw.get("product_code_counts", {})
+            if isinstance(raw.get("product_code_counts"), dict)
+            else {},
+            "sample_cardnumbers": raw.get("sample_cardnumbers", [])
+            if isinstance(raw.get("sample_cardnumbers"), list)
+            else [],
+            "source_url": source_url,
+        }
+    return out
+
+
+def should_fetch_product_page_incremental(
+    product_url: str,
+    *,
+    previous_entries_by_url: Dict[str, Dict[str, Any]],
+    today: date,
+    released_product_grace_days: int,
+) -> Tuple[bool, Optional[Dict[str, Any]], str]:
+    old = previous_entries_by_url.get(str(product_url).strip())
+    if not old:
+        return True, None, "new_product"
+
+    raw_release = str(old.get("release_date", "") or "").strip()
+    if not raw_release:
+        return True, old, "release_date_unknown"
+    try:
+        release_day = date.fromisoformat(raw_release)
+    except ValueError:
+        return True, old, "release_date_invalid"
+
+    grace_start = today - timedelta(days=max(0, int(released_product_grace_days)))
+    if release_day >= grace_start:
+        if release_day > today:
+            return True, old, "prerelease_product"
+        return True, old, "recently_released_product"
+
+    return False, old, "stable_released_product"
+
+
 def cmd_scrape(
     products_url: str,
     outdir: Path,
@@ -1660,6 +2093,7 @@ def cmd_scrape(
     fresh: bool = False,
     fetch_state: Optional[FetchState] = None,
     manual_overrides: Optional[Path] = None,
+    released_product_grace_days: int = 7,
 ) -> Tuple[Path, Path]:
     outdir.mkdir(parents=True, exist_ok=True)
     if fetch_state is None:
@@ -1696,27 +2130,86 @@ def cmd_scrape(
             product_urls = product_urls[:limit_products]
         print(f"[INFO] product pages: {len(product_urls)}")
 
-        card_urls: Set[str] = set()
+        # Existing card URLs are already represented by resume records. In
+        # incremental mode only product pages that may reveal new cards are
+        # fetched: new products, prerelease products, and recently released
+        # products. Stable old released products reuse the previous registry.
+        card_urls: Set[str] = set(resume_urls)
+        product_registry_entries: List[Dict[str, Any]] = []
+        previous_registry = (
+            {}
+            if fresh
+            else load_existing_product_registry_entries(
+                outdir / PRODUCT_RELEASE_REGISTRY_FILENAME
+            )
+        )
+        product_fetch_count = 0
+        product_reuse_count = 0
+        product_fetch_reasons: Counter[str] = Counter()
+        today = date.today()
+
         for i, pu in enumerate(product_urls, 1):
-            try:
-                h = fetch(
-                    pu,
-                    cache_dir,
-                    delay=delay,
-                    user_agent=user_agent,
-                    stage="product_page",
-                    fetch_state=fetch_state,
+            should_fetch = True
+            reused_entry: Optional[Dict[str, Any]] = None
+            reason = "fresh"
+            if not fresh:
+                should_fetch, reused_entry, reason = (
+                    should_fetch_product_page_incremental(
+                        pu,
+                        previous_entries_by_url=previous_registry,
+                        today=today,
+                        released_product_grace_days=released_product_grace_days,
+                    )
                 )
-                card_urls.update(extract_card_links_from_product(h))
-            except FetchSafetyStop:
-                raise
-            except Exception as e:
-                failed.append(pu)
-                print(f"[WARN] product fetch failed: {pu} ({e})")
-                if len(failed) >= max_fail:
-                    raise SystemExit("[ERROR] too many failures")
+
+            if not should_fetch and reused_entry is not None:
+                product_registry_entries.append(dict(reused_entry))
+                product_reuse_count += 1
+                product_fetch_reasons[reason] += 1
+            else:
+                product_fetch_count += 1
+                product_fetch_reasons[reason] += 1
+                try:
+                    h = fetch(
+                        pu,
+                        cache_dir,
+                        delay=delay,
+                        user_agent=user_agent,
+                        stage="product_page",
+                        fetch_state=fetch_state,
+                    )
+                    card_urls.update(extract_card_links_from_product(h))
+                    product_registry_entries.append(
+                        build_product_registry_entry(pu, h)
+                    )
+                except FetchSafetyStop:
+                    raise
+                except Exception as e:
+                    failed.append(pu)
+                    print(f"[WARN] product fetch failed: {pu} ({e})")
+                    if reused_entry is not None:
+                        fallback_entry = dict(reused_entry)
+                        fallback_entry["reason"] = "registry_reuse_after_fetch_error"
+                        product_registry_entries.append(fallback_entry)
+                    if len(failed) >= max_fail:
+                        raise SystemExit("[ERROR] too many failures")
+
             if i % 20 == 0:
                 print(f"[INFO] processed products {i}/{len(product_urls)}")
+
+        print(
+            "[PRODUCT-SCAN] "
+            f"total={len(product_urls)} fetch={product_fetch_count} "
+            f"reuse={product_reuse_count} "
+            f"released_grace_days={max(0, int(released_product_grace_days))} "
+            f"reasons={dict(sorted(product_fetch_reasons.items()))}"
+        )
+
+        write_product_release_registry(
+            outdir,
+            products_url=products_url,
+            entries=product_registry_entries,
+        )
 
         card_list = sorted(card_urls)
         if limit_cards:
@@ -2101,6 +2594,20 @@ def split_trigger_blocks(effect_text_norm: str) -> List[Dict[str, Any]]:
     # header line matchers
     header_angle = re.compile(r"^<([^<>]+)>$")
     header_kakko = re.compile(r"^[\[\【\（]([^\]\】\）]+)[\]\】\）]$")
+    header_ascii_paren = re.compile(r"^\(([^()]+)\)$")
+
+    def is_known_structural_header(h: str) -> bool:
+        h = h.strip()
+        return (
+            h in ability_headers
+            or h.startswith("自動")
+            or h.startswith("起動")
+            or h.startswith("常時")
+            or h in auto_triggers
+            or bool(eventish_re.search(h))
+            or h in known_conditions
+            or bool(turn_n_re.match(h))
+        )
 
     def parse_header_line(ln: str) -> Optional[str]:
         m = header_angle.match(ln)
@@ -2109,6 +2616,15 @@ def split_trigger_blocks(effect_text_norm: str) -> List[Dict[str, Any]]:
         m = header_kakko.match(ln)
         if m:
             return m.group(1).strip()
+        # New WIKIWIKI rows can expose effect headers as ASCII-parenthesized
+        # tokens, e.g. (ライブ開始時) / (自動) / (ターン1回).  Accept only
+        # known structural headers so ordinary parenthetical prose is not
+        # misclassified as an ability header.
+        m = header_ascii_paren.match(ln)
+        if m:
+            h = m.group(1).strip()
+            if is_known_structural_header(h):
+                return h
         return None
 
     blocks: List[Dict[str, Any]] = []
@@ -2722,21 +3238,154 @@ def cmd_audit(csv_path: Path, top_unknown: int = 30) -> None:
         for k, v in vc.items():
             print(f"  {k or '(blank)':20s} {int(v)}")
 
-    # unknown tags tally
+    # effect-token audit
+    #
+    # effect_tokens_json is primarily an icon/token stream. Ability/trigger/condition
+    # headers such as (自動), (ライブ開始時), and (ターン1回) are parsed by
+    # split_trigger_blocks() from effect_text_norm. Older audits mislabeled those
+    # structural headers as generic "UNKNOWN TOKENS". Keep the DB payload unchanged
+    # for compatibility, but separate structural headers from genuine unknown tokens.
+    structural_header_names = {
+        "自動", "起動", "常時",
+        "登場", "登場時", "登場した時",
+        "ライブ開始時", "ライブ成功時", "ライブ終了時", "ライブ中",
+        "ターン開始時", "ターン終了時",
+        "アタック時", "アタックした時",
+        "センター", "ライト", "レフト", "左サイド", "右サイド",
+    }
+    structural_turn_re = re.compile(r"^ターン[0-9]+回$")
+    structural_eventish_re = re.compile(r"(開始時|成功時|終了時|した時|時$)")
+
+    def is_structural_effect_header_token(token: str) -> bool:
+        t = normalize_tag(token)
+        if len(t) >= 2 and t[0] == "(" and t[-1] == ")":
+            bare = t[1:-1]
+        else:
+            bare = t
+        return (
+            bare in structural_header_names
+            or bool(structural_turn_re.match(bare))
+            or bool(structural_eventish_re.search(bare))
+        )
+
     if "effect_tokens_json" in df.columns:
-        unknown = Counter()
-        for s in df["effect_tokens_json"].tolist():
-            ok, obj = safe_json_loads(s)
+        structural = Counter()
+        genuine_unknown = Counter()
+        genuine_unknown_rows: List[Dict[str, Any]] = []
+
+        for _, row in df.iterrows():
+            ok, obj = safe_json_loads(row.get("effect_tokens_json", ""))
             if not ok or not isinstance(obj, dict):
                 continue
             tags = obj.get("unknown_tags", obj.get("tags", []))
-            if isinstance(tags, list):
-                for t in tags:
-                    if isinstance(t, str) and t:
-                        unknown[t] += 1
-        print("\n[UNKNOWN TOKENS in effect_tokens_json]")
-        for k, v in unknown.most_common(top_unknown):
-            print(f"  {k:20s} {v}")
+            if not isinstance(tags, list):
+                continue
+            for t in tags:
+                if not isinstance(t, str) or not t:
+                    continue
+                if is_structural_effect_header_token(t):
+                    structural[t] += 1
+                else:
+                    genuine_unknown[t] += 1
+                    genuine_unknown_rows.append({
+                        "cardnumber": str(row.get("cardnumber", "") or ""),
+                        "cardname": str(row.get("cardname", "") or ""),
+                        "token": t,
+                        "effect_text_norm": str(row.get("effect_text_norm", "") or ""),
+                    })
+
+        print("\n[STRUCTURAL EFFECT HEADERS in effect_tokens_json]")
+        if structural:
+            for k, v in structural.most_common(top_unknown):
+                print(f"  {k:20s} {v}")
+        else:
+            print("  (none)")
+
+        print("\n[GENUINE UNKNOWN TOKENS in effect_tokens_json]")
+        if genuine_unknown:
+            for k, v in genuine_unknown.most_common(top_unknown):
+                print(f"  {k:20s} {v}")
+        else:
+            print("  (none)")
+
+        genuine_unknown_path = csv_path.parent / "effect_token_genuine_unknown_audit.tsv"
+        pd.DataFrame(
+            genuine_unknown_rows,
+            columns=["cardnumber", "cardname", "token", "effect_text_norm"],
+        ).to_csv(genuine_unknown_path, index=False, encoding="utf-8-sig", sep="\t")
+        print(f"  report: {genuine_unknown_path}")
+
+    # Audit the actual effect-text grammar separately from icon/token recognition.
+    # This is the relevant check for new/pre-release card wording.
+    if "effect_text_norm" in df.columns:
+        source_placeholder_rows: List[Dict[str, Any]] = []
+        grammar_unknown_rows: List[Dict[str, Any]] = []
+        source_placeholders = {"(不明)", "(未判明)", "(未公開)"}
+
+        for _, row in df.iterrows():
+            effect_text = str(row.get("effect_text_norm", "") or "").strip()
+            status = str(row.get("effect_text_status", "") or "").strip()
+            if not effect_text or status == "NO_ABILITY" or effect_text in NO_ABILITY_MARKERS:
+                continue
+
+            if effect_text in source_placeholders:
+                source_placeholder_rows.append({
+                    "cardnumber": str(row.get("cardnumber", "") or ""),
+                    "cardname": str(row.get("cardname", "") or ""),
+                    "effect_text_norm": effect_text,
+                })
+                continue
+
+            blocks = split_trigger_blocks(effect_text)
+            if not blocks:
+                grammar_unknown_rows.append({
+                    "cardnumber": str(row.get("cardnumber", "") or ""),
+                    "cardname": str(row.get("cardname", "") or ""),
+                    "issue": "NO_TRIGGER_BLOCKS",
+                    "trigger": "",
+                    "conditions": "",
+                    "effect_text_norm": effect_text,
+                })
+                continue
+
+            for block in blocks:
+                if str(block.get("ability_type", "") or "") != "UNKNOWN":
+                    continue
+                grammar_unknown_rows.append({
+                    "cardnumber": str(row.get("cardnumber", "") or ""),
+                    "cardname": str(row.get("cardname", "") or ""),
+                    "issue": "UNKNOWN_ABILITY_TYPE",
+                    "trigger": str(block.get("trigger", "") or ""),
+                    "conditions": ";".join(
+                        str(x) for x in (block.get("conditions", []) or [])
+                        if str(x).strip()
+                    ),
+                    "effect_text_norm": effect_text,
+                })
+
+        grammar_unknown_path = csv_path.parent / "effect_grammar_unknown_audit.tsv"
+        placeholder_path = csv_path.parent / "effect_source_placeholder_audit.tsv"
+        pd.DataFrame(
+            grammar_unknown_rows,
+            columns=[
+                "cardnumber", "cardname", "issue", "trigger",
+                "conditions", "effect_text_norm",
+            ],
+        ).drop_duplicates().to_csv(
+            grammar_unknown_path, index=False, encoding="utf-8-sig", sep="\t"
+        )
+        pd.DataFrame(
+            source_placeholder_rows,
+            columns=["cardnumber", "cardname", "effect_text_norm"],
+        ).drop_duplicates().to_csv(
+            placeholder_path, index=False, encoding="utf-8-sig", sep="\t"
+        )
+
+        print("\n[EFFECT GRAMMAR AUDIT]")
+        print(f"  source_placeholder_rows: {len(source_placeholder_rows)}")
+        print(f"  grammar_unknown_rows: {len(grammar_unknown_rows)}")
+        print(f"  unknown_report: {grammar_unknown_path}")
+        print(f"  placeholder_report: {placeholder_path}")
 
     for col in ["tok_energy_icon_n", "tok_all_heart_n", "tok_blade_icon_n", "tok_score_delta_icon"]:
         if col in df.columns:
@@ -2780,6 +3429,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="ignore existing cards_min.csv/json and rebuild from fetched pages",
     )
     ps.add_argument("--manual-overrides", default=CONFIG["manual_overrides"])
+    ps.add_argument(
+        "--released-product-grace-days",
+        type=int,
+        default=7,
+        help="incremental mode: refetch product pages until this many days after release",
+    )
 
     pn = sub.add_parser("normalize")
     pn.add_argument("--csv", required=True)
@@ -2850,6 +3505,12 @@ def build_parser() -> argparse.ArgumentParser:
     pall.add_argument("--official-timeout", type=float, default=25.0)
     pall.add_argument("--no-per-card-fallback", action="store_true")
     pall.add_argument("--manual-overrides", default=CONFIG["manual_overrides"])
+    pall.add_argument(
+        "--released-product-grace-days",
+        type=int,
+        default=7,
+        help="incremental mode: refetch product pages until this many days after release",
+    )
 
     return p
 
@@ -2877,6 +3538,7 @@ def main() -> None:
             fresh=args.fresh,
             fetch_state=fetch_state,
             manual_overrides=Path(args.manual_overrides) if args.manual_overrides else None,
+            released_product_grace_days=args.released_product_grace_days,
         )
         return
 
@@ -2946,6 +3608,7 @@ def main() -> None:
             fresh=args.fresh,
             fetch_state=fetch_state,
             manual_overrides=Path(args.manual_overrides) if args.manual_overrides else None,
+            released_product_grace_days=args.released_product_grace_days,
         )
         norm_csv, norm_json = cmd_normalize(out_csv, out_json, outdir, args.suffix, manual_overrides=Path(args.manual_overrides) if args.manual_overrides else None)
         cmd_mine(norm_csv, outdir, args.mine_top)
