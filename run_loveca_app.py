@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# BUILD_TAG = "loveca_app_launcher_menu_remote_key_20260713a"
+# BUILD_TAG = "loveca_app_launcher_connections_20260713b"
 """
 Loveca application launcher (phase 1).
 
@@ -37,12 +37,13 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 
-BUILD_TAG = "loveca_app_launcher_menu_remote_key_20260713a"
+BUILD_TAG = "loveca_app_launcher_connections_20260713b"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 SESSION_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 SESSION_DIR = "user_data/remote_sessions"
 SETTINGS_PATH = "user_data/settings.json"
+APP_LOG_DIR = "user_data/logs"
 
 MANUAL_SCRIPT = "run_llocg_ui_web.py"
 UPDATE_SCRIPT = "llocg_update_database.py"
@@ -114,6 +115,76 @@ class AppState:
     def path(self, relative: str) -> Path:
         return self.root / relative
 
+    def load_settings(self) -> dict[str, Any]:
+        path = self.path(SETTINGS_PATH)
+        defaults: dict[str, Any] = {
+            "schema_version": 1,
+            "player_id": "",
+            "remote_key_length": 4,
+            "active_deck": "",
+        }
+        if not path.exists():
+            return defaults
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                defaults.update(raw)
+        except Exception:
+            pass
+        return defaults
+
+    def save_settings(self, patch: dict[str, Any]) -> dict[str, Any]:
+        current = self.load_settings()
+        current.update(patch)
+        current["schema_version"] = 1
+        current["updated_at"] = utc_now_iso()
+        path = self.path(SETTINGS_PATH)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
+        return current
+
+    def select_deck(self, relative_path: str) -> dict[str, Any]:
+        candidate = (self.root / relative_path).resolve()
+        try:
+            candidate.relative_to(self.root)
+        except ValueError as exc:
+            raise ValueError("プロジェクト外のファイルは選択できません。") from exc
+        valid = {str((self.root / d["path"]).resolve()): d for d in self.list_decks()}
+        record = valid.get(str(candidate))
+        if record is None:
+            raise ValueError("選択したデッキファイルが見つかりません。")
+        self.save_settings({"active_deck": record["path"]})
+        return record
+
+    def list_logs(self) -> list[dict[str, Any]]:
+        roots = [
+            self.path(APP_LOG_DIR),
+            self.path(SESSION_DIR),
+            self.path("logs"),
+        ]
+        seen: set[str] = set()
+        records: list[dict[str, Any]] = []
+        for base in roots:
+            if not base.is_dir():
+                continue
+            for path in base.rglob("*"):
+                if not path.is_file():
+                    continue
+                resolved = str(path.resolve())
+                if resolved in seen:
+                    continue
+                seen.add(resolved)
+                stat = path.stat()
+                records.append(
+                    {
+                        "name": path.name,
+                        "path": str(path.relative_to(self.root)),
+                        "size": stat.st_size,
+                        "modified": datetime.fromtimestamp(stat.st_mtime).astimezone().isoformat(timespec="seconds"),
+                    }
+                )
+        return sorted(records, key=lambda x: x["modified"], reverse=True)
+
     def list_decks(self) -> list[dict[str, Any]]:
         found: dict[str, Path] = {}
         for pattern in DECK_PATTERNS:
@@ -171,6 +242,8 @@ class AppState:
             "db_error": db_error,
             "image_count": image_count,
             "deck_count": len(self.list_decks()),
+            "log_count": len(self.list_logs()),
+            "active_deck": self.load_settings().get("active_deck", ""),
         }
 
     def start_manual(self) -> tuple[bool, str]:
@@ -182,10 +255,17 @@ class AppState:
             if self.manual_process and self.manual_process.poll() is None:
                 return False, "手動シミュレータはすでに起動しています。"
             try:
+                env = os.environ.copy()
+                settings = self.load_settings()
+                active_deck = str(settings.get("active_deck") or "")
+                if active_deck:
+                    env["LLOCG_APP_SELECTED_DECK"] = active_deck
+                env["LLOCG_APP_SETTINGS_PATH"] = str(self.path(SETTINGS_PATH))
                 self.manual_process = subprocess.Popen(
                     [sys.executable, str(script)],
                     cwd=str(self.root),
                     text=True,
+                    env=env,
                 )
             except Exception as exc:
                 return False, f"起動に失敗しました: {type(exc).__name__}: {exc}"
@@ -372,7 +452,7 @@ def page(title: str, body: str) -> bytes:
   <h1>Loveca Application</h1>
   <div>
     <span class="tag">{html.escape(BUILD_TAG)}</span>
-    <nav><a href="/">メニュー</a><a href="/remote">リモート対戦</a><a href="/decks">デッキ</a><a href="/update">更新</a><a href="/diagnostics">診断</a></nav>
+    <nav><a href="/">メニュー</a><a href="/remote">リモート対戦</a><a href="/decks">デッキ</a><a href="/update">更新</a><a href="/logs">ログ</a><a href="/settings">設定</a><a href="/diagnostics">診断</a></nav>
   </div>
 </header>
 <main>{body}</main>
@@ -423,6 +503,10 @@ class Handler(BaseHTTPRequestHandler):
             self.send_html(page("デッキ管理", self.decks_body()))
         elif path == "/update":
             self.send_html(page("データ更新", self.update_body()))
+        elif path == "/logs":
+            self.send_html(page("ログ管理", self.logs_body()))
+        elif path == "/settings":
+            self.send_html(page("設定", self.settings_body()))
         elif path == "/diagnostics":
             self.send_html(page("診断", self.diagnostics_body()))
         elif path == "/api/update/status":
@@ -449,6 +533,33 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/update/start":
             ok, message = self.app.start_update()
             self.send_json({"ok": ok, "message": message}, HTTPStatus.OK if ok else HTTPStatus.CONFLICT)
+        elif path == "/decks/select":
+            form = self.read_form()
+            try:
+                record = self.app.select_deck(form.get("deck_path", ""))
+                self.send_html(page("デッキ選択", f"""
+<section class="panel">
+<h2>使用デッキを選択しました</h2>
+<p><strong>{html.escape(record['name'])}</strong></p>
+<pre>{html.escape(record['path'])}</pre>
+<p class="status">今後のruntime接続用に設定へ保存し、手動シミュレータ起動時に <code>LLOCG_APP_SELECTED_DECK</code> として渡します。</p>
+<a class="button secondary" href="/decks">戻る</a>
+<a class="button" href="/">メニューへ</a>
+</section>
+"""))
+            except ValueError as exc:
+                self.send_html(page("入力エラー", f"<section class='panel'><p class='bad'>{html.escape(str(exc))}</p><a class='button secondary' href='/decks'>戻る</a></section>"), HTTPStatus.BAD_REQUEST)
+        elif path == "/settings/save":
+            form = self.read_form()
+            try:
+                player = safe_player_id(form.get("player_id", ""))
+                key_length = int(form.get("remote_key_length", "4"))
+                if key_length < 3 or key_length > 5:
+                    raise ValueError("キー長は3〜5桁で指定してください。")
+                self.app.save_settings({"player_id": player, "remote_key_length": key_length})
+                self.send_html(page("設定", "<section class='panel'><h2>設定を保存しました</h2><a class='button' href='/settings'>戻る</a></section>"))
+            except ValueError as exc:
+                self.send_html(page("入力エラー", f"<section class='panel'><p class='bad'>{html.escape(str(exc))}</p><a class='button secondary' href='/settings'>戻る</a></section>"), HTTPStatus.BAD_REQUEST)
         elif path == "/remote/create":
             form = self.read_form()
             try:
@@ -480,11 +591,13 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"ok": False, "message": "unknown endpoint"}, HTTPStatus.NOT_FOUND)
 
     def home_body(self) -> str:
-        return """
+        settings = self.app.load_settings()
+        active_deck = html.escape(str(settings.get("active_deck") or "未選択"))
+        body = """
 <div class="grid">
 <section class="card">
   <h2>手動シミュレータ</h2>
-  <p>既存の手動シミュレータを別プロセスで起動します。</p>
+  <p>既存の手動シミュレータを別プロセスで起動します。<br>選択デッキ：<code>{active_deck}</code></p>
   <button onclick="startManual()">起動</button>
   <div id="manualStatus" class="status"></div>
 </section>
@@ -510,13 +623,13 @@ class Handler(BaseHTTPRequestHandler):
 </section>
 <section class="card">
   <h2>ログ管理</h2>
-  <p>対局ログ、共有ログ、AI観戦ログを今後まとめます。</p>
-  <button disabled>準備中</button>
+  <p>現在保存されているアプリ・対戦セッションログを一覧表示します。</p>
+  <a class="button" href="/logs">開く</a>
 </section>
 <section class="card">
   <h2>設定</h2>
-  <p>UI倍率、保存先、更新設定、開発者モードを今後追加します。</p>
-  <button disabled>準備中</button>
+  <p>プレイヤー識別子と対戦キー長を保存します。</p>
+  <a class="button" href="/settings">開く</a>
 </section>
 <section class="card">
   <h2>診断・バージョン</h2>
@@ -540,9 +653,17 @@ async function startManual() {
 }
 </script>
 """
+        return body.replace("{active_deck}", active_deck)
 
     def remote_body(self) -> str:
-        return """
+        settings = self.app.load_settings()
+        player_id = html.escape(str(settings.get("player_id") or ""))
+        key_length = int(settings.get("remote_key_length") or 4)
+        options = "".join(
+            f'<option value="{n}" {"selected" if n == key_length else ""}>{n}桁</option>'
+            for n in (3, 4, 5)
+        )
+        return f"""
 <section class="panel">
 <h2>リモート対戦セッション</h2>
 <p>キーは英数字3〜5桁です。ログ上では日付・プレイヤー識別子・キーを結合して区別します。</p>
@@ -550,15 +671,11 @@ async function startManual() {
   <div class="row">
     <div>
       <label for="player_id">プレイヤー識別子</label>
-      <input id="player_id" name="player_id" maxlength="24" required placeholder="TAKESHI">
+      <input id="player_id" name="player_id" maxlength="24" required placeholder="TAKESHI" value="{player_id}">
     </div>
     <div>
       <label for="key_length">自動生成するキー長</label>
-      <select id="key_length" name="key_length">
-        <option value="3">3桁</option>
-        <option value="4" selected>4桁</option>
-        <option value="5">5桁</option>
-      </select>
+      <select id="key_length" name="key_length">{options}</select>
     </div>
   </div>
   <label for="short_key">相手から受け取ったキー（任意）</label>
@@ -570,19 +687,28 @@ async function startManual() {
 
     def decks_body(self) -> str:
         decks = self.app.list_decks()
+        active = str(self.app.load_settings().get("active_deck") or "")
         if not decks:
-            rows = "<tr><td colspan='4' class='warn'>既存デッキが見つかりません。</td></tr>"
+            rows = "<tr><td colspan='5' class='warn'>既存デッキが見つかりません。</td></tr>"
         else:
             rows = "".join(
-                f"<tr><td>{html.escape(deck['name'])}</td><td><code>{html.escape(deck['path'])}</code></td><td>{deck['size']}</td><td>{html.escape(deck['modified'])}</td></tr>"
+                (
+                    f"<tr><td>{'使用中' if deck['path'] == active else ''}</td>"
+                    f"<td>{html.escape(deck['name'])}</td>"
+                    f"<td><code>{html.escape(deck['path'])}</code></td>"
+                    f"<td>{html.escape(deck['modified'])}</td>"
+                    f"<td><form method='post' action='/decks/select'>"
+                    f"<input type='hidden' name='deck_path' value='{html.escape(deck['path'], quote=True)}'>"
+                    f"<button type='submit' class='secondary'>選択</button></form></td></tr>"
+                )
                 for deck in decks
             )
         return f"""
 <section class="panel">
 <h2>検出済みデッキ</h2>
-<p>初期版では既存ファイルの一覧表示のみです。編集・検証・シミュレータへの受け渡しは次段階で追加します。</p>
+<p>選択結果は <code>{html.escape(SETTINGS_PATH)}</code> に保存します。現行runtimeに専用引数がないため、起動時には接続契約として <code>LLOCG_APP_SELECTED_DECK</code> も渡します。</p>
 <table>
-<thead><tr><th>名前</th><th>パス</th><th>bytes</th><th>更新日時</th></tr></thead>
+<thead><tr><th>状態</th><th>名前</th><th>パス</th><th>更新日時</th><th></th></tr></thead>
 <tbody>{rows}</tbody>
 </table>
 </section>
@@ -628,6 +754,48 @@ poll();
 </script>
 """
 
+    def logs_body(self) -> str:
+        logs = self.app.list_logs()
+        if not logs:
+            rows = "<tr><td colspan='4' class='warn'>ログファイルはまだありません。</td></tr>"
+        else:
+            rows = "".join(
+                f"<tr><td>{html.escape(item['name'])}</td><td><code>{html.escape(item['path'])}</code></td><td>{item['size']}</td><td>{html.escape(item['modified'])}</td></tr>"
+                for item in logs
+            )
+        return f"""
+<section class="panel">
+<h2>ログ管理</h2>
+<p>現在はファイル一覧まで実装しています。対局イベント表示と比較は後続実装です。</p>
+<table>
+<thead><tr><th>名前</th><th>パス</th><th>bytes</th><th>更新日時</th></tr></thead>
+<tbody>{rows}</tbody>
+</table>
+</section>
+"""
+
+    def settings_body(self) -> str:
+        settings = self.app.load_settings()
+        player = html.escape(str(settings.get("player_id") or ""))
+        key_length = int(settings.get("remote_key_length") or 4)
+        options = "".join(
+            f'<option value="{n}" {"selected" if n == key_length else ""}>{n}桁</option>'
+            for n in (3, 4, 5)
+        )
+        return f"""
+<section class="panel">
+<h2>設定</h2>
+<form method="post" action="/settings/save">
+<label for="player_id">プレイヤー識別子</label>
+<input id="player_id" name="player_id" maxlength="24" value="{player}" required>
+<label for="remote_key_length">リモート対戦キー長</label>
+<select id="remote_key_length" name="remote_key_length">{options}</select>
+<div style="margin-top:16px"><button type="submit">保存</button></div>
+</form>
+<p class="status">保存先：<code>{html.escape(SETTINGS_PATH)}</code></p>
+</section>
+"""
+
     def diagnostics_body(self) -> str:
         diag = self.app.diagnostics()
         def flag(value: bool) -> str:
@@ -647,6 +815,8 @@ poll();
 <tr><th>DB読込エラー</th><td>{html.escape(str(diag['db_error'] or '-'))}</td></tr>
 <tr><th>カード画像数</th><td>{html.escape(str(diag['image_count']))}</td></tr>
 <tr><th>デッキ数</th><td>{html.escape(str(diag['deck_count']))}</td></tr>
+<tr><th>選択デッキ</th><td><code>{html.escape(str(diag['active_deck'] or '-'))}</code></td></tr>
+<tr><th>ログ数</th><td>{html.escape(str(diag['log_count']))}</td></tr>
 </table>
 </section>
 """
