@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "source_csv": "_db_recovery_1039_20260708/cards_min_tokv1.csv",
+  "source_csv": "llocg_db_out_full/cards_min_tokv1.csv",
   "cards": [
     {
       "cardnumber": "LL-PR-004",
@@ -2677,6 +2677,44 @@
               "cost_op": null,
               "effect_op": null,
               "raw": "・相手のステージにいる元々持つ\n<(ブレード)>\nが3つ以下のメンバー1人をウェイトにする。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!-bp5-111",
+      "cardname": "綺羅ツバサ",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "常時",
+          "trigger": "BODY",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分のステージにいるこのメンバー以外の『A-RISE』のメンバー1人につき、<(青)>を得る。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分のステージにいるこのメンバー以外の『A-RISE』のメンバー1人につき、<(青)>\nを得る。"
+            }
+          ]
+        },
+        {
+          "ability_type": "起動",
+          "trigger": "BODY",
+          "conditions": "ターン1回",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "手札を1枚控え室に置く",
+              "effect_template": "ウェイト状態のメンバー1人をアクティブにする。これにより相手のステージにいるメンバーをアクティブにした場合、自分の控え室からライブカードを1枚控え室に置く。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "手札を1枚控え室に置く：ウェイト状態のメンバー1人をアクティブにする。これにより相手のステージにいるメンバーをアクティブにした場合、自分の控え室からライブカードを1枚控え室に置く。"
             }
           ]
         }
@@ -12648,6 +12686,44 @@
       ]
     },
     {
+      "cardnumber": "PL!N-bp7-003",
+      "cardname": "桜坂しずく",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "起動",
+          "trigger": "BODY",
+          "conditions": "ターン1回",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "デッキの上からカードを5枚控え室に置く",
+              "effect_template": "自分の控え室にあるコスト17以下の『虹ヶ咲』のメンバーカード1枚をこのメンバーの下に置く。そうしたとき、ライブ終了時まで、このメンバーが元々持つハートは、これにより下に置いたメンバーカードが持つハートと同じになる。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "デッキの上からカードを5枚控え室に置く：自分の控え室にあるコスト17以下の『虹ヶ咲』のメンバーカード1枚をこのメンバーの下に置く。そうしたとき、ライブ終了時まで、このメンバーが元々持つハートは、これにより下に置いたメンバーカードが持つハートと同じになる。"
+            }
+          ]
+        },
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ開始時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "ライブ終了時まで、このメンバーの下に置かれている名前の異なるメンバーカード1枚につき、<(ブレード)>を得る。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "ライブ終了時まで、このメンバーの下に置かれている名前の異なるメンバーカード1枚につき、<(ブレード)>を得る。"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "cardnumber": "PL!N-bp7-004",
       "cardname": "朝香果林",
       "card_type": "MEMBER",
@@ -17157,6 +17233,120 @@
       ]
     },
     {
+      "cardnumber": "PL!S-bp7-003",
+      "cardname": "松浦果南",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "登場/ライブ開始時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分のデッキの一番上のカードを見る。それをデッキの一番下に置いてもよい。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分のデッキの一番上のカードを見る。それをデッキの一番下に置いてもよい。"
+            }
+          ]
+        },
+        {
+          "ability_type": "自動",
+          "trigger": "登場",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "以下から1つを選ぶ。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "以下から1つを選ぶ。"
+            },
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "ライブ終了時まで、自分のステージにいる元々持つ<(ブレード)>の数が3つ以下の『Aqours』のメンバーは、相手の効果によってはウェイトしない。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "・ライブ終了時まで、自分のステージにいる元々持つ\n<(ブレード)>\nの数が3つ以下の『Aqours』のメンバーは、相手の効果によってはウェイトしない。"
+            },
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "このメンバーを『Aqours』か『Saint Snow』のメンバーがいるエリアにポジションチェンジする。",
+              "cost_op": null,
+              "effect_op": {
+                "id": "E129",
+                "template": "このメンバーを『Aqours』か『Saint Snow』のメンバーがいるエリアにポジションチェンジする。",
+                "op": "TODO",
+                "params": {},
+                "note": "",
+                "confidence": 0.0
+              },
+              "raw": "・このメンバーを『Aqours』か『Saint Snow』のメンバーがいるエリアにポジションチェンジする。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!S-bp7-005",
+      "cardname": "渡辺曜",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "登場",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分の控え室にあるメンバーカード1枚を、自分のステージにいるメンバー1人の下に置く。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分の控え室にあるメンバーカード1枚を、自分のステージにいるメンバー1人の下に置く。"
+            }
+          ]
+        },
+        {
+          "ability_type": "常時",
+          "trigger": "BODY",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分のステージにいる、メンバーカードが下に貸し枯れている『Aqours』のメンバーは、<(ブレード)>を得る。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分のステージにいる、メンバーカードが下に貸し枯れている『Aqours』のメンバーは、<(ブレード)>\nを得る。"
+            }
+          ]
+        },
+        {
+          "ability_type": "起動",
+          "trigger": "BODY",
+          "conditions": "センター;ターン1回",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "手札を2枚控え室に置く",
+              "effect_template": "このメンバーと自分のステージにいるほかの『Aqours』のメンバー1人を選ぶ。それらが持つ<登場>能力それぞれ1つ発動させる。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "手札を2枚控え室に置く：このメンバーと自分のステージにいるほかの『Aqours』のメンバー1人を選ぶ。それらが持つ\n<登場>\n能力それぞれ1つ発動させる。"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "cardnumber": "PL!S-bp7-016",
       "cardname": "国木田花丸",
       "card_type": "MEMBER",
@@ -17174,6 +17364,82 @@
               "cost_op": null,
               "effect_op": null,
               "raw": "自分のステージにメンバーが3人以上いるかぎり、\n<赤>\n<緑>\n<青>\nを得る。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!S-bp7-020",
+      "cardname": "HAPPY PARTY TRAIN",
+      "card_type": "LIVE",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ開始時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分のステージにいるすべてのメンバーがアクティブ状態の場合、このカードの必要ハートを<任意>減らす。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分のステージにいるすべてのメンバーがアクティブ状態の場合、このカードの必要ハートを\n<任意>\n減らす。"
+            }
+          ]
+        },
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ開始時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分のデッキの下からカードを1枚控え室に置く。それが『Aqours』のメンバーカードの場合、このカードの必要ハートを<任意>減らす。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分のデッキの下からカードを1枚控え室に置く。それが『Aqours』のメンバーカードの場合、このカードの必要ハートを\n<任意>\n減らす。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!S-bp7-022",
+      "cardname": "恋になりたいAQUARIUM",
+      "card_type": "LIVE",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "常時",
+          "trigger": "BODY",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分のエールは、デッキの上から行う代わりにデッキの下から行う。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分のエールは、デッキの上から行う代わりにデッキの下から行う。"
+            }
+          ]
+        },
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ成功時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "エールにより公開された自分のカードの中に、<赤>、<緑>、<青>を持つ『Aqours』のメンバーカードがそれぞれあるなら、このカードのスコアを+1する。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "エールにより公開された自分のカードの中に、\n<赤>、\n<緑>、\n<青>\nを持つ『Aqours』のメンバーカードがそれぞれあるなら、このカードのスコアを+1する。"
             }
           ]
         }
@@ -21297,6 +21563,97 @@
       ]
     },
     {
+      "cardnumber": "PL!SP-bp7-005",
+      "cardname": "葉月恋",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "BODY",
+          "conditions": "ターン1回",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "このメンバーが登場するか、自分のエネルギーがエネルギー置き場からエネロキーデッキに置かれたとき、自分のエネルギーデッキから、エネルギーカードを1枚ウェイト状態で置く。そのエネルギーカードは、次のターンのアクティブフェイズにアクティブしない。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "このメンバーが登場するか、自分のエネルギーがエネルギー置き場からエネロキーデッキに置かれたとき、自分のエネルギーデッキから、エネルギーカードを1枚ウェイト状態で置く。そのエネルギーカードは、次のターンのアクティブフェイズにアクティブしない。"
+            }
+          ]
+        },
+        {
+          "ability_type": "自動",
+          "trigger": "BODY",
+          "conditions": "ターン2回",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分のカードの効果によって、自分のエネルギー置き場にエネルギーが置かれたとき、ライブ終了時まで、<(ブレード)>を得る。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分のカードの効果によって、自分のエネルギー置き場にエネルギーが置かれたとき、ライブ終了時まで、<(ブレード)>\nを得る。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!SP-bp7-007",
+      "cardname": "米女メイ",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ開始時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "エネルギー置き場にあるエネルギー2枚をエネルギーデッキに置いてもよい",
+              "effect_template": "ライブ終了時まで、<(ブレード)><(ブレード)><(ブレード)>を得る。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "エネルギー置き場にあるエネルギー2枚をエネルギーデッキに置いてもよい：ライブ終了時まで、<(ブレード)><(ブレード)><(ブレード)>\nを得る。"
+            }
+          ]
+        },
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ成功時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分のエネルギーデッキから、エネルギーカードを2枚ウェイト状態で置く。それらのエネルギーカードは、次のターンのアクティブフェイズにアクティブしない。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分のエネルギーデッキから、エネルギーカードを2枚ウェイト状態で置く。それらのエネルギーカードは、次のターンのアクティブフェイズにアクティブしない。"
+            }
+          ]
+        },
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ成功時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分のエネルギーが相手より多い場合、エネルギーを5枚アクティブにする。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分のエネルギーが相手より多い場合、エネルギーを5枚アクティブにする。"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "cardnumber": "PL!SP-bp7-014",
       "cardname": "嵐千砂都",
       "card_type": "MEMBER",
@@ -24136,44 +24493,6 @@
               "cost_op": null,
               "effect_op": null,
               "raw": "ライブ終了時まで、自分のステージにいる、このターン中にエリアを移動したすべての『Liella!』メンバーは、<(ブレード)>を得る。"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "cardnumber": "PL!-bp5-111",
-      "cardname": "綺羅ツバサ",
-      "card_type": "MEMBER",
-      "parse_status": "OK",
-      "abilities": [
-        {
-          "ability_type": "常時",
-          "trigger": "BODY",
-          "conditions": "",
-          "clauses": [
-            {
-              "optional": false,
-              "cost_template": "",
-              "effect_template": "自分のステージにいるこのメンバー以外の『A-RISE』のメンバー1人につき、<(青)>を得る。",
-              "cost_op": null,
-              "effect_op": null,
-              "raw": "自分のステージにいるこのメンバー以外の『A-RISE』のメンバー1人につき、<(青)>\nを得る。"
-            }
-          ]
-        },
-        {
-          "ability_type": "起動",
-          "trigger": "BODY",
-          "conditions": "ターン1回",
-          "clauses": [
-            {
-              "optional": false,
-              "cost_template": "手札を1枚控え室に置く",
-              "effect_template": "ウェイト状態のメンバー1人をアクティブにする。これにより相手のステージにいるメンバーをアクティブにした場合、自分の控え室からライブカードを1枚控え室に置く。",
-              "cost_op": null,
-              "effect_op": null,
-              "raw": "手札を1枚控え室に置く：ウェイト状態のメンバー1人をアクティブにする。これにより相手のステージにいるメンバーをアクティブにした場合、自分の控え室からライブカードを1枚控え室に置く。"
             }
           ]
         }
