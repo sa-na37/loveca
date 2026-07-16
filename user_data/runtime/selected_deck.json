@@ -1,0 +1,221 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-15T11:15:38+09:00",
+  "deck_name": "10軸青紫",
+  "deck_path": "llocg_db_out_full/decklists/deck_1RCBL.tsv",
+  "cards": [
+    "PL!-bp3-012",
+    "PL!-bp3-012",
+    "PL!-pb1-015",
+    "PL!-pb1-015",
+    "PL!-pb1-015",
+    "PL!-pb1-024",
+    "PL!-pb1-024",
+    "PL!HS-PR-018",
+    "PL!HS-PR-018",
+    "PL!HS-PR-018",
+    "PL!HS-PR-023",
+    "PL!HS-PR-023",
+    "PL!HS-PR-023",
+    "PL!HS-PR-023",
+    "PL!HS-PR-026",
+    "PL!HS-PR-026",
+    "PL!HS-PR-026",
+    "PL!N-bp1-006",
+    "PL!N-bp1-006",
+    "PL!N-bp1-012",
+    "PL!N-bp1-012",
+    "PL!N-bp1-026",
+    "PL!N-bp1-029",
+    "PL!N-bp1-029",
+    "PL!N-bp1-029",
+    "PL!N-bp3-009",
+    "PL!N-bp3-030",
+    "PL!N-bp3-032",
+    "PL!N-bp4-017",
+    "PL!N-bp4-029",
+    "PL!N-bp4-029",
+    "PL!N-bp4-030",
+    "PL!N-bp4-030",
+    "PL!N-bp4-030",
+    "PL!N-bp4-030",
+    "PL!N-pb1-005",
+    "PL!N-pb1-005",
+    "PL!N-pb1-005",
+    "PL!N-pb1-005",
+    "PL!N-pb1-010",
+    "PL!N-pb1-010",
+    "PL!N-pb1-010",
+    "PL!N-pb1-011",
+    "PL!N-pb1-011",
+    "PL!N-sd1-004",
+    "PL!N-sd1-004",
+    "PL!N-sd1-006",
+    "PL!N-sd1-006",
+    "PL!N-sd1-006",
+    "PL!S-pb1-017",
+    "PL!S-pb1-017",
+    "PL!S-pb1-017",
+    "PL!S-pb1-017",
+    "PL!SP-pb1-014",
+    "PL!SP-pb1-014",
+    "PL!SP-pb1-014",
+    "PL!SP-sd1-019",
+    "PL!SP-sd1-019",
+    "PL!SP-sd1-019",
+    "PL!SP-sd1-019"
+  ],
+  "variants": [
+    {
+      "card_no": "PL!-bp3-012",
+      "count": 2,
+      "rarity": "PR",
+      "variant_id": ""
+    },
+    {
+      "card_no": "PL!-pb1-015",
+      "count": 3,
+      "rarity": "P+",
+      "variant_id": ""
+    },
+    {
+      "card_no": "PL!-pb1-024",
+      "count": 2,
+      "rarity": "N",
+      "variant_id": ""
+    },
+    {
+      "card_no": "PL!HS-PR-018",
+      "count": 3,
+      "rarity": "PR",
+      "variant_id": ""
+    },
+    {
+      "card_no": "PL!HS-PR-023",
+      "count": 4,
+      "rarity": "PR",
+      "variant_id": ""
+    },
+    {
+      "card_no": "PL!HS-PR-026",
+      "count": 3,
+      "rarity": "PR",
+      "variant_id": ""
+    },
+    {
+      "card_no": "PL!N-bp1-006",
+      "count": 2,
+      "rarity": "SEC",
+      "variant_id": ""
+    },
+    {
+      "card_no": "PL!N-bp1-012",
+      "count": 2,
+      "rarity": "SEC",
+      "variant_id": ""
+    },
+    {
+      "card_no": "PL!N-bp1-026",
+      "count": 1,
+      "rarity": "L",
+      "variant_id": ""
+    },
+    {
+      "card_no": "PL!N-bp1-029",
+      "count": 3,
+      "rarity": "L",
+      "variant_id": ""
+    },
+    {
+      "card_no": "PL!N-bp3-009",
+      "count": 1,
+      "rarity": "SEC",
+      "variant_id": ""
+    },
+    {
+      "card_no": "PL!N-bp3-030",
+      "count": 1,
+      "rarity": "L",
+      "variant_id": ""
+    },
+    {
+      "card_no": "PL!N-bp3-032",
+      "count": 1,
+      "rarity": "L",
+      "variant_id": ""
+    },
+    {
+      "card_no": "PL!N-bp4-017",
+      "count": 1,
+      "rarity": "N",
+      "variant_id": ""
+    },
+    {
+      "card_no": "PL!N-bp4-029",
+      "count": 2,
+      "rarity": "L",
+      "variant_id": ""
+    },
+    {
+      "card_no": "PL!N-bp4-030",
+      "count": 4,
+      "rarity": "L",
+      "variant_id": ""
+    },
+    {
+      "card_no": "PL!N-pb1-005",
+      "count": 4,
+      "rarity": "P+",
+      "variant_id": ""
+    },
+    {
+      "card_no": "PL!N-pb1-010",
+      "count": 3,
+      "rarity": "P+",
+      "variant_id": ""
+    },
+    {
+      "card_no": "PL!N-pb1-011",
+      "count": 2,
+      "rarity": "P+",
+      "variant_id": ""
+    },
+    {
+      "card_no": "PL!N-sd1-004",
+      "count": 2,
+      "rarity": "SD",
+      "variant_id": ""
+    },
+    {
+      "card_no": "PL!N-sd1-006",
+      "count": 3,
+      "rarity": "SD",
+      "variant_id": ""
+    },
+    {
+      "card_no": "PL!S-pb1-017",
+      "count": 4,
+      "rarity": "N",
+      "variant_id": ""
+    },
+    {
+      "card_no": "PL!SP-pb1-014",
+      "count": 3,
+      "rarity": "N",
+      "variant_id": ""
+    },
+    {
+      "card_no": "PL!SP-sd1-019",
+      "count": 4,
+      "rarity": "SD",
+      "variant_id": ""
+    }
+  ],
+  "composition": {
+    "member": 48,
+    "live": 12,
+    "other": 0,
+    "total": 60,
+    "valid": true
+  }
+}

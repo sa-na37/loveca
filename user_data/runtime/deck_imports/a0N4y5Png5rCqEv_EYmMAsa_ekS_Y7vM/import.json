@@ -1,0 +1,26 @@
+{
+  "import_token": "a0N4y5Png5rCqEv_EYmMAsa_ekS_Y7vM",
+  "deck_code": "W42B",
+  "deck_name": "推し活",
+  "source_tsv": "/Users/tekitou/Desktop/gsim/loveca/user_data/runtime/deck_imports/a0N4y5Png5rCqEv_EYmMAsa_ekS_Y7vM/source/decklists/deck_W42B.tsv",
+  "source_meta": "/Users/tekitou/Desktop/gsim/loveca/user_data/runtime/deck_imports/a0N4y5Png5rCqEv_EYmMAsa_ekS_Y7vM/source/decklists/deck_W42B.meta.json",
+  "preview_tsv": "/Users/tekitou/Desktop/gsim/loveca/user_data/runtime/deck_imports/a0N4y5Png5rCqEv_EYmMAsa_ekS_Y7vM/preview.tsv",
+  "created_at": "2026-07-15T13:07:15+09:00",
+  "script": "llocg_deckcode_to_decklist.py",
+  "command": [
+    "/Library/Frameworks/Python.framework/Versions/3.10/bin/python3",
+    "/Users/tekitou/Desktop/gsim/loveca/llocg_deckcode_to_decklist.py",
+    "--root",
+    "/Users/tekitou/Desktop/gsim/loveca/user_data/runtime/deck_imports/a0N4y5Png5rCqEv_EYmMAsa_ekS_Y7vM/source",
+    "--code",
+    "W42B"
+  ],
+  "source_metadata": {
+    "deck_code": "W42B",
+    "deck_name": "推し活",
+    "source_url": "https://decklog.bushiroad.com/view/W42B",
+    "html_path": "/Users/tekitou/Desktop/gsim/loveca/user_data/runtime/deck_imports/a0N4y5Png5rCqEv_EYmMAsa_ekS_Y7vM/source/decklists/W42B.html",
+    "tsv_path": "/Users/tekitou/Desktop/gsim/loveca/user_data/runtime/deck_imports/a0N4y5Png5rCqEv_EYmMAsa_ekS_Y7vM/source/decklists/deck_W42B.tsv",
+    "fetched_at": "2026-07-15T13:07:15"
+  }
+}
