@@ -1,0 +1,178 @@
+{
+  "root": "llocg_db_out_full",
+  "code": "ui",
+  "deck_code": "1RCBL",
+  "seed": 1,
+  "debug": true,
+  "turn": 1,
+  "phase": "MAIN",
+  "live_start_prompted": false,
+  "deck": [
+    "LL-bp5-002",
+    "PL!-PR-005",
+    "PL!-PR-006",
+    "LL-bp5-001"
+  ],
+  "hand": [],
+  "hand_detail": [],
+  "energy_active": 0,
+  "energy_wait": 20,
+  "opponent_wait_count": 0,
+  "opponent_success_count": 0,
+  "opponent_excess_heart_count": 0,
+  "turn_order": "first",
+  "next_turn_order": "",
+  "stage": {
+    "L": null,
+    "C": {
+      "cardnumber": "LL-bp1-001",
+      "active": true,
+      "temp_blade": 0,
+      "temp_hearts": {},
+      "temp_score": 0,
+      "temp_cost": 0,
+      "temp_until": "",
+      "energy_under": 0,
+      "under_cards": [],
+      "heart_replace_color": ""
+    },
+    "R": null
+  },
+  "green_room": [
+    "LL-bp5-001"
+  ],
+  "set_zone": [],
+  "live_set_limit": 3,
+  "set_zone_score_rows": [],
+  "resolve_zone": [],
+  "yell_reveal_acknowledged_this_live": false,
+  "yell_flow_completed_this_live": false,
+  "success_zone": [],
+  "success_zone_score_sum": 0,
+  "success_zone_heart_color": "",
+  "success_zone_heart_pos": "",
+  "pending": [
+    {
+      "kind": "confirm_effect",
+      "text": "条件を満たすカードが控え室にないため、この効果は解決されませんでした。",
+      "detail_text": "自分の控え室からメンバーカードを1枚手札に加える。",
+      "options": [
+        "ok"
+      ],
+      "ctx": {
+        "source_cn": "LL-bp1-001",
+        "_ack_only": true
+      },
+      "source_cn": "LL-bp1-001"
+    }
+  ],
+  "deck_refreshed_this_turn": false,
+  "refresh_notice_seq": 0,
+  "refresh_notice_ack_seq": 0,
+  "refresh_notices": [],
+  "effect_events": [],
+  "public_reveal_events": [],
+  "public_hand_revealed_cards": [],
+  "public_hand_revealed_orient": {},
+  "public_hand_reveal_events": [],
+  "cn2name": {
+    "LL-bp1-001": "上原歩夢＆澁谷かのん＆日野下花帆",
+    "LL-bp5-001": "Live with a smile!",
+    "LL-bp5-002": "Bring the LOVE！",
+    "PL!-PR-005": "星空凛",
+    "PL!-PR-006": "西木野真姫"
+  },
+  "cn2label": {
+    "LL-bp1-001": "20/上原歩夢＆澁谷かのん＆日野下花帆",
+    "LL-bp5-001": "Live with a smile!",
+    "LL-bp5-002": "Bring the LOVE！",
+    "PL!-PR-005": "9/星空凛",
+    "PL!-PR-006": "9/西木野真姫"
+  },
+  "cn2type": {
+    "LL-bp1-001": "MEMBER",
+    "LL-bp5-001": "LIVE",
+    "LL-bp5-002": "LIVE",
+    "PL!-PR-005": "MEMBER",
+    "PL!-PR-006": "MEMBER"
+  },
+  "cn2is_live": {
+    "LL-bp1-001": false,
+    "LL-bp5-001": true,
+    "LL-bp5-002": true,
+    "PL!-PR-005": false,
+    "PL!-PR-006": false
+  },
+  "cn2yell_hearts": {
+    "LL-bp5-002": {
+      "all": 1
+    }
+  },
+  "cn2yell_draw_icons": {},
+  "cn2yell_score_icons": {
+    "LL-bp5-001": 1
+  },
+  "cn2group": {
+    "LL-bp1-001": "虹ヶ咲 / Liella! / 蓮ノ空",
+    "PL!-PR-005": "μ's",
+    "PL!-PR-006": "μ's"
+  },
+  "cn2unit": {
+    "PL!-PR-005": "lily white",
+    "PL!-PR-006": "BiBi"
+  },
+  "cn2cost": {
+    "LL-bp1-001": 20,
+    "LL-bp5-001": 0,
+    "LL-bp5-002": 0,
+    "PL!-PR-005": 9,
+    "PL!-PR-006": 9
+  },
+  "cn2score": {
+    "LL-bp1-001": 0,
+    "LL-bp5-001": 1,
+    "LL-bp5-002": 4,
+    "PL!-PR-005": 0,
+    "PL!-PR-006": 0
+  },
+  "stage_detail": {
+    "L": null,
+    "C": {
+      "cardnumber": "LL-bp1-001",
+      "name": "上原歩夢＆澁谷かのん＆日野下花帆",
+      "type": "MEMBER",
+      "has_sac": false,
+      "energy_under": 0,
+      "under_cards": [],
+      "base_cost": 20,
+      "effective_cost": 20,
+      "can_activate": false,
+      "temp_blade": 0,
+      "temp_hearts": {},
+      "success_zone_hearts_bonus": {},
+      "always_hearts_bonus": {},
+      "always_blade_bonus": 0,
+      "always_score_bonus": 0
+    },
+    "R": null
+  },
+  "log": [
+    "14:51:01 [NEW] code=1RCBL seed=1 opening_hand=6 turn=1",
+    "14:51:01 [PHASE] ACTIVE (refresh) E active=3 wait=0",
+    "14:51:01 [PHASE] ENERGY (+1) E active=4 wait=0",
+    "14:51:01 [PHASE] DRAW (draw 1) hand=7 deck=53",
+    "14:51:01 [PHASE] MAIN turn=1",
+    "[PHASE] MULLIGAN (choose cards to redraw)",
+    "[DEBUG_START] deck_exact strict: dropped original deck remainder",
+    "[DEBUG_START] phase=MAIN turn=1 hand=1 E=20/99 wait=0",
+    "[EXT] public reveal metadata gate active",
+    "[EXT] effect matchers active: broad generic green pick one to hand",
+    "[EXT] loaded llocg_ext extensions",
+    "[STATE] stage enter this turn count=1 cn=LL-bp1-001 pos=C origin=hand",
+    "[PLAY] C <- LL-bp1-001 (pay 20; E active=0 wait=20)",
+    "[AUTO_EXT] no any MEMBER in green_room (控え室回収)",
+    "[AUTO] LL-bp1-001[登場]: applied 自分の控え室からメンバーカードを1枚手札に加える。"
+  ],
+  "banner": null,
+  "ui_version": "live_attempt_summary_popup_rebase_20260706f"
+}

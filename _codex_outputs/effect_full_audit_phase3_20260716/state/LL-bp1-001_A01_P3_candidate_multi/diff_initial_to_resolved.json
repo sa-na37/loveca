@@ -1,0 +1,49 @@
+[
+  {
+    "path": "energy_active",
+    "before": 20,
+    "after": 0
+  },
+  {
+    "path": "energy_wait",
+    "before": 0,
+    "after": 20
+  },
+  {
+    "path": "green_room",
+    "before": [
+      "LL-bp2-001",
+      "LL-bp3-001",
+      "LL-bp5-001"
+    ],
+    "after": [
+      "LL-bp3-001",
+      "LL-bp5-001"
+    ]
+  },
+  {
+    "path": "hand",
+    "before": [
+      "LL-bp1-001"
+    ],
+    "after": [
+      "LL-bp2-001"
+    ]
+  },
+  {
+    "path": "stage.C",
+    "before": null,
+    "after": {
+      "cardnumber": "LL-bp1-001",
+      "active": true,
+      "temp_blade": 0,
+      "temp_hearts": {},
+      "temp_score": 0,
+      "temp_cost": 0,
+      "temp_until": "",
+      "energy_under": 0,
+      "under_cards": [],
+      "heart_replace_color": ""
+    }
+  }
+]

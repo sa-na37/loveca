@@ -1,0 +1,236 @@
+issue_id,status,audit_id,test_case_id,cardnumber,cardname,effect_text,implementation_location,debug_command,operation_steps,expected_result,actual_result,state_diff,log,screenshot_path,severity,affected_family,suspected_cause,fix_direction,human_rule_confirmation_required
+P2-004,NOT_IMPLEMENTED_CONFIRMED,LL-bp2-001#A02,LL-bp2-001#A02#P2T01,LL-bp2-001,渡辺曜＆鬼塚夏美＆大沢瑠璃乃,"<常時>
+このメンバーはバトンタッチで控え室に置けない。",,"#!/usr/bin/env bash
+set -euo pipefail
+cd '/Users/tekitou/Desktop/gsim/loveca'
+unset LLOCG_START_STAGE LLOCG_START_STAGE_L LLOCG_START_STAGE_C LLOCG_START_STAGE_R LLOCG_START_HAND LLOCG_START_HAND_SIZE LLOCG_START_SHUFFLE LLOCG_START_GREEN LLOCG_START_SUCCESS LLOCG_START_RESOLVE LLOCG_START_DECK_TOP LLOCG_START_DECK_EXACT LLOCG_START_DECK_EXACT_STRICT LLOCG_START_PHASE LLOCG_START_TURN LLOCG_START_ENERGY_ACTIVE LLOCG_START_ENERGY_WAIT LLOCG_DEBUG_PRESET LLOCG_DEBUG_EFFECT_CARD LLOCG_START_DEBUG LLOCG_DEBUG_LIVE_IN_HAND LLOCG_DEBUG_MEMBER_IN_HAND
+export LLOCG_DEBUG_PRESET='effect'
+export LLOCG_START_PHASE='MAIN'
+export LLOCG_START_TURN='1'
+export LLOCG_START_DEBUG='1'
+export LLOCG_DEBUG_EFFECT_CARD='LL-bp2-001'
+export LLOCG_START_HAND_SIZE='0'
+export LLOCG_START_ENERGY_ACTIVE='20'
+export LLOCG_START_ENERGY_WAIT='0'
+export LLOCG_DEBUG_LIVE_IN_HAND='0'
+export LLOCG_DEBUG_MEMBER_IN_HAND='0'
+export LLOCG_START_DECK_TOP='LL-bp1-001,LL-bp5-001,LL-bp3-001'
+export LLOCG_START_STAGE_C='LL-bp2-001'
+export LLOCG_START_HAND='LL-PR-004'
+python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8787 --debug
+",起動直後、常時補正またはstate表示を確認する,pending/effect_events/logにsource_cnまたは対象カード由来の記録が増える。解決後は該当領域/数値差分を確認する,no implementation route confirmed,,logs/LL-bp2-001_A02_P2T01.command.log,,P1,,no implementation route confirmed,Runtime修正は本Phaseでは行わない。generic matcher/trigger/pending/state routeとして次Phaseで修正対象化する,NO
+P2-005,NOT_IMPLEMENTED_CONFIRMED,LL-bp7-001#A01,LL-bp7-001#A01#P2T01,LL-bp7-001,国木田花丸＆優木せつ菜＆嵐千砂都,"<常時>
+このカードのプレイに際し、自分の手札から「国木田花丸」と「優木せつ菜」と「嵐千砂都」のメンバーカードをそれぞれ1枚ずつ控え室に置いてもよい。そうしたとき、このカードのコストは10になる。",,"#!/usr/bin/env bash
+set -euo pipefail
+cd '/Users/tekitou/Desktop/gsim/loveca'
+unset LLOCG_START_STAGE LLOCG_START_STAGE_L LLOCG_START_STAGE_C LLOCG_START_STAGE_R LLOCG_START_HAND LLOCG_START_HAND_SIZE LLOCG_START_SHUFFLE LLOCG_START_GREEN LLOCG_START_SUCCESS LLOCG_START_RESOLVE LLOCG_START_DECK_TOP LLOCG_START_DECK_EXACT LLOCG_START_DECK_EXACT_STRICT LLOCG_START_PHASE LLOCG_START_TURN LLOCG_START_ENERGY_ACTIVE LLOCG_START_ENERGY_WAIT LLOCG_DEBUG_PRESET LLOCG_DEBUG_EFFECT_CARD LLOCG_START_DEBUG LLOCG_DEBUG_LIVE_IN_HAND LLOCG_DEBUG_MEMBER_IN_HAND
+export LLOCG_DEBUG_PRESET='effect'
+export LLOCG_START_PHASE='MAIN'
+export LLOCG_START_TURN='1'
+export LLOCG_START_DEBUG='1'
+export LLOCG_DEBUG_EFFECT_CARD='LL-bp7-001'
+export LLOCG_START_HAND_SIZE='0'
+export LLOCG_START_ENERGY_ACTIVE='20'
+export LLOCG_START_ENERGY_WAIT='0'
+export LLOCG_DEBUG_LIVE_IN_HAND='0'
+export LLOCG_DEBUG_MEMBER_IN_HAND='0'
+export LLOCG_START_DECK_TOP='LL-bp1-001,LL-bp5-001,LL-bp2-001'
+export LLOCG_START_STAGE_C='LL-bp7-001'
+export LLOCG_START_HAND='LL-PR-004'
+python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8787 --debug
+",起動直後、常時補正またはstate表示を確認する,pending/effect_events/logにsource_cnまたは対象カード由来の記録が増える。解決後は該当領域/数値差分を確認する,no implementation route confirmed,,logs/LL-bp7-001_A01_P2T01.command.log,,P1,,no implementation route confirmed,Runtime修正は本Phaseでは行わない。generic matcher/trigger/pending/state routeとして次Phaseで修正対象化する,NO
+P2-006,NOT_IMPLEMENTED_CONFIRMED,PL!-bp3-002#A02,PL!-bp3-002#A02#P2T01,PL!-bp3-002,絢瀬絵里,"<常時>
+相手のステージにいるウェイト状態のメンバー1人につき、
+<(ブレード)>
+を得る。",,"#!/usr/bin/env bash
+set -euo pipefail
+cd '/Users/tekitou/Desktop/gsim/loveca'
+unset LLOCG_START_STAGE LLOCG_START_STAGE_L LLOCG_START_STAGE_C LLOCG_START_STAGE_R LLOCG_START_HAND LLOCG_START_HAND_SIZE LLOCG_START_SHUFFLE LLOCG_START_GREEN LLOCG_START_SUCCESS LLOCG_START_RESOLVE LLOCG_START_DECK_TOP LLOCG_START_DECK_EXACT LLOCG_START_DECK_EXACT_STRICT LLOCG_START_PHASE LLOCG_START_TURN LLOCG_START_ENERGY_ACTIVE LLOCG_START_ENERGY_WAIT LLOCG_DEBUG_PRESET LLOCG_DEBUG_EFFECT_CARD LLOCG_START_DEBUG LLOCG_DEBUG_LIVE_IN_HAND LLOCG_DEBUG_MEMBER_IN_HAND
+export LLOCG_DEBUG_PRESET='effect'
+export LLOCG_START_PHASE='MAIN'
+export LLOCG_START_TURN='1'
+export LLOCG_START_DEBUG='1'
+export LLOCG_DEBUG_EFFECT_CARD='PL!-bp3-002'
+export LLOCG_START_HAND_SIZE='0'
+export LLOCG_START_ENERGY_ACTIVE='20'
+export LLOCG_START_ENERGY_WAIT='0'
+export LLOCG_DEBUG_LIVE_IN_HAND='0'
+export LLOCG_DEBUG_MEMBER_IN_HAND='0'
+export LLOCG_START_DECK_TOP='LL-bp1-001,LL-bp5-001,LL-bp2-001'
+export LLOCG_START_STAGE_C='PL!-bp3-002'
+export LLOCG_START_HAND='LL-PR-004'
+python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8787 --debug
+",起動直後、常時補正またはstate表示を確認する,pending/effect_events/logにsource_cnまたは対象カード由来の記録が増える。解決後は該当領域/数値差分を確認する,no implementation route confirmed,,logs/PL_-bp3-002_A02_P2T01.command.log,,P1,,no implementation route confirmed,Runtime修正は本Phaseでは行わない。generic matcher/trigger/pending/state routeとして次Phaseで修正対象化する,NO
+P2-007,UNREACHABLE_CONFIRMED,PL!-PR-020#A02,PL!-PR-020#A02#P2T01,PL!-PR-020,高坂穂乃果,"<常時>
+ライブの合計スコアを+1する。』を得る。",,"#!/usr/bin/env bash
+set -euo pipefail
+cd '/Users/tekitou/Desktop/gsim/loveca'
+unset LLOCG_START_STAGE LLOCG_START_STAGE_L LLOCG_START_STAGE_C LLOCG_START_STAGE_R LLOCG_START_HAND LLOCG_START_HAND_SIZE LLOCG_START_SHUFFLE LLOCG_START_GREEN LLOCG_START_SUCCESS LLOCG_START_RESOLVE LLOCG_START_DECK_TOP LLOCG_START_DECK_EXACT LLOCG_START_DECK_EXACT_STRICT LLOCG_START_PHASE LLOCG_START_TURN LLOCG_START_ENERGY_ACTIVE LLOCG_START_ENERGY_WAIT LLOCG_DEBUG_PRESET LLOCG_DEBUG_EFFECT_CARD LLOCG_START_DEBUG LLOCG_DEBUG_LIVE_IN_HAND LLOCG_DEBUG_MEMBER_IN_HAND
+export LLOCG_DEBUG_PRESET='effect'
+export LLOCG_START_PHASE='MAIN'
+export LLOCG_START_TURN='1'
+export LLOCG_START_DEBUG='1'
+export LLOCG_DEBUG_EFFECT_CARD='PL!-PR-020'
+export LLOCG_START_HAND_SIZE='0'
+export LLOCG_START_ENERGY_ACTIVE='20'
+export LLOCG_START_ENERGY_WAIT='0'
+export LLOCG_DEBUG_LIVE_IN_HAND='0'
+export LLOCG_DEBUG_MEMBER_IN_HAND='0'
+export LLOCG_START_DECK_TOP='LL-bp1-001,LL-bp5-001,LL-bp2-001'
+export LLOCG_START_STAGE_C='PL!-PR-020'
+export LLOCG_START_HAND='LL-PR-004'
+python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8787 --debug
+",起動直後、常時補正またはstate表示を確認する,pending/effect_events/logにsource_cnまたは対象カード由来の記録が増える。解決後は該当領域/数値差分を確認する,trigger path previously unreachable; route not accepted until runtime evidence exists,,logs/PL_-PR-020_A02_P2T01.command.log,,P1,,trigger path previously unreachable; route not accepted until runtime evidence exists,Runtime修正は本Phaseでは行わない。generic matcher/trigger/pending/state routeとして次Phaseで修正対象化する,NO
+P2-008,UNREACHABLE_CONFIRMED,PL!-bp4-002#A03,PL!-bp4-002#A03#P2T01,PL!-bp4-002,絢瀬絵里,"<ライブ成功時>
+能力も持たないカードがあるかぎり、
+<紫>
+<紫>
+を加える。",,"#!/usr/bin/env bash
+set -euo pipefail
+cd '/Users/tekitou/Desktop/gsim/loveca'
+unset LLOCG_START_STAGE LLOCG_START_STAGE_L LLOCG_START_STAGE_C LLOCG_START_STAGE_R LLOCG_START_HAND LLOCG_START_HAND_SIZE LLOCG_START_SHUFFLE LLOCG_START_GREEN LLOCG_START_SUCCESS LLOCG_START_RESOLVE LLOCG_START_DECK_TOP LLOCG_START_DECK_EXACT LLOCG_START_DECK_EXACT_STRICT LLOCG_START_PHASE LLOCG_START_TURN LLOCG_START_ENERGY_ACTIVE LLOCG_START_ENERGY_WAIT LLOCG_DEBUG_PRESET LLOCG_DEBUG_EFFECT_CARD LLOCG_START_DEBUG LLOCG_DEBUG_LIVE_IN_HAND LLOCG_DEBUG_MEMBER_IN_HAND
+export LLOCG_DEBUG_PRESET='effect'
+export LLOCG_START_PHASE='MAIN'
+export LLOCG_START_TURN='1'
+export LLOCG_START_DEBUG='1'
+export LLOCG_DEBUG_EFFECT_CARD='PL!-bp4-002'
+export LLOCG_START_HAND_SIZE='0'
+export LLOCG_START_ENERGY_ACTIVE='20'
+export LLOCG_START_ENERGY_WAIT='0'
+export LLOCG_DEBUG_LIVE_IN_HAND='0'
+export LLOCG_DEBUG_MEMBER_IN_HAND='0'
+export LLOCG_START_DECK_TOP='LL-bp1-001,LL-bp5-001,LL-bp2-001'
+export LLOCG_START_STAGE_C='PL!-bp4-002'
+export LLOCG_START_HAND='LL-PR-004'
+python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8787 --debug
+",別LIVEをセットし、必要ならライブ成功処理まで進める,pending/effect_events/logにsource_cnまたは対象カード由来の記録が増える。解決後は該当領域/数値差分を確認する,trigger path previously unreachable; route not accepted until runtime evidence exists,,logs/PL_-bp4-002_A03_P2T01.command.log,,P1,,trigger path previously unreachable; route not accepted until runtime evidence exists,Runtime修正は本Phaseでは行わない。generic matcher/trigger/pending/state routeとして次Phaseで修正対象化する,NO
+P2-009,UNREACHABLE_CONFIRMED,PL!-bp4-002#A04,PL!-bp4-002#A04#P2T01,PL!-bp4-002,絢瀬絵里,"<起動>
+<ターン1回>
+手札を2枚控え室に置く：自分の控え室から『μ's』のライブカードを1枚手札に加える。この能力は、自分の成功ライブカード置き場にあるカードのスコアの合計が6以上の場合のみ起動できる。",,"#!/usr/bin/env bash
+set -euo pipefail
+cd '/Users/tekitou/Desktop/gsim/loveca'
+unset LLOCG_START_STAGE LLOCG_START_STAGE_L LLOCG_START_STAGE_C LLOCG_START_STAGE_R LLOCG_START_HAND LLOCG_START_HAND_SIZE LLOCG_START_SHUFFLE LLOCG_START_GREEN LLOCG_START_SUCCESS LLOCG_START_RESOLVE LLOCG_START_DECK_TOP LLOCG_START_DECK_EXACT LLOCG_START_DECK_EXACT_STRICT LLOCG_START_PHASE LLOCG_START_TURN LLOCG_START_ENERGY_ACTIVE LLOCG_START_ENERGY_WAIT LLOCG_DEBUG_PRESET LLOCG_DEBUG_EFFECT_CARD LLOCG_START_DEBUG LLOCG_DEBUG_LIVE_IN_HAND LLOCG_DEBUG_MEMBER_IN_HAND
+export LLOCG_DEBUG_PRESET='effect'
+export LLOCG_START_PHASE='MAIN'
+export LLOCG_START_TURN='1'
+export LLOCG_START_DEBUG='1'
+export LLOCG_DEBUG_EFFECT_CARD='PL!-bp4-002'
+export LLOCG_START_HAND_SIZE='0'
+export LLOCG_START_ENERGY_ACTIVE='20'
+export LLOCG_START_ENERGY_WAIT='0'
+export LLOCG_DEBUG_LIVE_IN_HAND='0'
+export LLOCG_DEBUG_MEMBER_IN_HAND='0'
+export LLOCG_START_DECK_TOP='LL-bp1-001,LL-bp5-001,LL-bp2-001'
+export LLOCG_START_STAGE_C='PL!-bp4-002'
+export LLOCG_START_HAND='LL-PR-004'
+python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8787 --debug
+",起動能力UI/操作経路の有無をstateから確認する,pending/effect_events/logにsource_cnまたは対象カード由来の記録が増える。解決後は該当領域/数値差分を確認する,trigger path previously unreachable; route not accepted until runtime evidence exists,,logs/PL_-bp4-002_A04_P2T01.command.log,,P1,,trigger path previously unreachable; route not accepted until runtime evidence exists,Runtime修正は本Phaseでは行わない。generic matcher/trigger/pending/state routeとして次Phaseで修正対象化する,NO
+P2-010,DEBUG_SETUP_LIMITATION,PL!S-bp3-001#A01,PL!S-bp3-001#A01#P2T01,PL!S-bp3-001,高海千歌,"<起動>
+<センター>
+<ターン1回>
+メンバー1人をウェイトにする：ライブ終了時まで、これによってウェイト状態になったメンバーは、「
+<常時>
+ライブの合計スコアを+1する。」を得る。
+(この能力はセンターエリアに登場している場合のみ起動できる。)",llocg_ui/engine.py,"#!/usr/bin/env bash
+set -euo pipefail
+cd '/Users/tekitou/Desktop/gsim/loveca'
+unset LLOCG_START_STAGE LLOCG_START_STAGE_L LLOCG_START_STAGE_C LLOCG_START_STAGE_R LLOCG_START_HAND LLOCG_START_HAND_SIZE LLOCG_START_SHUFFLE LLOCG_START_GREEN LLOCG_START_SUCCESS LLOCG_START_RESOLVE LLOCG_START_DECK_TOP LLOCG_START_DECK_EXACT LLOCG_START_DECK_EXACT_STRICT LLOCG_START_PHASE LLOCG_START_TURN LLOCG_START_ENERGY_ACTIVE LLOCG_START_ENERGY_WAIT LLOCG_DEBUG_PRESET LLOCG_DEBUG_EFFECT_CARD LLOCG_START_DEBUG LLOCG_DEBUG_LIVE_IN_HAND LLOCG_DEBUG_MEMBER_IN_HAND
+export LLOCG_DEBUG_PRESET='effect'
+export LLOCG_START_PHASE='MAIN'
+export LLOCG_START_TURN='1'
+export LLOCG_START_DEBUG='1'
+export LLOCG_DEBUG_EFFECT_CARD='PL!S-bp3-001'
+export LLOCG_START_HAND_SIZE='0'
+export LLOCG_START_ENERGY_ACTIVE='20'
+export LLOCG_START_ENERGY_WAIT='0'
+export LLOCG_DEBUG_LIVE_IN_HAND='0'
+export LLOCG_DEBUG_MEMBER_IN_HAND='0'
+export LLOCG_START_DECK_TOP='LL-bp1-001,LL-bp5-001,LL-bp2-001'
+export LLOCG_START_STAGE_C='PL!S-bp3-001'
+export LLOCG_START_HAND='LL-PR-004'
+python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8787 --debug
+",起動能力UI/操作経路の有無をstateから確認する,pending/effect_events/logにsource_cnまたは対象カード由来の記録が増える。解決後は該当領域/数値差分を確認する,partial route mapping; missing branch/cleanup/state evidence prevents accepted command,,logs/PL_S-bp3-001_A01_P2T01.command.log,,P2,parenthetical_note_noop,partial route mapping; missing branch/cleanup/state evidence prevents accepted command,Runtime修正は本Phaseでは行わない。generic matcher/trigger/pending/state routeとして次Phaseで修正対象化する,NO
+P2-011,TEST_INFRASTRUCTURE_FAILURE,LL-PR-004#A01,LL-PR-004#A01#P2T01,LL-PR-004,愛♡スクリ～ム！,"<ライブ開始時>
+相手に何が好き？と聞く。
+回答がチョコミントかストロベリーフレイバーかクッキー&クリームの場合、自分と相手は手札を1枚控え室に置く。
+回答があなたの場合、自分と相手はカードを1枚引く。
+回答がそれ以外の場合、ライブ終了時まで、自分と相手のステージにいるメンバーは<(ブレード)>を得る。",llocg_ui/engine.py,"#!/usr/bin/env bash
+set -euo pipefail
+cd '/Users/tekitou/Desktop/gsim/loveca'
+unset LLOCG_START_STAGE LLOCG_START_STAGE_L LLOCG_START_STAGE_C LLOCG_START_STAGE_R LLOCG_START_HAND LLOCG_START_HAND_SIZE LLOCG_START_SHUFFLE LLOCG_START_GREEN LLOCG_START_SUCCESS LLOCG_START_RESOLVE LLOCG_START_DECK_TOP LLOCG_START_DECK_EXACT LLOCG_START_DECK_EXACT_STRICT LLOCG_START_PHASE LLOCG_START_TURN LLOCG_START_ENERGY_ACTIVE LLOCG_START_ENERGY_WAIT LLOCG_DEBUG_PRESET LLOCG_DEBUG_EFFECT_CARD LLOCG_START_DEBUG LLOCG_DEBUG_LIVE_IN_HAND LLOCG_DEBUG_MEMBER_IN_HAND
+export LLOCG_DEBUG_PRESET='effect'
+export LLOCG_START_PHASE='MAIN'
+export LLOCG_START_TURN='1'
+export LLOCG_START_DEBUG='1'
+export LLOCG_DEBUG_EFFECT_CARD='LL-PR-004'
+export LLOCG_START_HAND_SIZE='0'
+export LLOCG_START_ENERGY_ACTIVE='20'
+export LLOCG_START_ENERGY_WAIT='0'
+export LLOCG_DEBUG_LIVE_IN_HAND='0'
+export LLOCG_DEBUG_MEMBER_IN_HAND='0'
+export LLOCG_START_DECK_TOP='LL-bp1-001,LL-bp5-002,LL-bp2-001'
+export LLOCG_START_HAND='LL-PR-004'
+export LLOCG_START_STAGE_C='LL-bp1-001'
+python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8787 --debug
+",手札の対象LIVEをライブカードとしてセットする,pending/effect_events/logにsource_cnまたは対象カード由来の記録が増える。解決後は該当領域/数値差分を確認する,startup ok port=8787; operation=set_live; no target trigger evidence in pending/effect_events/log,state_diffs/LL-PR-004_A01_P2T01.command.json,logs/LL-PR-004_A01_P2T01.command.log,,P2,ask_opponent_favorite_icecream;favorite_icecream_answer_discard_fragment;favorite_icecream_answer_draw_fragment;favorite_icecream_answer_blade_fragment,startup ok port=8787; operation=set_live; no target trigger evidence in pending/effect_events/log,Runtime修正は本Phaseでは行わない。generic matcher/trigger/pending/state routeとして次Phaseで修正対象化する,NO
+P2-013,TEST_INFRASTRUCTURE_FAILURE,LL-bp1-001#A02,LL-bp1-001#A02#P2T01,LL-bp1-001,上原歩夢＆澁谷かのん＆日野下花帆,"<ライブ開始時>
+手札の「上原歩夢」と「澁谷かのん」と「日野下花帆」を、好きな組み合わせで合計3枚、控え室に置いてもよい：ライブ終了時まで、「<常時>ライブの合計スコアを+3する。」を得る。",llocg_ui/engine.py,"#!/usr/bin/env bash
+set -euo pipefail
+cd '/Users/tekitou/Desktop/gsim/loveca'
+unset LLOCG_START_STAGE LLOCG_START_STAGE_L LLOCG_START_STAGE_C LLOCG_START_STAGE_R LLOCG_START_HAND LLOCG_START_HAND_SIZE LLOCG_START_SHUFFLE LLOCG_START_GREEN LLOCG_START_SUCCESS LLOCG_START_RESOLVE LLOCG_START_DECK_TOP LLOCG_START_DECK_EXACT LLOCG_START_DECK_EXACT_STRICT LLOCG_START_PHASE LLOCG_START_TURN LLOCG_START_ENERGY_ACTIVE LLOCG_START_ENERGY_WAIT LLOCG_DEBUG_PRESET LLOCG_DEBUG_EFFECT_CARD LLOCG_START_DEBUG LLOCG_DEBUG_LIVE_IN_HAND LLOCG_DEBUG_MEMBER_IN_HAND
+export LLOCG_DEBUG_PRESET='effect'
+export LLOCG_START_PHASE='MAIN'
+export LLOCG_START_TURN='1'
+export LLOCG_START_DEBUG='1'
+export LLOCG_DEBUG_EFFECT_CARD='LL-bp1-001'
+export LLOCG_START_HAND_SIZE='0'
+export LLOCG_START_ENERGY_ACTIVE='20'
+export LLOCG_START_ENERGY_WAIT='0'
+export LLOCG_DEBUG_LIVE_IN_HAND='0'
+export LLOCG_DEBUG_MEMBER_IN_HAND='0'
+export LLOCG_START_DECK_TOP='LL-bp2-001,LL-bp5-001,LL-bp3-001'
+export LLOCG_START_STAGE_C='LL-bp1-001'
+export LLOCG_START_HAND='LL-PR-004'
+python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8787 --debug
+",別LIVEをセットし、必要ならライブ成功処理まで進める,pending/effect_events/logにsource_cnまたは対象カード由来の記録が増える。解決後は該当領域/数値差分を確認する,MEMBER selected as live,,logs/LL-bp1-001_A02_P2T01.command.log,,P2,named_hand_cost_result_effect,MEMBER selected as live,Runtime修正は本Phaseでは行わない。generic matcher/trigger/pending/state routeとして次Phaseで修正対象化する,NO
+P2-014,TEST_INFRASTRUCTURE_FAILURE,LL-bp2-001#A01,LL-bp2-001#A01#P2T01,LL-bp2-001,渡辺曜＆鬼塚夏美＆大沢瑠璃乃,"<BODY>
+手札にあるこのメンバーカードのコストは、このカード以外の自分の手札1枚につき、1少なくなる。",llocg_ui/engine.py,"#!/usr/bin/env bash
+set -euo pipefail
+cd '/Users/tekitou/Desktop/gsim/loveca'
+unset LLOCG_START_STAGE LLOCG_START_STAGE_L LLOCG_START_STAGE_C LLOCG_START_STAGE_R LLOCG_START_HAND LLOCG_START_HAND_SIZE LLOCG_START_SHUFFLE LLOCG_START_GREEN LLOCG_START_SUCCESS LLOCG_START_RESOLVE LLOCG_START_DECK_TOP LLOCG_START_DECK_EXACT LLOCG_START_DECK_EXACT_STRICT LLOCG_START_PHASE LLOCG_START_TURN LLOCG_START_ENERGY_ACTIVE LLOCG_START_ENERGY_WAIT LLOCG_DEBUG_PRESET LLOCG_DEBUG_EFFECT_CARD LLOCG_START_DEBUG LLOCG_DEBUG_LIVE_IN_HAND LLOCG_DEBUG_MEMBER_IN_HAND
+export LLOCG_DEBUG_PRESET='effect'
+export LLOCG_START_PHASE='MAIN'
+export LLOCG_START_TURN='1'
+export LLOCG_START_DEBUG='1'
+export LLOCG_DEBUG_EFFECT_CARD='LL-bp2-001'
+export LLOCG_START_HAND_SIZE='0'
+export LLOCG_START_ENERGY_ACTIVE='20'
+export LLOCG_START_ENERGY_WAIT='0'
+export LLOCG_DEBUG_LIVE_IN_HAND='0'
+export LLOCG_DEBUG_MEMBER_IN_HAND='0'
+export LLOCG_START_DECK_TOP='LL-bp1-001,LL-bp5-001,LL-bp3-001'
+export LLOCG_START_STAGE_C='LL-bp2-001'
+export LLOCG_START_HAND='LL-PR-004'
+python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8787 --debug
+",起動直後、常時補正またはstate表示を確認する,pending/effect_events/logにsource_cnまたは対象カード由来の記録が増える。解決後は該当領域/数値差分を確認する,startup ok port=8787; operation=state_only; no target trigger evidence in pending/effect_events/log,state_diffs/LL-bp2-001_A01_P2T01.command.json,logs/LL-bp2-001_A01_P2T01.command.log,,P2,body_always_hand_cost_other_hand_count,startup ok port=8787; operation=state_only; no target trigger evidence in pending/effect_events/log,Runtime修正は本Phaseでは行わない。generic matcher/trigger/pending/state routeとして次Phaseで修正対象化する,NO
+P2-015,TEST_INFRASTRUCTURE_FAILURE,LL-bp3-001#A01,LL-bp3-001#A01#P2T01,LL-bp3-001,園田海未＆津島善子＆天王寺璃奈,"<BODY>
+【ターン1回】
+自分の控え室にある「園田海未」と「津島善子」と「天王寺璃奈」を、合計6枚をシャッフルしてデッキの一番下に置く：エネルギーを6枚までアクティブにする。",llocg_ui/engine.py,"#!/usr/bin/env bash
+set -euo pipefail
+cd '/Users/tekitou/Desktop/gsim/loveca'
+unset LLOCG_START_STAGE LLOCG_START_STAGE_L LLOCG_START_STAGE_C LLOCG_START_STAGE_R LLOCG_START_HAND LLOCG_START_HAND_SIZE LLOCG_START_SHUFFLE LLOCG_START_GREEN LLOCG_START_SUCCESS LLOCG_START_RESOLVE LLOCG_START_DECK_TOP LLOCG_START_DECK_EXACT LLOCG_START_DECK_EXACT_STRICT LLOCG_START_PHASE LLOCG_START_TURN LLOCG_START_ENERGY_ACTIVE LLOCG_START_ENERGY_WAIT LLOCG_DEBUG_PRESET LLOCG_DEBUG_EFFECT_CARD LLOCG_START_DEBUG LLOCG_DEBUG_LIVE_IN_HAND LLOCG_DEBUG_MEMBER_IN_HAND
+export LLOCG_DEBUG_PRESET='effect'
+export LLOCG_START_PHASE='MAIN'
+export LLOCG_START_TURN='1'
+export LLOCG_START_DEBUG='1'
+export LLOCG_DEBUG_EFFECT_CARD='LL-bp3-001'
+export LLOCG_START_HAND_SIZE='0'
+export LLOCG_START_ENERGY_ACTIVE='20'
+export LLOCG_START_ENERGY_WAIT='0'
+export LLOCG_DEBUG_LIVE_IN_HAND='0'
+export LLOCG_DEBUG_MEMBER_IN_HAND='0'
+export LLOCG_START_DECK_TOP='LL-bp1-001,LL-bp5-001,LL-bp2-001'
+export LLOCG_START_STAGE_C='LL-bp3-001'
+export LLOCG_START_HAND='LL-PR-004'
+python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8787 --debug
+",起動能力UI/操作経路の有無をstateから確認する,pending/effect_events/logにsource_cnまたは対象カード由来の記録が増える。解決後は該当領域/数値差分を確認する,startup ok port=8787; operation=state_only; no target trigger evidence in pending/effect_events/log,state_diffs/LL-bp3-001_A01_P2T01.command.json,logs/LL-bp3-001_A01_P2T01.command.log,,P2,energy_activate_upto_n,startup ok port=8787; operation=state_only; no target trigger evidence in pending/effect_events/log,Runtime修正は本Phaseでは行わない。generic matcher/trigger/pending/state routeとして次Phaseで修正対象化する,NO

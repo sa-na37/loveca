@@ -1,0 +1,61 @@
+[
+  {
+    "path": "energy_active",
+    "before": 20,
+    "after": 11
+  },
+  {
+    "path": "energy_wait",
+    "before": 0,
+    "after": 9
+  },
+  {
+    "path": "hand",
+    "before": [
+      "PL!-PR-005"
+    ],
+    "after": []
+  },
+  {
+    "path": "pending",
+    "before": [],
+    "after": [
+      {
+        "kind": "choose_enter_effect_mode",
+        "text": "PL!-PR-005[登場]: 効果を1つ選ぶ",
+        "options": [
+          "カードを1枚引き、手札を1枚控え室に置く",
+          "相手のステージにいるすべてのコスト2以下のメンバーをウェイトにする"
+        ],
+        "effects": [
+          "カードを1枚引き、手札を1枚控え室に置く。",
+          "相手のステージにいるすべてのコスト2以下のメンバーをウェイトにする。"
+        ],
+        "ctx": {
+          "pos": "C",
+          "source_cn": "PL!-PR-005",
+          "baton_old_cn": "",
+          "baton_old_cost": 0,
+          "entry_origin": "hand"
+        },
+        "source_cn": "PL!-PR-005"
+      }
+    ]
+  },
+  {
+    "path": "stage.C",
+    "before": null,
+    "after": {
+      "cardnumber": "PL!-PR-005",
+      "active": true,
+      "temp_blade": 0,
+      "temp_hearts": {},
+      "temp_score": 0,
+      "temp_cost": 0,
+      "temp_until": "",
+      "energy_under": 0,
+      "under_cards": [],
+      "heart_replace_color": ""
+    }
+  }
+]

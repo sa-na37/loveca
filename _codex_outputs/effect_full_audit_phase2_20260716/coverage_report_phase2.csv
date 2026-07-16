@@ -1,0 +1,16 @@
+metric,count
+static_reassessed_abilities,136
+debug_setup_designed_abilities,15
+commands_candidate,15
+quality_gate_accepted,4
+startup_executed,7
+trigger_reached,4
+state_verified,0
+ui_verified,0
+PASS,0
+STATE_PASS_UI_PENDING,0
+FAIL,6
+BLOCKED,5
+NOT_IMPLEMENTED_CONFIRMED,107
+UNREACHABLE_CONFIRMED,28
+DB_MISMATCH_CONFIRMED,31

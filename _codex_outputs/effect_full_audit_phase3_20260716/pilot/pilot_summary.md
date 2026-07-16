@@ -1,0 +1,24 @@
+# Pilot Summary
+
+- status: PHASE3_BLOCKED
+- Gate A: PASS
+- Gate B: BLOCKED
+- Gate C: NOT_OPENED
+
+- command_candidates: 8
+- commands_accepted: 8
+- commands_rejected: 0
+- server_started: 8
+- trigger_reached: 8
+- effect_resolved: 8
+- state_checked: 8
+- state_passed: 7
+- ui_checked: 0
+- ui_passed: 0
+- cleanup_passed: 7
+- undo_passed: 8
+- full_pass: 0
+- behavioral_failures: 1
+- static_missing_implementation_candidates: 0
+- static_confirmed_with_evidence: 0
+- db_semantic_differences: 0

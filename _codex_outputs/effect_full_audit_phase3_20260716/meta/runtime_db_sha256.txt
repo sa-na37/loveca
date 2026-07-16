@@ -1,0 +1,2 @@
+856caaf35fe742513adf5c58c491c4fc674a2bf0d7e4b0f49ec5d1d0da4e14a3  /Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full/cards_min_tokv1.json
+90af07f368128a6bbcfeffd45372f28e430598ce2f69ef6279e14e88e443bb85  /Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full/cards_compiled_v7h.json

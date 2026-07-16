@@ -1,0 +1,49 @@
+{
+  "audit_id": "LL-bp1-001#A01",
+  "test_case_id": "LL-bp1-001#A01#P3_candidate_multi",
+  "cardnumber": "LL-bp1-001",
+  "effect_text": "<登場>\n自分の控え室からメンバーカードを1枚手札に加える。",
+  "trigger": "登場",
+  "preconditions": [
+    "対象MEMBERを手札からCへ登場させる",
+    "控え室候補をbranchごとに配置する"
+  ],
+  "costs": [
+    "登場コスト20"
+  ],
+  "choices": [
+    "控え室のメンバーカード1枚を選ぶ"
+  ],
+  "valid_targets": [
+    "MEMBERカード"
+  ],
+  "invalid_targets": [
+    "LIVEカード"
+  ],
+  "expected_state_changes": [
+    "candidate_multi/candidate_one: 選んだMEMBER 1枚だけがgreen_roomからhandへ移る",
+    "candidate_zero: LIVEだけの控え室では候補が出ず、対象なし表示または自動解決になる"
+  ],
+  "expected_zone_moves": [
+    "green_room selected MEMBER -> hand"
+  ],
+  "expected_count_changes": [
+    "candidate_multi/candidate_one: hand +1, green_room -1"
+  ],
+  "expected_temporary_modifiers": [],
+  "expected_cleanup": [
+    "pendingなし",
+    "temporary modifierなし"
+  ],
+  "expected_ui": [
+    "候補カード画像/名前/番号が一致",
+    "LIVEカードは候補に出ない"
+  ],
+  "expected_logs": [
+    "[AUTO_EXT] or [AUTO]"
+  ],
+  "expected_non_changes": [
+    "LIVEカードはgreen_roomに残る",
+    "発生源カードはステージに残る"
+  ]
+}

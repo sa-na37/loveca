@@ -1,0 +1,16 @@
+test_case_id,audit_id,command_path,syntax_ok,card_exists,zone_type_ok,condition_setup_verified,test_separation_verified,startup_ok,trigger_reached,accepted,rejection_reason,evidence_log
+PL!-PR-005#A01#P2T01,PL!-PR-005#A01,debug_commands/accepted/PL_-PR-005_A01_P2T01.command,YES,YES,YES,YES,YES,YES,YES,YES,,logs/PL_-PR-005_A01_P2T01.command.log
+PL!-PR-006#A01#P2T01,PL!-PR-006#A01,debug_commands/accepted/PL_-PR-006_A01_P2T01.command,YES,YES,YES,YES,YES,YES,YES,YES,,logs/PL_-PR-006_A01_P2T01.command.log
+PL!-PR-008#A01#P2T01,PL!-PR-008#A01,debug_commands/accepted/PL_-PR-008_A01_P2T01.command,YES,YES,YES,YES,YES,YES,YES,YES,,logs/PL_-PR-008_A01_P2T01.command.log
+LL-bp2-001#A02#P2T01,LL-bp2-001#A02,debug_commands/rejected/LL-bp2-001_A02_P2T01.command,YES,YES,YES,YES,YES,NO,NO,NO,no implementation route confirmed,logs/LL-bp2-001_A02_P2T01.command.log
+LL-bp7-001#A01#P2T01,LL-bp7-001#A01,debug_commands/rejected/LL-bp7-001_A01_P2T01.command,YES,YES,YES,YES,YES,NO,NO,NO,no implementation route confirmed,logs/LL-bp7-001_A01_P2T01.command.log
+PL!-bp3-002#A02#P2T01,PL!-bp3-002#A02,debug_commands/rejected/PL_-bp3-002_A02_P2T01.command,YES,YES,YES,YES,YES,NO,NO,NO,no implementation route confirmed,logs/PL_-bp3-002_A02_P2T01.command.log
+PL!-PR-020#A02#P2T01,PL!-PR-020#A02,debug_commands/rejected/PL_-PR-020_A02_P2T01.command,YES,YES,YES,YES,YES,NO,NO,NO,trigger path previously unreachable; route not accepted until runtime evidence exists,logs/PL_-PR-020_A02_P2T01.command.log
+PL!-bp4-002#A03#P2T01,PL!-bp4-002#A03,debug_commands/rejected/PL_-bp4-002_A03_P2T01.command,YES,YES,YES,YES,YES,NO,NO,NO,trigger path previously unreachable; route not accepted until runtime evidence exists,logs/PL_-bp4-002_A03_P2T01.command.log
+PL!-bp4-002#A04#P2T01,PL!-bp4-002#A04,debug_commands/rejected/PL_-bp4-002_A04_P2T01.command,YES,YES,YES,YES,YES,NO,NO,NO,trigger path previously unreachable; route not accepted until runtime evidence exists,logs/PL_-bp4-002_A04_P2T01.command.log
+PL!S-bp3-001#A01#P2T01,PL!S-bp3-001#A01,debug_commands/rejected/PL_S-bp3-001_A01_P2T01.command,YES,YES,YES,YES,YES,NO,NO,NO,partial route mapping; missing branch/cleanup/state evidence prevents accepted command,logs/PL_S-bp3-001_A01_P2T01.command.log
+LL-PR-004#A01#P2T01,LL-PR-004#A01,debug_commands/rejected/LL-PR-004_A01_P2T01.command,YES,YES,YES,YES,YES,YES,NO,NO,startup ok port=8787; operation=set_live; no target trigger evidence in pending/effect_events/log,logs/LL-PR-004_A01_P2T01.command.log
+LL-bp1-001#A01#P2T01,LL-bp1-001#A01,debug_commands/accepted/LL-bp1-001_A01_P2T01.command,YES,YES,YES,YES,YES,YES,YES,YES,,logs/LL-bp1-001_A01_P2T01.command.log
+LL-bp1-001#A02#P2T01,LL-bp1-001#A02,debug_commands/rejected/LL-bp1-001_A02_P2T01.command,YES,YES,NO,NO,YES,NO,NO,NO,MEMBER selected as live,logs/LL-bp1-001_A02_P2T01.command.log
+LL-bp2-001#A01#P2T01,LL-bp2-001#A01,debug_commands/rejected/LL-bp2-001_A01_P2T01.command,YES,YES,YES,YES,YES,YES,NO,NO,startup ok port=8787; operation=state_only; no target trigger evidence in pending/effect_events/log,logs/LL-bp2-001_A01_P2T01.command.log
+LL-bp3-001#A01#P2T01,LL-bp3-001#A01,debug_commands/rejected/LL-bp3-001_A01_P2T01.command,YES,YES,YES,YES,YES,YES,NO,NO,startup ok port=8787; operation=state_only; no target trigger evidence in pending/effect_events/log,logs/LL-bp3-001_A01_P2T01.command.log
