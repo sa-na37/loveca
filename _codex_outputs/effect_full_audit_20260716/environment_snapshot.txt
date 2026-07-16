@@ -1,0 +1,56 @@
+effect_full_audit environment snapshot
+timestamp: 2026-07-16T12:43:30.316708
+
+$ git status --short
+ M AGENTS.md
+ D aqours_decklist.txt
+ D check_loveca_db_integrity_20260527.py
+ M docs/debug/loveca_debug_commands_20260623.md
+ M docs/debug/loveca_debug_commands_current_updates_20260623.md
+ M docs/debug/loveca_remaining_implementation_list_20260701.md
+ M docs/notes/loveca_runtime_implementation_rules_20260708.md
+ M llocg_db_out_full/cards_compiled_v7h.json
+ M llocg_db_out_full/cards_min_tokv1.csv
+ M llocg_db_out_full/cards_min_tokv1.json
+ M llocg_db_out_full/official_image_manifest.json
+ M llocg_db_out_full/official_image_manifest.tsv
+ D llocg_db_probe_type.py
+ M llocg_db_tool_v7.py
+ D llocg_decklist_to_simdeck.py
+ M llocg_fetch_all_card_images.py
+ D llocg_fetch_all_card_images_backup.py
+ D llocg_patterns_seed_v1/effect_patterns_seed_v1.yaml
+ D llocg_play_sim.py
+ D llocg_policy.py
+ D llocg_trace.py
+ M llocg_ui/effects/helpers.py
+ M llocg_ui/engine.py
+ M llocg_ui/server.py
+ D llocg_ui_web.py
+ M llocg_update_database.py
+ D llocg_update_manifest.py
+ M run_loveca_app.py
+?? docs/notes/loveca_db_manual_corrections_20260715.md
+?? llocg_fetch_decklog_by_code.py
+?? loveca_app/
+?? loveca_global_viewport_scale_memo_20260715.md
+?? refresh_loveca_product_catalog.py
+?? user_data/
+[exit 0]
+
+$ git rev-parse HEAD
+26147d578c6c8cea0bd654617be16c2898d85343
+[exit 0]
+
+$ git branch --show-current
+work/loveca-20260708
+[exit 0]
+
+$ python3 --version
+Python 3.10.0
+[exit 0]
+
+$ shasum -a 256 ./llocg_db_out_full/cards_min_tokv1.json ./llocg_db_out_full/cards_compiled_v7h.json
+36ce4e459f15066cff75dcd595d4676d967a223347312f0d5294d2dec63a4199  ./llocg_db_out_full/cards_min_tokv1.json
+90af07f368128a6bbcfeffd45372f28e430598ce2f69ef6279e14e88e443bb85  ./llocg_db_out_full/cards_compiled_v7h.json
+[exit 0]

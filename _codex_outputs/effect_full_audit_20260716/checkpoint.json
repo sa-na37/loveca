@@ -1,0 +1,24 @@
+{
+  "last_completed_audit_id": "PL!SP-sd2-025#A01",
+  "completed_ability_count": 1036,
+  "completed_test_count": 4195,
+  "result_counts": {
+    "NEEDS_MANUAL_CONFIRMATION": 3448,
+    "NOT_IMPLEMENTED": 509,
+    "DB_DATA_MISMATCH": 144,
+    "UNREACHABLE": 85,
+    "BLOCKED": 9
+  },
+  "timestamp": "2026-07-16T12:46:03.659071",
+  "current_commit": "26147d578c6c8cea0bd654617be16c2898d85343",
+  "input_hashes": {
+    "CODEX_INSTRUCTION_full_effect_audit_20260716.md": "c2b5e0a0c1c0e306cbf2bf94484c09cdf887d6bac6f6829d99176dd2937915e9",
+    "README.md": "a669034ffd040fe05756811e037d895ae94129c4b856a6c2d6e2539abe466b18",
+    "cards_min_tokv1_audit_source_20260716.json": "36ce4e459f15066cff75dcd595d4676d967a223347312f0d5294d2dec63a4199",
+    "loveca_card_facts_reparsed_20260716.csv": "defeacf0dfb28f1e236ffd1a24117c1bec73c54455b1843a6460e79230048db3",
+    "loveca_db_pre_audit_findings_20260716.md": "a81832d55fd06a951b23db992de11cb636d2accb812b8aa3ce31b856c55babbe",
+    "loveca_effect_audit_population_enriched_20260716.csv": "500e46c8da067499ff4e78e35af6779a1f560221124eb12d58594728478cd446",
+    "loveca_effect_audit_population_report_20260716.md": "657bed1ebe47d2cfced489f2c27df773366af5aa1e906b0d2bb866e09132da90",
+    "loveca_effect_baseline_test_cases_20260716.csv": "70eec19eff7edce873441fbddb421d50ba5b3532595208760d5a5a1feaeef833"
+  }
+}
