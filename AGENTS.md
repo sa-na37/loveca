@@ -159,7 +159,7 @@ unset LLOCG_START_STAGE LLOCG_START_STAGE_L LLOCG_START_STAGE_C LLOCG_START_STAG
   LLOCG_START_DECK_TOP LLOCG_START_DECK_EXACT \
   LLOCG_START_PHASE LLOCG_START_TURN \
   LLOCG_START_ENERGY_ACTIVE LLOCG_START_ENERGY_WAIT \
-  LLOCG_DEBUG_PRESET LLOCG_START_DEBUG \
+  LLOCG_DEBUG_PRESET LLOCG_DEBUG_EFFECT_CARD LLOCG_START_DEBUG \
   LLOCG_DEBUG_LIVE_IN_HAND LLOCG_DEBUG_MEMBER_IN_HAND
 
 export LLOCG_DEBUG_PRESET=effect
@@ -170,6 +170,7 @@ python3 ./run_llocg_ui_web.py
 ```
 
 `DECK_CODE` wrapper は使わない。
+`!` を含むカード番号を環境変数に入れる場合は、bash の履歴展開を避けるため必ずシングルクォートする。
 
 ### デバッグコマンド作成時の注意
 
@@ -207,6 +208,15 @@ root に残す Markdown は原則として `README.md` と `AGENTS.md` のみ。
 ユーザーが確認・監修する統合メモ `docs/debug/loveca_debug_commands_20260623.md` は、ユーザー指定の統合タイミング以外では直接編集しない。
 通常の実装中は `docs/debug/loveca_debug_commands_current_updates_20260623.md` に現行更新分を追記し、統合指示が出たら統合メモへ移す。
 「確認観点」だけでなく、環境変数を含む実行可能な個別起動コマンドを残す。
+
+デバッグコメントの扱い:
+
+- 未解決のユーザー/Codex コメントツリーは削除・上書きしない。ユーザーコメントは `＊`、Codex 追記は `※` で区別する。
+- `挙動問題なし` / `挙動確認済み` などで該当デバッグが完了した項目は、active command から外して確認済み項目リストへ移動する。
+- 重要な確認事項、再発防止ルール、汎用 UI / 実装方針は消さず、確認済み項目リスト内の補足または `docs/notes/loveca_runtime_implementation_rules_20260708.md` へ移す。
+- 未解決の指摘が同じツリーに残っている場合は active に残し、完了済み扱いにしない。
+- 「デバッグ対応」時は `※YYYYMMDD内部確認` コメントも確認対象に含める。内部確認の内容が現行実装と矛盾する場合、または検証不足が見つかった場合は、必要な修正・再確認を行い、修正内容と再確認結果を追記する。
+- 内部監査で問題なしと判断した項目も、ユーザー確認が必要か再判定する。UI目視・操作感・ユーザー指定観点が残るものは active/current に残し、ユーザー確認不要のものは監査済みリストへ移す。
 
 作業完了時は以下を報告する。
 

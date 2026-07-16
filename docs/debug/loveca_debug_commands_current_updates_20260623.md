@@ -11,4 +11,5 @@
 
 ## Pending current updates
 
-未統合の現行更新はありません。
+※ 20260715 統合済み: 未統合の current updates は `docs/debug/loveca_debug_commands_20260623.md` の `Integrated current updates 20260715` へ移動済み。
+※ 次回以降の実装・デバッグ確認分は、この見出しの下へ新規追記する。
