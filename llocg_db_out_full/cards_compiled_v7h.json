@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "source_csv": "/Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full/_update_work/run_20260713_154911/final/cards_min_tokv1.csv",
+  "source_csv": "/Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full/_update_work/run_20260715_135904/final/cards_min_tokv1.csv",
   "cards": [
     {
       "cardnumber": "LL-PR-004",
@@ -10647,10 +10647,10 @@
             {
               "optional": false,
               "cost_template": "<(E)><(E)>このメンバーをステージから控え室に置く",
-              "effect_template": "自分の手札からコスト13以下の『優木せつ菜』以外のメンバーカードを1枚、このメンバーがいたエリアに登場させる。その後、自分のエネルギー置き場にあるエネルギー1枚をそのメンバーの下に置く。",
+              "effect_template": "自分の手札からコスト13以下の『優木せつ菜』のメンバーカードを1枚、このメンバーがいたエリアに登場させる。その後、自分のエネルギー置き場にあるエネルギー1枚をそのメンバーの下に置く。",
               "cost_op": null,
               "effect_op": null,
-              "raw": "<(E)><(E)>このメンバーをステージから控え室に置く：自分の手札からコスト13以下の『優木せつ菜』以外のメンバーカードを1枚、このメンバーがいたエリアに登場させる。その後、自分のエネルギー置き場にあるエネルギー1枚をそのメンバーの下に置く。"
+              "raw": "<(E)><(E)>このメンバーをステージから控え室に置く：自分の手札からコスト13以下の『優木せつ菜』のメンバーカードを1枚、このメンバーがいたエリアに登場させる。その後、自分のエネルギー置き場にあるエネルギー1枚をそのメンバーの下に置く。"
             }
           ]
         }
@@ -17370,6 +17370,52 @@
       ]
     },
     {
+      "cardnumber": "PL!S-bp7-006",
+      "cardname": "津島善子",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ開始時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分のデッキの下からカードを3枚控え室に置く。それらがすべて『Aqours』のメンバーカードの場合、ライブ終了時まで、<緑>を得る。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分のデッキの下からカードを3枚控え室に置く。それらがすべて『Aqours』のメンバーカードの場合、ライブ終了時まで、<緑>\nを得る。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!S-bp7-015",
+      "cardname": "津島善子",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "常時",
+          "trigger": "BODY",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分のデッキの下からカードを1枚控え室に置く。それがライブカードの場合、ライブ終了時まで、<赤>を得る。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分のデッキの下からカードを1枚控え室に置く。それがライブカードの場合、ライブ終了時まで、<赤>\nを得る。"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "cardnumber": "PL!S-bp7-016",
       "cardname": "国木田花丸",
       "card_type": "MEMBER",
@@ -21746,6 +21792,29 @@
       ]
     },
     {
+      "cardnumber": "PL!SP-bp7-025",
+      "cardname": "Memories",
+      "card_type": "LIVE",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ開始時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "ライブ終了時まで、自分のステージにいる「嵐千砂都」1人は<(ブレード)>を得る。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "ライブ終了時まで、自分のステージにいる「嵐千砂都」1人は<(ブレード)>を得る。"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "cardnumber": "PL!SP-pb1-001",
       "cardname": "澁谷かのん",
       "card_type": "MEMBER",
@@ -22574,7 +22643,7 @@
       "abilities": [
         {
           "ability_type": "自動",
-          "trigger": "ライブ開始時",
+          "trigger": "ライブ成功時",
           "conditions": "",
           "clauses": [
             {
@@ -22585,7 +22654,9 @@
               "effect_op": null,
               "raw": "エールにより公開された自分のカードの中にあるブレードハートを持たない『Liella!』のメンバーカード2枚につき、ライブの合計スコアを+1する。この能力では合計スコアは2までしか増えない。"
             }
-          ]
+          ],
+          "manual_override_applied": 1,
+          "manual_override_reason": "20260715 local manual correction: source page/card image audit indicates PL!SP-pb2-008 timing is ライブ成功時, not ライブ開始時."
         }
       ]
     },

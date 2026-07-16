@@ -23,7 +23,7 @@ Runtime contract:
 """
 from __future__ import annotations
 
-BUILD_TAG = "fetch_card_images_incremental_target_filter_20260710k"
+BUILD_TAG = "fetch_card_images_reprint_folder_scan_20260715al"
 
 import argparse
 import datetime as dt
@@ -342,6 +342,31 @@ def folder_candidates_for_cardno(cardno: str) -> List[str]:
         return _uniq_keep_order([f for f in KNOWN_FOLDERS if f.startswith("PB")])
 
     return list(KNOWN_FOLDERS)
+
+
+REPRINT_FOLDER_SCAN_RARITIES = {"L2", "SECL", "RM", "SRL"}
+
+
+def reprint_folder_candidates(
+    base_folders: Sequence[str],
+    product_release_dates: Dict[str, str],
+) -> List[str]:
+    registry_folders = [
+        str(code).strip()
+        for code in product_release_dates.keys()
+        if re.fullmatch(
+            r"(?:BP|PB|CL|[A-Z]*SD)\w*",
+            str(code).strip(),
+            re.IGNORECASE,
+        )
+    ]
+    return _uniq_keep_order(
+        [
+            folder
+            for folder in list(base_folders) + KNOWN_FOLDERS + registry_folders
+            if folder
+        ]
+    )
 
 
 def family_rarities(cardno: str, global_rarities: Sequence[str], manifest_entries: Optional[List[Dict[str, Any]]] = None) -> List[str]:
@@ -935,33 +960,47 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             rarities = family_rarities(cardno, global_rarities, manifest_entries=manifest_entries)
             chosen_folder = None
 
-            for folder in folders:
-                any_ok_in_folder = False
-                folder_results: List[TryResult] = []
+            normal_folders = list(folders)
+            reprint_folders = reprint_folder_candidates(
+                folders,
+                product_release_dates,
+            )
+            folder_results_map: Dict[str, List[TryResult]] = {}
+            successful_folder = ""
 
-                for rarity in rarities:
+            for rarity in rarities:
+                rarity_norm = _normalize_rarity_token(rarity)
+                rarity_folders = (
+                    reprint_folders
+                    if rarity_norm in REPRINT_FOLDER_SCAN_RARITIES
+                    else normal_folders
+                )
+
+                for folder in rarity_folders:
                     tr = try_heuristic(
                         sess=sess,
                         cardno=cardno,
                         folder=folder,
-                        rarity=rarity,
+                        rarity=rarity_norm,
                         outdir=outdir,
                         skip_existing=args.skip_existing,
                         timeout=args.timeout,
                         allow_insecure_fallback=allow_fallback,
                         state=state,
                     )
-                    folder_results.append(tr)
+                    folder_results_map.setdefault(folder, []).append(tr)
+                    per_card_results.append(tr)
 
                     if tr.ok:
                         card_had_success = True
-                        any_ok_in_folder = True
+                        successful_folder = successful_folder or folder
+                        chosen_folder = chosen_folder or folder
                         if tr.status == "SKIP_EXISTS":
                             skip_files += 1
                         else:
                             ok_files += 1
                         heuristic_success += 1
-                        if (not args.all_rarities) and tr.status != "SKIP_EXISTS":
+                        if not args.all_rarities:
                             break
                     else:
                         fail_attempts += 1
@@ -969,18 +1008,22 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     if tr.status != "SKIP_EXISTS":
                         time.sleep(args.sleep + random.random() * args.jitter)
 
-                if any_ok_in_folder:
-                    chosen_folder = folder
-                    per_card_results.extend(folder_results)
+                if card_had_success and not args.all_rarities:
                     break
-                else:
-                    if folder == folders[-1]:
-                        per_card_results.extend(folder_results)
 
+            if not card_had_success:
+                for folder in normal_folders:
+                    folder_results = folder_results_map.get(folder, [])
                     warn_by_card.setdefault(cardno, 0)
-                    if warn_total < args.max_warn_total and warn_by_card[cardno] < args.max_warn_per_card:
+                    if (
+                        warn_total < args.max_warn_total
+                        and warn_by_card[cardno] < args.max_warn_per_card
+                    ):
                         ex = folder_results[0].url if folder_results else ""
-                        _log(f"[WARN] {cardno}: no images under folder={folder} (example {ex})")
+                        _log(
+                            f"[WARN] {cardno}: no images under folder={folder} "
+                            f"(example {ex})"
+                        )
                         warn_total += 1
                         warn_by_card[cardno] += 1
 

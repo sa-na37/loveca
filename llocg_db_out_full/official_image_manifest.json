@@ -2,13 +2,14 @@
   "version": 1,
   "source": "official_cardlist",
   "generated_from": {
-    "db_json": "llocg_db_out_full_fresh_20260703_154241/cards_min_tokv1.json",
-    "db_csv": "llocg_db_out_full_fresh_20260703_154241/cards_min_tokv1.csv"
+    "mode": "incremental_merge",
+    "base_manifest": "/Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full/official_image_manifest.json",
+    "delta_manifest": ""
   },
   "base_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist",
-  "cards_total_in_db": 1038,
+  "cards_total_in_db": 1052,
   "cards_with_manifest": 750,
-  "cards_missing_manifest": 288,
+  "cards_missing_manifest": 302,
   "expansions": {
     "BP01": {
       "cards_wanted": 80,

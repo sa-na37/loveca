@@ -21,7 +21,7 @@ BUILD_TAG is intentionally visible for delivery verification.
 
 from __future__ import annotations
 
-BUILD_TAG = "loveca_official_posts_index_product_page_reuse_20260710aa"
+BUILD_TAG = "loveca_field_schema_audit_summary_20260716b"
 
 import argparse
 import csv
@@ -73,10 +73,27 @@ PUBLISH_OPTIONAL_FILES = [
     "official_image_manifest.tsv",
     "product_release_registry.json",
     "product_release_registry_audit.tsv",
+    "product_catalog.json",
     "cardnumber_canonicalization_audit_normalize_csv.tsv",
     "cardnumber_canonicalization_audit_normalize_csv.json",
     "cardnumber_canonicalization_audit_normalize_json.tsv",
     "cardnumber_canonicalization_audit_normalize_json.json",
+    "field_validation_corrections.tsv",
+    "field_validation_corrections.json",
+    "field_validation_unresolved.tsv",
+    "field_validation_unresolved.json",
+    "field_validation_corrections_scrape_finalize.tsv",
+    "field_validation_corrections_scrape_finalize.json",
+    "field_validation_unresolved_scrape_finalize.tsv",
+    "field_validation_unresolved_scrape_finalize.json",
+    "field_validation_summary.tsv",
+    "field_validation_summary.json",
+    "field_validation_summary_scrape_finalize.tsv",
+    "field_validation_summary_scrape_finalize.json",
+    "field_validation_idempotence_failures.tsv",
+    "field_validation_idempotence_failures.json",
+    "field_validation_idempotence_failures_scrape_finalize.tsv",
+    "field_validation_idempotence_failures_scrape_finalize.json",
 ]
 
 
@@ -274,6 +291,55 @@ def load_json_object(path: Path) -> Dict[str, Any]:
     except (OSError, json.JSONDecodeError):
         return {}
     return obj if isinstance(obj, dict) else {}
+
+
+def write_product_catalog_from_registry(
+    registry_path: Path,
+    output_path: Path,
+) -> Path:
+    """Generate the app-facing expansion catalogue from the DB product registry.
+
+    No extra network request is made here. The registry is produced during the
+    normal DB scrape from the already-fetched product pages, so product names,
+    release dates, and source URLs stay in the same audited generation.
+    """
+    registry = load_json_object(registry_path)
+    products_raw = registry.get("products", {}) if isinstance(registry, dict) else {}
+    if not isinstance(products_raw, dict):
+        raise SystemExit(f"[ERROR] invalid product registry: {registry_path}")
+
+    products: Dict[str, Dict[str, Any]] = {}
+    for raw_code, raw in products_raw.items():
+        if not isinstance(raw, dict):
+            continue
+        code = str(raw_code or "").strip().upper()
+        title = str(raw.get("title", "") or "").strip()
+        if not code:
+            continue
+        products[code] = {
+            "name": title or code,
+            "title": title or code,
+            "release_date": str(raw.get("release_date", "") or "").strip(),
+            "source_url": str(raw.get("source_url", "") or "").strip(),
+            "card_link_count": int(raw.get("card_link_count", 0) or 0),
+        }
+
+    payload = {
+        "schema_version": 1,
+        "generated_at": datetime.now().astimezone().isoformat(),
+        "source": "product_release_registry.json",
+        "products": dict(sorted(products.items())),
+    }
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    print(
+        f"[PRODUCT-CATALOG] products={len(products)} "
+        f"source={registry_path} output={output_path}"
+    )
+    return output_path
 
 
 def cardnumber_set(rows: Sequence[Dict[str, Any]]) -> set[str]:
@@ -742,6 +808,10 @@ def main() -> int:
     copy_if_exists(
         fresh_dir / "product_release_registry_audit.tsv",
         final_dir / "product_release_registry_audit.tsv",
+    )
+    write_product_catalog_from_registry(
+        final_dir / "product_release_registry.json",
+        final_dir / "product_catalog.json",
     )
     write_merge_audit(
         final_dir,

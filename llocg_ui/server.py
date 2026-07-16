@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: debug_yell_badge_scaling_20260713b
+# BUILD_TAG: debug_skipped_yell_hand_ui_20260715d
 from __future__ import annotations
 
 """llocg_ui.server
@@ -2537,6 +2537,10 @@ HTML = r'''<!doctype html>
   .zone.debug{outline:2px dashed rgba(0,0,0,.35);}
   .label{position:absolute;left:calc(6px * var(--uiScale));top:calc(6px * var(--uiScale));padding:calc(2px * var(--uiScale)) calc(6px * var(--uiScale));font-size:calc(12px * var(--uiScale));background:rgba(0,0,0,.55);border-radius:calc(6px * var(--uiScale));pointer-events:none;}
   .countBadge{position:absolute;right:calc(6px * var(--uiScale));bottom:calc(6px * var(--uiScale));padding:calc(2px * var(--uiScale)) calc(6px * var(--uiScale));font-size:calc(12px * var(--uiScale));background:rgba(0,0,0,.75);border-radius:calc(6px * var(--uiScale));pointer-events:none;}
+  .underEnergyBadge{position:absolute;min-width:calc(32px * var(--uiScale));height:calc(23px * var(--uiScale));padding:0 calc(7px * var(--uiScale));box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:calc(4px * var(--uiScale));font-size:calc(11px * var(--uiScale));font-weight:900;line-height:1;color:#fff;background:rgba(0,0,0,.82);border:1px solid rgba(255,255,255,.58);border-radius:999px;box-shadow:0 2px 7px rgba(0,0,0,.48);pointer-events:none;z-index:470;transform:translate(-100%,-100%);}
+  .underEnergyBadgeIcon{position:relative;width:calc(11px * var(--uiScale));height:calc(15px * var(--uiScale));border:1px solid rgba(255,255,255,.86);border-radius:calc(2px * var(--uiScale));box-sizing:border-box;background:linear-gradient(180deg,rgba(255,255,255,.30),rgba(120,180,255,.30));}
+  .underEnergyBadgeIcon::before{content:'';position:absolute;left:calc(-4px * var(--uiScale));top:calc(3px * var(--uiScale));width:calc(11px * var(--uiScale));height:calc(15px * var(--uiScale));border:1px solid rgba(255,255,255,.62);border-radius:calc(2px * var(--uiScale));box-sizing:border-box;background:rgba(80,120,190,.32);z-index:-1;}
+  .underEnergyBadgeCount{display:inline-block;min-width:calc(10px * var(--uiScale));text-align:left;}
   .zoneInner{position:absolute;inset:0;overflow:hidden;}
 
   /* cards */
@@ -3357,7 +3361,21 @@ HTML = r'''<!doctype html>
     if(low === 'keep') return 'デッキ上に残す';
     return s;
   }
-  function choiceRichLabel(raw){
+  function isNumericChoicePendingKind(kind){
+    const k = String(kind || '').trim();
+    return k === 'choose_number_reveal_top_member_cost_compare'
+      || k === 'opponent_wait_notify'
+      || k === 'set_opponent_excess_for_live_success'
+      || k === 'set_opponent_success_score_for_live_attempt'
+      || k === 'choose_opponent_wait_count_for_topdeck_green_group_members'
+      || k === 'choose_under_energy_return_count';
+  }
+  function choiceTextLabelForPending(raw, kind){
+    const s = String(raw || '').trim();
+    if(isNumericChoicePendingKind(kind) && /^-?\d+$/.test(s)) return s;
+    return choiceTextLabel(s);
+  }
+  function choiceRichLabel(raw, kind=''){
     const s = String(raw || '').trim();
     const low = s.toLowerCase();
     const jpToColor = {'桃':'pink','赤':'red','黄':'yellow','緑':'green','青':'blue','紫':'purple','任意':'any','無色':'any','any':'any','all':'all'};
@@ -3370,7 +3388,7 @@ HTML = r'''<!doctype html>
       span.appendChild(document.createTextNode(`${HEART_LABEL_BY_COLOR[norm] || s || low}ハート`));
       return span;
     }
-    return document.createTextNode(choiceTextLabel(s));
+    return document.createTextNode(choiceTextLabelForPending(s, kind));
   }
   function cardChoiceCaption(cn, nth, tot){
     const name = cardDisplayText(cn);
@@ -3409,6 +3427,8 @@ HTML = r'''<!doctype html>
     if(kind === 'self_top1_to_green_or_keep') return 'デッキ上を確認';
     if(kind === 'choose_member_from_green_multi_up_to') return 'カードを選択';
     if(kind === 'auto_order') return '解決順を選択';
+    if(kind === 'choose_under_energy_return_count') return '戻す枚数を選択';
+    if(kind === 'choose_number_reveal_top_member_cost_compare') return '数を選択';
     if(kind === 'choose_opponent_wait_count_for_topdeck_green_group_members') return '人数を選択';
     return '効果の選択';
   }
@@ -5081,12 +5101,28 @@ inner.appendChild(card);
       if(underN > 0){
         const dx = sz.w * 0.05;
         const dy = sz.w * 0.05;
+        let lastEnergyPos = null;
         for(let i=0;i<underN;i++){
           const ex = x + dx*(i+1);
           const ey = y + dy*(i+1);
           const ecard = makeCard('__ENERGY__', 'portrait', ex, ey, sz.w, sz.h, '', null, false, 350+i, true);
           ecard.classList.add('underEnergy');
           inner.appendChild(ecard);
+          lastEnergyPos = {x: ex, y: ey};
+        }
+        if(lastEnergyPos){
+          const badge = document.createElement('div');
+          badge.className = 'underEnergyBadge';
+          badge.style.left = `${lastEnergyPos.x + sz.w - 5}px`;
+          badge.style.top = `${lastEnergyPos.y + sz.h - 5}px`;
+          const icon = document.createElement('span');
+          icon.className = 'underEnergyBadgeIcon';
+          const count = document.createElement('span');
+          count.className = 'underEnergyBadgeCount';
+          count.textContent = `×${underN}`;
+          badge.appendChild(icon);
+          badge.appendChild(count);
+          inner.appendChild(badge);
         }
       }
       const underCards = Array.isArray(slotObj.under_cards) ? slotObj.under_cards : [];
@@ -5363,91 +5399,104 @@ inner.appendChild(card);
     elModalText.appendChild(note);
   }
 
+  function isYellRevealPending(p){
+    if(!p) return false;
+    const label = String((p && p.label) || '');
+    const kind = String((p && p.kind) || '');
+    return !!(p.yell_reveal_ack || p.yell_draw_icon_count || p.yell_heart_counts || p.yell_score_icon_count)
+      || label.includes('エール公開')
+      || kind === 'choose_yell_revealed_to_green_then_extra_yell';
+  }
+
   function openYellRevealPopup(p){
     const displayCards = Array.isArray(p && p.display_cards) ? p.display_cards.map(x=>String(x||'')).filter(Boolean) : [];
     const helperText = String((p && (p.text || p.prompt || p.message)) ? (p.text || p.prompt || p.message) : '公開されたカードを確認');
-    popup = {type:'pending', title:String((p && p.label) ? p.label : 'エール公開カード確認'), cards: displayCards.slice(), closable:false, helperText};
-    elModalTitle.textContent = String((p && p.label) ? p.label : 'エール公開カード確認');
+    const isYell = isYellRevealPending(p);
+    const title = String((p && p.label) ? p.label : (isYell ? 'エール公開カード確認' : '公開カード確認'));
+    popup = {type:'pending', title, cards: displayCards.slice(), closable:false, helperText};
+    elModalTitle.textContent = title;
     setRichText(elModalText, helperText);
     elModalActions.innerHTML = '';
     elModalCards.innerHTML = '';
 
-    const summary = computeYellRevealSummary(displayCards, p || {});
     const wrap = document.createElement('div');
     wrap.className = 'yellRevealSummary';
 
-    const makeMetric = ({token='', label='', count=0, sub='', compact=false})=>{
-      const box = document.createElement('div');
-      box.className = 'yellRevealMetric' + (compact ? ' compact' : '');
-      const lab = document.createElement('div');
-      lab.className = 'yellRevealMetricLabel';
-      if(token) lab.appendChild(makeTextIconImg(token, label, '1.15em'));
-      const text = document.createElement('span');
-      text.textContent = label;
-      lab.appendChild(text);
-      const cnt = document.createElement('div');
-      cnt.className = 'yellRevealMetricCount';
-      cnt.textContent = String(Number(count || 0));
-      box.appendChild(lab);
-      box.appendChild(cnt);
-      if(sub){
-        const s = document.createElement('div');
-        s.className = 'yellRevealMetricSub';
-        s.textContent = sub;
-        box.appendChild(s);
+    if(isYell){
+      const summary = computeYellRevealSummary(displayCards, p || {});
+      const makeMetric = ({token='', label='', count=0, sub='', compact=false})=>{
+        const box = document.createElement('div');
+        box.className = 'yellRevealMetric' + (compact ? ' compact' : '');
+        const lab = document.createElement('div');
+        lab.className = 'yellRevealMetricLabel';
+        if(token) lab.appendChild(makeTextIconImg(token, label, '1.15em'));
+        const text = document.createElement('span');
+        text.textContent = label;
+        lab.appendChild(text);
+        const cnt = document.createElement('div');
+        cnt.className = 'yellRevealMetricCount';
+        cnt.textContent = String(Number(count || 0));
+        box.appendChild(lab);
+        box.appendChild(cnt);
+        if(sub){
+          const s = document.createElement('div');
+          s.className = 'yellRevealMetricSub';
+          s.textContent = sub;
+          box.appendChild(s);
+        }
+        return box;
+      };
+
+      const heartSec = document.createElement('div');
+      heartSec.className = 'yellRevealSection';
+      const heartTitle = document.createElement('div');
+      heartTitle.className = 'yellRevealSectionTitle';
+      heartTitle.textContent = '公開ハート';
+      const heartGrid = document.createElement('div');
+      const hasAny = Number(summary.heartCounts.any || 0) > 0;
+      heartGrid.className = 'yellRevealHeartGrid' + (hasAny ? ' withAny' : '');
+      [['pink','桃'],['red','赤'],['yellow','黄'],['green','緑'],['blue','青'],['purple','紫'],['all','ALL']].forEach(([k,lab])=>{
+        heartGrid.appendChild(makeMetric({token: HEART_TOKEN_BY_COLOR[k], label: lab, count: Number(summary.heartCounts[k] || 0)}));
+      });
+      if(hasAny){
+        heartGrid.appendChild(makeMetric({token: HEART_TOKEN_BY_COLOR.any, label: '任意', count: Number(summary.heartCounts.any || 0)}));
       }
-      return box;
-    };
+      heartSec.appendChild(heartTitle);
+      heartSec.appendChild(heartGrid);
+      wrap.appendChild(heartSec);
 
-    const heartSec = document.createElement('div');
-    heartSec.className = 'yellRevealSection';
-    const heartTitle = document.createElement('div');
-    heartTitle.className = 'yellRevealSectionTitle';
-    heartTitle.textContent = '公開ハート';
-    const heartGrid = document.createElement('div');
-    const hasAny = Number(summary.heartCounts.any || 0) > 0;
-    heartGrid.className = 'yellRevealHeartGrid' + (hasAny ? ' withAny' : '');
-    [['pink','桃'],['red','赤'],['yellow','黄'],['green','緑'],['blue','青'],['purple','紫'],['all','ALL']].forEach(([k,lab])=>{
-      heartGrid.appendChild(makeMetric({token: HEART_TOKEN_BY_COLOR[k], label: lab, count: Number(summary.heartCounts[k] || 0)}));
-    });
-    if(hasAny){
-      heartGrid.appendChild(makeMetric({token: HEART_TOKEN_BY_COLOR.any, label: '任意', count: Number(summary.heartCounts.any || 0)}));
+      const iconSec = document.createElement('div');
+      iconSec.className = 'yellRevealSection';
+      const iconTitle = document.createElement('div');
+      iconTitle.className = 'yellRevealSectionTitle';
+      iconTitle.textContent = '公開アイコン';
+      const iconBar = document.createElement('div');
+      iconBar.className = 'yellRevealIconGrid';
+      const appendIconPair = (label, count)=>{
+        const item = document.createElement('div');
+        item.className = 'yellRevealIconMetric';
+        const lab = document.createElement('div');
+        lab.className = 'yellRevealIconMetricLabel';
+        lab.textContent = label;
+        const cnt = document.createElement('div');
+        cnt.className = 'yellRevealIconMetricValue';
+        cnt.textContent = String(Number(count || 0));
+        item.appendChild(lab);
+        item.appendChild(cnt);
+        iconBar.appendChild(item);
+      };
+      appendIconPair('ドロー', Number(summary.drawIcons || 0));
+      appendIconPair('スコアUP', Number(summary.scoreIcons || 0));
+      iconSec.appendChild(iconTitle);
+      iconSec.appendChild(iconBar);
+      wrap.appendChild(iconSec);
     }
-    heartSec.appendChild(heartTitle);
-    heartSec.appendChild(heartGrid);
-    wrap.appendChild(heartSec);
-
-    const iconSec = document.createElement('div');
-    iconSec.className = 'yellRevealSection';
-    const iconTitle = document.createElement('div');
-    iconTitle.className = 'yellRevealSectionTitle';
-    iconTitle.textContent = '公開アイコン';
-    const iconBar = document.createElement('div');
-    iconBar.className = 'yellRevealIconGrid';
-    const appendIconPair = (label, count)=>{
-      const item = document.createElement('div');
-      item.className = 'yellRevealIconMetric';
-      const lab = document.createElement('div');
-      lab.className = 'yellRevealIconMetricLabel';
-      lab.textContent = label;
-      const cnt = document.createElement('div');
-      cnt.className = 'yellRevealIconMetricValue';
-      cnt.textContent = String(Number(count || 0));
-      item.appendChild(lab);
-      item.appendChild(cnt);
-      iconBar.appendChild(item);
-    };
-    appendIconPair('ドロー', Number(summary.drawIcons || 0));
-    appendIconPair('スコアUP', Number(summary.scoreIcons || 0));
-    iconSec.appendChild(iconTitle);
-    iconSec.appendChild(iconBar);
-    wrap.appendChild(iconSec);
 
     const cardSec = document.createElement('div');
     cardSec.className = 'yellRevealSection';
     const cardTitle = document.createElement('div');
     cardTitle.className = 'yellRevealSectionTitle';
-    cardTitle.textContent = `公開カード (${displayCards.length})`;
+    cardTitle.textContent = `${isYell ? '公開カード' : '確認カード'} (${displayCards.length})`;
     cardSec.appendChild(cardTitle);
     const cardRow = document.createElement('div');
     cardRow.className = 'yellRevealCardRow';
@@ -7035,6 +7084,115 @@ inner.appendChild(card);
       return;
     }
 
+    if(kind === 'choose_yell_revealed_to_green_then_extra_yell'){
+      const displayCards = Array.isArray(p.display_cards) ? p.display_cards : (Array.isArray(p.candidates) ? p.candidates : opts);
+      popup = {type:'pending', closable:false};
+      elModalTitle.textContent = '公開カードを選択';
+      setRichText(elModalText, pendText || '控え室に置くエール公開カードを選んでください。0枚で終了する場合はスキップしてください。');
+      elModalCards.innerHTML = '';
+      elModalActions.innerHTML = '';
+      const row = document.createElement('div');
+      row.className = 'choiceRow';
+      const dims = standardSize('portrait');
+      displayCards.filter(cn=>looksLikeCardNo(String(cn))).forEach((cn)=>{
+        const b = document.createElement('button');
+        b.className = 'choiceBtn';
+        b.style.width = dims.w + 'px';
+        b.style.height = dims.h + 'px';
+        const img = document.createElement('img');
+        img.src = imgUrl(cn);
+        img.alt = cn;
+        const cap = document.createElement('div');
+        cap.className = 'choiceCap';
+        cap.textContent = cardChoiceCaption(cn, 1, 1);
+        b.appendChild(img);
+        b.appendChild(cap);
+        b.addEventListener('click', async ev=>{
+          ev.stopPropagation();
+          st = await apiCmd('resolve_pending', {idx:0, choice:String(cn)});
+          selHand=[]; updateTop(); render();
+        });
+        row.appendChild(b);
+      });
+      if(row.children.length){
+        elModalCards.appendChild(row);
+      }else{
+        const note = document.createElement('div');
+        note.style.opacity = '0.85';
+        note.style.fontSize = '13px';
+        note.style.padding = '6px 0';
+        note.textContent = '選択できる公開カードがありません。';
+        elModalCards.appendChild(note);
+      }
+      const bSkip = document.createElement('button');
+      bSkip.className = 'miniBtn';
+      const pickedN = Array.isArray(p.picked) ? p.picked.length : 0;
+      bSkip.textContent = pickedN > 0 ? '選択を終了' : '0枚で終了';
+      bSkip.addEventListener('click', async ev=>{
+        ev.stopPropagation();
+        st = await apiCmd('resolve_pending', {idx:0, choice:'skip'});
+        selHand=[]; updateTop(); render();
+      });
+      elModalActions.appendChild(bSkip);
+      elMask.style.display = 'block';
+      return;
+    }
+
+    if(kind === 'hand_member_to_empty_area'){
+      const displayCards = Array.isArray(p.display_cards) ? p.display_cards : opts.filter(o=>looksLikeCardNo(String(o)));
+      popup = {type:'pending', closable:false};
+      elModalTitle.textContent = '手札からメンバーを選択';
+      setRichText(elModalText, pendText || '手札から登場させるメンバーを選んでください。');
+      elModalCards.innerHTML = '';
+      elModalActions.innerHTML = '';
+      const row = document.createElement('div');
+      row.className = 'choiceRow';
+      const dims = standardSize('portrait');
+      displayCards.filter(cn=>looksLikeCardNo(String(cn))).forEach((cn)=>{
+        const b = document.createElement('button');
+        b.className = 'choiceBtn';
+        b.style.width = dims.w + 'px';
+        b.style.height = dims.h + 'px';
+        const img = document.createElement('img');
+        img.src = imgUrl(cn);
+        img.alt = cn;
+        const cap = document.createElement('div');
+        cap.className = 'choiceCap';
+        cap.textContent = cardChoiceCaption(cn, 1, 1);
+        b.appendChild(img);
+        b.appendChild(cap);
+        b.addEventListener('click', async ev=>{
+          ev.stopPropagation();
+          st = await apiCmd('resolve_pending', {idx:0, choice:String(cn)});
+          selHand=[]; updateTop(); render();
+        });
+        row.appendChild(b);
+      });
+      if(row.children.length){
+        elModalCards.appendChild(row);
+      }else{
+        const note = document.createElement('div');
+        note.style.opacity = '0.85';
+        note.style.fontSize = '13px';
+        note.style.padding = '6px 0';
+        note.textContent = '候補カードが表示できませんでした。';
+        elModalCards.appendChild(note);
+      }
+      if(p && p.optional){
+        const bSkip = document.createElement('button');
+        bSkip.className = 'miniBtn';
+        bSkip.textContent = 'スキップ';
+        bSkip.addEventListener('click', async ev=>{
+          ev.stopPropagation();
+          st = await apiCmd('resolve_pending', {idx:0, choice:'skip'});
+          selHand=[]; updateTop(); render();
+        });
+        elModalActions.appendChild(bSkip);
+      }
+      elMask.style.display = 'block';
+      return;
+    }
+
     if(kind === 'mass_bottom_auto_ack' || kind === 'mass_bottom_optional_result_ack'){
       // 結果本文は上部の既存 effect processing text に集約する。
       // 重複を避けるため下部には追加説明を出さず、可変枚数だけ軽く強調する。
@@ -7967,7 +8125,7 @@ inner.appendChild(card);
           b.textContent = String(opt);
         }else{
           b.textContent = '';
-          b.appendChild(choiceRichLabel(opt));
+          b.appendChild(choiceRichLabel(opt, kind));
         }
         b.addEventListener('click', async (ev)=>{
           ev.stopPropagation();
@@ -8033,7 +8191,9 @@ inner.appendChild(card);
         row.appendChild(card0);
       });
       elModalCards.appendChild(row);
-      appendYellRevealDrawNotice(p);
+      if(isYellRevealPending(p)){
+        appendYellRevealDrawNotice(p);
+      }
     }
 
     const publicOptions = (p && Array.isArray(p.options)) ? p.options.map(x=>String(x||'')).filter(Boolean) : [];
@@ -8045,7 +8205,7 @@ inner.appendChild(card);
         const chip = document.createElement('span');
         chip.className = 'miniBtn';
         chip.style.cssText = 'opacity:.75;cursor:default;pointer-events:none;';
-        chip.appendChild(choiceRichLabel(opt));
+        chip.appendChild(choiceRichLabel(opt, kind));
         row.appendChild(chip);
       });
       elModalCards.appendChild(row);

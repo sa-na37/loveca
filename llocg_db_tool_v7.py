@@ -19,7 +19,7 @@ Deps:
 
 from __future__ import annotations
 
-BUILD_TAG = "db_product_unknown_release_registry_reuse_20260710af"
+BUILD_TAG = "db_field_schema_noise_idempotence_20260716b"
 
 import argparse
 import csv
@@ -55,6 +55,7 @@ CONFIG = {
     "user_agent": "LL-OCG-DB-Build/1.0 (polite crawler; contact: your_email@example.com)",
     "normalize_suffix": "_tokv1",
     "manual_overrides": "manual_overrides/loveca_card_text_overrides.json",
+    "field_schema": "manual_overrides/loveca_field_schema.json",
 }
 
 TRANSIENT_HTTP_STATUSES = {500, 502, 503, 504}
@@ -1519,6 +1520,417 @@ def infer_card_type(raw: Any, required_hearts_raw: Any = "", score: Any = "", co
     return inferred, canonical_raw
 
 
+
+# -------------------------
+# field schema validation / correction
+# -------------------------
+# Canonical vocabularies are deliberately explicit. Unknown values are retained
+# and written to an unresolved audit instead of being silently discarded.
+BUILTIN_FIELD_SCHEMA: Dict[str, Any] = {
+    "schema_version": 1,
+    "vocabularies": {
+        "group": {
+            "values": [
+                "μ's", "Aqours", "虹ヶ咲", "Liella!", "蓮ノ空",
+                "A-RISE", "Saint Snow", "Sunny Passion",
+            ],
+            "aliases": {
+                "μｓ": "μ's", "Muse": "μ's", "ミューズ": "μ's",
+                "AQUORS": "Aqours", "アクア": "Aqours",
+                "虹ヶ咲学園スクールアイドル同好会": "虹ヶ咲",
+                "ニジガク": "虹ヶ咲",
+                "Liella": "Liella!", "リエラ": "Liella!",
+                "蓮ノ空女学院スクールアイドルクラブ": "蓮ノ空",
+                "蓮ノ空女学院": "蓮ノ空", "蓮": "蓮ノ空",
+                "ARISE": "A-RISE", "A‐RISE": "A-RISE",
+                "SAINT SNOW": "Saint Snow", "SaintSnow": "Saint Snow",
+                "SUNNY PASSION": "Sunny Passion", "SunnyPassion": "Sunny Passion",
+            },
+        },
+        "unit": {
+            "values": [
+                "Printemps", "lily white", "BiBi",
+                "CYaRon!", "AZALEA", "Guilty Kiss",
+                "DiverDiva", "A・ZU・NA", "QU4RTZ", "R3BIRTH",
+                "CatChu!", "KALEIDOSCORE", "5yncri5e!",
+                "スリーズブーケ", "DOLLCHESTRA", "みらくらぱーく！", "Edel Note",
+            ],
+            "aliases": {
+                "LILY WHITE": "lily white", "lilywhite": "lily white",
+                "CYaRon": "CYaRon!", "GuiltyKiss": "Guilty Kiss",
+                "A-ZU-NA": "A・ZU・NA", "A･ZU･NA": "A・ZU・NA", "AZUNA": "A・ZU・NA",
+                "CatChu": "CatChu!", "5yncri5e": "5yncri5e!",
+                "Cerise Bouquet": "スリーズブーケ",
+                "Mira-Cra Park!": "みらくらぱーく！", "Mira-Cra Park": "みらくらぱーく！",
+                "みらくらぱーく": "みらくらぱーく！", "EdelNote": "Edel Note",
+            },
+        },
+        "card_type_norm": {
+            "values": ["MEMBER", "LIVE", "EVENT", "SUPPORT"],
+            "aliases": {
+                "メンバー": "MEMBER", "メンバーカード": "MEMBER",
+                "ライブ": "LIVE", "ライブカード": "LIVE",
+                "イベント": "EVENT", "イベントカード": "EVENT",
+                "サポート": "SUPPORT", "サポートカード": "SUPPORT",
+            },
+        },
+        "card_type_raw": {
+            "values": ["メンバー", "ライブ", "イベント", "サポート"],
+            "aliases": {
+                "MEMBER": "メンバー", "メンバーカード": "メンバー",
+                "LIVE": "ライブ", "ライブカード": "ライブ",
+                "EVENT": "イベント", "イベントカード": "イベント",
+                "SUPPORT": "サポート", "サポートカード": "サポート",
+            },
+        },
+    },
+    "numeric_fields": {
+        "cost": {"min": 0, "max": 99, "integer": True},
+        "blade": {"min": 0, "max": 99, "integer": True},
+        "score": {"min": 0, "max": 99, "integer": True},
+        "base_hearts_total": {"min": 0, "max": 99, "integer": True},
+        "required_hearts_total": {"min": 0, "max": 99, "integer": True},
+        "blade_heart_total": {"min": 0, "max": 99, "integer": True},
+    },
+    "json_count_fields": {
+        "base_hearts_counts_json": ["pink", "red", "yellow", "green", "blue", "purple", "white", "black", "any", "all"],
+        "required_hearts_counts_json": ["pink", "red", "yellow", "green", "blue", "purple", "white", "black", "any", "all"],
+        "blade_heart_counts_json": ["pink", "red", "yellow", "green", "blue", "purple", "white", "black", "any", "all"],
+        "blade_heart_special_counts_json": ["draw", "score", "colorless"],
+    },
+}
+
+_FIELD_SPLIT_RE = re.compile(r"\s*(?:/|／|、|,|\||・|;|；)\s*")
+_EMPTY_FIELD_MARKERS = {"", "-", "—", "―", "なし", "無し", "nan", "none", "null"}
+
+
+def _is_empty_field_value(value: Any) -> bool:
+    """Treat CSV NaN and configured source placeholders as semantic blanks."""
+    if value is None:
+        return True
+    if isinstance(value, float) and pd.isna(value):
+        return True
+    return str(value).strip().casefold() in _EMPTY_FIELD_MARKERS
+
+
+def _normalized_field_text(value: Any) -> str:
+    """Canonical comparison form used to avoid auditing blank-marker cleanup."""
+    return _join_field_tokens(_field_tokens(value))
+
+
+def _deep_merge_schema(base: Dict[str, Any], extra: Dict[str, Any]) -> Dict[str, Any]:
+    out = json.loads(json.dumps(base, ensure_ascii=False))
+    for key, value in extra.items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = _deep_merge_schema(out[key], value)
+        else:
+            out[key] = value
+    return out
+
+
+def load_field_schema(path: Optional[Path]) -> Dict[str, Any]:
+    schema = json.loads(json.dumps(BUILTIN_FIELD_SCHEMA, ensure_ascii=False))
+    if path and path.exists():
+        try:
+            obj = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(obj, dict):
+                schema = _deep_merge_schema(schema, obj)
+        except Exception as exc:
+            print(f"[WARN] failed to load field schema: {path} ({exc})")
+    return schema
+
+
+def _field_tokens(value: Any) -> List[str]:
+    if _is_empty_field_value(value):
+        return []
+    raw = str(value).strip()
+    return [x.strip() for x in _FIELD_SPLIT_RE.split(raw) if x.strip()]
+
+
+def _join_field_tokens(tokens: List[str]) -> str:
+    return " / ".join(dict.fromkeys(x for x in tokens if x))
+
+
+def _vocab_maps(schema: Dict[str, Any], field: str) -> Tuple[Set[str], Dict[str, str], Dict[str, str]]:
+    spec = schema.get("vocabularies", {}).get(field, {})
+    values = {str(x) for x in spec.get("values", []) if str(x).strip()}
+    aliases = {str(k): str(v) for k, v in spec.get("aliases", {}).items()}
+    folded: Dict[str, str] = {}
+    for value in values:
+        folded[value.casefold()] = value
+    for alias, canonical in aliases.items():
+        folded[alias.casefold()] = canonical
+    return values, aliases, folded
+
+
+def _audit_row(rec: Dict[str, Any], *, field: str, source_value: Any, corrected_value: Any,
+               action: str, reason: str, status: str) -> Dict[str, Any]:
+    return {
+        "cardnumber": str(rec.get("cardnumber", "") or ""),
+        "cardname": str(rec.get("cardname", "") or ""),
+        "field": field,
+        "source_value": "" if source_value is None else str(source_value),
+        "corrected_value": "" if corrected_value is None else str(corrected_value),
+        "action": action,
+        "reason": reason,
+        "status": status,
+        "source_url": str(rec.get("source_url", "") or ""),
+    }
+
+
+def validate_and_correct_record_fields(
+    rec: Dict[str, Any], schema: Dict[str, Any]
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    corrections: List[Dict[str, Any]] = []
+    unresolved: List[Dict[str, Any]] = []
+
+    # First canonicalize every enum vocabulary independently.
+    for field in schema.get("vocabularies", {}):
+        if field not in rec:
+            continue
+        source = rec.get(field, "")
+        tokens = _field_tokens(source)
+        if not tokens:
+            # Normalize source placeholders internally, but do not count routine
+            # blank cleanup ("-", NaN, None, etc.) as a semantic correction.
+            if source != "":
+                rec[field] = ""
+            continue
+        allowed, _aliases, folded = _vocab_maps(schema, field)
+        canonical_tokens: List[str] = []
+        unknown_tokens: List[str] = []
+        for token in tokens:
+            canonical = folded.get(token.casefold())
+            if canonical:
+                canonical_tokens.append(canonical)
+            else:
+                canonical_tokens.append(token)
+                unknown_tokens.append(token)
+        corrected = _join_field_tokens(canonical_tokens)
+        if corrected != _normalized_field_text(source):
+            rec[field] = corrected
+            corrections.append(_audit_row(
+                rec, field=field, source_value=source, corrected_value=corrected,
+                action="CANONICALIZE_ENUM", reason="matched canonical vocabulary or alias",
+                status="CORRECTED",
+            ))
+        for token in unknown_tokens:
+            # A value belonging to the opposite taxonomy is resolved by the
+            # cross-field repair below, so do not report it as unresolved here.
+            if field == "group":
+                _a, _b, opposite_folded = _vocab_maps(schema, "unit")
+                if token.casefold() in opposite_folded:
+                    continue
+            if field == "unit":
+                _a, _b, opposite_folded = _vocab_maps(schema, "group")
+                if token.casefold() in opposite_folded:
+                    continue
+            unresolved.append(_audit_row(
+                rec, field=field, source_value=token, corrected_value=token,
+                action="UNKNOWN_ENUM_VALUE_RETAINED",
+                reason="value is not in the configured canonical vocabulary",
+                status="UNRESOLVED",
+            ))
+
+    # Cross-field taxonomy repair. Group and unit are mutually exclusive vocabularies.
+    group_allowed, _, group_folded = _vocab_maps(schema, "group")
+    unit_allowed, _, unit_folded = _vocab_maps(schema, "unit")
+    group_source = rec.get("group", "")
+    unit_source = rec.get("unit", "")
+    group_tokens = _field_tokens(group_source)
+    unit_tokens = _field_tokens(unit_source)
+
+    corrected_groups: List[str] = []
+    corrected_units: List[str] = []
+    moved_to_group: List[str] = []
+    moved_to_unit: List[str] = []
+
+    for token in group_tokens:
+        group_value = group_folded.get(token.casefold())
+        unit_value = unit_folded.get(token.casefold())
+        if group_value:
+            corrected_groups.append(group_value)
+        elif unit_value:
+            corrected_units.append(unit_value)
+            moved_to_unit.append(token)
+        else:
+            corrected_groups.append(token)
+
+    for token in unit_tokens:
+        unit_value = unit_folded.get(token.casefold())
+        group_value = group_folded.get(token.casefold())
+        if unit_value:
+            corrected_units.append(unit_value)
+        elif group_value:
+            corrected_groups.append(group_value)
+            moved_to_group.append(token)
+        else:
+            corrected_units.append(token)
+
+    new_group = _join_field_tokens(corrected_groups)
+    new_unit = _join_field_tokens(corrected_units)
+    if new_group != _normalized_field_text(group_source):
+        rec["group"] = new_group
+        corrections.append(_audit_row(
+            rec, field="group", source_value=group_source, corrected_value=new_group,
+            action="CROSS_FIELD_TAXONOMY_REPAIR",
+            reason=("moved unit vocabulary out of group: " + ", ".join(moved_to_unit)) if moved_to_unit else "deduplicated/canonicalized group values",
+            status="CORRECTED",
+        ))
+    if new_unit != _normalized_field_text(unit_source):
+        rec["unit"] = new_unit
+        corrections.append(_audit_row(
+            rec, field="unit", source_value=unit_source, corrected_value=new_unit,
+            action="CROSS_FIELD_TAXONOMY_REPAIR",
+            reason=("moved group vocabulary out of unit: " + ", ".join(moved_to_group)) if moved_to_group else "deduplicated/canonicalized unit values",
+            status="CORRECTED",
+        ))
+
+    # Numeric domain validation. Invalid values are retained and surfaced.
+    for field, spec in schema.get("numeric_fields", {}).items():
+        if field not in rec or _is_empty_field_value(rec.get(field)):
+            continue
+        raw = rec.get(field)
+        text = str(raw).strip().translate(FW_DIGITS)
+        try:
+            number = float(text)
+        except ValueError:
+            unresolved.append(_audit_row(
+                rec, field=field, source_value=raw, corrected_value=raw,
+                action="INVALID_NUMERIC_RETAINED", reason="not a numeric value",
+                status="UNRESOLVED",
+            ))
+            continue
+        if spec.get("integer") and not number.is_integer():
+            unresolved.append(_audit_row(
+                rec, field=field, source_value=raw, corrected_value=raw,
+                action="NON_INTEGER_RETAINED", reason="field requires an integer",
+                status="UNRESOLVED",
+            ))
+        lo, hi = spec.get("min"), spec.get("max")
+        if (lo is not None and number < float(lo)) or (hi is not None and number > float(hi)):
+            unresolved.append(_audit_row(
+                rec, field=field, source_value=raw, corrected_value=raw,
+                action="OUT_OF_RANGE_RETAINED", reason=f"expected range {lo}..{hi}",
+                status="UNRESOLVED",
+            ))
+
+    # Structured JSON count validation.
+    for field, allowed_keys_raw in schema.get("json_count_fields", {}).items():
+        if field not in rec or _is_empty_field_value(rec.get(field)):
+            continue
+        ok, obj = safe_json_loads(rec.get(field))
+        if not ok or not isinstance(obj, dict):
+            unresolved.append(_audit_row(
+                rec, field=field, source_value=rec.get(field), corrected_value=rec.get(field),
+                action="INVALID_JSON_RETAINED", reason="expected a JSON object",
+                status="UNRESOLVED",
+            ))
+            continue
+        allowed_keys = {str(x) for x in allowed_keys_raw}
+        unknown_keys = sorted(set(str(k) for k in obj) - allowed_keys)
+        bad_values = [str(k) for k, v in obj.items() if not isinstance(v, int) or v < 0]
+        if unknown_keys or bad_values:
+            unresolved.append(_audit_row(
+                rec, field=field, source_value=rec.get(field), corrected_value=rec.get(field),
+                action="INVALID_COUNT_MAP_RETAINED",
+                reason=f"unknown_keys={unknown_keys}; nonnegative_integer_required={bad_values}",
+                status="UNRESOLVED",
+            ))
+
+    # Cross-field card-type consistency audit after infer_card_type repair.
+    inferred, _raw = infer_card_type(
+        rec.get("card_type_raw", ""),
+        required_hearts_raw=rec.get("required_hearts_raw", ""),
+        score=rec.get("score", ""), cost=rec.get("cost", ""),
+        blade=rec.get("blade", ""), base_hearts_raw=rec.get("base_hearts_raw", ""),
+    )
+    current = str(rec.get("card_type_norm", "") or "").strip()
+    if inferred and current and inferred != current:
+        source = current
+        rec["card_type_norm"] = inferred
+        canonical_raw = _canonical_card_type_raw(inferred)
+        if canonical_raw:
+            rec["card_type_raw"] = canonical_raw
+        corrections.append(_audit_row(
+            rec, field="card_type_norm", source_value=source, corrected_value=inferred,
+            action="CARD_TYPE_SIGNAL_REPAIR",
+            reason="cost/heart/score field signals contradicted the extracted card type",
+            status="CORRECTED",
+        ))
+
+    return corrections, unresolved
+
+
+def _write_field_validation_audits(
+    outdir: Path, corrections: List[Dict[str, Any]], unresolved: List[Dict[str, Any]], label: str,
+    idempotence_failures: Optional[List[Dict[str, Any]]] = None,
+) -> None:
+    outdir.mkdir(parents=True, exist_ok=True)
+    final_names = label in {"normalize_csv", "normalize_final"}
+    suffix = "" if final_names else "_" + re.sub(r"[^A-Za-z0-9]+", "_", label).strip("_").lower()
+    fields = ["cardnumber", "cardname", "field", "source_value", "corrected_value", "action", "reason", "status", "source_url"]
+    datasets = [
+        ("field_validation_corrections", corrections),
+        ("field_validation_unresolved", unresolved),
+        ("field_validation_idempotence_failures", idempotence_failures or []),
+    ]
+    for stem, rows in datasets:
+        tsv_path = outdir / f"{stem}{suffix}.tsv"
+        json_path = outdir / f"{stem}{suffix}.json"
+        with tsv_path.open("w", encoding="utf-8-sig", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fields, delimiter="\t", extrasaction="ignore")
+            writer.writeheader(); writer.writerows(rows)
+        json_path.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    # Compact field/action summary keeps real anomalies visible even for large DBs.
+    summary_rows: List[Dict[str, Any]] = []
+    for category, rows in (("CORRECTED", corrections), ("UNRESOLVED", unresolved), ("IDEMPOTENCE_FAILURE", idempotence_failures or [])):
+        counts = Counter((str(r.get("field", "")), str(r.get("action", "")), str(r.get("reason", ""))) for r in rows)
+        for (field, action, reason), count in sorted(counts.items(), key=lambda item: (-item[1], item[0])):
+            summary_rows.append({"category": category, "field": field, "action": action, "reason": reason, "count": count})
+    summary_tsv = outdir / f"field_validation_summary{suffix}.tsv"
+    summary_json = outdir / f"field_validation_summary{suffix}.json"
+    summary_fields = ["category", "field", "action", "reason", "count"]
+    with summary_tsv.open("w", encoding="utf-8-sig", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=summary_fields, delimiter="\t")
+        writer.writeheader(); writer.writerows(summary_rows)
+    summary_json.write_text(json.dumps(summary_rows, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def apply_field_schema_to_records(
+    records: List[Dict[str, Any]], *, outdir: Path, label: str, schema_path: Optional[Path]
+) -> Tuple[int, int]:
+    schema = load_field_schema(schema_path)
+    corrections: List[Dict[str, Any]] = []
+    unresolved: List[Dict[str, Any]] = []
+    valid_records: List[Dict[str, Any]] = []
+    for rec in records:
+        if not isinstance(rec, dict):
+            continue
+        valid_records.append(rec)
+        c, u = validate_and_correct_record_fields(rec, schema)
+        corrections.extend(c); unresolved.extend(u)
+
+    # A second pass must produce no further semantic corrections.  It is cheap,
+    # catches ordering bugs in repair rules, and leaves the output fully settled.
+    idempotence_failures: List[Dict[str, Any]] = []
+    for rec in valid_records:
+        c2, _u2 = validate_and_correct_record_fields(rec, schema)
+        idempotence_failures.extend(c2)
+
+    _write_field_validation_audits(
+        outdir, corrections, unresolved, label,
+        idempotence_failures=idempotence_failures,
+    )
+    idem_status = "PASS" if not idempotence_failures else "FAIL"
+    print(
+        f"[FIELD-SCHEMA] label={label} corrected={len(corrections)} "
+        f"unresolved={len(unresolved)} idempotence={idem_status} "
+        f"idempotence_corrections={len(idempotence_failures)}"
+    )
+    return len(corrections), len(unresolved)
+
 def normalize_effect_text(effect_text: str) -> str:
     if not effect_text or not isinstance(effect_text, str):
         return ""
@@ -1726,7 +2138,7 @@ def _write_scrape_checkpoint(
     _write_failed_urls(outdir, failed)
 
 
-def finalize_outputs(outdir: Path, records: List[Dict[str, Any]], keys_found: Set[str], failed: List[str], manual_overrides: Optional[Path] = None) -> Tuple[Path, Path]:
+def finalize_outputs(outdir: Path, records: List[Dict[str, Any]], keys_found: Set[str], failed: List[str], manual_overrides: Optional[Path] = None, field_schema: Optional[Path] = None) -> Tuple[Path, Path]:
     outdir.mkdir(parents=True, exist_ok=True)
     canonicalize_cardnumbers_in_records(
         records,
@@ -1735,6 +2147,7 @@ def finalize_outputs(outdir: Path, records: List[Dict[str, Any]], keys_found: Se
     )
     overrides = load_card_text_overrides(manual_overrides)
     apply_card_text_overrides_to_records(records, overrides, label="scrape/finalize")
+    apply_field_schema_to_records(records, outdir=outdir, label="scrape_finalize", schema_path=field_schema)
     df = pd.DataFrame(records)
     if "source_url" in df.columns:
         df = df.drop_duplicates(subset=["source_url"], keep="last")
@@ -1800,7 +2213,134 @@ def extract_release_date_from_product_html(html: str) -> str:
     return ""
 
 
-def build_product_registry_entry(product_url: str, html: str) -> Dict[str, Any]:
+def _product_category_for_title(title: str) -> str:
+    text = str(title or "")
+    if "プレミアムブースター" in text:
+        return "PB"
+    if "ブースターパック" in text:
+        return "BP"
+    if "スタートデッキ" in text:
+        return "SD"
+    if "コレクション" in text or "クリアポケット" in text:
+        return "CL"
+    return ""
+
+
+def _code_matches_product_category(code: str, category: str) -> bool:
+    value = str(code or "").upper()
+    if category == "BP":
+        return bool(re.fullmatch(r"BP\d{2}", value))
+    if category == "PB":
+        return value.startswith("PB")
+    if category == "SD":
+        return bool(re.search(r"SD\d{2}$", value))
+    if category == "CL":
+        return value.startswith("CL")
+    return True
+
+
+def _code_sequence_number(code: str) -> int:
+    m = re.search(r"(\d+)$", str(code or ""))
+    return int(m.group(1)) if m else 0
+
+
+def _established_code_owners(
+    previous_entries_by_url: Dict[str, Dict[str, Any]],
+) -> Dict[str, Set[str]]:
+    owners: Dict[str, Set[str]] = {}
+    for url, raw in previous_entries_by_url.items():
+        if not isinstance(raw, dict):
+            continue
+        if str(raw.get("status", "") or "") != "MATCHED":
+            continue
+        code = str(raw.get("product_code", "") or "").strip().upper()
+        if code:
+            owners.setdefault(code, set()).add(str(url))
+    return owners
+
+
+def resolve_product_code(
+    *,
+    product_url: str,
+    title: str,
+    release_date: str,
+    code_counts: Counter[str],
+    previous_entries_by_url: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> Tuple[str, str, str]:
+    if not release_date:
+        return "", "NO_RELEASE_DATE", "release date not found on product page"
+    if not code_counts:
+        return "", "NO_PRODUCT_CODE", "no product-code-bearing card links found"
+
+    previous_entries_by_url = previous_entries_by_url or {}
+    owners = _established_code_owners(previous_entries_by_url)
+    category = _product_category_for_title(title)
+    matching = {
+        str(code).upper(): int(count)
+        for code, count in code_counts.items()
+        if _code_matches_product_category(str(code), category)
+    }
+    if not matching:
+        return (
+            "",
+            "AMBIGUOUS_PRODUCT_CODE",
+            f"no card-link expansion matches product category={category or 'unknown'}",
+        )
+
+    previous = previous_entries_by_url.get(str(product_url), {})
+    previous_code = str(previous.get("product_code", "") or "").strip().upper()
+    if previous_code and previous_code in matching:
+        other_owners = owners.get(previous_code, set()) - {str(product_url)}
+        if not other_owners:
+            return (
+                previous_code,
+                "MATCHED",
+                "preserved previously confirmed product code for the same source URL",
+            )
+
+    # A new expansion generally introduces at least one card-number series not
+    # already owned by another product page. Reprints from old products must not
+    # win merely because they are more numerous on an incomplete prerelease page.
+    unowned = {
+        code: count
+        for code, count in matching.items()
+        if not owners.get(code)
+    }
+    if unowned:
+        ordered = sorted(
+            unowned.items(),
+            key=lambda item: (item[1], _code_sequence_number(item[0]), item[0]),
+            reverse=True,
+        )
+        best_code, best_count = ordered[0]
+        tied = [
+            code for code, count in ordered
+            if count == best_count and _code_sequence_number(code) == _code_sequence_number(best_code)
+        ]
+        if len(tied) == 1:
+            return (
+                best_code,
+                "MATCHED",
+                "selected unassigned card-number series matching the product category",
+            )
+
+    # Every matching code already belongs to another product. This usually means
+    # the page currently contains only reprints or related-card links. Keep it as
+    # unresolved until its own card-number series appears rather than overwriting
+    # an established product.
+    return (
+        "",
+        "UNRESOLVED_PRODUCT_CODE",
+        "all matching card-number series are already assigned to other product pages",
+    )
+
+
+def build_product_registry_entry(
+    product_url: str,
+    html: str,
+    *,
+    previous_entries_by_url: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
     card_links = extract_card_links_from_product(html)
     cardnumbers: List[str] = []
     code_counts: Counter[str] = Counter()
@@ -1814,31 +2354,17 @@ def build_product_registry_entry(product_url: str, html: str) -> Dict[str, Any]:
         if not code:
             continue
         cardnumbers.append(canonical)
-        code_counts[code] += 1
+        code_counts[code.upper()] += 1
 
     release_date = extract_release_date_from_product_html(html)
     title = extract_product_page_title(html)
-
-    product_code = ""
-    status = ""
-    reason = ""
-    if not release_date:
-        status = "NO_RELEASE_DATE"
-        reason = "release date not found on product page"
-    elif not code_counts:
-        status = "NO_PRODUCT_CODE"
-        reason = "no product-code-bearing card links found"
-    else:
-        ordered = code_counts.most_common()
-        best_code, best_count = ordered[0]
-        tied = [code for code, count in ordered if count == best_count]
-        if len(tied) > 1:
-            status = "AMBIGUOUS_PRODUCT_CODE"
-            reason = "multiple product codes tied for most card links"
-        else:
-            product_code = best_code
-            status = "MATCHED"
-            reason = "product code selected from most frequent card-link expansion"
+    product_code, status, reason = resolve_product_code(
+        product_url=product_url,
+        title=title,
+        release_date=release_date,
+        code_counts=code_counts,
+        previous_entries_by_url=previous_entries_by_url,
+    )
 
     return {
         "product_code": product_code,
@@ -1872,20 +2398,7 @@ def write_product_release_registry(
         code = str(entry.get("product_code", "") or "").strip().upper()
         if not code:
             continue
-        if code in products:
-            old = products[code]
-            old_sig = (
-                str(old.get("release_date", "")),
-                str(old.get("source_url", "")),
-            )
-            new_sig = (
-                str(entry.get("release_date", "")),
-                str(entry.get("source_url", "")),
-            )
-            if old_sig != new_sig:
-                collisions.setdefault(code, [old]).append(entry)
-                continue
-        products[code] = {
+        candidate = {
             "release_date": entry.get("release_date", ""),
             "title": entry.get("title", ""),
             "source_url": entry.get("source_url", ""),
@@ -1893,9 +2406,43 @@ def write_product_release_registry(
             "product_code_counts": entry.get("product_code_counts", {}),
             "sample_cardnumbers": entry.get("sample_cardnumbers", []),
         }
+        if code not in products:
+            products[code] = candidate
+            continue
 
-    for code in collisions:
-        products.pop(code, None)
+        old = products[code]
+        old_sig = (str(old.get("release_date", "")), str(old.get("source_url", "")))
+        new_sig = (str(candidate.get("release_date", "")), str(candidate.get("source_url", "")))
+        if old_sig == new_sig:
+            products[code] = candidate
+            continue
+
+        collisions.setdefault(code, [dict(old)]).append(dict(candidate))
+
+        def confidence(row: Dict[str, Any]) -> Tuple[int, float, int]:
+            counts = row.get("product_code_counts", {})
+            own = 0
+            total = 0
+            if isinstance(counts, dict):
+                for raw_code, raw_count in counts.items():
+                    try:
+                        count = int(raw_count or 0)
+                    except (TypeError, ValueError):
+                        count = 0
+                    total += count
+                    if str(raw_code).upper() == code:
+                        own += count
+            ratio = (own / total) if total else 0.0
+            try:
+                links = int(row.get("card_link_count", 0) or 0)
+            except (TypeError, ValueError):
+                links = 0
+            return own, ratio, links
+
+        # Keep the higher-confidence owner. A weak prerelease page containing a
+        # few reprints can no longer erase a well-established product.
+        if confidence(candidate) > confidence(old):
+            products[code] = candidate
 
     # Keep a page-level registry in addition to the product-code registry.
     # Multiple WIKIWIKI product pages may collapse to the same inferred code or
@@ -2103,6 +2650,7 @@ def cmd_scrape(
     fetch_state: Optional[FetchState] = None,
     manual_overrides: Optional[Path] = None,
     released_product_grace_days: int = 7,
+    field_schema: Optional[Path] = None,
 ) -> Tuple[Path, Path]:
     outdir.mkdir(parents=True, exist_ok=True)
     if fetch_state is None:
@@ -2189,7 +2737,11 @@ def cmd_scrape(
                     )
                     card_urls.update(extract_card_links_from_product(h))
                     product_registry_entries.append(
-                        build_product_registry_entry(pu, h)
+                        build_product_registry_entry(
+                            pu,
+                            h,
+                            previous_entries_by_url=previous_registry,
+                        )
                     )
                 except FetchSafetyStop:
                     raise
@@ -2280,7 +2832,7 @@ def cmd_scrape(
         raise
 
     out_csv, out_json = finalize_outputs(
-        outdir, records, keys_found, failed, manual_overrides=manual_overrides
+        outdir, records, keys_found, failed, manual_overrides=manual_overrides, field_schema=field_schema
     )
     print("[DONE] records=", len(pd.read_csv(out_csv)))
     print("  CSV :", out_csv)
@@ -2359,7 +2911,7 @@ def process_tokens(obj: Dict[str, Any]) -> Dict[str, Any]:
     return obj
 
 
-def cmd_normalize(csv_path: Path, json_path: Optional[Path], outdir: Path, suffix: str, manual_overrides: Optional[Path] = None) -> Tuple[Path, Optional[Path]]:
+def cmd_normalize(csv_path: Path, json_path: Optional[Path], outdir: Path, suffix: str, manual_overrides: Optional[Path] = None, field_schema: Optional[Path] = None) -> Tuple[Path, Optional[Path]]:
     df = pd.read_csv(csv_path)
     csv_records = df.to_dict(orient="records")
     canonicalize_cardnumbers_in_records(
@@ -2460,6 +3012,10 @@ def cmd_normalize(csv_path: Path, json_path: Optional[Path], outdir: Path, suffi
     df["tok_score_delta_icon"] = tok_score_delta
     df["tok_unknown_tags_n"] = tok_unknown_n
 
+    csv_out_records = df.to_dict(orient="records")
+    apply_field_schema_to_records(csv_out_records, outdir=outdir, label="normalize_csv", schema_path=field_schema)
+    df = pd.DataFrame(csv_out_records)
+
     outdir.mkdir(parents=True, exist_ok=True)
     out_csv = outdir / f"{csv_path.stem}{suffix}.csv"
     df.to_csv(out_csv, index=False, encoding="utf-8-sig")
@@ -2501,6 +3057,7 @@ def cmd_normalize(csv_path: Path, json_path: Optional[Path], outdir: Path, suffi
                     )
                     r["card_type_norm"] = inferred_type
                     r["card_type_raw"] = canonical_raw or str(r.get("card_type_raw", "") or "")
+                apply_field_schema_to_records(data, outdir=outdir, label="normalize_json", schema_path=field_schema)
                 out_json = outdir / f"{json_path.stem}{suffix}.json"
                 out_json.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
                 print(f"[DONE] wrote: {out_json}")
@@ -3438,6 +3995,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="ignore existing cards_min.csv/json and rebuild from fetched pages",
     )
     ps.add_argument("--manual-overrides", default=CONFIG["manual_overrides"])
+    ps.add_argument("--field-schema", default=CONFIG["field_schema"])
     ps.add_argument(
         "--released-product-grace-days",
         type=int,
@@ -3451,6 +4009,7 @@ def build_parser() -> argparse.ArgumentParser:
     pn.add_argument("--outdir", default="")
     pn.add_argument("--suffix", default=CONFIG["normalize_suffix"])
     pn.add_argument("--manual-overrides", default=CONFIG["manual_overrides"])
+    pn.add_argument("--field-schema", default=CONFIG["field_schema"])
 
     pm = sub.add_parser("mine")
     pm.add_argument("--csv", required=True)
@@ -3514,6 +4073,7 @@ def build_parser() -> argparse.ArgumentParser:
     pall.add_argument("--official-timeout", type=float, default=25.0)
     pall.add_argument("--no-per-card-fallback", action="store_true")
     pall.add_argument("--manual-overrides", default=CONFIG["manual_overrides"])
+    pall.add_argument("--field-schema", default=CONFIG["field_schema"])
     pall.add_argument(
         "--released-product-grace-days",
         type=int,
@@ -3548,6 +4108,7 @@ def main() -> None:
             fetch_state=fetch_state,
             manual_overrides=Path(args.manual_overrides) if args.manual_overrides else None,
             released_product_grace_days=args.released_product_grace_days,
+            field_schema=Path(args.field_schema) if args.field_schema else None,
         )
         return
 
@@ -3555,7 +4116,7 @@ def main() -> None:
         csvp = Path(args.csv)
         jsonp = Path(args.json) if args.json else None
         outdir = Path(args.outdir) if args.outdir else csvp.parent
-        cmd_normalize(csvp, jsonp, outdir, args.suffix, manual_overrides=Path(args.manual_overrides) if args.manual_overrides else None)
+        cmd_normalize(csvp, jsonp, outdir, args.suffix, manual_overrides=Path(args.manual_overrides) if args.manual_overrides else None, field_schema=Path(args.field_schema) if args.field_schema else None)
         return
 
     if args.cmd == "mine":
@@ -3618,8 +4179,9 @@ def main() -> None:
             fetch_state=fetch_state,
             manual_overrides=Path(args.manual_overrides) if args.manual_overrides else None,
             released_product_grace_days=args.released_product_grace_days,
+            field_schema=Path(args.field_schema) if args.field_schema else None,
         )
-        norm_csv, norm_json = cmd_normalize(out_csv, out_json, outdir, args.suffix, manual_overrides=Path(args.manual_overrides) if args.manual_overrides else None)
+        norm_csv, norm_json = cmd_normalize(out_csv, out_json, outdir, args.suffix, manual_overrides=Path(args.manual_overrides) if args.manual_overrides else None, field_schema=Path(args.field_schema) if args.field_schema else None)
         cmd_mine(norm_csv, outdir, args.mine_top)
         cmd_audit(norm_csv, args.top_unknown)
         audit_db_generation_consistency(

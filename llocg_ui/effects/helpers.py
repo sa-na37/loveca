@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: helpers_live_in_progress_set_zone_20260622g
+# BUILD_TAG: green_pick_pending_detail_20260714a
 from __future__ import annotations
 
 """llocg_ui.effects.helpers
@@ -901,15 +901,27 @@ def _enqueue_choose_card_from_green_pending(
         cns = [str(getattr(c, 'cardnumber', None) or c or '') for c in list(candidates or [])]
         ctx0 = dict(ctx or {})
         detail = str(detail_text or ctx0.get('detail_text') or ctx0.get('effect_text') or '')
+        label_text = str(label or f'【{source_name}】控え室からカードを1枚選んでください')
+        src_label = str(source_cn or source_name or 'この能力')
+        auto_detail = detail
+        if auto_detail and src_label and not str(auto_detail).lstrip().startswith('【'):
+            auto_detail = f'【{src_label}】自動効果\n効果：{auto_detail}'
+        if not auto_detail:
+            auto_detail = f'【{src_label}】自動効果\n効果：{label_text}'
         payload = {
             'kind': 'choose_card_from_green',
             'candidates': cns,
+            'options': cns,
+            'display_cards': cns,
             'optional': bool(optional),
             'allow_skip': bool(allow_skip),
             'after_ext_key': str(after_ext_key or '').strip(),
             'source_cn': str(source_cn or ''),
-            'label': str(label or f'【{source_name}】控え室からカードを1枚選んでください'),
+            'label': label_text,
+            'text': f'{auto_detail}\n\n処理：{label_text}',
             'detail_text': detail,
+            'auto_effect_detail': auto_detail,
+            'suppress_card_text': bool(auto_detail),
             'ctx': ctx0,
         }
         payload['ctx'].setdefault('source_name', str(source_name or 'カード'))

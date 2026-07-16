@@ -1,0 +1,185 @@
+{
+  "schema_version": 1,
+  "vocabularies": {
+    "group": {
+      "values": [
+        "μ's",
+        "Aqours",
+        "虹ヶ咲",
+        "Liella!",
+        "蓮ノ空",
+        "A-RISE",
+        "Saint Snow",
+        "Sunny Passion"
+      ],
+      "aliases": {
+        "μｓ": "μ's",
+        "Muse": "μ's",
+        "ミューズ": "μ's",
+        "AQUORS": "Aqours",
+        "アクア": "Aqours",
+        "虹ヶ咲学園スクールアイドル同好会": "虹ヶ咲",
+        "ニジガク": "虹ヶ咲",
+        "Liella": "Liella!",
+        "リエラ": "Liella!",
+        "蓮ノ空女学院スクールアイドルクラブ": "蓮ノ空",
+        "蓮ノ空女学院": "蓮ノ空",
+        "蓮": "蓮ノ空",
+        "ARISE": "A-RISE",
+        "A‐RISE": "A-RISE",
+        "SAINT SNOW": "Saint Snow",
+        "SaintSnow": "Saint Snow",
+        "SUNNY PASSION": "Sunny Passion",
+        "SunnyPassion": "Sunny Passion"
+      }
+    },
+    "unit": {
+      "values": [
+        "Printemps",
+        "lily white",
+        "BiBi",
+        "CYaRon!",
+        "AZALEA",
+        "Guilty Kiss",
+        "DiverDiva",
+        "A・ZU・NA",
+        "QU4RTZ",
+        "R3BIRTH",
+        "CatChu!",
+        "KALEIDOSCORE",
+        "5yncri5e!",
+        "スリーズブーケ",
+        "DOLLCHESTRA",
+        "みらくらぱーく！",
+        "Edel Note"
+      ],
+      "aliases": {
+        "LILY WHITE": "lily white",
+        "lilywhite": "lily white",
+        "CYaRon": "CYaRon!",
+        "GuiltyKiss": "Guilty Kiss",
+        "A-ZU-NA": "A・ZU・NA",
+        "A･ZU･NA": "A・ZU・NA",
+        "AZUNA": "A・ZU・NA",
+        "CatChu": "CatChu!",
+        "5yncri5e": "5yncri5e!",
+        "Cerise Bouquet": "スリーズブーケ",
+        "Mira-Cra Park!": "みらくらぱーく！",
+        "Mira-Cra Park": "みらくらぱーく！",
+        "みらくらぱーく": "みらくらぱーく！",
+        "EdelNote": "Edel Note"
+      }
+    },
+    "card_type_norm": {
+      "values": [
+        "MEMBER",
+        "LIVE",
+        "EVENT",
+        "SUPPORT"
+      ],
+      "aliases": {
+        "メンバー": "MEMBER",
+        "メンバーカード": "MEMBER",
+        "ライブ": "LIVE",
+        "ライブカード": "LIVE",
+        "イベント": "EVENT",
+        "イベントカード": "EVENT",
+        "サポート": "SUPPORT",
+        "サポートカード": "SUPPORT"
+      }
+    },
+    "card_type_raw": {
+      "values": [
+        "メンバー",
+        "ライブ",
+        "イベント",
+        "サポート"
+      ],
+      "aliases": {
+        "MEMBER": "メンバー",
+        "メンバーカード": "メンバー",
+        "LIVE": "ライブ",
+        "ライブカード": "ライブ",
+        "EVENT": "イベント",
+        "イベントカード": "イベント",
+        "SUPPORT": "サポート",
+        "サポートカード": "サポート"
+      }
+    }
+  },
+  "numeric_fields": {
+    "cost": {
+      "min": 0,
+      "max": 99,
+      "integer": true
+    },
+    "blade": {
+      "min": 0,
+      "max": 99,
+      "integer": true
+    },
+    "score": {
+      "min": 0,
+      "max": 99,
+      "integer": true
+    },
+    "base_hearts_total": {
+      "min": 0,
+      "max": 99,
+      "integer": true
+    },
+    "required_hearts_total": {
+      "min": 0,
+      "max": 99,
+      "integer": true
+    },
+    "blade_heart_total": {
+      "min": 0,
+      "max": 99,
+      "integer": true
+    }
+  },
+  "json_count_fields": {
+    "base_hearts_counts_json": [
+      "pink",
+      "red",
+      "yellow",
+      "green",
+      "blue",
+      "purple",
+      "white",
+      "black",
+      "any",
+      "all"
+    ],
+    "required_hearts_counts_json": [
+      "pink",
+      "red",
+      "yellow",
+      "green",
+      "blue",
+      "purple",
+      "white",
+      "black",
+      "any",
+      "all"
+    ],
+    "blade_heart_counts_json": [
+      "pink",
+      "red",
+      "yellow",
+      "green",
+      "blue",
+      "purple",
+      "white",
+      "black",
+      "any",
+      "all"
+    ],
+    "blade_heart_special_counts_json": [
+      "draw",
+      "score",
+      "colorless"
+    ]
+  }
+}
