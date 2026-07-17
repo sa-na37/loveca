@@ -1,0 +1,83 @@
+- img "playmat"
+- generic: "Turn: 1 | Phase: MAIN | Energy: 99/99"
+- text: "Opponent wait:"
+- generic: "0"
+- text: /3
+- button "−" [disabled]
+- button "＋"
+- text: "Opp success:"
+- generic: "0"
+- text: /2
+- button "−" [disabled]
+- button "＋"
+- button "先手"
+- button "後手"
+- generic: "Selected(hand): 0"
+- button "枠表示"
+- generic: DECK
+- img "__BACK__"
+- generic: "51"
+- generic: Waiting room
+- generic: "0"
+- generic: ENERGY
+- text: "Energy: 99 / 99"
+- generic: "wait: 0"
+- button "UNDO"
+- button "NEXT"
+- generic: Success
+- generic: LIVE SET
+- generic: "0"
+- generic: L
+- generic: C
+- img "PL!SP-bp1-003"
+- generic: SP/10/嵐千砂都
+- button "起動"
+- button "↻"
+- generic: R
+- generic: HAND
+- img "PL!N-bp3-009"
+- generic: N/10/天王寺璃奈
+- img "PL!N-bp3-009"
+- generic: N/10/天王寺璃奈
+- img "PL!N-bp1-029"
+- generic: Eutopia
+- img "PL!N-bp4-030"
+- generic: Daydream Mermaid
+- img "PL!N-bp3-032"
+- generic: THE SECRET NiGHT
+- generic: "5"
+- generic: LOG
+- generic: "14:13:18 [NEW] code=1RCBL seed=1 opening_hand=6 turn=1 14:13:18 [PHASE] ACTIVE (refresh) E active=3 wait=0 14:13:18 [PHASE] ENERGY (+1) E active=4 wait=0 14:13:18 [PHASE] DRAW (draw 1) hand=7 deck=53 14:13:18 [PHASE] MAIN turn=1 [PHASE] MULLIGAN (choose cards to redraw) [DEBUG_START] phase=MAIN turn=1 hand=5 E=99/99 wait=0 [EXT] public reveal metadata gate active [EXT] effect matchers active: broad generic green pick one to hand [EXT] loaded llocg_ext extensions [ACT] C: PL!SP-bp1-003 activated [PENDING] activate reveal hand MEMBER cost sum options=2 source=PL!SP-bp1-003"
+- button "🙈 盤面確認"
+- generic: 公開カードを選択
+- img "PL!SP-bp1-003"
+- generic: 嵐千砂都
+- generic: PL!SP-bp1-003 発生源
+- generic: 【PL!SP-bp1-003 起動効果】手札にあるメンバーカードを0枚以上公開します。公開したカードのコスト合計が10/20/30/40/50なら、ライブ終了時までライブの合計スコア+1を得ます。
+- generic: 発動する効果
+- generic: 公開したカードのコストの合計が、10、20、30、40、50のいずれかの場合、ライブ終了時まで、「<常時>ライブの合計スコアを+1する。」を得る。
+- generic: "選択: 0 / 0〜2 コスト合計: 0 条件未達"
+- button "PL!N-bp3-009 PL!N-bp3-009 (1/2) cost10":
+  - img "PL!N-bp3-009"
+  - generic: PL!N-bp3-009 (1/2) cost10
+- button "PL!N-bp3-009 PL!N-bp3-009 (2/2) cost10":
+  - img "PL!N-bp3-009"
+  - generic: PL!N-bp3-009 (2/2) cost10
+- button "公開して解決 (0枚 / 合計0)"
+
+VISIBLE
+<button node_id=1 title="相手ウェイト人数を減らす" disabled="true">−</button>
+<button node_id=2 title="相手ウェイト人数を増やす">＋</button>
+<button node_id=3 title="相手成功置き場枚数を減らす" disabled="true">−</button>
+<button node_id=4 title="相手成功置き場枚数を増やす">＋</button>
+<button node_id=5 title="現在ターンを先手扱いにする">先手</button>
+<button node_id=6 title="現在ターンを後手扱いにする">後手</button>
+<button node_id=7>枠表示</button>
+<button node_id=8>UNDO</button>
+<button node_id=9>NEXT</button>
+<button node_id=10>起動</button>
+<button node_id=11 title="ウェイトにする">↻</button>
+<button node_id=12 title="ポップアップを一時的に隠して盤面を確認">🙈 盤面確認</button>
+<button node_id=13>PL!N-bp3-009 (1/2) cost10</button>
+<button node_id=14>PL!N-bp3-009 (2/2) cost10</button>
+<button node_id=15>公開して解決 (0枚 / 合計0)</button>

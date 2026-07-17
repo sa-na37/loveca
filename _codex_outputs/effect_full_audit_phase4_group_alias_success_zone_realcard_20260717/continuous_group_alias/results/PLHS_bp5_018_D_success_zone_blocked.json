@@ -1,0 +1,11 @@
+{
+  "status": "BLOCKED_NO_REAL_CARD_REFERENCE",
+  "target_cardnumber": "PL!HS-bp5-018",
+  "absent_success_zone": [],
+  "present_success_zone": [
+    "PL!HS-bp5-018"
+  ],
+  "reason": "No real DB card references success zone by スリーズブーケ/DOLLCHESTRA/みらくらぱーく！/蓮ノ空.",
+  "synthetic_effect_used": false,
+  "generic_rule_used": false
+}

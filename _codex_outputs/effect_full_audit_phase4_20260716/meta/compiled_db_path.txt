@@ -1,0 +1,1 @@
+llocg_db_out_full/cards_compiled_v7h.json

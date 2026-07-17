@@ -1,0 +1,163 @@
+{
+  "root": "/Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full",
+  "code": "ui",
+  "deck_code": "1RCBL",
+  "seed": 1,
+  "debug": true,
+  "turn": 1,
+  "phase": "MAIN",
+  "live_start_prompted": false,
+  "deck": [
+    "LL-bp1-001",
+    "LL-bp5-001",
+    "LL-bp2-001",
+    "LL-bp3-001",
+    "LL-bp5-002"
+  ],
+  "hand": [
+    "PL!-PR-006"
+  ],
+  "hand_detail": [
+    {
+      "cardnumber": "PL!-PR-006",
+      "base_cost": 9,
+      "effective_cost": 9
+    }
+  ],
+  "energy_active": 30,
+  "energy_wait": 0,
+  "opponent_wait_count": 0,
+  "opponent_success_count": 0,
+  "opponent_excess_heart_count": 0,
+  "turn_order": "first",
+  "next_turn_order": "",
+  "stage": {
+    "L": null,
+    "C": null,
+    "R": null
+  },
+  "green_room": [],
+  "set_zone": [],
+  "live_set_limit": 3,
+  "set_zone_score_rows": [],
+  "resolve_zone": [],
+  "yell_reveal_acknowledged_this_live": false,
+  "yell_flow_completed_this_live": false,
+  "success_zone": [],
+  "success_zone_score_sum": 0,
+  "success_zone_heart_color": "",
+  "success_zone_heart_pos": "",
+  "pending": [],
+  "deck_refreshed_this_turn": false,
+  "refresh_notice_seq": 0,
+  "refresh_notice_ack_seq": 0,
+  "refresh_notices": [],
+  "effect_events": [],
+  "public_reveal_events": [],
+  "public_hand_revealed_cards": [],
+  "public_hand_revealed_orient": {},
+  "public_hand_reveal_events": [],
+  "cn2name": {
+    "LL-bp1-001": "上原歩夢＆澁谷かのん＆日野下花帆",
+    "LL-bp2-001": "渡辺曜＆鬼塚夏美＆大沢瑠璃乃",
+    "LL-bp3-001": "園田海未＆津島善子＆天王寺璃奈",
+    "LL-bp5-001": "Live with a smile!",
+    "LL-bp5-002": "Bring the LOVE！",
+    "PL!-PR-006": "西木野真姫"
+  },
+  "cn2label": {
+    "LL-bp1-001": "20/上原歩夢＆澁谷かのん＆日野下花帆",
+    "LL-bp2-001": "20/渡辺曜＆鬼塚夏美＆大沢瑠璃乃",
+    "LL-bp3-001": "20/園田海未＆津島善子＆天王寺璃奈",
+    "LL-bp5-001": "Live with a smile!",
+    "LL-bp5-002": "Bring the LOVE！",
+    "PL!-PR-006": "9/西木野真姫"
+  },
+  "cn2type": {
+    "LL-bp1-001": "MEMBER",
+    "LL-bp2-001": "MEMBER",
+    "LL-bp3-001": "MEMBER",
+    "LL-bp5-001": "LIVE",
+    "LL-bp5-002": "LIVE",
+    "PL!-PR-006": "MEMBER"
+  },
+  "cn2is_live": {
+    "LL-bp1-001": false,
+    "LL-bp2-001": false,
+    "LL-bp3-001": false,
+    "LL-bp5-001": true,
+    "LL-bp5-002": true,
+    "PL!-PR-006": false
+  },
+  "cn2yell_hearts": {
+    "LL-bp5-002": {
+      "all": 1
+    }
+  },
+  "cn2yell_draw_icons": {},
+  "cn2yell_score_icons": {
+    "LL-bp5-001": 1
+  },
+  "cn2group": {
+    "LL-bp1-001": "虹ヶ咲 / Liella! / 蓮ノ空",
+    "LL-bp2-001": "Aqours / Liella! / 蓮ノ空",
+    "LL-bp3-001": "μ's / Aqours / 虹ヶ咲",
+    "PL!-PR-006": "μ's"
+  },
+  "cn2unit": {
+    "PL!-PR-006": "BiBi"
+  },
+  "cn2cost": {
+    "LL-bp1-001": 20,
+    "LL-bp2-001": 20,
+    "LL-bp3-001": 20,
+    "LL-bp5-001": 0,
+    "LL-bp5-002": 0,
+    "PL!-PR-006": 9
+  },
+  "cn2score": {
+    "LL-bp1-001": 0,
+    "LL-bp2-001": 0,
+    "LL-bp3-001": 0,
+    "LL-bp5-001": 1,
+    "LL-bp5-002": 4,
+    "PL!-PR-006": 0
+  },
+  "stage_detail": {
+    "L": null,
+    "C": null,
+    "R": null
+  },
+  "log": [
+    "16:30:26 [NEW] code=1RCBL seed=1 opening_hand=6 turn=1",
+    "16:30:26 [PHASE] ACTIVE (refresh) E active=3 wait=0",
+    "16:30:26 [PHASE] ENERGY (+1) E active=4 wait=0",
+    "16:30:26 [PHASE] DRAW (draw 1) hand=7 deck=53",
+    "16:30:26 [PHASE] MAIN turn=1",
+    "[PHASE] MULLIGAN (choose cards to redraw)",
+    "[DEBUG_START] deck_exact strict: dropped original deck remainder",
+    "[DEBUG_START] phase=MAIN turn=1 hand=1 E=30/99 wait=0",
+    "[EXT] public reveal metadata gate active",
+    "[EXT] effect matchers active: broad generic green pick one to hand",
+    "[EXT] loaded llocg_ext extensions",
+    "[STATE] stage enter this turn count=1 cn=PL!-PR-006 pos=C origin=hand",
+    "[PLAY] C <- PL!-PR-006 (pay 9; E active=21 wait=9)",
+    "[PENDING] PL!-PR-006[登場]: choose mode from 2 effects",
+    "[BLOCK] next: choose_enter_effect_mode requires a choice",
+    "[AUTO] draw 1 -> drew 1; then discard 1",
+    "[PENDING] discard_from_hand remaining=1 hand=1",
+    "[AUTO] PL!-PR-006[登場]: chose mode -> applied カードを1枚引き、手札を1枚控え室に置く。",
+    "[ACT] discard 1 -> LL-bp1-001 (remaining=0)",
+    "16:30:26 [UNDO] restored previous state",
+    "16:30:26 [UNDO] restored previous state",
+    "16:30:26 [UNDO] restored previous state",
+    "16:30:26 [UNDO] restored previous state",
+    "16:30:26 [UNDO] nothing to undo",
+    "16:30:26 [UNDO] nothing to undo",
+    "16:30:26 [UNDO] nothing to undo",
+    "16:30:26 [UNDO] nothing to undo",
+    "16:30:26 [UNDO] nothing to undo"
+  ],
+  "banner": null,
+  "ui_version": "live_attempt_summary_popup_rebase_20260706f"
+}

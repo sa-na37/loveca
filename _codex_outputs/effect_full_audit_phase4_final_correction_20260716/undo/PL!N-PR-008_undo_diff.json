@@ -1,0 +1,88 @@
+{
+  "previous_00_vs_06_diffs": [
+    {
+      "path": "log",
+      "before": [
+        "17:19:34 [NEW] code=1RCBL seed=1 opening_hand=6 turn=1",
+        "17:19:34 [PHASE] ACTIVE (refresh) E active=3 wait=0",
+        "17:19:34 [PHASE] ENERGY (+1) E active=4 wait=0",
+        "17:19:34 [PHASE] DRAW (draw 1) hand=7 deck=53",
+        "17:19:34 [PHASE] MAIN turn=1",
+        "[PHASE] MULLIGAN (choose cards to redraw)",
+        "[DEBUG_START] deck_exact strict: dropped original deck remainder",
+        "[DEBUG_START] phase=MAIN turn=1 hand=2 E=40/99 wait=0",
+        "[EXT] public reveal metadata gate active",
+        "[EXT] effect matchers active: broad generic green pick one to hand",
+        "[EXT] loaded llocg_ext extensions"
+      ],
+      "after": [
+        "17:19:34 [NEW] code=1RCBL seed=1 opening_hand=6 turn=1",
+        "17:19:34 [PHASE] ACTIVE (refresh) E active=3 wait=0",
+        "17:19:34 [PHASE] ENERGY (+1) E active=4 wait=0",
+        "17:19:34 [PHASE] DRAW (draw 1) hand=7 deck=53",
+        "17:19:34 [PHASE] MAIN turn=1",
+        "[PHASE] MULLIGAN (choose cards to redraw)",
+        "[DEBUG_START] deck_exact strict: dropped original deck remainder",
+        "[DEBUG_START] phase=MAIN turn=1 hand=2 E=40/99 wait=0",
+        "[EXT] public reveal metadata gate active",
+        "[EXT] effect matchers active: broad generic green pick one to hand",
+        "[EXT] loaded llocg_ext extensions",
+        "[ACT] L: PL!N-PR-008 activated",
+        "[AUTO] PL!N-PR-008[BODY]: 手札公開 hand=['PL!N-bp5-002', 'PL!N-bp5-003'] live_in_hand=[]",
+        "[PENDING] PL!N-PR-008[BODY]: デッキ上5枚=['PL!HS-bp2-020', 'LL-bp1-001', 'LL-bp5-001', 'LL-bp2-001', 'LL-bp3-001'] ライブ候補=['PL!HS-bp2-020', 'LL-bp5-001']",
+        "[SKIP] PL!N-PR-008[BODY]: 全て控え室 ['PL!HS-bp2-020', 'LL-bp1-001', 'LL-bp5-001', 'LL-bp2-001', 'LL-bp3-001']",
+        "17:19:34 [UNDO] restored previous state"
+      ],
+      "classification": "EXPECTED_LOG_DIFFERENCE"
+    },
+    {
+      "path": "pending",
+      "before": [],
+      "after": [
+        {
+          "kind": "body_reveal_pick_live",
+          "cn": "PL!N-PR-008",
+          "pos": "L",
+          "pool": [
+            "PL!HS-bp2-020",
+            "LL-bp1-001",
+            "LL-bp5-001",
+            "LL-bp2-001",
+            "LL-bp3-001"
+          ],
+          "live_cands": [
+            "PL!HS-bp2-020",
+            "LL-bp5-001"
+          ],
+          "k": 5,
+          "text": "PL!N-PR-008[BODY]: デッキ上5枚からライブカードを1枚手札に加えてもよい（スキップ可）",
+          "options": [
+            "PL!HS-bp2-020",
+            "LL-bp5-001",
+            "skip"
+          ],
+          "display_cards": [
+            "PL!HS-bp2-020",
+            "LL-bp1-001",
+            "LL-bp5-001",
+            "LL-bp2-001",
+            "LL-bp3-001"
+          ],
+          "candidates": [
+            "PL!HS-bp2-020",
+            "LL-bp5-001"
+          ],
+          "optional": true
+        }
+      ],
+      "classification": "REAL_STATE_RESTORE_FAILURE"
+    },
+    {
+      "path": "stage_detail.L.can_activate",
+      "before": true,
+      "after": false,
+      "classification": "UNRESOLVED"
+    }
+  ],
+  "corrected_game_state_diffs": []
+}

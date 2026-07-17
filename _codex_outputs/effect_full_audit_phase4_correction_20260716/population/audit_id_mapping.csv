@@ -1,0 +1,137 @@
+original_audit_id,canonical_audit_id,correction_type,exclude_from_backlog,reason
+LL-bp2-001#A02,LL-bp2-001#A02,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+LL-bp7-001#A01,LL-bp7-001#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!-PR-020#A02,PL!-PR-020#A02,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!-bp3-002#A02,PL!-bp3-002#A02,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!-bp4-002#A01,PL!-bp4-002#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!-bp4-002#A03,PL!-bp4-002#A03,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!-bp4-002#A04,PL!-bp4-002#A03,DUPLICATE_OF_OTHER_AUDIT_ID,YES,"Same card, trigger, and normalized effect text as another audit row."
+PL!-bp4-014#A02,PL!-bp4-014#A02,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!-bp4-014#A03,PL!-bp4-014#A02,DUPLICATE_OF_OTHER_AUDIT_ID,YES,"Same card, trigger, and normalized effect text as another audit row."
+PL!-bp4-018#A01,PL!-bp4-018#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!-bp5-111#A02,PL!-bp5-111#A02,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 起動; BODY is parser body marker, not activation timing."
+PL!-bp6-002#A02,PL!-bp6-002#A02,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!-bp6-009#A01,PL!-bp6-009#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!-bp6-019#A01,PL!-bp6-019#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!-bp6-020#A03,PL!-bp6-020#A03,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!-bp6-020#A04,PL!-bp6-020#A03,DUPLICATE_OF_OTHER_AUDIT_ID,YES,"Same card, trigger, and normalized effect text as another audit row."
+PL!-bp6-022#A01,PL!-bp6-022#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!-bp6-024#A01,PL!-bp6-024#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!-pb1-002#A02,PL!-pb1-002#A02,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!-pb1-013#A02,PL!-pb1-013#A02,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!-pb1-015#A02,PL!-pb1-015#A02,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!HS-bp1-003#A01,PL!HS-bp1-003#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!HS-bp2-020#A01,PL!HS-bp2-020#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!HS-bp5-001#A02,PL!HS-bp5-001#A02,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 起動; BODY is parser body marker, not activation timing."
+PL!HS-bp5-016#A02,PL!HS-bp5-016#A02,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!HS-bp5-018#A01,PL!HS-bp5-018#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!HS-bp6-006#A02,PL!HS-bp6-006#A02,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!HS-bp6-007#A01,PL!HS-bp6-007#A01,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!HS-bp6-014#A01,PL!HS-bp6-014#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 起動; BODY is parser body marker, not activation timing."
+PL!HS-pb1-001#A01,PL!HS-pb1-001#A01,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!HS-pb1-002#A01,PL!HS-pb1-002#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 起動; BODY is parser body marker, not activation timing."
+PL!HS-pb1-003#A02,PL!HS-pb1-003#A02,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!HS-pb1-007#A02,PL!HS-pb1-007#A02,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!HS-pb1-008#A02,PL!HS-pb1-008#A02,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!HS-pb1-009#A01,PL!HS-pb1-009#A01,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!HS-pb1-014#A02,PL!HS-pb1-014#A02,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!HS-pb1-015#A01,PL!HS-pb1-015#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!HS-pb1-028#A02,PL!HS-pb1-028#A02,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!HS-pb1-028#A03,PL!HS-pb1-028#A02,DUPLICATE_OF_OTHER_AUDIT_ID,YES,"Same card, trigger, and normalized effect text as another audit row."
+PL!HS-sd1-004#A02,PL!HS-sd1-004#A02,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!HS-sd1-005#A02,PL!HS-sd1-005#A02,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!HS-sd1-020#A01,PL!HS-sd1-020#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!N-PR-003#A01,PL!N-PR-003#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 起動; BODY is parser body marker, not activation timing."
+PL!N-PR-008#A01,PL!N-PR-008#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 起動; BODY is parser body marker, not activation timing."
+PL!N-PR-010#A01,PL!N-PR-010#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 起動; BODY is parser body marker, not activation timing."
+PL!N-PR-024#A01,PL!N-PR-024#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!N-PR-025#A01,PL!N-PR-025#A01,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!N-PR-026#A02,PL!N-PR-026#A02,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!N-PR-026#A03,PL!N-PR-026#A03,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!N-PR-027#A01,PL!N-PR-027#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!N-bp1-002#A02,PL!N-bp1-002#A02,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 起動; BODY is parser body marker, not activation timing."
+PL!N-bp1-008#A01,PL!N-bp1-008#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 起動; BODY is parser body marker, not activation timing."
+PL!N-bp3-003#A02,PL!N-bp3-003#A02,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!N-bp3-003#A03,PL!N-bp3-003#A02,DUPLICATE_OF_OTHER_AUDIT_ID,YES,"Same card, trigger, and normalized effect text as another audit row."
+PL!N-bp3-005#A03,PL!N-bp3-005#A03,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!N-bp4-007#A02,PL!N-bp4-007#A02,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!N-bp4-008#A01,PL!N-bp4-008#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 起動; BODY is parser body marker, not activation timing."
+PL!N-bp4-012#A01,PL!N-bp4-012#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!N-bp4-018#A01,PL!N-bp4-018#A01,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!N-bp4-026#A01,PL!N-bp4-026#A01,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!N-bp4-026#A02,PL!N-bp4-026#A02,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!N-bp5-001#A02,PL!N-bp5-001#A02,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!N-bp5-002#A01,PL!N-bp5-002#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!N-bp5-003#A01,PL!N-bp5-003#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 起動; BODY is parser body marker, not activation timing."
+PL!N-bp5-030#A01,PL!N-bp5-030#A01,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!N-bp5-030#A03,PL!N-bp5-030#A01,DUPLICATE_OF_OTHER_AUDIT_ID,YES,"Same card, trigger, and normalized effect text as another audit row."
+PL!N-bp5-030#A04,PL!N-bp5-030#A01,DUPLICATE_OF_OTHER_AUDIT_ID,YES,"Same card, trigger, and normalized effect text as another audit row."
+PL!N-bp7-004#A01,PL!N-bp7-004#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 起動; BODY is parser body marker, not activation timing."
+PL!N-pb1-002#A02,PL!N-pb1-002#A02,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!N-pb1-003#A01,PL!N-pb1-003#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 起動; BODY is parser body marker, not activation timing."
+PL!N-pb1-004#A01,PL!N-pb1-004#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!N-pb1-005#A01,PL!N-pb1-005#A01,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!N-pb1-007#A01,PL!N-pb1-007#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!N-pb1-012#A01,PL!N-pb1-012#A01,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!S-PR-029#A01,PL!S-PR-029#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!S-PR-030#A01,PL!S-PR-030#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!S-PR-031#A01,PL!S-PR-031#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!S-PR-039#A01,PL!S-PR-039#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!S-PR-042#A01,PL!S-PR-042#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!S-bp2-001#A01,PL!S-bp2-001#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!S-bp2-024#A01,PL!S-bp2-024#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!S-bp3-001#A01,PL!S-bp3-001#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 起動; BODY is parser body marker, not activation timing."
+PL!S-bp3-006#A01,PL!S-bp3-006#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 起動; BODY is parser body marker, not activation timing."
+PL!S-bp3-016#A01,PL!S-bp3-016#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!S-bp5-001#A02,PL!S-bp5-001#A02,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!S-bp5-008#A01,PL!S-bp5-008#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!S-bp6-002#A01,PL!S-bp6-002#A01,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!S-bp6-003#A01,PL!S-bp6-003#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 起動; BODY is parser body marker, not activation timing."
+PL!S-bp6-004#A02,PL!S-bp6-004#A02,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!S-bp6-009#A01,PL!S-bp6-009#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!S-bp7-005#A04,PL!S-bp7-005#A04,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!S-bp7-006#A01,PL!S-bp7-006#A01,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!S-bp7-015#A01,PL!S-bp7-015#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!S-bp7-016#A01,PL!S-bp7-016#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!S-bp7-022#A01,PL!S-bp7-022#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!S-pb1-006#A01,PL!S-pb1-006#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 起動; BODY is parser body marker, not activation timing."
+PL!S-pb1-009#A01,PL!S-pb1-009#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!S-pb1-019#A03,PL!S-pb1-019#A03,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!SP-PR-022#A01,PL!SP-PR-022#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!SP-PR-026#A02,PL!SP-PR-026#A02,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!SP-bp1-001#A01,PL!SP-bp1-001#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!SP-bp1-003#A01,PL!SP-bp1-003#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 起動; BODY is parser body marker, not activation timing."
+PL!SP-bp1-004#A01,PL!SP-bp1-004#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!SP-bp2-001#A02,PL!SP-bp2-001#A02,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!SP-bp2-004#A01,PL!SP-bp2-004#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!SP-bp2-006#A03,PL!SP-bp2-006#A03,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!SP-bp2-006#A04,PL!SP-bp2-006#A03,DUPLICATE_OF_OTHER_AUDIT_ID,YES,"Same card, trigger, and normalized effect text as another audit row."
+PL!SP-bp2-008#A01,PL!SP-bp2-008#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 起動; BODY is parser body marker, not activation timing."
+PL!SP-bp2-010#A01,PL!SP-bp2-010#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!SP-bp4-003#A02,PL!SP-bp4-003#A02,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!SP-bp4-004#A01,PL!SP-bp4-004#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!SP-bp4-009#A01,PL!SP-bp4-009#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!SP-bp4-016#A01,PL!SP-bp4-016#A01,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!SP-bp4-021#A01,PL!SP-bp4-021#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!SP-bp5-003#A01,PL!SP-bp5-003#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!SP-bp5-005#A01,PL!SP-bp5-005#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 起動; BODY is parser body marker, not activation timing."
+PL!SP-bp5-005#A02,PL!SP-bp5-005#A02,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!SP-bp5-011#A01,PL!SP-bp5-011#A01,FRAGMENT_MERGED_INTO_PARENT,YES,Effect text is a parser fragment and has no independent subject/effect body.
+PL!SP-bp5-011#A02,PL!SP-bp5-011#A02,FRAGMENT_MERGED_INTO_PARENT,YES,Effect text is a parser fragment and has no independent subject/effect body.
+PL!SP-bp5-011#A03,PL!SP-bp5-011#A03,FRAGMENT_MERGED_INTO_PARENT,YES,Effect text is a parser fragment and has no independent subject/effect body.
+PL!SP-bp5-012#A01,PL!SP-bp5-012#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!SP-bp7-005#A01,PL!SP-bp7-005#A01,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!SP-bp7-005#A02,PL!SP-bp7-005#A02,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!SP-bp7-025#A01,PL!SP-bp7-025#A01,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!SP-pb2-000#A01,PL!SP-pb2-000#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!SP-pb2-005#A02,PL!SP-pb2-005#A02,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!SP-pb2-005#A03,PL!SP-pb2-005#A03,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!SP-pb2-006#A01,PL!SP-pb2-006#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!SP-pb2-006#A02,PL!SP-pb2-006#A02,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!SP-pb2-022#A01,PL!SP-pb2-022#A01,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!SP-pb2-035#A01,PL!SP-pb2-035#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!SP-pb2-041#A01,PL!SP-pb2-041#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!SP-pb2-046#A01,PL!SP-pb2-046#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."
+PL!SP-pb2-046#A03,PL!SP-pb2-046#A03,VALID_TOP_LEVEL_ABILITY,NO,Top-level ability retained after DB ability lookup.
+PL!SP-pb2-046#A04,PL!SP-pb2-046#A03,DUPLICATE_OF_OTHER_AUDIT_ID,YES,"Same card, trigger, and normalized effect text as another audit row."
+PL!SP-sd2-004#A01,PL!SP-sd2-004#A01,TRIGGER_RECLASSIFIED,NO,"Compiled ability_type is 常時; BODY is parser body marker, not activation timing."

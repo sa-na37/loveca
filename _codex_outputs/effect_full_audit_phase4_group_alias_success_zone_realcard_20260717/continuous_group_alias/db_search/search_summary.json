@@ -1,0 +1,11 @@
+{
+  "success_zone_references_all": 64,
+  "success_zone_group_unit_references": 0,
+  "searched_terms": [
+    "スリーズブーケ",
+    "DOLLCHESTRA",
+    "みらくらぱーく！",
+    "蓮ノ空"
+  ],
+  "blocked_reason": "No real card in compiled DB references success zone by the target group/unit aliases."
+}

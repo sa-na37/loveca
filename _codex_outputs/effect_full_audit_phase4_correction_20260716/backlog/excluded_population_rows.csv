@@ -1,0 +1,13 @@
+audit_id,cardnumber,cardname,reason,notes
+PL!-bp4-002#A04,PL!-bp4-002,絢瀬絵里,DUPLICATE_OF_OTHER_AUDIT_ID,"Same card, trigger, and normalized effect text as another audit row."
+PL!-bp4-014#A03,PL!-bp4-014,星空凛,DUPLICATE_OF_OTHER_AUDIT_ID,"Same card, trigger, and normalized effect text as another audit row."
+PL!-bp6-020#A04,PL!-bp6-020,Dancing stars on me!,DUPLICATE_OF_OTHER_AUDIT_ID,"Same card, trigger, and normalized effect text as another audit row."
+PL!HS-pb1-028#A03,PL!HS-pb1-028,COMPASS,DUPLICATE_OF_OTHER_AUDIT_ID,"Same card, trigger, and normalized effect text as another audit row."
+PL!N-bp3-003#A03,PL!N-bp3-003,桜坂しずく,DUPLICATE_OF_OTHER_AUDIT_ID,"Same card, trigger, and normalized effect text as another audit row."
+PL!N-bp5-030#A03,PL!N-bp5-030,繚乱！ビクトリーロード,DUPLICATE_OF_OTHER_AUDIT_ID,"Same card, trigger, and normalized effect text as another audit row."
+PL!N-bp5-030#A04,PL!N-bp5-030,繚乱！ビクトリーロード,DUPLICATE_OF_OTHER_AUDIT_ID,"Same card, trigger, and normalized effect text as another audit row."
+PL!SP-bp2-006#A04,PL!SP-bp2-006,桜小路きな子,DUPLICATE_OF_OTHER_AUDIT_ID,"Same card, trigger, and normalized effect text as another audit row."
+PL!SP-bp5-011#A01,PL!SP-bp5-011,鬼塚冬毬,FRAGMENT_MERGED_INTO_PARENT,Effect text is a parser fragment and has no independent subject/effect body.
+PL!SP-bp5-011#A02,PL!SP-bp5-011,鬼塚冬毬,FRAGMENT_MERGED_INTO_PARENT,Effect text is a parser fragment and has no independent subject/effect body.
+PL!SP-bp5-011#A03,PL!SP-bp5-011,鬼塚冬毬,FRAGMENT_MERGED_INTO_PARENT,Effect text is a parser fragment and has no independent subject/effect body.
+PL!SP-pb2-046#A04,PL!SP-pb2-046,Butterfly Wing,DUPLICATE_OF_OTHER_AUDIT_ID,"Same card, trigger, and normalized effect text as another audit row."

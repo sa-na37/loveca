@@ -1,0 +1,2 @@
+audit_id,cardnumber,branch,matcher,resolver,ui,conditions_checked,phase4_result,notes
+PL!S-bp3-001#A01,PL!S-bp3-001,cost_member_wait_then_temp_score,parenthetical_note_noop,body_always_noop,not confirmed,center/turn1 noted from compiled ability,PARTIAL_CONFIRMED,Branch-level runtime proof failed to reach complete resolver; backlog P1.

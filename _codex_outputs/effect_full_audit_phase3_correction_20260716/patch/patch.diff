@@ -1,0 +1,95 @@
+diff --git a/llocg_ui/engine.py b/llocg_ui/engine.py
+index d3efbfd..df6494f 100644
+--- a/llocg_ui/engine.py
++++ b/llocg_ui/engine.py
+@@ -1,5 +1,5 @@
+ # -*- coding: utf-8 -*-
+-# BUILD_TAG: debug_skipped_yell_hand_ui_20260715e
++# BUILD_TAG: mandatory_choose_pending_block_20260716a
+ from __future__ import annotations
+ """llocg_ui.engine
+ UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
+@@ -15717,6 +15717,8 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
+                 'text': f"{canon}[登場]: 効果を1つ選ぶ",
+                 'options': list(mode_labels),
+                 'effects': list(mode_effects),
++                'mandatory': True,
++                'allow_skip': False,
+                 'ctx': {'pos': pos.upper(), 'source_cn': canon, 'baton_old_cn': _canon_cardno(str(baton_old_cn or '')), 'baton_old_cost': int(baton_old_cost or 0), 'entry_origin': str(entry_origin or 'hand')},
+                 'source_cn': canon,
+             })
+@@ -22489,6 +22491,15 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int,
+     p = gs.pending.pop(idx)
+     kind = str(p.get("kind", "") or "")
+     choice_str = str(choice or "").strip()
++    def _keep_mandatory_choice_pending(pp: Dict[str, Any]) -> None:
++        msg = '必須選択です。いずれかの効果を選んでください。'
++        txt = str(pp.get('text', '') or '')
++        if msg not in txt:
++            pp['text'] = (txt + '\n' + msg).strip()
++        pp['last_error'] = msg
++        pp['mandatory'] = True
++        pp['allow_skip'] = False
++        gs.pending.insert(0, pp)
+     def _auto_queue_to_options(q: List[Dict[str, Any]]) -> List[str]:
+         out: List[str] = []
+         for t in (q or []):
+@@ -27487,6 +27498,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int,
+                 idx = -1
+         if idx < 0 or idx >= len(effs):
+             gs.log.append(f"[ERR] choose_enter_effect_mode: invalid choice {choice_str}")
++            _keep_mandatory_choice_pending(p)
+             return
+         eff = str(effs[idx] or '').strip()
+         try:
+@@ -27878,6 +27890,17 @@ def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], i
+                 'live_attempt_summary_ack',
+                 'mass_bottom_auto_ack', 'mass_bottom_optional_result_ack',
+             }
++            if k0 == 'choose_enter_effect_mode' and not (bool(p0.get('optional', False)) or bool(p0.get('allow_skip', False))):
++                msg = '必須選択です。いずれかの効果を選んでください。'
++                txt = str(p0.get('text', '') or '')
++                if msg not in txt:
++                    p0['text'] = (txt + '\n' + msg).strip()
++                p0['last_error'] = msg
++                p0['mandatory'] = True
++                p0['allow_skip'] = False
++                gs.pending[0] = p0
++                gs.log.append('[BLOCK] next: choose_enter_effect_mode requires a choice')
++                return
+             if k0 in ack_kinds:
+                 cmd_resolve_pending(gs, cards_db, 0, 'ok', rng)
+                 return
+diff --git a/llocg_ui/server.py b/llocg_ui/server.py
+index e59c4c9..6d63082 100644
+--- a/llocg_ui/server.py
++++ b/llocg_ui/server.py
+@@ -1,5 +1,5 @@
+ # -*- coding: utf-8 -*-
+-# BUILD_TAG: debug_skipped_yell_hand_ui_20260715d
++# BUILD_TAG: mandatory_choose_pending_block_20260716a
+ from __future__ import annotations
+ 
+ """llocg_ui.server
+@@ -2121,6 +2121,21 @@ class App:
+                         'live_start_success_count_distinct_names_score_ack',
+                         'mass_bottom_auto_ack', 'mass_bottom_optional_result_ack',
+                     }
++                    if k0 == 'choose_enter_effect_mode' and not (bool(p0.get('optional', False)) or bool(p0.get('allow_skip', False))):
++                        msg = '必須選択です。いずれかの効果を選んでください。'
++                        txt = str(p0.get('text', '') or '')
++                        if msg not in txt:
++                            p0['text'] = (txt + '\n' + msg).strip()
++                        p0['last_error'] = msg
++                        p0['mandatory'] = True
++                        p0['allow_skip'] = False
++                        self.gs.pending[0] = p0
++                        self.gs.log.append('[BLOCK] next: choose_enter_effect_mode requires a choice')
++                        post_process(self.gs)
++                        self._auto_refresh_if_deck_empty_after_cmd(f"post_cmd:{name}")
++                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}", before_refresh_notice_seq_for_public_hand)
++                        self.save_trace()
++                        return self.state_json()
+                     if k0 in ack_kinds:
+                         cmd_resolve_pending(self.gs, self.cards_db, 0, 'ok')
+                         post_process(self.gs)

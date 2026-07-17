@@ -1,0 +1,20 @@
+# PL!N-PR-010#A01 design
+
+- audit_id: PL!N-PR-010#A01
+- cardnumber: PL!N-PR-010
+- cardname: エマ・ヴェルデ
+- card_type: MEMBER
+- effect_text: 手札をすべて公開する：自分のステージにほかのメンバーがおり、かつこれにより公開した手札の中にライブカードがない場合、自分のデッキの上からカードを5枚見る。その中からライブカードを1枚公開して手札に加えてもよい。残りを控え室に置く。
+- canonical_trigger: 起動
+- activation_timing: 起動
+- required_zone: stage
+- required_phase: MAIN for 起動; none for 常時; trigger-specific otherwise
+- required_cost: provided by debug energy/hand/deck setup where applicable
+- required_targets: stage members/hand cards/deck top according to effect text
+- required_prior_state: avoid unrelated trigger noise; provide other member when effect requires another stage member
+- forbidden_noise: DECK_CODE wrapper, success zone >=3 initial state, unrelated live triggers
+- expected_pending_kind: none for 常時; effect-specific for 起動
+- expected_state_change: activation log, pending or immediate resolver state change
+- expected_cleanup: count only when effect actually resolves
+- expected_undo: count exact undo only after effect actually resolves
+- manual_steps: Place member on stage in MAIN, satisfy costs/conditions, execute activate_to_green for that position.

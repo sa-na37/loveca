@@ -1,0 +1,2 @@
+original_rows,duplicate_rows,fragment_rows,nested_granted_rows,trigger_reclassified_rows,canonical_abilities,excluded_rows,tier1_total,tier1_designs_completed,tier1_setups_valid,tier1_triggers_reached,tier1_effects_resolved,tier1_cleanup_passed,tier1_undo_exact,tier1_ui_checked,tier1_still_unresolved,implementation_backlog_count,research_backlog_count,excluded_backlog_count,behavioral_issues,watch_items
+136,9,3,0,84,124,12,11,11,8,4,3,3,0,11,8,2,119,12,0,1

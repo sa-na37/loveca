@@ -1,0 +1,59 @@
+- img "playmat"
+- generic: "Turn: 1 | Phase: MAIN | Energy: 99/99"
+- text: "Opponent wait:"
+- generic: "0"
+- text: /3
+- button "−" [disabled]
+- button "＋"
+- text: "Opp success:"
+- generic: "0"
+- text: /2
+- button "−" [disabled]
+- button "＋"
+- button "先手"
+- button "後手"
+- generic: "Selected(hand): 0"
+- button "枠表示"
+- generic: DECK
+- img "__BACK__"
+- generic: "51"
+- generic: Waiting room
+- generic: "0"
+- generic: ENERGY
+- text: "Energy: 99 / 99"
+- generic: "wait: 0"
+- button "UNDO"
+- button "NEXT"
+- generic: Success
+- generic: LIVE SET
+- generic: "0"
+- generic: L
+- generic: C
+- img "PL!SP-bp1-003"
+- generic: SP/10/嵐千砂都
+- button "↻"
+- generic: R
+- generic: HAND
+- img "PL!N-bp3-009"
+- generic: N/10/天王寺璃奈
+- img "PL!N-bp3-009"
+- generic: N/10/天王寺璃奈
+- img "PL!N-bp1-029"
+- generic: Eutopia
+- img "PL!N-bp4-030"
+- generic: Daydream Mermaid
+- img "PL!N-bp3-032"
+- generic: THE SECRET NiGHT
+- generic: "5"
+- generic: LOG
+- generic: "14:24:07 [NEW] code=1RCBL seed=1 opening_hand=6 turn=1 14:24:07 [PHASE] ACTIVE (refresh) E active=3 wait=0 14:24:07 [PHASE] ENERGY (+1) E active=4 wait=0 14:24:07 [PHASE] DRAW (draw 1) hand=7 deck=53 14:24:07 [PHASE] MAIN turn=1 [PHASE] MULLIGAN (choose cards to redraw) [DEBUG_START] phase=MAIN turn=1 hand=5 E=99/99 wait=0 [EXT] public reveal metadata gate active [EXT] effect matchers active: broad generic green pick one to hand [EXT] loaded llocg_ext extensions [ACT] C: PL!SP-bp1-003 activated [PENDING] activate reveal hand MEMBER cost sum options=2 source=PL!SP-bp1-003 [AUTO] PL!SP-bp1-003: revealed MEMBER cost total=0 -> no live total score bonus [PUBLIC] PL!SP-bp1-003: revealed hand MEMBER cards count=0 total_cost=0 cards=[]"
+- button "🙈 盤面確認"
+- generic: PL!SP-bp1-003 公開カード確認
+- img "PL!SP-bp1-003"
+- generic: 嵐千砂都
+- generic: PL!SP-bp1-003 発生源
+- generic: PL!SP-bp1-003[起動効果] 公開したメンバーカード0枚のコスト合計は0です。条件未達。
+- generic: 発動する効果
+- generic: 公開したカードのコストの合計が、10、20、30、40、50のいずれかの場合、ライブ終了時まで、「<常時>ライブの合計スコアを+1する。」を得る。
+- generic: 確認カード (0)
+- button "確認"

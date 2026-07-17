@@ -124,11 +124,11 @@
     "R": null
   },
   "log": [
-    "14:51:01 [NEW] code=1RCBL seed=1 opening_hand=6 turn=1",
-    "14:51:01 [PHASE] ACTIVE (refresh) E active=3 wait=0",
-    "14:51:01 [PHASE] ENERGY (+1) E active=4 wait=0",
-    "14:51:01 [PHASE] DRAW (draw 1) hand=7 deck=53",
-    "14:51:01 [PHASE] MAIN turn=1",
+    "15:17:44 [NEW] code=1RCBL seed=1 opening_hand=6 turn=1",
+    "15:17:44 [PHASE] ACTIVE (refresh) E active=3 wait=0",
+    "15:17:44 [PHASE] ENERGY (+1) E active=4 wait=0",
+    "15:17:44 [PHASE] DRAW (draw 1) hand=7 deck=53",
+    "15:17:44 [PHASE] MAIN turn=1",
     "[PHASE] MULLIGAN (choose cards to redraw)",
     "[DEBUG_START] deck_exact strict: dropped original deck remainder",
     "[DEBUG_START] phase=MAIN turn=1 hand=1 E=20/99 wait=0",
@@ -140,8 +140,8 @@
     "[AUTO_EXT] no any MEMBER in green_room (控え室回収)",
     "[AUTO] LL-bp1-001[登場]: applied 自分の控え室からメンバーカードを1枚手札に加える。",
     "[AUTO] LL-bp1-001: confirm_effect -> no_match ",
-    "14:51:01 [UNDO] restored previous state",
-    "14:51:01 [UNDO] restored previous state"
+    "15:17:44 [UNDO] restored previous state",
+    "15:17:44 [UNDO] restored previous state"
   ],
   "banner": null,
   "ui_version": "live_attempt_summary_popup_rebase_20260706f"

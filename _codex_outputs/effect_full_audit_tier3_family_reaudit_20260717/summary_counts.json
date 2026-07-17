@@ -1,0 +1,13 @@
+{
+  "target_total": 61,
+  "implemented_and_reachable": 0,
+  "implemented_but_setup_invalid_previously": 0,
+  "implemented_runtime_ui_pending": 0,
+  "trigger_reached_resolver_blocked": 6,
+  "ui_route_missing": 4,
+  "generic_route_text_not_matched": 41,
+  "rule_interpretation_required": 2,
+  "not_implemented_confirmed": 0,
+  "duplicate_or_noncanonical": 0,
+  "blocked_by_engine_capability": 8
+}

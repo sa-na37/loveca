@@ -1,0 +1,1 @@
+no dedicated HTTP port required for App-based regression; UI state captured via private/public view JSON

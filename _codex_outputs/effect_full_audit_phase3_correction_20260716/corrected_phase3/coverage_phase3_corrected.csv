@@ -1,0 +1,15 @@
+metric,count
+command_candidates,11
+commands_accepted,11
+commands_rejected,0
+resolution_attempted,11
+resolution_completed,10
+pending_residue,1
+cleanup_passed,10
+cleanup_failed,1
+undo_passed,11
+full_pass,3
+aggregated_opponent_state_pass,4
+behavioral_failures,1
+static_reclassified_abilities,136
+db_reviewed_differences,31

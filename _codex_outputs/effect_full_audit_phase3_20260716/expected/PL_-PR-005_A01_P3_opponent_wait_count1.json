@@ -1,0 +1,55 @@
+{
+  "audit_id": "PL!-PR-005#A01",
+  "test_case_id": "PL!-PR-005#A01#P3_opponent_wait_count1",
+  "cardnumber": "PL!-PR-005",
+  "effect_text": "<登場>\n以下から1つを選ぶ。\n・カードを1枚引き、手札を1枚控え室に置く。\n・相手のステージにいるすべてのコスト2以下のメンバーをウェイトにする。",
+  "trigger": "登場",
+  "preconditions": [
+    "対象MEMBERを手札からCへ登場させる",
+    "energy activeを十分量にする"
+  ],
+  "costs": [
+    "登場コスト9"
+  ],
+  "choices": [
+    "カードを1枚引き、手札を1枚控え室に置く",
+    "相手のステージにいるすべてのコスト2以下のメンバーをウェイトにする"
+  ],
+  "valid_targets": [
+    "分岐A: ドロー後の手札カード",
+    "分岐B: 人数入力 0..上限"
+  ],
+  "invalid_targets": [
+    "分岐A: ステージ上の発生源自身",
+    "分岐B: 入力範囲外の人数"
+  ],
+  "expected_state_changes": [
+    "現行正式仕様として相手個別カードではなく人数入力pendingで処理される",
+    "入力した人数がopponent_wait_countへ加算される",
+    "0入力は増加なし、1/2入力はその値だけ増加する"
+  ],
+  "expected_zone_moves": [
+    "branchA: deck top -> hand -> selected card green_room"
+  ],
+  "expected_count_changes": [
+    "branchA: deck -1, hand +1 then -1, green_room +1"
+  ],
+  "expected_temporary_modifiers": [],
+  "expected_cleanup": [
+    "pendingなし",
+    "temporary modifierなし",
+    "次操作を妨げない"
+  ],
+  "expected_ui": [
+    "2つの選択肢が重複なく表示",
+    "発生源と実行中効果が表示"
+  ],
+  "expected_logs": [
+    "[PENDING]",
+    "[AUTO]"
+  ],
+  "expected_non_changes": [
+    "発生源カードはステージに残る",
+    "branchBでは自分の手札/山札は変化しない"
+  ]
+}

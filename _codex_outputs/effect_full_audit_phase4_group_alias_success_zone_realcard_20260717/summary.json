@@ -1,0 +1,14 @@
+{
+  "status": "COMPLETED_WITH_BLOCKED_SUCCESS_ZONE",
+  "total_tests": 27,
+  "passed": 24,
+  "failed": 0,
+  "blocked": 3,
+  "success_zone_realcard_passed": 0,
+  "success_zone_blocked_no_real_card_reference": 3,
+  "other_24_tests_preserved": true,
+  "db_success_zone_reference_rows": 64,
+  "db_success_zone_group_unit_reference_rows": 0,
+  "runtime_modified": false,
+  "db_modified": false
+}

@@ -1,0 +1,131 @@
+{
+  "code": "ui",
+  "deck_code": "1RCBL",
+  "seed": 1,
+  "debug": false,
+  "turn": 1,
+  "phase": "MAIN",
+  "live_start_prompted": false,
+  "deck": [],
+  "hand": [],
+  "hand_detail": [],
+  "energy_active": 40,
+  "energy_wait": 0,
+  "opponent_wait_count": 0,
+  "opponent_success_count": 0,
+  "opponent_excess_heart_count": 0,
+  "turn_order": "first",
+  "next_turn_order": "",
+  "stage": {
+    "L": null,
+    "C": {
+      "cardnumber": "PL!-bp5-111",
+      "active": true,
+      "temp_blade": 0,
+      "temp_hearts": {},
+      "temp_score": 0,
+      "temp_cost": 0,
+      "temp_until": "",
+      "energy_under": 0,
+      "under_cards": [],
+      "heart_replace_color": ""
+    },
+    "R": null
+  },
+  "green_room": [],
+  "set_zone": [],
+  "live_set_limit": 3,
+  "set_zone_score_rows": [],
+  "resolve_zone": [],
+  "yell_reveal_acknowledged_this_live": false,
+  "yell_flow_completed_this_live": false,
+  "success_zone": [],
+  "success_zone_score_sum": 0,
+  "success_zone_heart_color": "",
+  "success_zone_heart_pos": "",
+  "pending": [],
+  "deck_refreshed_this_turn": false,
+  "refresh_notice_seq": 0,
+  "refresh_notice_ack_seq": 0,
+  "refresh_notices": [],
+  "effect_events": [],
+  "public_reveal_events": [],
+  "public_hand_revealed_cards": [],
+  "public_hand_revealed_orient": {},
+  "public_hand_reveal_events": [],
+  "cn2name": {
+    "PL!-bp5-111": "綺羅ツバサ"
+  },
+  "cn2label": {
+    "PL!-bp5-111": "11/綺羅ツバサ"
+  },
+  "cn2type": {
+    "PL!-bp5-111": "MEMBER"
+  },
+  "cn2is_live": {
+    "PL!-bp5-111": false
+  },
+  "cn2yell_hearts": {
+    "PL!-bp5-111": {
+      "blue": 1
+    }
+  },
+  "cn2yell_draw_icons": {},
+  "cn2yell_score_icons": {},
+  "cn2group": {
+    "PL!-bp5-111": "A-RISE"
+  },
+  "cn2unit": {},
+  "cn2cost": {
+    "PL!-bp5-111": 11
+  },
+  "cn2score": {
+    "PL!-bp5-111": 0
+  },
+  "stage_detail": {
+    "L": null,
+    "C": {
+      "cardnumber": "PL!-bp5-111",
+      "name": "綺羅ツバサ",
+      "type": "MEMBER",
+      "has_sac": false,
+      "energy_under": 0,
+      "under_cards": [],
+      "base_cost": 11,
+      "effective_cost": 11,
+      "can_activate": false,
+      "temp_blade": 0,
+      "temp_hearts": {},
+      "success_zone_hearts_bonus": {},
+      "always_hearts_bonus": {},
+      "always_blade_bonus": 0,
+      "always_score_bonus": 0
+    },
+    "R": null
+  },
+  "log": [
+    "16:59:53 [NEW] code=1RCBL seed=1 opening_hand=6 turn=1",
+    "16:59:53 [PHASE] ACTIVE (refresh) E active=3 wait=0",
+    "16:59:53 [PHASE] ENERGY (+1) E active=4 wait=0",
+    "16:59:53 [PHASE] DRAW (draw 1) hand=7 deck=53",
+    "16:59:53 [PHASE] MAIN turn=1",
+    "[PHASE] MULLIGAN (choose cards to redraw)",
+    "[DEBUG_START] deck_exact strict: dropped original deck remainder",
+    "[DEBUG_START] phase=MAIN turn=1 hand=1 E=40/99 wait=0",
+    "[EXT] public reveal metadata gate active",
+    "[EXT] effect matchers active: broad generic green pick one to hand",
+    "[EXT] loaded llocg_ext extensions"
+  ],
+  "banner": null,
+  "ui_version": "live_attempt_summary_popup_rebase_20260706f",
+  "view_mode": "public",
+  "view_build_tag": "live_attempt_summary_popup_rebase_20260706f",
+  "deck_count": 7,
+  "hand_count": 1,
+  "green_room_count": 0,
+  "set_zone_count": 0,
+  "set_zone_public": false,
+  "resolve_zone_count": 0,
+  "success_zone_count": 0,
+  "public_pending": []
+}

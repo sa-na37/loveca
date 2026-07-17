@@ -1,0 +1,167 @@
+{
+  "code": "ui",
+  "deck_code": "1RCBL",
+  "seed": 1,
+  "debug": false,
+  "turn": 1,
+  "phase": "MAIN",
+  "live_start_prompted": false,
+  "deck": [],
+  "hand": [],
+  "hand_detail": [],
+  "energy_active": 40,
+  "energy_wait": 0,
+  "opponent_wait_count": 0,
+  "opponent_success_count": 0,
+  "opponent_excess_heart_count": 0,
+  "turn_order": "first",
+  "next_turn_order": "",
+  "stage": {
+    "L": null,
+    "C": {
+      "cardnumber": "PL!SP-bp1-003",
+      "active": true,
+      "temp_blade": 0,
+      "temp_hearts": {},
+      "temp_score": 0,
+      "temp_cost": 0,
+      "temp_until": "",
+      "energy_under": 0,
+      "under_cards": [],
+      "heart_replace_color": ""
+    },
+    "R": null
+  },
+  "green_room": [],
+  "set_zone": [],
+  "live_set_limit": 3,
+  "set_zone_score_rows": [],
+  "resolve_zone": [],
+  "yell_reveal_acknowledged_this_live": false,
+  "yell_flow_completed_this_live": false,
+  "success_zone": [],
+  "success_zone_score_sum": 0,
+  "success_zone_heart_color": "",
+  "success_zone_heart_pos": "",
+  "pending": [],
+  "deck_refreshed_this_turn": false,
+  "refresh_notice_seq": 0,
+  "refresh_notice_ack_seq": 0,
+  "refresh_notices": [],
+  "effect_events": [],
+  "public_reveal_events": [
+    {
+      "kind": "public_reveal_event",
+      "title": "公開カード",
+      "source": "",
+      "source_public": false,
+      "text": "PL!SP-bp1-003[起動効果] 公開したメンバーカード2枚のコスト合計は40です。条件達成。",
+      "effect_text": "",
+      "display_cards": [
+        "LL-bp1-001",
+        "LL-bp2-001"
+      ],
+      "display_card_count": 2,
+      "candidate_count": 0,
+      "option_count": 0,
+      "choice_required": false,
+      "seq": 1
+    }
+  ],
+  "public_hand_revealed_cards": [],
+  "public_hand_revealed_orient": {},
+  "public_hand_reveal_events": [],
+  "cn2name": {
+    "LL-bp1-001": "上原歩夢＆澁谷かのん＆日野下花帆",
+    "LL-bp2-001": "渡辺曜＆鬼塚夏美＆大沢瑠璃乃",
+    "PL!SP-bp1-003": "嵐千砂都"
+  },
+  "cn2label": {
+    "LL-bp1-001": "20/上原歩夢＆澁谷かのん＆日野下花帆",
+    "LL-bp2-001": "20/渡辺曜＆鬼塚夏美＆大沢瑠璃乃",
+    "PL!SP-bp1-003": "SP/10/嵐千砂都"
+  },
+  "cn2type": {
+    "LL-bp1-001": "MEMBER",
+    "LL-bp2-001": "MEMBER",
+    "PL!SP-bp1-003": "MEMBER"
+  },
+  "cn2is_live": {
+    "LL-bp1-001": false,
+    "LL-bp2-001": false,
+    "PL!SP-bp1-003": false
+  },
+  "cn2yell_hearts": {},
+  "cn2yell_draw_icons": {},
+  "cn2yell_score_icons": {},
+  "cn2group": {
+    "LL-bp1-001": "虹ヶ咲 / Liella! / 蓮ノ空",
+    "LL-bp2-001": "Aqours / Liella! / 蓮ノ空",
+    "PL!SP-bp1-003": "Liella!"
+  },
+  "cn2unit": {
+    "PL!SP-bp1-003": "5yncri5e!"
+  },
+  "cn2cost": {
+    "LL-bp1-001": 20,
+    "LL-bp2-001": 20,
+    "PL!SP-bp1-003": 10
+  },
+  "cn2score": {
+    "LL-bp1-001": 0,
+    "LL-bp2-001": 0,
+    "PL!SP-bp1-003": 0
+  },
+  "stage_detail": {
+    "L": null,
+    "C": {
+      "cardnumber": "PL!SP-bp1-003",
+      "name": "嵐千砂都",
+      "type": "MEMBER",
+      "has_sac": false,
+      "energy_under": 0,
+      "under_cards": [],
+      "base_cost": 10,
+      "effective_cost": 10,
+      "can_activate": true,
+      "temp_blade": 0,
+      "temp_hearts": {},
+      "success_zone_hearts_bonus": {},
+      "always_hearts_bonus": {},
+      "always_blade_bonus": 0,
+      "always_score_bonus": 0
+    },
+    "R": null
+  },
+  "log": [
+    "14:06:49 [NEW] code=1RCBL seed=1 opening_hand=6 turn=1",
+    "14:06:49 [PHASE] ACTIVE (refresh) E active=3 wait=0",
+    "14:06:49 [PHASE] ENERGY (+1) E active=4 wait=0",
+    "14:06:49 [PHASE] DRAW (draw 1) hand=7 deck=53",
+    "14:06:49 [PHASE] MAIN turn=1",
+    "[PHASE] MULLIGAN (choose cards to redraw)",
+    "[DEBUG_START] deck_exact strict: dropped original deck remainder",
+    "[DEBUG_START] phase=MAIN turn=1 hand=2 E=40/99 wait=0",
+    "[EXT] public reveal metadata gate active",
+    "[EXT] effect matchers active: broad generic green pick one to hand",
+    "[EXT] loaded llocg_ext extensions",
+    "[ACT] C: PL!SP-bp1-003 activated",
+    "[PENDING] activate reveal hand MEMBER cost sum options=2 source=PL!SP-bp1-003",
+    "[AUTO] PL!SP-bp1-003: revealed MEMBER cost total=40 -> live total score +1 until end_of_live",
+    "[PUBLIC] PL!SP-bp1-003: revealed hand MEMBER cards count=2 total_cost=40 cards=['LL-bp1-001:上原歩夢＆澁谷かのん＆日野下花帆:cost20', 'LL-bp2-001:渡辺曜＆鬼塚夏美＆大沢瑠璃乃:cost20']",
+    "14:06:49 [UNDO] restored previous state",
+    "14:06:49 [UNDO] restored previous state"
+  ],
+  "banner": null,
+  "ui_version": "live_attempt_summary_popup_rebase_20260706f",
+  "view_mode": "public",
+  "view_build_tag": "live_attempt_summary_popup_rebase_20260706f",
+  "deck_count": 6,
+  "hand_count": 2,
+  "green_room_count": 0,
+  "set_zone_count": 0,
+  "set_zone_public": false,
+  "resolve_zone_count": 0,
+  "success_zone_count": 0,
+  "public_pending": []
+}

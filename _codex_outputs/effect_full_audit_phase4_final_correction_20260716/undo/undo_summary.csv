@@ -1,0 +1,4 @@
+cardnumber,previous_diff_count,previous_real_state_diff,corrected_game_state_diff_count,verdict,runtime_fix_required,evidence
+PL!N-PR-003,3,YES,0,UNDO_GAME_STATE_PASS_WITH_METADATA_DIFF,NO,undo/PL!N-PR-003_undo_diff.json
+PL!N-PR-008,3,YES,0,UNDO_GAME_STATE_PASS_WITH_METADATA_DIFF,NO,undo/PL!N-PR-008_undo_diff.json
+PL!N-PR-010,3,YES,0,UNDO_GAME_STATE_PASS_WITH_METADATA_DIFF,NO,undo/PL!N-PR-010_undo_diff.json

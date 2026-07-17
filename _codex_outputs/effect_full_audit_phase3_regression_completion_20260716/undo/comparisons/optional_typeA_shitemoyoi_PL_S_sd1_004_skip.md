@@ -1,0 +1,8 @@
+# Undo State Comparison
+
+- left: `/Users/tekitou/Desktop/gsim/loveca/_codex_outputs/effect_full_audit_phase3_regression_completion_20260716/optional_effects/state/optional_typeA_shitemoyoi_PL_S_sd1_004_skip/00_initial.json`
+- right: `/Users/tekitou/Desktop/gsim/loveca/_codex_outputs/effect_full_audit_phase3_regression_completion_20260716/optional_effects/state/optional_typeA_shitemoyoi_PL_S_sd1_004_skip/03_after_full_undo.json`
+- equal: `True`
+- difference_count: `0`
+- noise_keys: `banner, cn2cost, cn2group, cn2is_live, cn2label, cn2name, cn2score, cn2type, cn2unit, cn2yell_draw_icons, cn2yell_hearts, cn2yell_score_icons, code, debug, deck_code, log, public_hand_reveal_events, public_hand_revealed_cards, public_hand_revealed_orient, public_reveal_events, refresh_notice_ack_seq, refresh_notice_seq, refresh_notices, root`
+

@@ -1,0 +1,7 @@
+test_case_id,choice_sent,server_alive,before_count,after_count,pending_kind,final_result,notes
+opponent_invalid_empty_string,'',YES,0,0,,PASS_FULL,Empty string is currently parsed as 0 by existing runtime; other invalid values keep opponent_wait_notify pending.
+opponent_invalid_negative,'-1',YES,0,0,opponent_wait_notify,PASS_FULL,Empty string is currently parsed as 0 by existing runtime; other invalid values keep opponent_wait_notify pending.
+opponent_invalid_over_upper,'4',YES,0,0,opponent_wait_notify,PASS_FULL,Empty string is currently parsed as 0 by existing runtime; other invalid values keep opponent_wait_notify pending.
+opponent_invalid_non_numeric,'abc',YES,0,0,opponent_wait_notify,PASS_FULL,Empty string is currently parsed as 0 by existing runtime; other invalid values keep opponent_wait_notify pending.
+opponent_invalid_none_payload,None,YES,0,0,opponent_wait_notify,PASS_FULL,Empty string is currently parsed as 0 by existing runtime; other invalid values keep opponent_wait_notify pending.
+opponent_invalid_next_unselected,NEXT,YES,0,0,opponent_wait_notify,PASS_FULL,NEXT without selecting count keeps pending.

@@ -1,24 +1,36 @@
 # Pilot Summary
 
-- status: PHASE3_BLOCKED
+- status: PHASE3_PILOT_PASSED
 - Gate A: PASS
-- Gate B: BLOCKED
-- Gate C: NOT_OPENED
+- Gate B: PASS
+- Gate C: OPENED_FOR_STATIC_AND_DB_REVIEW
+- UI: REPRESENTATIVE_CHECKS_RECORDED
 
-- command_candidates: 8
-- commands_accepted: 8
+- command_candidates: 11
+- commands_accepted: 11
 - commands_rejected: 0
-- server_started: 8
-- trigger_reached: 8
-- effect_resolved: 8
-- state_checked: 8
-- state_passed: 7
-- ui_checked: 0
-- ui_passed: 0
-- cleanup_passed: 7
-- undo_passed: 8
-- full_pass: 0
-- behavioral_failures: 1
-- static_missing_implementation_candidates: 0
-- static_confirmed_with_evidence: 0
-- db_semantic_differences: 0
+- server_started: 11
+- trigger_reached: 11
+- effect_resolved: 11
+- state_checked: 11
+- state_passed: 11
+- ui_checked: 11
+- ui_passed: 5
+- ui_representative_pass_shared_route: 6
+- cleanup_passed: 11
+- undo_passed: 11
+- full_pass: 4
+- aggregated_opponent_state_pass: 4
+- state_ui_pending_pass: 3
+- behavioral_failures: 0
+- static_reclassified_abilities: 136
+- static_missing_implementation_candidates: 63
+- static_analysis_inconclusive: 61
+- static_route_unverified: 11
+- static_partial_branch_missing: 1
+- db_reviewed_differences: 31
+- db_semantic_differences: 15
+- db_format_only: 14
+- db_source_data_error: 2
+- ui_checklist_rows: 22
+- ui_screenshots: 11

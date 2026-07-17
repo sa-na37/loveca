@@ -1,3 +1,3 @@
 # Next Expansion Plan
 
-Gate C is not opened in this run because the representative opponent-wait branch cannot verify individual opponent cost filtering in current runtime state. Next phase should either add non-mutating observation support or classify opponent-board effects as manual-counter routes before expanding.
+The v2 pilot treats opponent-wait effects as the current aggregate opponent-count model. Expansion can proceed only after the pilot summary shows Gate B pass. For future opponent-state effects, verify the count prompt, input range, count application, reset, undo, pending cleanup, and public/private display consistency; do not require individual opponent card state in this runtime mode.

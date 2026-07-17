@@ -1,0 +1,2 @@
+opponent_count_cases_planned,opponent_count_cases_executed,opponent_count_input_values_tested,opponent_count_passed,opponent_count_failed,undo_cases_executed,undo_exact_matches,undo_mismatches,optional_cards_selected,optional_skip_cases_executed,optional_skip_passed,optional_execute_cases_executed,optional_execute_passed,mandatory_choice_cards_checked,behavioral_failures,ui_pending
+6,6,0;1;2,6,0,13,13,0,2,2,2,2,2,3,0,0

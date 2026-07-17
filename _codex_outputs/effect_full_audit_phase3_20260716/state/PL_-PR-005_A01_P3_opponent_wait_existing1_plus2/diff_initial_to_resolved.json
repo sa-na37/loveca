@@ -1,0 +1,40 @@
+[
+  {
+    "path": "energy_active",
+    "before": 20,
+    "after": 11
+  },
+  {
+    "path": "energy_wait",
+    "before": 0,
+    "after": 9
+  },
+  {
+    "path": "hand",
+    "before": [
+      "PL!-PR-005"
+    ],
+    "after": []
+  },
+  {
+    "path": "opponent_wait_count",
+    "before": 1,
+    "after": 3
+  },
+  {
+    "path": "stage.C",
+    "before": null,
+    "after": {
+      "cardnumber": "PL!-PR-005",
+      "active": true,
+      "temp_blade": 0,
+      "temp_hearts": {},
+      "temp_score": 0,
+      "temp_cost": 0,
+      "temp_until": "",
+      "energy_under": 0,
+      "under_cards": [],
+      "heart_replace_color": ""
+    }
+  }
+]

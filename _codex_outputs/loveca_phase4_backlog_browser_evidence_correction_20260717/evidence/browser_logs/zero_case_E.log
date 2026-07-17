@@ -1,0 +1,15 @@
+2026-07-17T05:24:34.635Z opened private page for zero reveal
+2026-07-17T05:24:35.432Z clicked 起動; zero reveal pending displayed
+2026-07-17T05:24:36.211Z clicked 公開して解決 (0枚 / 合計0)
+2026-07-17T05:24:37.007Z clicked 確認 after zero reveal; pending should be gone
+
+{
+  "eChecks": {
+    "hasConditionUnmet": true,
+    "noScorePlus": true,
+    "hasHandCards": true,
+    "hasAckButton": true
+  },
+  "afterAckHasPendingPopup": false,
+  "browserErrors": []
+}

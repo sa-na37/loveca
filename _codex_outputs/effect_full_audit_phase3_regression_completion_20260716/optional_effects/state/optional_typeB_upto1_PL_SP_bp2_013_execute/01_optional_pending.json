@@ -1,0 +1,203 @@
+{
+  "root": "/Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full",
+  "code": "ui",
+  "deck_code": "1RCBL",
+  "seed": 1,
+  "debug": true,
+  "turn": 1,
+  "phase": "MAIN",
+  "live_start_prompted": false,
+  "deck": [
+    "PL!SP-bp4-004",
+    "PL!SP-bp4-007",
+    "PL!SP-pb1-001"
+  ],
+  "hand": [],
+  "hand_detail": [],
+  "energy_active": 21,
+  "energy_wait": 9,
+  "opponent_wait_count": 0,
+  "opponent_success_count": 0,
+  "opponent_excess_heart_count": 0,
+  "turn_order": "first",
+  "next_turn_order": "",
+  "stage": {
+    "L": null,
+    "C": {
+      "cardnumber": "PL!SP-bp2-013",
+      "active": true,
+      "temp_blade": 0,
+      "temp_hearts": {},
+      "temp_score": 0,
+      "temp_cost": 0,
+      "temp_until": "",
+      "energy_under": 0,
+      "under_cards": [],
+      "heart_replace_color": ""
+    },
+    "R": null
+  },
+  "green_room": [
+    "PL!SP-bp4-024",
+    "PL!SP-bp1-001"
+  ],
+  "set_zone": [],
+  "live_set_limit": 3,
+  "set_zone_score_rows": [],
+  "resolve_zone": [],
+  "yell_reveal_acknowledged_this_live": false,
+  "yell_flow_completed_this_live": false,
+  "success_zone": [],
+  "success_zone_score_sum": 0,
+  "success_zone_heart_color": "",
+  "success_zone_heart_pos": "",
+  "pending": [
+    {
+      "kind": "topdeck_from_green",
+      "text": "【PL!SP-bp2-013】\n処理：控え室のANYを1枚までデッキ上に置く：1枚目=一番上。/ skipで終了",
+      "options": [
+        "PL!SP-bp4-024",
+        "PL!SP-bp1-001",
+        "skip"
+      ],
+      "remaining": 1,
+      "picked": [],
+      "want_kind": "ANY",
+      "want_group": "",
+      "allow_less": true,
+      "valid_cards": [],
+      "display_cards": [
+        "PL!SP-bp4-024",
+        "PL!SP-bp1-001"
+      ],
+      "source_cn": "PL!SP-bp2-013"
+    }
+  ],
+  "deck_refreshed_this_turn": false,
+  "refresh_notice_seq": 0,
+  "refresh_notice_ack_seq": 0,
+  "refresh_notices": [],
+  "effect_events": [],
+  "public_reveal_events": [],
+  "public_hand_revealed_cards": [],
+  "public_hand_revealed_orient": {},
+  "public_hand_reveal_events": [],
+  "cn2name": {
+    "PL!SP-bp1-001": "澁谷かのん",
+    "PL!SP-bp2-013": "唐可可",
+    "PL!SP-bp4-004": "平安名すみれ",
+    "PL!SP-bp4-007": "米女メイ",
+    "PL!SP-bp4-024": "ノンフィクション!!",
+    "PL!SP-pb1-001": "澁谷かのん"
+  },
+  "cn2label": {
+    "PL!SP-bp1-001": "SP/9/澁谷かのん",
+    "PL!SP-bp2-013": "SP/9/唐可可",
+    "PL!SP-bp4-004": "SP/22/平安名すみれ",
+    "PL!SP-bp4-007": "SP/11/米女メイ",
+    "PL!SP-bp4-024": "ノンフィクション!!",
+    "PL!SP-pb1-001": "SP/11/澁谷かのん"
+  },
+  "cn2type": {
+    "PL!SP-bp1-001": "MEMBER",
+    "PL!SP-bp2-013": "MEMBER",
+    "PL!SP-bp4-004": "MEMBER",
+    "PL!SP-bp4-007": "MEMBER",
+    "PL!SP-bp4-024": "LIVE",
+    "PL!SP-pb1-001": "MEMBER"
+  },
+  "cn2is_live": {
+    "PL!SP-bp1-001": false,
+    "PL!SP-bp2-013": false,
+    "PL!SP-bp4-004": false,
+    "PL!SP-bp4-007": false,
+    "PL!SP-bp4-024": true,
+    "PL!SP-pb1-001": false
+  },
+  "cn2yell_hearts": {
+    "PL!SP-bp4-007": {
+      "red": 1
+    },
+    "PL!SP-bp4-024": {
+      "yellow": 1
+    },
+    "PL!SP-pb1-001": {
+      "red": 1
+    }
+  },
+  "cn2yell_draw_icons": {
+    "PL!SP-bp4-024": 1
+  },
+  "cn2yell_score_icons": {},
+  "cn2group": {
+    "PL!SP-bp1-001": "Liella!",
+    "PL!SP-bp2-013": "Liella!",
+    "PL!SP-bp4-004": "Liella!",
+    "PL!SP-bp4-007": "Liella!",
+    "PL!SP-bp4-024": "Liella!",
+    "PL!SP-pb1-001": "Liella!"
+  },
+  "cn2unit": {
+    "PL!SP-bp1-001": "CatChu!",
+    "PL!SP-bp2-013": "KALEIDOSCORE",
+    "PL!SP-bp4-004": "CatChu!",
+    "PL!SP-bp4-007": "CatChu!",
+    "PL!SP-pb1-001": "CatChu!"
+  },
+  "cn2cost": {
+    "PL!SP-bp1-001": 9,
+    "PL!SP-bp2-013": 9,
+    "PL!SP-bp4-004": 22,
+    "PL!SP-bp4-007": 11,
+    "PL!SP-bp4-024": 0,
+    "PL!SP-pb1-001": 11
+  },
+  "cn2score": {
+    "PL!SP-bp1-001": 0,
+    "PL!SP-bp2-013": 0,
+    "PL!SP-bp4-004": 0,
+    "PL!SP-bp4-007": 0,
+    "PL!SP-bp4-024": 6,
+    "PL!SP-pb1-001": 0
+  },
+  "stage_detail": {
+    "L": null,
+    "C": {
+      "cardnumber": "PL!SP-bp2-013",
+      "name": "唐可可",
+      "type": "MEMBER",
+      "has_sac": false,
+      "energy_under": 0,
+      "under_cards": [],
+      "base_cost": 9,
+      "effective_cost": 9,
+      "can_activate": false,
+      "temp_blade": 0,
+      "temp_hearts": {},
+      "success_zone_hearts_bonus": {},
+      "always_hearts_bonus": {},
+      "always_blade_bonus": 0,
+      "always_score_bonus": 0
+    },
+    "R": null
+  },
+  "log": [
+    "16:30:26 [NEW] code=1RCBL seed=1 opening_hand=6 turn=1",
+    "16:30:26 [PHASE] ACTIVE (refresh) E active=3 wait=0",
+    "16:30:26 [PHASE] ENERGY (+1) E active=4 wait=0",
+    "16:30:26 [PHASE] DRAW (draw 1) hand=7 deck=53",
+    "16:30:26 [PHASE] MAIN turn=1",
+    "[PHASE] MULLIGAN (choose cards to redraw)",
+    "[DEBUG_START] deck_exact strict: dropped original deck remainder",
+    "[DEBUG_START] phase=MAIN turn=1 hand=1 E=30/99 wait=0",
+    "[EXT] public reveal metadata gate active",
+    "[EXT] effect matchers active: broad generic green pick one to hand",
+    "[EXT] loaded llocg_ext extensions",
+    "[STATE] stage enter this turn count=1 cn=PL!SP-bp2-013 pos=C origin=hand",
+    "[PLAY] C <- PL!SP-bp2-013 (pay 9; E active=21 wait=9)",
+    "[PENDING] topdeck_from_green: kind=ANY n=1 allow_less=True (cands=2)",
+    "[AUTO] PL!SP-bp2-013[登場]: applied 自分の控え室からカードを1枚までデッキの一番上に置く。"
+  ],
+  "banner": null,
+  "ui_version": "live_attempt_summary_popup_rebase_20260706f"
+}

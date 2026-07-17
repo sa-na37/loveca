@@ -1,0 +1,3 @@
+cardnumber,canonical_trigger,canonical_effect_text_normalized,canonical_audit_id,member_audit_ids,duplicate_count,reason
+PL!-bp4-002,常時,"自分のライブ中のライブカードに,<ライブ開始時>能力も<ライブ成功時>能力も持たないカードがあるかぎり,<紫><紫>を加える.",PL!-bp4-002#A01,PL!-bp4-002#A01;PL!-bp4-002#A03,1,Duplicate after canonical trigger reclassification.
+PL!SP-pb2-046,常時,自分のステージにいるメンバーが持つ<ライブ開始時>能力は発動しない.,PL!SP-pb2-046#A01,PL!SP-pb2-046#A01;PL!SP-pb2-046#A03,1,Duplicate after canonical trigger reclassification.

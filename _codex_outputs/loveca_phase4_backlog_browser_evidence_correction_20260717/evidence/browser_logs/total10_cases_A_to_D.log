@@ -1,0 +1,30 @@
+2026-07-17T05:16:44.967Z opened private page
+2026-07-17T05:16:45.765Z clicked 起動; pending displayed
+2026-07-17T05:16:46.387Z clicked first PL!N-bp3-009 candidate
+2026-07-17T05:16:47.580Z clicked 公開して解決 (1枚 / 合計10)
+2026-07-17T05:16:48.735Z opened public page after total10 resolution
+2026-07-17T05:16:50.240Z clicked 確認; pending should be gone
+
+{
+  "aChecks": {
+    "hasMemberCandidates": true,
+    "liveVisibleInHand": true,
+    "zeroConfirmVisible": true,
+    "liveExcludedFromCandidateButton": true
+  },
+  "bChecks": {
+    "selectedPersistedAfterRefresh": true,
+    "visibleHasDoneTotal10": true
+  },
+  "cChecks": {
+    "hasAckPopup": true,
+    "hasRevealCard": true,
+    "hasScorePlus": true
+  },
+  "dChecks": {
+    "hasRevealCard": true,
+    "noPrivateLiveLeak": true
+  },
+  "afterAckHasPendingPopup": false,
+  "browserErrors": []
+}

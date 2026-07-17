@@ -1,0 +1,138 @@
+ M _codex_outputs/effect_full_audit_phase3_20260716/README.md
+ M _codex_outputs/effect_full_audit_phase3_20260716/commands/accepted/LL-bp1-001_A01_P3_candidate_multi.command.sh
+ M _codex_outputs/effect_full_audit_phase3_20260716/commands/accepted/LL-bp1-001_A01_P3_candidate_one.command.sh
+ M _codex_outputs/effect_full_audit_phase3_20260716/commands/accepted/LL-bp1-001_A01_P3_candidate_zero.command.sh
+ M _codex_outputs/effect_full_audit_phase3_20260716/commands/accepted/PL_-PR-005_A01_P3_choice_required.command.sh
+ M _codex_outputs/effect_full_audit_phase3_20260716/commands/accepted/PL_-PR-005_A01_P3_draw_discard.command.sh
+ D _codex_outputs/effect_full_audit_phase3_20260716/commands/accepted/PL_-PR-005_A01_P3_opponent_wait.command.sh
+ D _codex_outputs/effect_full_audit_phase3_20260716/commands/accepted/PL_-PR-005_A01_P3_opponent_wait.steps.md
+ M _codex_outputs/effect_full_audit_phase3_20260716/commands/accepted/PL_-PR-006_A01_P3_draw_discard.command.sh
+ M _codex_outputs/effect_full_audit_phase3_20260716/commands/accepted/PL_-PR-008_A01_P3_draw_discard.command.sh
+ M _codex_outputs/effect_full_audit_phase3_20260716/commands/candidates/LL-bp1-001_A01_P3_candidate_multi.command.sh
+ M _codex_outputs/effect_full_audit_phase3_20260716/commands/candidates/LL-bp1-001_A01_P3_candidate_one.command.sh
+ M _codex_outputs/effect_full_audit_phase3_20260716/commands/candidates/LL-bp1-001_A01_P3_candidate_zero.command.sh
+ M _codex_outputs/effect_full_audit_phase3_20260716/commands/candidates/PL_-PR-005_A01_P3_choice_required.command.sh
+ M _codex_outputs/effect_full_audit_phase3_20260716/commands/candidates/PL_-PR-005_A01_P3_draw_discard.command.sh
+ D _codex_outputs/effect_full_audit_phase3_20260716/commands/candidates/PL_-PR-005_A01_P3_opponent_wait.command.sh
+ D _codex_outputs/effect_full_audit_phase3_20260716/commands/candidates/PL_-PR-005_A01_P3_opponent_wait.steps.md
+ M _codex_outputs/effect_full_audit_phase3_20260716/commands/candidates/PL_-PR-006_A01_P3_draw_discard.command.sh
+ M _codex_outputs/effect_full_audit_phase3_20260716/commands/candidates/PL_-PR-008_A01_P3_draw_discard.command.sh
+ M _codex_outputs/effect_full_audit_phase3_20260716/coverage_phase3.csv
+ M _codex_outputs/effect_full_audit_phase3_20260716/db/db_mismatch_semantic_review.csv
+ M _codex_outputs/effect_full_audit_phase3_20260716/docs/next_expansion_plan.md
+ M _codex_outputs/effect_full_audit_phase3_20260716/expected/PL_-PR-005_A01_P3_choice_required.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/expected/PL_-PR-005_A01_P3_draw_discard.json
+ D _codex_outputs/effect_full_audit_phase3_20260716/expected/PL_-PR-005_A01_P3_opponent_wait.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/expected/PL_-PR-006_A01_P3_draw_discard.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/expected/PL_-PR-008_A01_P3_draw_discard.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/final_report_phase3.md
+ M _codex_outputs/effect_full_audit_phase3_20260716/meta/git_diff_stat.txt
+ M _codex_outputs/effect_full_audit_phase3_20260716/meta/git_head.txt
+ M _codex_outputs/effect_full_audit_phase3_20260716/meta/git_status_short.txt
+ M _codex_outputs/effect_full_audit_phase3_20260716/meta/runtime_environment.md
+ M _codex_outputs/effect_full_audit_phase3_20260716/pilot/behavioral_issues.csv
+ M _codex_outputs/effect_full_audit_phase3_20260716/pilot/pilot_summary.md
+ M _codex_outputs/effect_full_audit_phase3_20260716/pilot/pilot_test_results.csv
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/LL-bp1-001_A01_P3_candidate_multi/00_initial.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/LL-bp1-001_A01_P3_candidate_multi/01_triggered.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/LL-bp1-001_A01_P3_candidate_multi/02_pending.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/LL-bp1-001_A01_P3_candidate_multi/03_after_selection.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/LL-bp1-001_A01_P3_candidate_multi/04_resolved.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/LL-bp1-001_A01_P3_candidate_multi/05_after_cleanup.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/LL-bp1-001_A01_P3_candidate_multi/06_after_undo.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/LL-bp1-001_A01_P3_candidate_one/00_initial.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/LL-bp1-001_A01_P3_candidate_one/01_triggered.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/LL-bp1-001_A01_P3_candidate_one/02_pending.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/LL-bp1-001_A01_P3_candidate_one/03_after_selection.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/LL-bp1-001_A01_P3_candidate_one/04_resolved.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/LL-bp1-001_A01_P3_candidate_one/05_after_cleanup.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/LL-bp1-001_A01_P3_candidate_one/06_after_undo.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/LL-bp1-001_A01_P3_candidate_zero/00_initial.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/LL-bp1-001_A01_P3_candidate_zero/01_triggered.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/LL-bp1-001_A01_P3_candidate_zero/02_pending.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/LL-bp1-001_A01_P3_candidate_zero/03_after_selection.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/LL-bp1-001_A01_P3_candidate_zero/04_resolved.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/LL-bp1-001_A01_P3_candidate_zero/05_after_cleanup.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/LL-bp1-001_A01_P3_candidate_zero/06_after_undo.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_choice_required/00_initial.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_choice_required/01_triggered.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_choice_required/02_pending.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_choice_required/03_after_selection.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_choice_required/04_resolved.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_choice_required/05_after_cleanup.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_choice_required/06_after_undo.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_draw_discard/00_initial.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_draw_discard/01_triggered.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_draw_discard/02_pending.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_draw_discard/03_after_selection.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_draw_discard/04_resolved.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_draw_discard/05_after_cleanup.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_draw_discard/06_after_undo.json
+ D _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_opponent_wait/00_initial.json
+ D _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_opponent_wait/01_triggered.json
+ D _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_opponent_wait/02_pending.json
+ D _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_opponent_wait/03_after_selection.json
+ D _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_opponent_wait/04_resolved.json
+ D _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_opponent_wait/05_after_cleanup.json
+ D _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_opponent_wait/06_after_undo.json
+ D _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_opponent_wait/diff_initial_to_resolved.json
+ D _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_opponent_wait/diff_initial_to_undo.json
+ D _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_opponent_wait/diff_resolved_to_cleanup.json
+ D _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_opponent_wait/normalization_notes.md
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-006_A01_P3_draw_discard/00_initial.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-006_A01_P3_draw_discard/01_triggered.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-006_A01_P3_draw_discard/02_pending.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-006_A01_P3_draw_discard/03_after_selection.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-006_A01_P3_draw_discard/04_resolved.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-006_A01_P3_draw_discard/05_after_cleanup.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-006_A01_P3_draw_discard/06_after_undo.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-008_A01_P3_draw_discard/00_initial.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-008_A01_P3_draw_discard/01_triggered.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-008_A01_P3_draw_discard/02_pending.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-008_A01_P3_draw_discard/03_after_selection.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-008_A01_P3_draw_discard/04_resolved.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-008_A01_P3_draw_discard/05_after_cleanup.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-008_A01_P3_draw_discard/06_after_undo.json
+ M _codex_outputs/effect_full_audit_phase3_20260716/static_reclassification_136.csv
+ M _codex_outputs/effect_full_audit_phase3_20260716/tools/phase3_pilot_audit.py
+ M _codex_outputs/effect_full_audit_phase3_20260716/ui/ui_checklist.csv
+ D llocg_dual/__init__.py
+ D llocg_dual/server.py
+ M llocg_ui/engine.py
+ M llocg_ui/server.py
+ D run_llocg_dual_ui.py
+?? _codex_outputs/effect_full_audit_phase3_20260716/commands/accepted/PL_-PR-005_A01_P3_opponent_wait_count0.command.sh
+?? _codex_outputs/effect_full_audit_phase3_20260716/commands/accepted/PL_-PR-005_A01_P3_opponent_wait_count0.steps.md
+?? _codex_outputs/effect_full_audit_phase3_20260716/commands/accepted/PL_-PR-005_A01_P3_opponent_wait_count1.command.sh
+?? _codex_outputs/effect_full_audit_phase3_20260716/commands/accepted/PL_-PR-005_A01_P3_opponent_wait_count1.steps.md
+?? _codex_outputs/effect_full_audit_phase3_20260716/commands/accepted/PL_-PR-005_A01_P3_opponent_wait_count2.command.sh
+?? _codex_outputs/effect_full_audit_phase3_20260716/commands/accepted/PL_-PR-005_A01_P3_opponent_wait_count2.steps.md
+?? _codex_outputs/effect_full_audit_phase3_20260716/commands/accepted/PL_-PR-005_A01_P3_opponent_wait_existing1_plus2.command.sh
+?? _codex_outputs/effect_full_audit_phase3_20260716/commands/accepted/PL_-PR-005_A01_P3_opponent_wait_existing1_plus2.steps.md
+?? _codex_outputs/effect_full_audit_phase3_20260716/commands/candidates/PL_-PR-005_A01_P3_opponent_wait_count0.command.sh
+?? _codex_outputs/effect_full_audit_phase3_20260716/commands/candidates/PL_-PR-005_A01_P3_opponent_wait_count0.steps.md
+?? _codex_outputs/effect_full_audit_phase3_20260716/commands/candidates/PL_-PR-005_A01_P3_opponent_wait_count1.command.sh
+?? _codex_outputs/effect_full_audit_phase3_20260716/commands/candidates/PL_-PR-005_A01_P3_opponent_wait_count1.steps.md
+?? _codex_outputs/effect_full_audit_phase3_20260716/commands/candidates/PL_-PR-005_A01_P3_opponent_wait_count2.command.sh
+?? _codex_outputs/effect_full_audit_phase3_20260716/commands/candidates/PL_-PR-005_A01_P3_opponent_wait_count2.steps.md
+?? _codex_outputs/effect_full_audit_phase3_20260716/commands/candidates/PL_-PR-005_A01_P3_opponent_wait_existing1_plus2.command.sh
+?? _codex_outputs/effect_full_audit_phase3_20260716/commands/candidates/PL_-PR-005_A01_P3_opponent_wait_existing1_plus2.steps.md
+?? _codex_outputs/effect_full_audit_phase3_20260716/expected/PL_-PR-005_A01_P3_opponent_wait_count0.json
+?? _codex_outputs/effect_full_audit_phase3_20260716/expected/PL_-PR-005_A01_P3_opponent_wait_count1.json
+?? _codex_outputs/effect_full_audit_phase3_20260716/expected/PL_-PR-005_A01_P3_opponent_wait_count2.json
+?? _codex_outputs/effect_full_audit_phase3_20260716/expected/PL_-PR-005_A01_P3_opponent_wait_existing1_plus2.json
+?? _codex_outputs/effect_full_audit_phase3_20260716/screenshots/
+?? _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_opponent_wait_count0/
+?? _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_opponent_wait_count1/
+?? _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_opponent_wait_count2/
+?? _codex_outputs/effect_full_audit_phase3_20260716/state/PL_-PR-005_A01_P3_opponent_wait_existing1_plus2/
+?? _codex_outputs/effect_full_audit_phase3_20260716/static_evidence/
+?? _codex_outputs/effect_full_audit_phase3_20260716/tools/phase3_static_db_review.py
+?? _codex_outputs/effect_full_audit_phase3_correction_20260716/
+?? _codex_outputs/effect_full_audit_phase3_regression_completion_20260716/
+?? _codex_outputs/effect_full_audit_phase4_20260716/
+?? _codex_outputs/effect_full_audit_phase4_correction_20260716/
+?? _codex_outputs/effect_full_audit_phase4_final_correction_20260716/
+?? _codex_outputs/effect_full_audit_phase4_group_alias_completion_20260717/
+?? llocg_dual_v2/
+?? run_llocg_dual_v2.py

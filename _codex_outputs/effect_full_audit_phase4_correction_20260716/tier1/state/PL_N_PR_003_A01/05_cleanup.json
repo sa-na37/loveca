@@ -1,0 +1,253 @@
+{
+  "root": "/Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full",
+  "code": "ui",
+  "deck_code": "1RCBL",
+  "seed": 1,
+  "debug": true,
+  "turn": 1,
+  "phase": "MAIN",
+  "live_start_prompted": false,
+  "deck": [
+    "LL-bp5-002"
+  ],
+  "hand": [
+    "PL!N-bp5-002",
+    "PL!N-bp5-003"
+  ],
+  "hand_detail": [
+    {
+      "cardnumber": "PL!N-bp5-002",
+      "base_cost": 15,
+      "effective_cost": 15
+    },
+    {
+      "cardnumber": "PL!N-bp5-003",
+      "base_cost": 11,
+      "effective_cost": 11
+    }
+  ],
+  "energy_active": 40,
+  "energy_wait": 0,
+  "opponent_wait_count": 0,
+  "opponent_success_count": 0,
+  "opponent_excess_heart_count": 0,
+  "turn_order": "first",
+  "next_turn_order": "",
+  "stage": {
+    "L": {
+      "cardnumber": "PL!N-PR-003",
+      "active": true,
+      "temp_blade": 0,
+      "temp_hearts": {},
+      "temp_score": 0,
+      "temp_cost": 0,
+      "temp_until": "",
+      "energy_under": 0,
+      "under_cards": [],
+      "heart_replace_color": ""
+    },
+    "C": {
+      "cardnumber": "PL!N-bp5-001",
+      "active": true,
+      "temp_blade": 0,
+      "temp_hearts": {},
+      "temp_score": 0,
+      "temp_cost": 0,
+      "temp_until": "",
+      "energy_under": 0,
+      "under_cards": [],
+      "heart_replace_color": ""
+    },
+    "R": null
+  },
+  "green_room": [
+    "PL!HS-bp2-020",
+    "LL-bp1-001",
+    "LL-bp5-001",
+    "LL-bp2-001",
+    "LL-bp3-001"
+  ],
+  "set_zone": [],
+  "live_set_limit": 3,
+  "set_zone_score_rows": [],
+  "resolve_zone": [],
+  "yell_reveal_acknowledged_this_live": false,
+  "yell_flow_completed_this_live": false,
+  "success_zone": [],
+  "success_zone_score_sum": 0,
+  "success_zone_heart_color": "",
+  "success_zone_heart_pos": "",
+  "pending": [],
+  "deck_refreshed_this_turn": false,
+  "refresh_notice_seq": 0,
+  "refresh_notice_ack_seq": 0,
+  "refresh_notices": [],
+  "effect_events": [],
+  "public_reveal_events": [],
+  "public_hand_revealed_cards": [],
+  "public_hand_revealed_orient": {},
+  "public_hand_reveal_events": [],
+  "cn2name": {
+    "LL-bp1-001": "上原歩夢＆澁谷かのん＆日野下花帆",
+    "LL-bp2-001": "渡辺曜＆鬼塚夏美＆大沢瑠璃乃",
+    "LL-bp3-001": "園田海未＆津島善子＆天王寺璃奈",
+    "LL-bp5-001": "Live with a smile!",
+    "LL-bp5-002": "Bring the LOVE！",
+    "PL!HS-bp2-020": "Link to the FUTURE",
+    "PL!N-PR-003": "上原歩夢",
+    "PL!N-bp5-001": "上原歩夢",
+    "PL!N-bp5-002": "中須かすみ",
+    "PL!N-bp5-003": "桜坂しずく"
+  },
+  "cn2label": {
+    "LL-bp1-001": "20/上原歩夢＆澁谷かのん＆日野下花帆",
+    "LL-bp2-001": "20/渡辺曜＆鬼塚夏美＆大沢瑠璃乃",
+    "LL-bp3-001": "20/園田海未＆津島善子＆天王寺璃奈",
+    "LL-bp5-001": "Live with a smile!",
+    "LL-bp5-002": "Bring the LOVE！",
+    "PL!HS-bp2-020": "Link to the FUTURE",
+    "PL!N-PR-003": "N/9/上原歩夢",
+    "PL!N-bp5-001": "N/5/上原歩夢",
+    "PL!N-bp5-002": "N/15/中須かすみ",
+    "PL!N-bp5-003": "N/11/桜坂しずく"
+  },
+  "cn2type": {
+    "LL-bp1-001": "MEMBER",
+    "LL-bp2-001": "MEMBER",
+    "LL-bp3-001": "MEMBER",
+    "LL-bp5-001": "LIVE",
+    "LL-bp5-002": "LIVE",
+    "PL!HS-bp2-020": "LIVE",
+    "PL!N-PR-003": "MEMBER",
+    "PL!N-bp5-001": "MEMBER",
+    "PL!N-bp5-002": "MEMBER",
+    "PL!N-bp5-003": "MEMBER"
+  },
+  "cn2is_live": {
+    "LL-bp1-001": false,
+    "LL-bp2-001": false,
+    "LL-bp3-001": false,
+    "LL-bp5-001": true,
+    "LL-bp5-002": true,
+    "PL!HS-bp2-020": true,
+    "PL!N-PR-003": false,
+    "PL!N-bp5-001": false,
+    "PL!N-bp5-002": false,
+    "PL!N-bp5-003": false
+  },
+  "cn2yell_hearts": {
+    "LL-bp5-002": {
+      "all": 1
+    },
+    "PL!HS-bp2-020": {
+      "all": 1
+    },
+    "PL!N-bp5-002": {
+      "yellow": 1
+    },
+    "PL!N-bp5-003": {
+      "blue": 1
+    }
+  },
+  "cn2yell_draw_icons": {},
+  "cn2yell_score_icons": {
+    "LL-bp5-001": 1
+  },
+  "cn2group": {
+    "LL-bp1-001": "虹ヶ咲 / Liella! / 蓮ノ空",
+    "LL-bp2-001": "Aqours / Liella! / 蓮ノ空",
+    "LL-bp3-001": "μ's / Aqours / 虹ヶ咲",
+    "PL!HS-bp2-020": "蓮ノ空",
+    "PL!N-PR-003": "虹ヶ咲",
+    "PL!N-bp5-001": "虹ヶ咲",
+    "PL!N-bp5-002": "虹ヶ咲",
+    "PL!N-bp5-003": "虹ヶ咲"
+  },
+  "cn2unit": {
+    "PL!HS-bp2-020": "( スリーズブーケ / DOLLCHESTRA / みらくらぱーく！ )",
+    "PL!N-PR-003": "A・ZU・NA",
+    "PL!N-bp5-001": "A・ZU・NA",
+    "PL!N-bp5-002": "QU4RTZ",
+    "PL!N-bp5-003": "A・ZU・NA"
+  },
+  "cn2cost": {
+    "LL-bp1-001": 20,
+    "LL-bp2-001": 20,
+    "LL-bp3-001": 20,
+    "LL-bp5-001": 0,
+    "LL-bp5-002": 0,
+    "PL!HS-bp2-020": 0,
+    "PL!N-PR-003": 9,
+    "PL!N-bp5-001": 5,
+    "PL!N-bp5-002": 15,
+    "PL!N-bp5-003": 11
+  },
+  "cn2score": {
+    "LL-bp1-001": 0,
+    "LL-bp2-001": 0,
+    "LL-bp3-001": 0,
+    "LL-bp5-001": 1,
+    "LL-bp5-002": 4,
+    "PL!HS-bp2-020": 0,
+    "PL!N-PR-003": 0,
+    "PL!N-bp5-001": 0,
+    "PL!N-bp5-002": 0,
+    "PL!N-bp5-003": 0
+  },
+  "stage_detail": {
+    "L": {
+      "cardnumber": "PL!N-PR-003",
+      "name": "上原歩夢",
+      "type": "MEMBER",
+      "has_sac": false,
+      "energy_under": 0,
+      "under_cards": [],
+      "base_cost": 9,
+      "effective_cost": 9,
+      "can_activate": false,
+      "temp_blade": 0,
+      "temp_hearts": {},
+      "success_zone_hearts_bonus": {},
+      "always_hearts_bonus": {},
+      "always_blade_bonus": 0,
+      "always_score_bonus": 0
+    },
+    "C": {
+      "cardnumber": "PL!N-bp5-001",
+      "name": "上原歩夢",
+      "type": "MEMBER",
+      "has_sac": false,
+      "energy_under": 0,
+      "under_cards": [],
+      "base_cost": 5,
+      "effective_cost": 5,
+      "can_activate": false,
+      "temp_blade": 0,
+      "temp_hearts": {},
+      "success_zone_hearts_bonus": {},
+      "always_hearts_bonus": {},
+      "always_blade_bonus": 0,
+      "always_score_bonus": 0
+    },
+    "R": null
+  },
+  "log": [
+    "17:19:34 [NEW] code=1RCBL seed=1 opening_hand=6 turn=1",
+    "17:19:34 [PHASE] ACTIVE (refresh) E active=3 wait=0",
+    "17:19:34 [PHASE] ENERGY (+1) E active=4 wait=0",
+    "17:19:34 [PHASE] DRAW (draw 1) hand=7 deck=53",
+    "17:19:34 [PHASE] MAIN turn=1",
+    "[PHASE] MULLIGAN (choose cards to redraw)",
+    "[DEBUG_START] deck_exact strict: dropped original deck remainder",
+    "[DEBUG_START] phase=MAIN turn=1 hand=2 E=40/99 wait=0",
+    "[EXT] public reveal metadata gate active",
+    "[EXT] effect matchers active: broad generic green pick one to hand",
+    "[EXT] loaded llocg_ext extensions",
+    "[ACT] L: PL!N-PR-003 activated",
+    "[AUTO] PL!N-PR-003[BODY]: 手札公開 hand=['PL!N-bp5-002', 'PL!N-bp5-003'] live_in_hand=[]",
+    "[PENDING] PL!N-PR-003[BODY]: デッキ上5枚=['PL!HS-bp2-020', 'LL-bp1-001', 'LL-bp5-001', 'LL-bp2-001', 'LL-bp3-001'] ライブ候補=['PL!HS-bp2-020', 'LL-bp5-001']",
+    "[SKIP] PL!N-PR-003[BODY]: 全て控え室 ['PL!HS-bp2-020', 'LL-bp1-001', 'LL-bp5-001', 'LL-bp2-001', 'LL-bp3-001']"
+  ],
+  "banner": null,
+  "ui_version": "live_attempt_summary_popup_rebase_20260706f"
+}

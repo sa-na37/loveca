@@ -1,0 +1,154 @@
+{
+  "code": "ui",
+  "deck_code": "1RCBL",
+  "seed": 1,
+  "debug": false,
+  "turn": 1,
+  "phase": "MAIN",
+  "live_start_prompted": false,
+  "deck": [],
+  "hand": [],
+  "hand_detail": [],
+  "energy_active": 40,
+  "energy_wait": 0,
+  "opponent_wait_count": 0,
+  "opponent_success_count": 0,
+  "opponent_excess_heart_count": 0,
+  "turn_order": "first",
+  "next_turn_order": "",
+  "stage": {
+    "L": null,
+    "C": {
+      "cardnumber": "PL!HS-bp2-013",
+      "active": true,
+      "temp_blade": 0,
+      "temp_hearts": {},
+      "temp_score": 0,
+      "temp_cost": 0,
+      "temp_until": "",
+      "energy_under": 0,
+      "under_cards": [],
+      "heart_replace_color": ""
+    },
+    "R": null
+  },
+  "green_room": [
+    "PL!HS-bp6-014"
+  ],
+  "set_zone": [],
+  "live_set_limit": 3,
+  "set_zone_score_rows": [],
+  "resolve_zone": [],
+  "yell_reveal_acknowledged_this_live": false,
+  "yell_flow_completed_this_live": false,
+  "success_zone": [],
+  "success_zone_score_sum": 0,
+  "success_zone_heart_color": "",
+  "success_zone_heart_pos": "",
+  "pending": [
+    {
+      "kind": "message_ack",
+      "source_cn": "PL!HS-bp6-014",
+      "label": "PL!HS-bp6-014 起動効果",
+      "text": "【PL!HS-bp6-014 起動効果】コストを支払いカードを1枚引きました。ステージに対象（藤島慈 / 大沢瑠璃乃）がいないため、ブレード付与は行いません。",
+      "options": [
+        "ok"
+      ],
+      "effect_text": "カードを1枚引き、ライブ終了時まで、自分のステージにいる「藤島慈」か「大沢瑠璃乃」のうち1人は<(ブレード)>を得る。この能力は、このカードが手札にある場合のみ起動できる。",
+      "public_sanitized": true
+    }
+  ],
+  "deck_refreshed_this_turn": false,
+  "refresh_notice_seq": 0,
+  "refresh_notice_ack_seq": 0,
+  "refresh_notices": [],
+  "effect_events": [],
+  "public_reveal_events": [],
+  "public_hand_revealed_cards": [],
+  "public_hand_revealed_orient": {},
+  "public_hand_reveal_events": [],
+  "cn2name": {
+    "PL!HS-bp2-013": "夕霧綴理",
+    "PL!HS-bp6-014": "安養寺姫芽"
+  },
+  "cn2label": {
+    "PL!HS-bp2-013": "HS/5/夕霧綴理",
+    "PL!HS-bp6-014": "HS/2/安養寺姫芽"
+  },
+  "cn2type": {
+    "PL!HS-bp2-013": "MEMBER",
+    "PL!HS-bp6-014": "MEMBER"
+  },
+  "cn2is_live": {
+    "PL!HS-bp2-013": false,
+    "PL!HS-bp6-014": false
+  },
+  "cn2yell_hearts": {},
+  "cn2yell_draw_icons": {},
+  "cn2yell_score_icons": {},
+  "cn2group": {
+    "PL!HS-bp2-013": "蓮ノ空",
+    "PL!HS-bp6-014": "蓮ノ空"
+  },
+  "cn2unit": {
+    "PL!HS-bp2-013": "DOLLCHESTRA",
+    "PL!HS-bp6-014": "みらくらぱーく！"
+  },
+  "cn2cost": {
+    "PL!HS-bp2-013": 5,
+    "PL!HS-bp6-014": 2
+  },
+  "cn2score": {
+    "PL!HS-bp2-013": 0,
+    "PL!HS-bp6-014": 0
+  },
+  "stage_detail": {
+    "L": null,
+    "C": {
+      "cardnumber": "PL!HS-bp2-013",
+      "name": "夕霧綴理",
+      "type": "MEMBER",
+      "has_sac": false,
+      "energy_under": 0,
+      "under_cards": [],
+      "base_cost": 5,
+      "effective_cost": 5,
+      "can_activate": false,
+      "temp_blade": 0,
+      "temp_hearts": {},
+      "success_zone_hearts_bonus": {},
+      "always_hearts_bonus": {},
+      "always_blade_bonus": 0,
+      "always_score_bonus": 0
+    },
+    "R": null
+  },
+  "log": [
+    "14:06:48 [NEW] code=1RCBL seed=1 opening_hand=6 turn=1",
+    "14:06:48 [PHASE] ACTIVE (refresh) E active=3 wait=0",
+    "14:06:48 [PHASE] ENERGY (+1) E active=4 wait=0",
+    "14:06:48 [PHASE] DRAW (draw 1) hand=7 deck=53",
+    "14:06:48 [PHASE] MAIN turn=1",
+    "[PHASE] MULLIGAN (choose cards to redraw)",
+    "[DEBUG_START] deck_exact strict: dropped original deck remainder",
+    "[DEBUG_START] phase=MAIN turn=1 hand=1 E=40/99 wait=0",
+    "[EXT] public reveal metadata gate active",
+    "[EXT] effect matchers active: broad generic green pick one to hand",
+    "[EXT] loaded llocg_ext extensions",
+    "[ACT] hand activate PL!HS-bp6-014: cost self -> waiting room",
+    "[ACT] hand activate PL!HS-bp6-014: draw 1",
+    "[INFO] hand activate PL!HS-bp6-014: no stage target for ['藤島慈', '大沢瑠璃乃']"
+  ],
+  "banner": null,
+  "ui_version": "live_attempt_summary_popup_rebase_20260706f",
+  "view_mode": "public",
+  "view_build_tag": "live_attempt_summary_popup_rebase_20260706f",
+  "deck_count": 5,
+  "hand_count": 1,
+  "green_room_count": 1,
+  "set_zone_count": 0,
+  "set_zone_public": false,
+  "resolve_zone_count": 0,
+  "success_zone_count": 0,
+  "public_pending": []
+}

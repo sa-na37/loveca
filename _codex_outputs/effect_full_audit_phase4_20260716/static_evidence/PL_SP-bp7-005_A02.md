@@ -1,0 +1,87 @@
+# Static Evidence PL!SP-bp7-005#A02
+
+- audit_id: PL!SP-bp7-005#A02
+- cardnumber: PL!SP-bp7-005
+- cardname: 葉月恋
+- effect_text: <BODY> / 自分のカードの効果によって、自分のエネルギー置き場にエネルギーが置かれたとき、ライブ終了時まで、<(ブレード)> / を得る。
+- previous_classification: NOT_IMPLEMENTED_CONFIRMED
+
+## cardnumber_search
+
+- not found
+
+## cardname_search
+
+- `llocg_ui/effects/registry.py:340:        "gd": {"topk": "5", "filter_group": "Liella!", "optional": "1", "source_name": "葉月恋 bp1-005"},`
+
+## feature_term_search
+
+- `llocg_ui/engine.py:1002:    m_moved_or_energy_event = re.match(r'^自分のカードの効果によって、このメンバーがエリアを移動するか自分のエネルギー置き場にエネルギーが置かれたとき、(?P<inner>.+)$', s_stage_cond)`
+- `llocg_ui/engine.py:13046:                    m = re.match(r'^自分のカードの効果によって、このメンバーがエリアを移動するか自分のエネルギー置き場にエネルギーが置かれたとき、(?P<inner>.+)$', eff_norm)`
+- `llocg_ui/engine.py:1002:    m_moved_or_energy_event = re.match(r'^自分のカードの効果によって、このメンバーがエリアを移動するか自分のエネルギー置き場にエネルギーが置かれたとき、(?P<inner>.+)$', s_stage_cond)`
+- `llocg_ui/engine.py:13046:                    m = re.match(r'^自分のカードの効果によって、このメンバーがエリアを移動するか自分のエネルギー置き場にエネルギーが置かれたとき、(?P<inner>.+)$', eff_norm)`
+- `llocg_ui/engine.py:40:    {"id": "favorite_icecream_answer_blade_fragment", "pattern": r"^回答がそれ以外の場合、ライブ終了時まで、自分と相手のステージにいるメンバーは<\(ブレード\)>を得る。$", "op": "answer_fragment_noop"},`
+- `llocg_ui/engine.py:42:    {"id": "draw_n_then_gain_icons_until_end_live", "pattern": r"^カードを(?P<n>\d+)枚引き、ライブ終了時まで、(?P<icons>(?:<(?:\([^)]+\)|[^<>]+)>)+)を得る。$", "op": "draw_then_gain_icons_until_end_live"},`
+- `llocg_ui/engine.py:43:    {"id": "draw_then_stage_group_member_temp_cost", "pattern": r"^カードを(?P<draw_n>\d+)枚引き、ライブ終了時まで、自分のステージにいる『(?P<group>[^』]+)』のメンバー1人のコストを\+(?P<cost_n>\d+)する。$", "op": "draw_then_stage_group_member_temp_cost"},`
+- `llocg_ui/engine.py:44:    {"id": "stage_group_member_cost_equal_original_minus_self_gain_icon_if_gte", "pattern": r"^自分のステージにいる『(?P<group>[^』]+)』のメンバー1人を選ぶ。ライブ終了時まで、このメンバーのコストは、選んだメンバーが元々持つコストより(?P<minus_n>\d+)低い値に等しくなる。これによりこのカードのコストが(?P<threshold>\d+)以上になった場合、ライブ終了時まで、(?P<icons>(?:<(?:\([^)]+\)|[^<>]+)>)+)を得る。$", "op": "stage_group_member_cost_equal_original_minus_self_gain_icon_if_gte"},`
+
+## compiled_db_entry
+
+```json
+{
+  "ability_type": "自動",
+  "trigger": "BODY",
+  "conditions": "ターン2回",
+  "clauses": [
+    {
+      "optional": false,
+      "cost_template": "",
+      "effect_template": "自分のカードの効果によって、自分のエネルギー置き場にエネルギーが置かれたとき、ライブ終了時まで、<(ブレード)>を得る。",
+      "cost_op": null,
+      "effect_op": null,
+      "raw": "自分のカードの効果によって、自分のエネルギー置き場にエネルギーが置かれたとき、ライブ終了時まで、<(ブレード)>\nを得る。"
+    }
+  ]
+}
+```
+
+## generic_matcher_candidate
+
+- not found
+
+## card_specific_route
+
+- not found
+
+## trigger_collection_route
+
+- `llocg_ui/server.py:3424:    if(kind === 'mass_bottom_auto_ack') return '自動効果確認';`
+- `llocg_ui/server.py:3469:    if(kind === 'mass_bottom_auto_ack') return '自動効果を確認してから、後続処理へ進みます。';`
+- `llocg_ui/effects/stage_triggers.py:222:    # bp2_batch3_local_20260413f: PL!HS-bp2-015 藤島慈 (自動/BODY)`
+- `llocg_ui/engine.py:2176:        timing = '自動効果'`
+- `llocg_ui/engine.py:2188:def _auto_effect_detail_for_condition(ctx: Optional[Dict[str, Any]], effect_text: str, condition_text: str, timing: str = '自動効果') -> str:`
+- `llocg_ui/engine.py:2191:    head = f'【{src}】{timing}' if src else str(timing or '自動効果')`
+
+## pending_creation_route
+
+- not found
+
+## resolver_route
+
+- not found
+
+## ui_route
+
+- not found
+
+## reachable_from_runtime
+
+No previous static matcher/resolve route; no pending/dispatch evidence in mapping
+
+## conflicting_routes
+
+none found in this static pass
+
+- final_classification: STATIC_ANALYSIS_INCONCLUSIVE
+- confidence: low
+- reason: Search evidence is insufficient to confirm either implementation or absence.

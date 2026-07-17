@@ -1,0 +1,3 @@
+# -*- coding: utf-8 -*-
+# BUILD_TAG: mandatory_choose_pending_block_20260716a
+from __future__ import annotations

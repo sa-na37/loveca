@@ -1,0 +1,176 @@
+{
+  "code": "ui",
+  "deck_code": "1RCBL",
+  "seed": 1,
+  "debug": false,
+  "turn": 1,
+  "phase": "MAIN",
+  "live_start_prompted": false,
+  "deck": [],
+  "hand": [],
+  "hand_detail": [],
+  "energy_active": 40,
+  "energy_wait": 0,
+  "opponent_wait_count": 0,
+  "opponent_success_count": 0,
+  "opponent_excess_heart_count": 0,
+  "turn_order": "first",
+  "next_turn_order": "",
+  "stage": {
+    "L": null,
+    "C": {
+      "cardnumber": "PL!N-bp4-018",
+      "active": true,
+      "temp_blade": 0,
+      "temp_hearts": {},
+      "temp_score": 0,
+      "temp_cost": 0,
+      "temp_until": "",
+      "energy_under": 0,
+      "under_cards": [],
+      "heart_replace_color": ""
+    },
+    "R": null
+  },
+  "green_room": [
+    "PL!N-bp3-009",
+    "PL!N-bp1-029",
+    "PL!HS-bp2-015",
+    "PL!S-bp2-026"
+  ],
+  "set_zone": [],
+  "live_set_limit": 3,
+  "set_zone_score_rows": [],
+  "resolve_zone": [],
+  "yell_reveal_acknowledged_this_live": false,
+  "yell_flow_completed_this_live": false,
+  "success_zone": [],
+  "success_zone_score_sum": 0,
+  "success_zone_heart_color": "",
+  "success_zone_heart_pos": "",
+  "pending": [],
+  "deck_refreshed_this_turn": false,
+  "refresh_notice_seq": 0,
+  "refresh_notice_ack_seq": 0,
+  "refresh_notices": [],
+  "effect_events": [],
+  "public_reveal_events": [],
+  "public_hand_revealed_cards": [],
+  "public_hand_revealed_orient": {},
+  "public_hand_reveal_events": [],
+  "cn2name": {
+    "PL!HS-bp2-015": "藤島慈",
+    "PL!N-bp1-029": "Eutopia",
+    "PL!N-bp3-009": "天王寺璃奈",
+    "PL!N-bp4-018": "近江彼方",
+    "PL!S-bp2-026": "ユメ語るよりユメ歌おう"
+  },
+  "cn2label": {
+    "PL!HS-bp2-015": "HS/5/藤島慈",
+    "PL!N-bp1-029": "Eutopia",
+    "PL!N-bp3-009": "N/10/天王寺璃奈",
+    "PL!N-bp4-018": "N/2/近江彼方",
+    "PL!S-bp2-026": "ユメ語るよりユメ歌おう"
+  },
+  "cn2type": {
+    "PL!HS-bp2-015": "MEMBER",
+    "PL!N-bp1-029": "LIVE",
+    "PL!N-bp3-009": "MEMBER",
+    "PL!N-bp4-018": "MEMBER",
+    "PL!S-bp2-026": "LIVE"
+  },
+  "cn2is_live": {
+    "PL!HS-bp2-015": false,
+    "PL!N-bp1-029": true,
+    "PL!N-bp3-009": false,
+    "PL!N-bp4-018": false,
+    "PL!S-bp2-026": true
+  },
+  "cn2yell_hearts": {
+    "PL!N-bp1-029": {
+      "pink": 1
+    },
+    "PL!N-bp4-018": {
+      "yellow": 1
+    },
+    "PL!S-bp2-026": {
+      "all": 1
+    }
+  },
+  "cn2yell_draw_icons": {
+    "PL!N-bp1-029": 1
+  },
+  "cn2yell_score_icons": {},
+  "cn2group": {
+    "PL!HS-bp2-015": "蓮ノ空",
+    "PL!N-bp1-029": "虹ヶ咲",
+    "PL!N-bp3-009": "虹ヶ咲",
+    "PL!N-bp4-018": "虹ヶ咲",
+    "PL!S-bp2-026": "Aqours"
+  },
+  "cn2unit": {
+    "PL!HS-bp2-015": "みらくらぱーく！",
+    "PL!N-bp3-009": "QU4RTZ",
+    "PL!N-bp4-018": "QU4RTZ"
+  },
+  "cn2cost": {
+    "PL!HS-bp2-015": 5,
+    "PL!N-bp1-029": 0,
+    "PL!N-bp3-009": 10,
+    "PL!N-bp4-018": 2,
+    "PL!S-bp2-026": 0
+  },
+  "cn2score": {
+    "PL!HS-bp2-015": 0,
+    "PL!N-bp1-029": 5,
+    "PL!N-bp3-009": 0,
+    "PL!N-bp4-018": 0,
+    "PL!S-bp2-026": 4
+  },
+  "stage_detail": {
+    "L": null,
+    "C": {
+      "cardnumber": "PL!N-bp4-018",
+      "name": "近江彼方",
+      "type": "MEMBER",
+      "has_sac": false,
+      "energy_under": 0,
+      "under_cards": [],
+      "base_cost": 2,
+      "effective_cost": 2,
+      "can_activate": false,
+      "temp_blade": 0,
+      "temp_hearts": {},
+      "success_zone_hearts_bonus": {},
+      "always_hearts_bonus": {},
+      "always_blade_bonus": 0,
+      "always_score_bonus": 0
+    },
+    "R": null
+  },
+  "log": [
+    "14:56:07 [NEW] code=1RCBL seed=1 opening_hand=6 turn=1",
+    "14:56:07 [PHASE] ACTIVE (refresh) E active=3 wait=0",
+    "14:56:07 [PHASE] ENERGY (+1) E active=4 wait=0",
+    "14:56:07 [PHASE] DRAW (draw 1) hand=7 deck=53",
+    "14:56:07 [PHASE] MAIN turn=1",
+    "[PHASE] MULLIGAN (choose cards to redraw)",
+    "[DEBUG_START] deck_exact strict: dropped original deck remainder",
+    "[DEBUG_START] phase=MAIN turn=1 hand=3 E=40/99 wait=0",
+    "[EXT] public reveal metadata gate active",
+    "[EXT] effect matchers active: broad generic green pick one to hand",
+    "[EXT] loaded llocg_ext extensions"
+  ],
+  "banner": null,
+  "ui_version": "live_attempt_summary_popup_rebase_20260706f",
+  "view_mode": "public",
+  "view_build_tag": "live_attempt_summary_popup_rebase_20260706f",
+  "deck_count": 10,
+  "hand_count": 3,
+  "green_room_count": 4,
+  "set_zone_count": 0,
+  "set_zone_public": false,
+  "resolve_zone_count": 0,
+  "success_zone_count": 0,
+  "public_pending": []
+}

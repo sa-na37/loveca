@@ -1,0 +1,11 @@
+test,status,details
+mandatory_choice_next_and_invalid,PASS,"{""invalid_kept_pending"": true, ""next_blocked"": true, ""undo_ok"": true, ""valid_choice_resolved"": true}"
+PL!-PR-005_draw_discard,PASS,"{""hand_count"": 0, ""pending_kind"": """", ""undo_ok"": true}"
+PL!-PR-006_draw_discard,PASS,"{""hand_count"": 0, ""pending_kind"": """", ""undo_ok"": true}"
+PL!-PR-008_draw_discard,PASS,"{""hand_count"": 0, ""pending_kind"": """", ""undo_ok"": true}"
+PL!-PR-005_opponent_wait_count0,PASS,"{""expected"": 2, ""got"": 2, ""initial"": 0, ""pending_kind"": """", ""undo_ok"": true}"
+PL!-PR-005_opponent_wait_count1,PASS,"{""expected"": 3, ""got"": 3, ""initial"": 1, ""pending_kind"": """", ""undo_ok"": true}"
+PL!-PR-005_opponent_wait_existing1_plus2,PASS,"{""expected"": 3, ""got"": 3, ""initial"": 1, ""pending_kind"": """", ""undo_ok"": true}"
+PL!-PR-005_opponent_wait_count2,PASS,"{""expected"": 3, ""got"": 3, ""initial"": 2, ""pending_kind"": """", ""undo_ok"": true}"
+optional_confirm_effect_skip,PASS,"{""pending_kind"": """", ""pending_text"": """", ""undo_ok"": true}"
+optional_pay_or_skip_next,PASS,"{""pending_kind"": """", ""pending_text"": """", ""undo_ok"": true}"

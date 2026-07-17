@@ -1,0 +1,7 @@
+{
+  "hasChoose": false,
+  "hasMandatory": false,
+  "hasModalCue": false,
+  "phaseMain": true,
+  "sample": "Turn: 1 | Phase: MAIN | Energy: 11/20\nOpponent wait:\n0\n/3\n−\n＋\nOpp success:\n0\n/2\n−\n＋\n先手\n後手\nSelected(hand): 0\n枠表示\nDECK\n4\nWaiting room\n1\nENERGY\nEnergy: 11 / 20\nwait: 9\nUNDO\nNEXT\nSuccess\nLIVE SET\n0\nL\nC\n9/星空凛\n↻\nR\nHAND\n0\nLOG\n16:10:46 [NEW] code=1RCBL seed=1 opening_hand=6 turn=1\n16:10:46 [PHASE] ACTIVE (refresh) E active=3 wait=0\n16:10:46 [PHASE] ENERGY (+1) E active=4 wait=0\n16:10:46 [PHASE] DRAW (draw 1) hand=7 deck=53\n16:10:46 [PHASE] MAIN turn=1\n[PHASE] MULLIGAN (choose cards to redraw)\n[DEBUG_START] deck_exact strict: dropped original deck remainder\n[DEBUG_START] phase=MAIN turn=1 hand=1 E=20/99 wait=0\n[EXT] public reveal metadata gate active\n[EXT] effect matchers active: broad generic green pick one to hand\n[EXT] loaded llocg_ext extensions\n[STATE] stage enter this turn count=1 cn=PL!-PR-005 pos=C origin=hand\n[PLAY] C <- PL!-PR-005 (pay 9; E active=11 wait=9)\n[PENDING] PL!-PR-005[登場]: choose mode from 2 effects\n[BLOCK] next: choose_enter_effect_mode requires a choice\n[AUTO] draw 1 -> d"
+}

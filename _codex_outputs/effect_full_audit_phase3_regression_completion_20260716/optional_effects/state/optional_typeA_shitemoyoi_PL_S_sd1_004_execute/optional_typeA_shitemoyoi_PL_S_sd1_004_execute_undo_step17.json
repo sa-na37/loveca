@@ -1,0 +1,220 @@
+{
+  "root": "/Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full",
+  "code": "ui",
+  "deck_code": "1RCBL",
+  "seed": 1,
+  "debug": true,
+  "turn": 1,
+  "phase": "MAIN",
+  "live_start_prompted": false,
+  "deck": [
+    "PL!S-bp3-019",
+    "PL!S-bp6-021",
+    "PL!S-bp5-019",
+    "PL!S-pb1-023"
+  ],
+  "hand": [
+    "PL!S-bp2-026"
+  ],
+  "hand_detail": [
+    {
+      "cardnumber": "PL!S-bp2-026",
+      "base_cost": 0,
+      "effective_cost": 0
+    }
+  ],
+  "energy_active": 30,
+  "energy_wait": 0,
+  "opponent_wait_count": 0,
+  "opponent_success_count": 0,
+  "opponent_excess_heart_count": 0,
+  "turn_order": "first",
+  "next_turn_order": "",
+  "stage": {
+    "L": null,
+    "C": {
+      "cardnumber": "PL!S-sd1-004",
+      "active": true,
+      "temp_blade": 0,
+      "temp_hearts": {},
+      "temp_score": 0,
+      "temp_cost": 0,
+      "temp_until": "",
+      "energy_under": 0,
+      "under_cards": [],
+      "heart_replace_color": ""
+    },
+    "R": null
+  },
+  "green_room": [],
+  "set_zone": [],
+  "live_set_limit": 3,
+  "set_zone_score_rows": [],
+  "resolve_zone": [],
+  "yell_reveal_acknowledged_this_live": false,
+  "yell_flow_completed_this_live": false,
+  "success_zone": [],
+  "success_zone_score_sum": 0,
+  "success_zone_heart_color": "",
+  "success_zone_heart_pos": "",
+  "pending": [],
+  "deck_refreshed_this_turn": false,
+  "refresh_notice_seq": 0,
+  "refresh_notice_ack_seq": 0,
+  "refresh_notices": [],
+  "effect_events": [],
+  "public_reveal_events": [],
+  "public_hand_revealed_cards": [],
+  "public_hand_revealed_orient": {},
+  "public_hand_reveal_events": [],
+  "cn2name": {
+    "PL!S-bp2-026": "ユメ語るよりユメ歌おう",
+    "PL!S-bp3-019": "MIRACLE WAVE",
+    "PL!S-bp5-019": "not ALONE not HITORI",
+    "PL!S-bp6-021": "MIRAI TICKET",
+    "PL!S-pb1-023": "Next SPARKLING!!",
+    "PL!S-sd1-004": "黒澤ダイヤ"
+  },
+  "cn2label": {
+    "PL!S-bp2-026": "ユメ語るよりユメ歌おう",
+    "PL!S-bp3-019": "MIRACLE WAVE",
+    "PL!S-bp5-019": "not ALONE not HITORI",
+    "PL!S-bp6-021": "MIRAI TICKET",
+    "PL!S-pb1-023": "Next SPARKLING!!",
+    "PL!S-sd1-004": "S/13/黒澤ダイヤ"
+  },
+  "cn2type": {
+    "PL!S-bp2-026": "LIVE",
+    "PL!S-bp3-019": "LIVE",
+    "PL!S-bp5-019": "LIVE",
+    "PL!S-bp6-021": "LIVE",
+    "PL!S-pb1-023": "LIVE",
+    "PL!S-sd1-004": "MEMBER"
+  },
+  "cn2is_live": {
+    "PL!S-bp2-026": true,
+    "PL!S-bp3-019": true,
+    "PL!S-bp5-019": true,
+    "PL!S-bp6-021": true,
+    "PL!S-pb1-023": true,
+    "PL!S-sd1-004": false
+  },
+  "cn2yell_hearts": {
+    "PL!S-bp2-026": {
+      "all": 1
+    },
+    "PL!S-bp3-019": {
+      "all": 1
+    },
+    "PL!S-bp5-019": {
+      "blue": 1
+    },
+    "PL!S-pb1-023": {
+      "all": 1
+    },
+    "PL!S-sd1-004": {
+      "green": 1
+    }
+  },
+  "cn2yell_draw_icons": {
+    "PL!S-bp5-019": 1
+  },
+  "cn2yell_score_icons": {
+    "PL!S-bp6-021": 1
+  },
+  "cn2group": {
+    "PL!S-bp2-026": "Aqours",
+    "PL!S-bp3-019": "Aqours",
+    "PL!S-bp5-019": "Aqours",
+    "PL!S-bp6-021": "Aqours",
+    "PL!S-pb1-023": "Aqours",
+    "PL!S-sd1-004": "Aqours"
+  },
+  "cn2unit": {
+    "PL!S-sd1-004": "AZALEA"
+  },
+  "cn2cost": {
+    "PL!S-bp2-026": 0,
+    "PL!S-bp3-019": 0,
+    "PL!S-bp5-019": 0,
+    "PL!S-bp6-021": 0,
+    "PL!S-pb1-023": 0,
+    "PL!S-sd1-004": 13
+  },
+  "cn2score": {
+    "PL!S-bp2-026": 4,
+    "PL!S-bp3-019": 7,
+    "PL!S-bp5-019": 5,
+    "PL!S-bp6-021": 8,
+    "PL!S-pb1-023": 9,
+    "PL!S-sd1-004": 0
+  },
+  "stage_detail": {
+    "L": null,
+    "C": {
+      "cardnumber": "PL!S-sd1-004",
+      "name": "黒澤ダイヤ",
+      "type": "MEMBER",
+      "has_sac": false,
+      "energy_under": 0,
+      "under_cards": [],
+      "base_cost": 13,
+      "effective_cost": 13,
+      "can_activate": false,
+      "temp_blade": 0,
+      "temp_hearts": {},
+      "success_zone_hearts_bonus": {},
+      "always_hearts_bonus": {},
+      "always_blade_bonus": 0,
+      "always_score_bonus": 0
+    },
+    "R": null
+  },
+  "log": [
+    "16:30:26 [NEW] code=1RCBL seed=1 opening_hand=6 turn=1",
+    "16:30:26 [PHASE] ACTIVE (refresh) E active=3 wait=0",
+    "16:30:26 [PHASE] ENERGY (+1) E active=4 wait=0",
+    "16:30:26 [PHASE] DRAW (draw 1) hand=7 deck=53",
+    "16:30:26 [PHASE] MAIN turn=1",
+    "[PHASE] MULLIGAN (choose cards to redraw)",
+    "[DEBUG_START] deck_exact strict: dropped original deck remainder",
+    "[DEBUG_START] phase=MAIN turn=1 hand=1 E=30/99 wait=0",
+    "[EXT] public reveal metadata gate active",
+    "[EXT] effect matchers active: broad generic green pick one to hand",
+    "[EXT] loaded llocg_ext extensions",
+    "[PHASE] LIVE_SET (hand choose up to 3; preloaded=0) turn=1",
+    "[SET] set 1 cards (limit=3, total_in_set=1), drew 1",
+    "[SET] set 0 cards (limit=3, total_in_set=1), drew 0",
+    "[PHASE] LIVE_CONFIRM (filter set cards) turn=1",
+    "[DEBUG] live_start ab found: pos=C cn=PL!S-sd1-004 trig='ライブ開始時'",
+    "[PENDING] auto_order triggers=1",
+    "[PROMPT] live-start abilities queued: 1",
+    "[AUTO] live-start triggers queued=1",
+    "[PENDING] PL!S-sd1-004: optional draw 1 then hand top 2",
+    "[AUTO] PL!S-sd1-004[ライブ開始時]: applied カードを1枚引いてもよい。そうした場合、手札2枚を好きな順番でデッキの上に置く。",
+    "[AUTO] draw_then_hand_to_deck_top: drew 1; choose 2 from hand -> deck top",
+    "[PENDING] hand_to_deck_top: kind=ANY n=2 cands=2",
+    "[AUTO] PL!S-sd1-004: confirm_effect -> applied カードを1枚引き、自分の手札を2枚デッキの一番上に置く。",
+    "[ACT] hand_to_deck_top: PL!S-bp3-019 -> deck top (remaining=1)",
+    "[ACT] hand_to_deck_top: PL!S-bp6-021 -> deck top (remaining=0)",
+    "16:30:26 [UNDO] restored previous state",
+    "16:30:26 [UNDO] restored previous state",
+    "16:30:26 [UNDO] restored previous state",
+    "16:30:26 [UNDO] restored previous state",
+    "16:30:26 [UNDO] restored previous state",
+    "16:30:26 [UNDO] restored previous state",
+    "16:30:26 [UNDO] restored previous state",
+    "16:30:26 [UNDO] restored previous state",
+    "16:30:26 [UNDO] nothing to undo",
+    "16:30:26 [UNDO] nothing to undo",
+    "16:30:26 [UNDO] nothing to undo",
+    "16:30:26 [UNDO] nothing to undo",
+    "16:30:26 [UNDO] nothing to undo",
+    "16:30:26 [UNDO] nothing to undo",
+    "16:30:26 [UNDO] nothing to undo",
+    "16:30:26 [UNDO] nothing to undo",
+    "16:30:26 [UNDO] nothing to undo"
+  ],
+  "banner": null,
+  "ui_version": "live_attempt_summary_popup_rebase_20260706f"
+}

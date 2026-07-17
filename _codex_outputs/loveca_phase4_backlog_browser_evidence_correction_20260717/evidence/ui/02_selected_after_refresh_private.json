@@ -1,0 +1,497 @@
+{
+  "root": "/Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full",
+  "code": "ui",
+  "deck_code": "1RCBL",
+  "seed": 1,
+  "debug": true,
+  "turn": 1,
+  "phase": "MAIN",
+  "live_start_prompted": false,
+  "deck": [
+    "PL!N-bp4-030",
+    "PL!N-bp3-032",
+    "PL!-pb1-015",
+    "PL!N-pb1-010",
+    "PL!N-pb1-005",
+    "PL!SP-pb1-014",
+    "PL!S-pb1-017",
+    "PL!SP-sd1-019",
+    "PL!HS-PR-023",
+    "PL!N-bp1-006",
+    "PL!S-pb1-017",
+    "PL!N-bp4-029",
+    "PL!N-sd1-006",
+    "PL!HS-PR-018",
+    "PL!N-pb1-011",
+    "PL!SP-sd1-019",
+    "PL!N-bp4-029",
+    "PL!HS-PR-023",
+    "PL!N-pb1-005",
+    "PL!N-bp1-029",
+    "PL!N-sd1-004",
+    "PL!N-sd1-006",
+    "PL!HS-PR-023",
+    "PL!-pb1-024",
+    "PL!HS-PR-026",
+    "PL!N-bp1-012",
+    "PL!N-bp4-030",
+    "PL!-bp3-012",
+    "PL!N-pb1-010",
+    "PL!HS-PR-026",
+    "PL!N-bp1-012",
+    "PL!N-bp1-006",
+    "PL!N-pb1-010",
+    "PL!S-pb1-017",
+    "PL!N-bp1-029",
+    "PL!N-sd1-006",
+    "PL!N-pb1-011",
+    "PL!SP-sd1-019",
+    "PL!-bp3-012",
+    "PL!-pb1-024",
+    "PL!N-bp1-026",
+    "PL!HS-PR-023",
+    "PL!N-pb1-005",
+    "PL!N-bp4-017",
+    "PL!N-bp3-030",
+    "PL!HS-PR-018",
+    "PL!N-sd1-004",
+    "PL!N-pb1-005",
+    "PL!HS-PR-018",
+    "PL!HS-PR-026",
+    "PL!-pb1-015"
+  ],
+  "hand": [
+    "PL!N-bp3-009",
+    "PL!N-bp3-009",
+    "PL!N-bp1-029",
+    "PL!N-bp4-030",
+    "PL!N-bp3-032"
+  ],
+  "hand_detail": [
+    {
+      "cardnumber": "PL!N-bp3-009",
+      "base_cost": 10,
+      "effective_cost": 10,
+      "can_activate_from_hand": false
+    },
+    {
+      "cardnumber": "PL!N-bp3-009",
+      "base_cost": 10,
+      "effective_cost": 10,
+      "can_activate_from_hand": false
+    },
+    {
+      "cardnumber": "PL!N-bp1-029",
+      "base_cost": 0,
+      "effective_cost": 0,
+      "can_activate_from_hand": false
+    },
+    {
+      "cardnumber": "PL!N-bp4-030",
+      "base_cost": 0,
+      "effective_cost": 0,
+      "can_activate_from_hand": false
+    },
+    {
+      "cardnumber": "PL!N-bp3-032",
+      "base_cost": 0,
+      "effective_cost": 0,
+      "can_activate_from_hand": false
+    }
+  ],
+  "energy_active": 99,
+  "energy_wait": 0,
+  "opponent_wait_count": 0,
+  "opponent_success_count": 0,
+  "opponent_excess_heart_count": 0,
+  "turn_order": "first",
+  "next_turn_order": "",
+  "stage": {
+    "L": null,
+    "C": {
+      "cardnumber": "PL!SP-bp1-003",
+      "active": true,
+      "temp_blade": 0,
+      "temp_hearts": {},
+      "temp_score": 0,
+      "temp_cost": 0,
+      "temp_until": "",
+      "energy_under": 0,
+      "under_cards": [],
+      "heart_replace_color": ""
+    },
+    "R": null
+  },
+  "green_room": [],
+  "set_zone": [],
+  "live_set_limit": 3,
+  "set_zone_score_rows": [],
+  "resolve_zone": [],
+  "yell_reveal_acknowledged_this_live": false,
+  "yell_flow_completed_this_live": false,
+  "success_zone": [],
+  "success_zone_score_sum": 0,
+  "success_zone_heart_color": "",
+  "success_zone_heart_pos": "",
+  "pending": [
+    {
+      "kind": "reveal_hand_members_cost_sum",
+      "text": "【PL!SP-bp1-003 起動効果】手札にあるメンバーカードを0枚以上公開します。公開したカードのコスト合計が10/20/30/40/50なら、ライブ終了時までライブの合計スコア+1を得ます。",
+      "source_cn": "PL!SP-bp1-003",
+      "pos": "C",
+      "options": [
+        "PL!N-bp3-009",
+        "PL!N-bp3-009"
+      ],
+      "display_cards": [
+        "PL!N-bp3-009",
+        "PL!N-bp3-009"
+      ],
+      "max_picks": 2,
+      "min_picks": 0,
+      "valid_totals": [
+        10,
+        20,
+        30,
+        40,
+        50
+      ],
+      "score_delta": 1,
+      "effect_text": "公開したカードのコストの合計が、10、20、30、40、50のいずれかの場合、ライブ終了時まで、「<常時>ライブの合計スコアを+1する。」を得る。",
+      "once_per_turn": true,
+      "usage_key": "C:PL!SP-bp1-003:"
+    }
+  ],
+  "deck_refreshed_this_turn": false,
+  "refresh_notice_seq": 0,
+  "refresh_notice_ack_seq": 0,
+  "refresh_notices": [],
+  "effect_events": [],
+  "public_reveal_events": [],
+  "public_hand_revealed_cards": [],
+  "public_hand_revealed_orient": {},
+  "public_hand_reveal_events": [],
+  "cn2name": {
+    "PL!-bp3-012": "南ことり",
+    "PL!-pb1-015": "西木野真姫",
+    "PL!-pb1-024": "西木野真姫",
+    "PL!HS-PR-018": "大沢瑠璃乃",
+    "PL!HS-PR-023": "桂城泉",
+    "PL!HS-PR-026": "村野さやか",
+    "PL!N-bp1-006": "近江彼方",
+    "PL!N-bp1-012": "鐘嵐珠",
+    "PL!N-bp1-026": "Poppin' Up!",
+    "PL!N-bp1-029": "Eutopia",
+    "PL!N-bp3-009": "天王寺璃奈",
+    "PL!N-bp3-030": "Love U my friends",
+    "PL!N-bp3-032": "THE SECRET NiGHT",
+    "PL!N-bp4-017": "宮下愛",
+    "PL!N-bp4-029": "Rise Up High!",
+    "PL!N-bp4-030": "Daydream Mermaid",
+    "PL!N-pb1-005": "宮下愛",
+    "PL!N-pb1-010": "三船栞子",
+    "PL!N-pb1-011": "ミア・テイラー",
+    "PL!N-sd1-004": "朝香果林",
+    "PL!N-sd1-006": "近江彼方",
+    "PL!S-pb1-017": "小原鞠莉",
+    "PL!SP-bp1-003": "嵐千砂都",
+    "PL!SP-pb1-014": "嵐千砂都",
+    "PL!SP-sd1-019": "若菜四季"
+  },
+  "cn2label": {
+    "PL!-bp3-012": "2/南ことり",
+    "PL!-pb1-015": "11/西木野真姫",
+    "PL!-pb1-024": "2/西木野真姫",
+    "PL!HS-PR-018": "HS/4/大沢瑠璃乃",
+    "PL!HS-PR-023": "HS/11/桂城泉",
+    "PL!HS-PR-026": "HS/2/村野さやか",
+    "PL!N-bp1-006": "N/13/近江彼方",
+    "PL!N-bp1-012": "N/15/鐘嵐珠",
+    "PL!N-bp1-026": "Poppin' Up!",
+    "PL!N-bp1-029": "Eutopia",
+    "PL!N-bp3-009": "N/10/天王寺璃奈",
+    "PL!N-bp3-030": "Love U my friends",
+    "PL!N-bp3-032": "THE SECRET NiGHT",
+    "PL!N-bp4-017": "N/2/宮下愛",
+    "PL!N-bp4-029": "Rise Up High!",
+    "PL!N-bp4-030": "Daydream Mermaid",
+    "PL!N-pb1-005": "N/2/宮下愛",
+    "PL!N-pb1-010": "N/10/三船栞子",
+    "PL!N-pb1-011": "N/15/ミア・テイラー",
+    "PL!N-sd1-004": "N/11/朝香果林",
+    "PL!N-sd1-006": "N/2/近江彼方",
+    "PL!S-pb1-017": "S/4/小原鞠莉",
+    "PL!SP-bp1-003": "SP/10/嵐千砂都",
+    "PL!SP-pb1-014": "SP/2/嵐千砂都",
+    "PL!SP-sd1-019": "SP/2/若菜四季"
+  },
+  "cn2type": {
+    "PL!-bp3-012": "MEMBER",
+    "PL!-pb1-015": "MEMBER",
+    "PL!-pb1-024": "MEMBER",
+    "PL!HS-PR-018": "MEMBER",
+    "PL!HS-PR-023": "MEMBER",
+    "PL!HS-PR-026": "MEMBER",
+    "PL!N-bp1-006": "MEMBER",
+    "PL!N-bp1-012": "MEMBER",
+    "PL!N-bp1-026": "LIVE",
+    "PL!N-bp1-029": "LIVE",
+    "PL!N-bp3-009": "MEMBER",
+    "PL!N-bp3-030": "LIVE",
+    "PL!N-bp3-032": "LIVE",
+    "PL!N-bp4-017": "MEMBER",
+    "PL!N-bp4-029": "LIVE",
+    "PL!N-bp4-030": "LIVE",
+    "PL!N-pb1-005": "MEMBER",
+    "PL!N-pb1-010": "MEMBER",
+    "PL!N-pb1-011": "MEMBER",
+    "PL!N-sd1-004": "MEMBER",
+    "PL!N-sd1-006": "MEMBER",
+    "PL!S-pb1-017": "MEMBER",
+    "PL!SP-bp1-003": "MEMBER",
+    "PL!SP-pb1-014": "MEMBER",
+    "PL!SP-sd1-019": "MEMBER"
+  },
+  "cn2is_live": {
+    "PL!-bp3-012": false,
+    "PL!-pb1-015": false,
+    "PL!-pb1-024": false,
+    "PL!HS-PR-018": false,
+    "PL!HS-PR-023": false,
+    "PL!HS-PR-026": false,
+    "PL!N-bp1-006": false,
+    "PL!N-bp1-012": false,
+    "PL!N-bp1-026": true,
+    "PL!N-bp1-029": true,
+    "PL!N-bp3-009": false,
+    "PL!N-bp3-030": true,
+    "PL!N-bp3-032": true,
+    "PL!N-bp4-017": false,
+    "PL!N-bp4-029": true,
+    "PL!N-bp4-030": true,
+    "PL!N-pb1-005": false,
+    "PL!N-pb1-010": false,
+    "PL!N-pb1-011": false,
+    "PL!N-sd1-004": false,
+    "PL!N-sd1-006": false,
+    "PL!S-pb1-017": false,
+    "PL!SP-bp1-003": false,
+    "PL!SP-pb1-014": false,
+    "PL!SP-sd1-019": false
+  },
+  "cn2yell_hearts": {
+    "PL!-bp3-012": {
+      "yellow": 1
+    },
+    "PL!-pb1-015": {
+      "purple": 1
+    },
+    "PL!-pb1-024": {
+      "purple": 1
+    },
+    "PL!HS-PR-018": {
+      "pink": 1
+    },
+    "PL!HS-PR-023": {
+      "purple": 1
+    },
+    "PL!HS-PR-026": {
+      "blue": 1
+    },
+    "PL!N-bp1-006": {
+      "purple": 1
+    },
+    "PL!N-bp1-012": {
+      "pink": 1
+    },
+    "PL!N-bp1-026": {
+      "all": 1
+    },
+    "PL!N-bp1-029": {
+      "pink": 1
+    },
+    "PL!N-bp3-030": {
+      "all": 1
+    },
+    "PL!N-bp3-032": {
+      "all": 1
+    },
+    "PL!N-bp4-017": {
+      "blue": 1
+    },
+    "PL!N-bp4-029": {
+      "all": 1
+    },
+    "PL!N-bp4-030": {
+      "all": 1
+    },
+    "PL!N-pb1-005": {
+      "blue": 1
+    },
+    "PL!N-pb1-011": {
+      "yellow": 1
+    },
+    "PL!N-sd1-004": {
+      "blue": 1
+    },
+    "PL!N-sd1-006": {
+      "purple": 1
+    },
+    "PL!S-pb1-017": {
+      "blue": 1
+    },
+    "PL!SP-pb1-014": {
+      "red": 1
+    },
+    "PL!SP-sd1-019": {
+      "purple": 1
+    }
+  },
+  "cn2yell_draw_icons": {
+    "PL!N-bp1-029": 1
+  },
+  "cn2yell_score_icons": {},
+  "cn2group": {
+    "PL!-bp3-012": "μ's",
+    "PL!-pb1-015": "μ's",
+    "PL!-pb1-024": "μ's",
+    "PL!HS-PR-018": "蓮ノ空",
+    "PL!HS-PR-023": "蓮ノ空",
+    "PL!HS-PR-026": "蓮ノ空",
+    "PL!N-bp1-006": "虹ヶ咲",
+    "PL!N-bp1-012": "虹ヶ咲",
+    "PL!N-bp1-026": "虹ヶ咲",
+    "PL!N-bp1-029": "虹ヶ咲",
+    "PL!N-bp3-009": "虹ヶ咲",
+    "PL!N-bp3-030": "虹ヶ咲",
+    "PL!N-bp3-032": "虹ヶ咲",
+    "PL!N-bp4-017": "虹ヶ咲",
+    "PL!N-bp4-029": "虹ヶ咲",
+    "PL!N-bp4-030": "虹ヶ咲",
+    "PL!N-pb1-005": "虹ヶ咲",
+    "PL!N-pb1-010": "虹ヶ咲",
+    "PL!N-pb1-011": "虹ヶ咲",
+    "PL!N-sd1-004": "虹ヶ咲",
+    "PL!N-sd1-006": "虹ヶ咲",
+    "PL!S-pb1-017": "Aqours",
+    "PL!SP-bp1-003": "Liella!",
+    "PL!SP-pb1-014": "Liella!",
+    "PL!SP-sd1-019": "Liella!"
+  },
+  "cn2unit": {
+    "PL!-bp3-012": "Printemps",
+    "PL!-pb1-015": "BiBi",
+    "PL!-pb1-024": "BiBi",
+    "PL!HS-PR-018": "みらくらぱーく！",
+    "PL!HS-PR-023": "Edel Note",
+    "PL!HS-PR-026": "DOLLCHESTRA",
+    "PL!N-bp1-006": "QU4RTZ",
+    "PL!N-bp1-012": "R3BIRTH",
+    "PL!N-bp3-009": "QU4RTZ",
+    "PL!N-bp3-032": "DiverDiva",
+    "PL!N-bp4-017": "DiverDiva",
+    "PL!N-pb1-005": "DiverDiva",
+    "PL!N-pb1-010": "R3BIRTH",
+    "PL!N-pb1-011": "R3BIRTH",
+    "PL!N-sd1-004": "DiverDiva",
+    "PL!N-sd1-006": "QU4RTZ",
+    "PL!S-pb1-017": "Guilty Kiss",
+    "PL!SP-bp1-003": "5yncri5e!",
+    "PL!SP-pb1-014": "5yncri5e!",
+    "PL!SP-sd1-019": "5yncri5e!"
+  },
+  "cn2cost": {
+    "PL!-bp3-012": 2,
+    "PL!-pb1-015": 11,
+    "PL!-pb1-024": 2,
+    "PL!HS-PR-018": 4,
+    "PL!HS-PR-023": 11,
+    "PL!HS-PR-026": 2,
+    "PL!N-bp1-006": 13,
+    "PL!N-bp1-012": 15,
+    "PL!N-bp1-026": 0,
+    "PL!N-bp1-029": 0,
+    "PL!N-bp3-009": 10,
+    "PL!N-bp3-030": 0,
+    "PL!N-bp3-032": 0,
+    "PL!N-bp4-017": 2,
+    "PL!N-bp4-029": 0,
+    "PL!N-bp4-030": 0,
+    "PL!N-pb1-005": 2,
+    "PL!N-pb1-010": 10,
+    "PL!N-pb1-011": 15,
+    "PL!N-sd1-004": 11,
+    "PL!N-sd1-006": 2,
+    "PL!S-pb1-017": 4,
+    "PL!SP-bp1-003": 10,
+    "PL!SP-pb1-014": 2,
+    "PL!SP-sd1-019": 2
+  },
+  "cn2score": {
+    "PL!-bp3-012": 0,
+    "PL!-pb1-015": 0,
+    "PL!-pb1-024": 0,
+    "PL!HS-PR-018": 0,
+    "PL!HS-PR-023": 0,
+    "PL!HS-PR-026": 0,
+    "PL!N-bp1-006": 0,
+    "PL!N-bp1-012": 0,
+    "PL!N-bp1-026": 1,
+    "PL!N-bp1-029": 5,
+    "PL!N-bp3-009": 0,
+    "PL!N-bp3-030": 3,
+    "PL!N-bp3-032": 2,
+    "PL!N-bp4-017": 0,
+    "PL!N-bp4-029": 1,
+    "PL!N-bp4-030": 3,
+    "PL!N-pb1-005": 0,
+    "PL!N-pb1-010": 0,
+    "PL!N-pb1-011": 0,
+    "PL!N-sd1-004": 0,
+    "PL!N-sd1-006": 0,
+    "PL!S-pb1-017": 0,
+    "PL!SP-bp1-003": 0,
+    "PL!SP-pb1-014": 0,
+    "PL!SP-sd1-019": 0
+  },
+  "stage_detail": {
+    "L": null,
+    "C": {
+      "cardnumber": "PL!SP-bp1-003",
+      "name": "嵐千砂都",
+      "type": "MEMBER",
+      "has_sac": false,
+      "energy_under": 0,
+      "under_cards": [],
+      "base_cost": 10,
+      "effective_cost": 10,
+      "can_activate": true,
+      "temp_blade": 0,
+      "temp_hearts": {},
+      "success_zone_hearts_bonus": {},
+      "always_hearts_bonus": {},
+      "always_blade_bonus": 0,
+      "always_score_bonus": 0
+    },
+    "R": null
+  },
+  "log": [
+    "14:26:58 [NEW] code=1RCBL seed=1 opening_hand=6 turn=1",
+    "14:26:58 [PHASE] ACTIVE (refresh) E active=3 wait=0",
+    "14:26:58 [PHASE] ENERGY (+1) E active=4 wait=0",
+    "14:26:58 [PHASE] DRAW (draw 1) hand=7 deck=53",
+    "14:26:58 [PHASE] MAIN turn=1",
+    "[PHASE] MULLIGAN (choose cards to redraw)",
+    "[DEBUG_START] phase=MAIN turn=1 hand=5 E=99/99 wait=0",
+    "[EXT] public reveal metadata gate active",
+    "[EXT] effect matchers active: broad generic green pick one to hand",
+    "[EXT] loaded llocg_ext extensions",
+    "[ACT] C: PL!SP-bp1-003 activated",
+    "[PENDING] activate reveal hand MEMBER cost sum options=2 source=PL!SP-bp1-003"
+  ],
+  "banner": null,
+  "ui_version": "live_attempt_summary_popup_rebase_20260706f",
+  "view_mode": "private",
+  "view_build_tag": "live_attempt_summary_popup_rebase_20260706f",
+  "_codex_note": "The selected reveal card is client-local UI state and is not represented in server state JSON; see screenshot B and browser log 02_selected_after_refresh_snapshot.txt for persisted selection after refresh."
+}

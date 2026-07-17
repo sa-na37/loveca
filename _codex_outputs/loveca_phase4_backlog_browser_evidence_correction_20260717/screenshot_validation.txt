@@ -1,0 +1,5 @@
+PLSP_bp1_003_browser_A_member_only_candidates.png size=(536, 683) extrema=((0, 255), (0, 255), (0, 255)) sample_unique=1464
+PLSP_bp1_003_browser_B_selection_persisted_total10.png size=(536, 683) extrema=((0, 255), (0, 255), (0, 255)) sample_unique=1472
+PLSP_bp1_003_browser_C_private_resolved_total10.png size=(536, 683) extrema=((0, 255), (0, 255), (0, 255)) sample_unique=1314
+PLSP_bp1_003_browser_D_public_reveal_total10.png size=(536, 683) extrema=((0, 255), (0, 255), (0, 255)) sample_unique=1311
+PLSP_bp1_003_browser_E_zero_reveal_resolved.png size=(536, 683) extrema=((0, 255), (0, 255), (0, 255)) sample_unique=1271
