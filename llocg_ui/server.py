@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: debug_skipped_yell_hand_ui_20260715d
+# BUILD_TAG: hand_activated_ui_and_reveal_cost_sum_20260717b
 from __future__ import annotations
 
 """llocg_ui.server
@@ -51,12 +51,14 @@ from .engine import (
     cmd_end_turn,
     cmd_next,
     cmd_activate_to_green,
+    cmd_activate_from_hand,
     cmd_toggle_stage_active,
     cmd_resolve_pending,
     post_process,
     _get_card,
     _has_sacrifice_ability,
     can_activate_in_state,
+    can_activate_from_hand_in_state,
     StageSlot,
     _slot_effective_cost,
     _card_effective_play_cost_from_hand,
@@ -1721,6 +1723,7 @@ class App:
                 "cardnumber": cn,
                 "base_cost": int(base_cost or 0),
                 "effective_cost": int(effective_cost or 0),
+                "can_activate_from_hand": bool(can_activate_from_hand_in_state(self.gs, self.cards_db, len(out))),
             })
         return out
 
@@ -1987,7 +1990,7 @@ class App:
             ph0 = str(getattr(self.gs, 'phase', '') or '')
         except Exception:
             ph0 = ''
-        if name in {'play', 'activate_to_green'} and ph0 != 'MAIN':
+        if name in {'play', 'activate_to_green', 'activate_from_hand'} and ph0 != 'MAIN':
             try:
                 self.gs.log.append('[UI] メインフェイズのみ実行できます')
             except Exception:
@@ -2004,6 +2007,7 @@ class App:
             "end_turn",
             "toggle_debug",
             "activate_to_green",
+            "activate_from_hand",
             "resolve_pending",
             "next",
             "mulligan_next",
@@ -2046,6 +2050,8 @@ class App:
             cmd_ack(self.gs)
         elif name == "activate_to_green":
             cmd_activate_to_green(self.gs, self.cards_db, str(payload.get("pos", "")))
+        elif name == "activate_from_hand":
+            cmd_activate_from_hand(self.gs, self.cards_db, int(payload.get("hand_idx", -1)), self.rng)
         elif name == "toggle_stage_active":
             push_undo(self.gs, self.rng)
             cmd_toggle_stage_active(self.gs, self.cards_db, str(payload.get("pos", "")))
@@ -2121,6 +2127,21 @@ class App:
                         'live_start_success_count_distinct_names_score_ack',
                         'mass_bottom_auto_ack', 'mass_bottom_optional_result_ack',
                     }
+                    if k0 == 'choose_enter_effect_mode' and not (bool(p0.get('optional', False)) or bool(p0.get('allow_skip', False))):
+                        msg = '必須選択です。いずれかの効果を選んでください。'
+                        txt = str(p0.get('text', '') or '')
+                        if msg not in txt:
+                            p0['text'] = (txt + '\n' + msg).strip()
+                        p0['last_error'] = msg
+                        p0['mandatory'] = True
+                        p0['allow_skip'] = False
+                        self.gs.pending[0] = p0
+                        self.gs.log.append('[BLOCK] next: choose_enter_effect_mode requires a choice')
+                        post_process(self.gs)
+                        self._auto_refresh_if_deck_empty_after_cmd(f"post_cmd:{name}")
+                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}", before_refresh_notice_seq_for_public_hand)
+                        self.save_trace()
+                        return self.state_json()
                     if k0 in ack_kinds:
                         cmd_resolve_pending(self.gs, self.cards_db, 0, 'ok')
                         post_process(self.gs)
@@ -4544,6 +4565,20 @@ ${text}`;
         const baseCost = Number((hd && hd.base_cost) || cardCostFor(cn) || 0);
         const effectiveCost = Number((hd && hd.effective_cost) || baseCost || 0);
         appendCostBadgeCurrent(card, baseCost, effectiveCost, true);
+        if(hd && hd.can_activate_from_hand){
+          const b = document.createElement('button');
+          b.className = 'actBtn';
+          b.textContent = '能力';
+          b.title = '手札から能力を起動';
+          b.addEventListener('click', async ev => {
+            ev.stopPropagation();
+            st = await apiCmd('activate_from_hand', {hand_idx: i});
+            selHand = [];
+            updateTop();
+            render();
+          });
+          card.appendChild(b);
+        }
       }catch(e){}
       inner.appendChild(card);
     });
@@ -6623,6 +6658,137 @@ inner.appendChild(card);
         render();
       });
 
+      updateCounter();
+      elModalCards.appendChild(counter);
+      elModalCards.appendChild(row);
+      elModalActions.appendChild(doneBtn);
+      elMask.style.display = 'block';
+      return;
+    }
+
+    // Multi-select: reveal hand MEMBER cards and evaluate printed cost sum.
+    if(kind === 'reveal_hand_members_cost_sum'){
+      const maxPicks = (p && p.max_picks != null) ? parseInt(p.max_picks) : ((p && p.maxPicks != null) ? parseInt(p.maxPicks) : 0);
+      const opts = (p && Array.isArray(p.options)) ? p.options : [];
+      const validTotals = (p && Array.isArray(p.valid_totals)) ? p.valid_totals.map(x=>Number(x||0)) : [10,20,30,40,50];
+      const title = String((p && (p.text || p.prompt || p.message)) ? (p.text || p.prompt || p.message) : `手札のメンバーカードを0〜${maxPicks}枚公開`);
+
+      popup = {type:'pending', closable:false};
+      elModalTitle.textContent = '公開カードを選択';
+      setRichText(elModalText, title);
+      elModalCards.innerHTML = '';
+      elModalActions.innerHTML = '';
+
+      const selectionKey = JSON.stringify({
+        kind: kind,
+        source: p && p.source ? String(p.source) : '',
+        source_pos: p && p.source_pos ? String(p.source_pos) : '',
+        options: opts.map(x=>String(x).trim()),
+        max_picks: maxPicks,
+        valid_totals: validTotals
+      });
+      if(!window.__revealCostSumSelection || window.__revealCostSumSelection.key !== selectionKey){
+        window.__revealCostSumSelection = {key: selectionKey, selected: []};
+      }
+      const selected = window.__revealCostSumSelection.selected;
+      for(let si = selected.length - 1; si >= 0; si--){
+        const idx = Number(selected[si]);
+        if(!Number.isInteger(idx) || idx < 0 || idx >= opts.length){
+          selected.splice(si, 1);
+        }
+      }
+      const dimsP = standardSize('portrait');
+      const row = document.createElement('div');
+      row.className = 'choiceRow';
+
+      const counter = document.createElement('div');
+      counter.style.cssText = 'width:100%;text-align:center;color:#fff;font-size:13px;margin-bottom:4px;padding:2px 0;';
+
+      const doneBtn = document.createElement('button');
+      doneBtn.className = 'miniBtn';
+      const btnMap = {};
+      const dupCount = {};
+      opts.forEach(o => { const k=String(o).trim(); dupCount[k]=(dupCount[k]||0)+1; });
+      const dupSeen = {};
+
+      function printedCost(cn){
+        try{
+          const m = (st && st.cn2cost) ? st.cn2cost : {};
+          return Number(m[String(cn)] || 0) || 0;
+        }catch(e){ return 0; }
+      }
+      function selectedTotal(){
+        return selected.reduce((acc, idx)=> acc + printedCost(opts[idx]), 0);
+      }
+      function updateCounter(){
+        const n = selected.length;
+        const total = selectedTotal();
+        const met = validTotals.includes(total);
+        counter.textContent = `選択: ${n} / 0〜${maxPicks}　コスト合計: ${total}　${met ? '条件達成' : '条件未達'}`;
+        counter.className = met ? 'condMet' : 'condUnmet';
+        doneBtn.textContent = `公開して解決 (${n}枚 / 合計${total})`;
+        doneBtn.disabled = false;
+        opts.forEach((cn, i) => {
+          const b = btnMap[i];
+          if(!b) return;
+          const badge = b.querySelector('.orderBadge');
+          const cap = b.querySelector('.choiceCap');
+          if(selected.includes(i)){
+            b.classList.add('orderedSelected');
+            if(badge){ badge.textContent = '✓'; badge.style.display = 'flex'; }
+            if(cap) cap.textContent = `${String(cn).trim()} cost${printedCost(cn)} ✓`;
+          }else{
+            b.classList.remove('orderedSelected');
+            if(badge){ badge.textContent = ''; badge.style.display = 'none'; }
+            if(cap){
+              const k = String(cn).trim();
+              const dup = opts.filter(x => String(x).trim() === k).length;
+              const nth = opts.slice(0, i).filter(x => String(x).trim() === k).length + 1;
+              cap.textContent = `${dup > 1 ? `${k} (${nth}/${dup})` : k} cost${printedCost(cn)}`;
+            }
+          }
+        });
+      }
+      opts.forEach((opt, i) => {
+        const cn = String(opt).trim();
+        const b = document.createElement('button');
+        b.className = 'choiceBtn';
+        b.style.width = dimsP.w + 'px';
+        b.style.height = dimsP.h + 'px';
+        appendChoiceCardImage(b, cn, 'portrait');
+        const badge = document.createElement('div');
+        badge.className = 'orderBadge';
+        b.appendChild(badge);
+        const cap = document.createElement('div');
+        cap.className = 'choiceCap';
+        dupSeen[cn] = (dupSeen[cn]||0) + 1;
+        cap.textContent = `${cardChoiceCaption(cn, dupSeen[cn], dupCount[cn])} cost${printedCost(cn)}`;
+        b.appendChild(cap);
+        btnMap[i] = b;
+        b.addEventListener('click', ev => {
+          ev.stopPropagation();
+          const j = selected.indexOf(i);
+          if(j >= 0) selected.splice(j, 1);
+          else if(selected.length < maxPicks) selected.push(i);
+          window.__revealCostSumSelection = {key: selectionKey, selected: selected};
+          updateCounter();
+        });
+        row.appendChild(b);
+      });
+      let submitting = false;
+      doneBtn.addEventListener('click', async ev => {
+        ev.stopPropagation();
+        if(submitting) return;
+        submitting = true;
+        const choiceStr = selected.map(i => String(opts[i]).trim()).join(',');
+        st = await apiCmd('resolve_pending', {idx:0, choice: choiceStr});
+        if(window.__revealCostSumSelection && window.__revealCostSumSelection.key === selectionKey){
+          window.__revealCostSumSelection = null;
+        }
+        selHand = [];
+        updateTop();
+        render();
+      });
       updateCounter();
       elModalCards.appendChild(counter);
       elModalCards.appendChild(row);

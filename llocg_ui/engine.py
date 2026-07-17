@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: debug_skipped_yell_hand_ui_20260715e
+# BUILD_TAG: hand_activated_and_reveal_cost_sum_20260717a
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -1361,6 +1361,35 @@ def _ability_key(ci: CardInfo, ab: Dict[str, Any], pos: str) -> str:
     cn = str(getattr(ci, 'cardnumber', '') or '')
     aid = str(ab.get('ability_id', '') or ab.get('ability_index', '') or '')
     return f"{pos}:{cn}:{aid}"
+
+def _activated_clause_is_hand_self_discard_draw_named_blade(cost_text: str, effect_text: str) -> Dict[str, Any]:
+    cost = str(cost_text or '').strip()
+    eff = _normalize_icon_token_text(str(effect_text or '').strip()).replace('\n', '')
+    if 'このカードを手札から控え室に置く' not in cost:
+        return {}
+    m = re.match(
+        r'^カードを(?P<draw>\d+)枚引き、ライブ終了時まで、自分のステージにいる(?P<names>.+?)のうち1人は(?P<icons>(?:<\([^<>]+\)>)+)を得る。この能力は、このカードが手札にある場合のみ起動できる。?$',
+        eff,
+    )
+    if not m:
+        return {}
+    names = [str(x).strip() for x in re.findall(r'[「『]([^」』]+)[」』]', str(m.group('names') or '')) if str(x).strip()]
+    blade_n = _count_blade_icons_from_tagblob(str(m.group('icons') or ''))
+    return {'draw': int(m.group('draw') or 0), 'names': names, 'blade_n': int(blade_n or 0), 'effect_text': eff}
+
+def _activated_cost_is_reveal_any_hand_members(cost_text: str) -> bool:
+    t = str(cost_text or '').strip()
+    return ('手札にあるメンバーカードを好きな枚数公開する' in t)
+
+def _effect_is_revealed_member_cost_sum_live_score(effect_text: str) -> Dict[str, Any]:
+    eff = _normalize_icon_token_text(str(effect_text or '').strip()).replace('\n', '')
+    if '公開したカードのコストの合計' not in eff:
+        return {}
+    if 'ライブの合計スコアを+1する' not in eff:
+        return {}
+    nums = [int(x) for x in re.findall(r'(?<!\d)(10|20|30|40|50)(?!\d)', _norm_digits_jp(eff))]
+    valid = sorted(set(nums or [10, 20, 30, 40, 50]))
+    return {'valid_totals': valid, 'score_delta': 1, 'effect_text': eff}
 def _cost_move_active_energy_to_under(cost_text: str) -> bool:
     t = _norm_digits_jp(cost_text or '')
     # e.g. 自分のエネルギー置き場にあるエネルギー1枚をこのメンバーの下に置く
@@ -1915,12 +1944,13 @@ def can_activate_in_state(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: s
                 continue
             # BODY起動効果（手札をすべて公開する）はeffect_templateが_EFFECT_RULESにないためスキップ
             is_body_cost = '手札をすべて公開する' in cost and str(ab.get('trigger', '') or '') == 'BODY'
+            is_reveal_member_cost_sum = _activated_cost_is_reveal_any_hand_members(cost) and bool(_effect_is_revealed_member_cost_sum_live_score(eff))
             cond_thr = int(_activated_success_score_sum_condition(eff) or 0)
             eff_for_match = _strip_activated_success_score_sum_condition(eff) if cond_thr else eff
             eff_for_match = _strip_activated_success_count_discard_cost_reduction(eff_for_match)
             if cond_thr and not _success_score_sum_condition_met(gs, cards_db, cond_thr):
                 continue
-            if not is_body_cost and not (_match_effect_template(eff) or _match_effect_template(eff_for_match)):
+            if not is_body_cost and not is_reveal_member_cost_sum and not (_match_effect_template(eff) or _match_effect_template(eff_for_match)):
                 continue
             # energy cost check
             need_e = _parse_energy_cost(cost)
@@ -1960,6 +1990,35 @@ def can_activate_in_state(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: s
     if not _has_matchable_activated(ci):
         if _has_green_live_take_ability(ci) or _has_green_member_take_ability(ci) or _has_sacrifice_ability(ci):
             return True
+    return False
+
+def can_activate_from_hand_in_state(gs: 'GameState', cards_db: Dict[str, CardInfo], hand_idx: int) -> bool:
+    try:
+        hand_idx = int(hand_idx)
+    except Exception:
+        return False
+    if str(getattr(gs, 'phase', '') or '') != 'MAIN':
+        return False
+    if list(getattr(gs, 'pending', []) or []):
+        return False
+    hand = list(getattr(gs, 'hand', []) or [])
+    if hand_idx < 0 or hand_idx >= len(hand):
+        return False
+    ci = _get_card(cards_db, hand[hand_idx])
+    if not ci or not _is_member_ci(ci):
+        return False
+    for ab in _iter_activated_abilities(ci):
+        clauses = ab.get('clauses', []) if isinstance(ab, dict) else []
+        if not isinstance(clauses, list):
+            continue
+        for cl in clauses:
+            if not isinstance(cl, dict):
+                continue
+            if _activated_clause_is_hand_self_discard_draw_named_blade(
+                str(cl.get('cost_template', '') or ''),
+                str(cl.get('effect_template', '') or cl.get('raw', '') or ''),
+            ):
+                return True
     return False
 def _count_blade_icons_from_tagblob(s: str) -> int:
     t = str(s or "")
@@ -15717,6 +15776,8 @@ def handle_enter_auto(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, cn
                 'text': f"{canon}[登場]: 効果を1つ選ぶ",
                 'options': list(mode_labels),
                 'effects': list(mode_effects),
+                'mandatory': True,
+                'allow_skip': False,
                 'ctx': {'pos': pos.upper(), 'source_cn': canon, 'baton_old_cn': _canon_cardno(str(baton_old_cn or '')), 'baton_old_cost': int(baton_old_cost or 0), 'entry_origin': str(entry_origin or 'hand')},
                 'source_cn': canon,
             })
@@ -22153,6 +22214,84 @@ def cmd_toggle_stage_active(gs: GameState, cards_db: Dict[str, CardInfo], pos: s
     slot.active = (not bool(getattr(slot, 'active', False)))
     state = 'ACTIVE' if bool(slot.active) else 'WAIT'
     gs.log.append(f"[STATE] {pos} -> {state} ({getattr(slot, 'cardnumber', '')})")
+
+def cmd_activate_from_hand(gs: GameState, cards_db: Dict[str, CardInfo], hand_idx: int, rng: Optional[random.Random] = None) -> None:
+    try:
+        hand_idx = int(hand_idx)
+    except Exception:
+        gs.log.append("[ERR] activate_from_hand: invalid hand index")
+        return
+    if str(getattr(gs, 'phase', '') or '') != 'MAIN':
+        gs.log.append("[ERR] activate_from_hand: MAIN phase only")
+        return
+    if list(getattr(gs, 'pending', []) or []):
+        gs.log.append("[ERR] activate_from_hand: pending prompt exists")
+        return
+    if hand_idx < 0 or hand_idx >= len(getattr(gs, 'hand', []) or []):
+        gs.log.append("[ERR] activate_from_hand: invalid hand index")
+        return
+    if rng is None:
+        rng = random.Random(getattr(gs, 'seed', 1) or 1)
+    source_cn = str(gs.hand[hand_idx])
+    ci = _get_card(cards_db, source_cn)
+    if not ci or not _is_member_ci(ci):
+        gs.log.append(f"[ERR] activate_from_hand: not a member card {source_cn}")
+        return
+    for ab in _iter_activated_abilities(ci):
+        clauses = ab.get('clauses', []) if isinstance(ab, dict) else []
+        if not isinstance(clauses, list):
+            continue
+        for cl in clauses:
+            if not isinstance(cl, dict):
+                continue
+            cost = str(cl.get('cost_template', '') or '')
+            eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '')
+            parsed = _activated_clause_is_hand_self_discard_draw_named_blade(cost, eff)
+            if not parsed:
+                continue
+            moved = gs.hand.pop(hand_idx)
+            gs.green_room.append(moved)
+            gs.log.append(f"[ACT] hand activate {source_cn}: cost self -> waiting room")
+            drew = draw(gs, int(parsed.get('draw', 0) or 0), rng)
+            gs.log.append(f"[ACT] hand activate {source_cn}: draw {drew}")
+            names = [str(x) for x in list(parsed.get('names', []) or []) if str(x)]
+            candidates: List[str] = []
+            for pos in ('L', 'C', 'R'):
+                slot = (getattr(gs, 'stage', {}) or {}).get(pos)
+                if not slot or not getattr(slot, 'cardnumber', ''):
+                    continue
+                tci = _get_card(cards_db, getattr(slot, 'cardnumber', '') or '')
+                if not tci or not _is_member_ci(tci):
+                    continue
+                tname = str(getattr(tci, 'name', '') or getattr(tci, 'cardname', '') or '')
+                if any(n and n in tname for n in names):
+                    candidates.append(pos)
+            blade_n = int(parsed.get('blade_n', 0) or 0)
+            if candidates and blade_n > 0:
+                gs.pending.append({
+                    'kind': 'choose_stage_member_to_gain_blade',
+                    'title': '手札起動効果',
+                    'text': f'【{source_cn} 起動効果】ステージの「{"」または「".join(names)}」1人を選び、ライブ終了時まで<(ブレード)>を{blade_n}つ得ます。',
+                    'source_cn': source_cn,
+                    'options': list(candidates),
+                    'candidates': list(candidates),
+                    'blade_n': blade_n,
+                    'effect_text': str(parsed.get('effect_text') or eff),
+                })
+                gs.log.append(f"[PENDING] hand activate {source_cn}: choose target {candidates} blade+{blade_n}")
+            else:
+                gs.pending.append({
+                    'kind': 'message_ack',
+                    'source_cn': source_cn,
+                    'label': f'{source_cn} 起動効果',
+                    'text': f'【{source_cn} 起動効果】コストを支払いカードを{drew}枚引きました。ステージに対象（{" / ".join(names)}）がいないため、ブレード付与は行いません。',
+                    'options': ['ok'],
+                    'effect_text': str(parsed.get('effect_text') or eff),
+                })
+                gs.log.append(f"[INFO] hand activate {source_cn}: no stage target for {names}")
+            return
+    gs.log.append(f"[ERR] activate_from_hand: no supported hand activated ability on {source_cn}")
+
 def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str, rng: Optional[random.Random] = None) -> None:
     # Activate ability on stage member at pos.
     pos = str(pos or "").upper()
@@ -22404,6 +22543,34 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                     gs.log.append(f"[PENDING] named_cards_cost_multi: total={total} cands={cands}")
                     return
             # Cost: 手札をすべて公開する（BODY起動効果）
+            if _activated_cost_is_reveal_any_hand_members(cost):
+                effect_info = _effect_is_revealed_member_cost_sum_live_score(eff)
+                if not effect_info:
+                    gs.log.append(f"[WARN] activate: unsupported reveal-member cost result {eff}")
+                    return
+                member_options = []
+                for hcn in list(getattr(gs, 'hand', []) or []):
+                    hci = _get_card(cards_db, hcn)
+                    if hci and _is_member_ci(hci):
+                        member_options.append(hcn)
+                gs.pending.append({
+                    'kind': 'reveal_hand_members_cost_sum',
+                    'text': f'【{ci.cardnumber} 起動効果】手札にあるメンバーカードを0枚以上公開します。公開したカードのコスト合計が10/20/30/40/50なら、ライブ終了時までライブの合計スコア+1を得ます。',
+                    'source_cn': ci.cardnumber,
+                    'pos': pos,
+                    'options': list(member_options),
+                    'display_cards': list(member_options),
+                    'max_picks': len(member_options),
+                    'min_picks': 0,
+                    'valid_totals': list(effect_info.get('valid_totals', [10, 20, 30, 40, 50])),
+                    'score_delta': int(effect_info.get('score_delta', 1) or 1),
+                    'effect_text': str(effect_info.get('effect_text') or eff),
+                    'once_per_turn': bool(flags.get('once_per_turn')),
+                    'usage_key': akey,
+                })
+                gs.log.append(f"[PENDING] activate reveal hand MEMBER cost sum options={len(member_options)} source={ci.cardnumber}")
+                return
+
             if '手札をすべて公開する' in cost:
                 # Mark once-per-turn before suspending
                 if flags.get('once_per_turn'):
@@ -22489,6 +22656,15 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
     p = gs.pending.pop(idx)
     kind = str(p.get("kind", "") or "")
     choice_str = str(choice or "").strip()
+    def _keep_mandatory_choice_pending(pp: Dict[str, Any]) -> None:
+        msg = '必須選択です。いずれかの効果を選んでください。'
+        txt = str(pp.get('text', '') or '')
+        if msg not in txt:
+            pp['text'] = (txt + '\n' + msg).strip()
+        pp['last_error'] = msg
+        pp['mandatory'] = True
+        pp['allow_skip'] = False
+        gs.pending.insert(0, pp)
     def _auto_queue_to_options(q: List[Dict[str, Any]]) -> List[str]:
         out: List[str] = []
         for t in (q or []):
@@ -23502,6 +23678,68 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         _r = p.get('_resume') if isinstance(p, dict) else None
         if _r:
             gs.pending.append(_r)
+        _enqueue_auto_order_from_deferred()
+        return
+    if kind == 'reveal_hand_members_cost_sum':
+        raw_parts = [str(x).strip() for x in str(choice_str or '').split(',') if str(x).strip()]
+        options = [str(x) for x in list(p.get('options', []) or []) if str(x or '').strip()]
+        remaining = list(options)
+        picked: List[str] = []
+        for raw_cn in raw_parts:
+            want = _canon_cardno(raw_cn)
+            found_i = -1
+            for i, opt in enumerate(remaining):
+                if _canon_cardno(opt) == want:
+                    found_i = i
+                    break
+            if found_i < 0:
+                gs.log.append(f"[ERR] reveal_hand_members_cost_sum: invalid choice {raw_cn}")
+                gs.pending.append(p)
+                return
+            picked.append(remaining.pop(found_i))
+        total = 0
+        details = []
+        for cn0 in picked:
+            ci0 = _get_card(cards_db, cn0)
+            if not ci0 or not _is_member_ci(ci0):
+                gs.log.append(f"[ERR] reveal_hand_members_cost_sum: non-MEMBER selected {cn0}")
+                gs.pending.append(p)
+                return
+            try:
+                cost_i = int(getattr(ci0, 'cost', 0) or 0)
+            except Exception:
+                cost_i = 0
+            total += cost_i
+            details.append(f"{cn0}:{getattr(ci0, 'name', cn0)}:cost{cost_i}")
+        valid_totals = [int(x) for x in list(p.get('valid_totals', []) or [])]
+        met = int(total) in set(valid_totals)
+        src = str(p.get('source_cn', '') or '')
+        pos = str(p.get('pos', '') or '').upper()
+        delta = int(p.get('score_delta', 1) or 1)
+        if met:
+            slot = (getattr(gs, 'stage', {}) or {}).get(pos) if pos in ('L', 'C', 'R') else None
+            if slot and getattr(slot, 'cardnumber', '') and _canon_cardno(getattr(slot, 'cardnumber', '') or '') == _canon_cardno(src):
+                slot.temp_score = int(getattr(slot, 'temp_score', 0) or 0) + delta
+                slot.temp_until = 'end_of_live'
+                gs.log.append(f"[AUTO] {src}: revealed MEMBER cost total={total} -> live total score +{delta} until end_of_live")
+            else:
+                gs.log.append(f"[WARN] {src}: cost total met but source slot missing/moved ({pos})")
+        else:
+            gs.log.append(f"[AUTO] {src}: revealed MEMBER cost total={total} -> no live total score bonus")
+        _mark_used_once_from_pending(p)
+        gs.log.append(f"[PUBLIC] {src}: revealed hand MEMBER cards count={len(picked)} total_cost={total} cards={details}")
+        gs.pending.append({
+            'kind': 'show_revealed_cards_ack',
+            'source_cn': src,
+            'label': f'{src} 公開カード確認',
+            'text': f'{src}[起動効果] 公開したメンバーカード{len(picked)}枚のコスト合計は{total}です。条件{"達成" if met else "未達"}。',
+            'display_cards': list(picked),
+            'revealed_cards': list(picked),
+            'options': ['ok'],
+            'condition_status': 'met' if met else 'unmet',
+            'cost_total': int(total),
+            'effect_text': str(p.get('effect_text', '') or ''),
+        })
         _enqueue_auto_order_from_deferred()
         return
     if kind == 'show_revealed_cards_ack':
@@ -27487,6 +27725,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                 idx = -1
         if idx < 0 or idx >= len(effs):
             gs.log.append(f"[ERR] choose_enter_effect_mode: invalid choice {choice_str}")
+            _keep_mandatory_choice_pending(p)
             return
         eff = str(effs[idx] or '').strip()
         try:
@@ -27878,6 +28117,17 @@ def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], i
                 'live_attempt_summary_ack',
                 'mass_bottom_auto_ack', 'mass_bottom_optional_result_ack',
             }
+            if k0 == 'choose_enter_effect_mode' and not (bool(p0.get('optional', False)) or bool(p0.get('allow_skip', False))):
+                msg = '必須選択です。いずれかの効果を選んでください。'
+                txt = str(p0.get('text', '') or '')
+                if msg not in txt:
+                    p0['text'] = (txt + '\n' + msg).strip()
+                p0['last_error'] = msg
+                p0['mandatory'] = True
+                p0['allow_skip'] = False
+                gs.pending[0] = p0
+                gs.log.append('[BLOCK] next: choose_enter_effect_mode requires a choice')
+                return
             if k0 in ack_kinds:
                 cmd_resolve_pending(gs, cards_db, 0, 'ok', rng)
                 return
