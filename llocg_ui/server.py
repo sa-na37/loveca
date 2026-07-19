@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: hand_activated_ui_and_reveal_cost_sum_20260717b
+# BUILD_TAG: single_suspend_resume_and_dual_rule_recheck_20260720a
 from __future__ import annotations
 
 """llocg_ui.server
@@ -26,9 +26,13 @@ Key goals:
 - HEAD requests are supported (curl -I works).
 """
 
+import base64
+import copy
+import datetime as _dt
 import json
 import time
 import os
+import pickle
 import re
 from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -67,7 +71,7 @@ from .engine import (
     _rule_refresh_main_deck,
 )
 
-APP_VERSION = "live_attempt_summary_popup_rebase_20260706f"
+APP_VERSION = "single_suspend_resume_and_dual_rule_recheck_20260720a"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -652,6 +656,89 @@ class App:
     def save_trace(self) -> None:
         self.outdir.mkdir(parents=True, exist_ok=True)
         _write_text(self.outdir / "ui_trace.txt", "\n".join(self.gs.log) + ("\n" if self.gs.log else ""))
+
+    def _capture_suspend_snapshot(self) -> Dict[str, Any]:
+        return {
+            "gs": copy.deepcopy(self.gs),
+            "rng_state": self.rng.getstate(),
+            "app_state": {
+                "public_reveal_events": copy.deepcopy(self._public_reveal_events),
+                "public_reveal_seq": int(self._public_reveal_seq or 0),
+                "public_reveal_seen": copy.deepcopy(self._public_reveal_seen),
+                "public_hand_revealed_turn": int(self._public_hand_revealed_turn or 0),
+                "public_hand_revealed_cards": copy.deepcopy(self._public_hand_revealed_cards),
+                "public_hand_reveal_events": copy.deepcopy(self._public_hand_reveal_events),
+                "public_hand_reveal_seq": int(self._public_hand_reveal_seq or 0),
+                "refresh_notice_ack_seq": int(getattr(self, "_refresh_notice_ack_seq", 0) or 0),
+            },
+        }
+
+    def _restore_suspend_snapshot(self, snap: Dict[str, Any]) -> None:
+        self.gs = copy.deepcopy(snap["gs"])
+        try:
+            setattr(self.gs, "_cards_db", self.cards_db)
+        except Exception:
+            pass
+        self.rng.setstate(snap["rng_state"])
+        app_state = dict(snap.get("app_state", {}) or {})
+        self._public_reveal_events = list(app_state.get("public_reveal_events", []) or [])
+        self._public_reveal_seq = int(app_state.get("public_reveal_seq", 0) or 0)
+        self._public_reveal_seen = dict(app_state.get("public_reveal_seen", {}) or {})
+        self._public_hand_revealed_turn = int(app_state.get("public_hand_revealed_turn", 0) or 0)
+        self._public_hand_revealed_cards = list(app_state.get("public_hand_revealed_cards", []) or [])
+        self._public_hand_reveal_events = list(app_state.get("public_hand_reveal_events", []) or [])
+        self._public_hand_reveal_seq = int(app_state.get("public_hand_reveal_seq", 0) or 0)
+        self._refresh_notice_ack_seq = int(app_state.get("refresh_notice_ack_seq", 0) or 0)
+
+    def export_suspend_data(self, label: str = "") -> Dict[str, Any]:
+        state = self.state_json()
+        payload = base64.b64encode(
+            pickle.dumps(self._capture_suspend_snapshot(), protocol=pickle.HIGHEST_PROTOCOL)
+        ).decode("ascii")
+        return {
+            "format": "llocg_ui_suspend_state",
+            "format_version": 1,
+            "build_tag": "single_suspend_resume_and_dual_rule_recheck_20260720a",
+            "created_at": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+            "label": str(label or ""),
+            "summary": {
+                "turn": state.get("turn"),
+                "phase": state.get("phase"),
+                "deck_code": state.get("deck_code"),
+                "hand_count": len(list(state.get("hand", []) or [])),
+                "deck_count": len(list(state.get("deck", []) or [])),
+                "success_zone": list(state.get("success_zone", []) or []),
+                "set_zone": list(state.get("set_zone", []) or []),
+            },
+            "log": list(state.get("log", []) or []),
+            "snapshot_b64": payload,
+        }
+
+    def import_suspend_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(data, dict):
+            raise ValueError("中断データの形式が不正です")
+        if data.get("format") != "llocg_ui_suspend_state":
+            raise ValueError("1デッキ用シミュレーターの中断データではありません")
+        raw = str(data.get("snapshot_b64", "") or "")
+        if not raw:
+            raise ValueError("中断データに復元用スナップショットがありません")
+        try:
+            snap = pickle.loads(base64.b64decode(raw.encode("ascii"), validate=True))
+        except Exception as exc:
+            raise ValueError(f"中断データを読み込めません: {exc}") from exc
+        self._restore_suspend_snapshot(snap)
+        try:
+            self.gs.undo_stack = []
+        except Exception:
+            pass
+        try:
+            self.gs.log.append(
+                f"[RESUME] 中断データから再開 label={str(data.get('label', '') or '')}"
+            )
+        except Exception:
+            pass
+        self.save_trace()
+        return self.state_json()
 
 
     def _force_mulligan_start(self) -> None:
@@ -2322,6 +2409,11 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, data, "application/json; charset=utf-8")
             return
 
+        if u.path == "/suspend_state":
+            data = json.dumps(self.app.export_suspend_data(), ensure_ascii=False).encode("utf-8")
+            self._send(200, data, "application/json; charset=utf-8")
+            return
+
         if u.path == "/cardinfo":
             qs = parse_qs(u.query)
             cn = unquote((qs.get("cn", [""])[0] or "").strip())
@@ -2490,7 +2582,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         u = urlparse(self.path)
-        if u.path != "/cmd":
+        if u.path not in {"/cmd", "/resume_state"}:
             self._send(404, b"not found", "text/plain; charset=utf-8")
             return
         n = int(self.headers.get("Content-Length", "0") or "0")
@@ -2499,6 +2591,17 @@ class Handler(BaseHTTPRequestHandler):
             obj = json.loads(body.decode("utf-8"))
         except Exception:
             obj = {}
+
+        if u.path == "/resume_state":
+            try:
+                state = self.app.import_suspend_data(obj)
+                data = json.dumps({"ok": True, "state": state}, ensure_ascii=False).encode("utf-8")
+                self._send(200, data, "application/json; charset=utf-8")
+                return
+            except Exception as exc:
+                data = json.dumps({"ok": False, "error": f"{type(exc).__name__}: {exc}"}, ensure_ascii=False).encode("utf-8")
+                self._send(400, data, "application/json; charset=utf-8")
+                return
 
         cmd = str(obj.get("cmd", "")).strip()
         payload = obj.get("payload", {}) or {}
@@ -2925,6 +3028,9 @@ HTML = r'''<!doctype html>
       <div class="pill oppWaitPill">Opp success: <b id="opponentSuccess">0</b>/2 <button class="oppWaitBtn" id="btnOppSuccessMinus" title="相手成功置き場枚数を減らす">−</button><button class="oppWaitBtn" id="btnOppSuccessPlus" title="相手成功置き場枚数を増やす">＋</button></div>
       <div class="pill oppWaitPill"><button class="oppWaitBtn turnOrderBtn" id="btnOrderFirst" title="現在ターンを先手扱いにする">先手</button><button class="oppWaitBtn turnOrderBtn" id="btnOrderSecond" title="現在ターンを後手扱いにする">後手</button></div>
       <div class="pill">Selected(hand): <b id="selected">0</b></div>
+      <button class="miniBtn" id="btnSuspendSave">中断保存</button>
+      <button class="miniBtn" id="btnSuspendLoad">再開読込</button>
+      <input id="suspendFileInput" type="file" accept="application/json,.json" hidden>
       <button class="miniBtn" id="btnDbg">枠表示</button>
     </div>
 
@@ -3114,6 +3220,9 @@ HTML = r'''<!doctype html>
   const elViewerClose = document.getElementById('viewerClose');
 
   const btnDbg = document.getElementById('btnDbg');
+  const btnSuspendSave = document.getElementById('btnSuspendSave');
+  const btnSuspendLoad = document.getElementById('btnSuspendLoad');
+  const suspendFileInput = document.getElementById('suspendFileInput');
 
   let debug = false;
   let st = null;
@@ -3300,6 +3409,59 @@ HTML = r'''<!doctype html>
       localStorage.setItem('llocg_public_refresh_ping', String(Date.now()) + ':' + String(cmd || ''));
     }catch(e){}
     return data;
+  }
+
+  async function saveSuspendData(){
+    if(IS_PUBLIC_VIEW) return;
+    try{
+      const r = await fetch('/suspend_state', {cache:'no-store'});
+      if(!r.ok) throw new Error(await r.text());
+      const data = await r.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+      const a = document.createElement('a');
+      const stamp = new Date().toISOString().replace(/[:.]/g, '').slice(0, 15);
+      a.href = URL.createObjectURL(blob);
+      a.download = `llocg_ui_suspend_${stamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 1200);
+      setBanner('中断データを保存しました');
+    }catch(e){
+      console.error(e);
+      alert('中断保存に失敗しました: ' + String(e && e.message || e));
+    }
+  }
+
+  async function loadSuspendDataFile(file){
+    if(IS_PUBLIC_VIEW || !file) return;
+    try{
+      const text = await file.text();
+      const data = JSON.parse(text);
+      const r = await fetch('/resume_state', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(data)
+      });
+      const out = await r.json();
+      if(!r.ok || !out.ok) throw new Error(out.error || '再開に失敗しました');
+      st = out.state;
+      selHand = [];
+      lastStateSignature = stableStateSignature(st);
+      try{
+        localStorage.setItem('llocg_public_refresh_ping', String(Date.now()) + ':resume_state');
+      }catch(e){}
+      closePopup();
+      closeViewerPopup();
+      updateTop();
+      render();
+      setBanner('中断データから再開しました');
+    }catch(e){
+      console.error(e);
+      alert('再開読込に失敗しました: ' + String(e && e.message || e));
+    }finally{
+      if(suspendFileInput) suspendFileInput.value = '';
+    }
   }
 
   function cnType(cn){
@@ -8566,6 +8728,22 @@ inner.appendChild(card);
   }
 
   btnDbg.addEventListener('click', ()=>{ debug = !debug; render(); });
+  if(btnSuspendSave){
+    btnSuspendSave.addEventListener('click', (ev)=>{
+      ev.stopPropagation();
+      saveSuspendData();
+    });
+  }
+  if(btnSuspendLoad && suspendFileInput){
+    btnSuspendLoad.addEventListener('click', (ev)=>{
+      ev.stopPropagation();
+      suspendFileInput.click();
+    });
+    suspendFileInput.addEventListener('change', (ev)=>{
+      const file = ev && ev.target && ev.target.files ? ev.target.files[0] : null;
+      loadSuspendDataFile(file);
+    });
+  }
   elMask.addEventListener('click', (ev)=>{ if(popup && popup.type==='cardlist' && popup.closable){ closePopup(); } });
   elViewerLayer.addEventListener('click', (ev)=>{ if(ev.target === elViewerLayer){ closeViewerPopup(); } });
   elViewerModal.addEventListener('click', (ev)=>{ ev.stopPropagation(); });

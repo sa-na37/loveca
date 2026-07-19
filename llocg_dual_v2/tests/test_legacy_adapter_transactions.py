@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import json
 import random
 import sys
+import tempfile
 import types
 import unittest
+from pathlib import Path
 from dataclasses import dataclass
 from types import SimpleNamespace
 
@@ -15,7 +18,7 @@ except ModuleNotFoundError:
     views_stub = types.ModuleType("llocg_ui.views")
     db_stub = types.ModuleType("llocg_ui.db")
     server_stub.App = object
-    server_stub.HTML = "<html><head></head><body><script>function clearSel(){ selHand = []; updateTop(); render(); }\n  if(IS_PUBLIC_VIEW){\n    setInterval(()=>{ refreshStateFromServer({force:false}); }, 250);\n    window.addEventListener('storage', (ev)=>{</script></body></html>"
+    server_stub.HTML = "<html><head></head><body><script>function clearSel(){ selHand = []; updateTop(); render(); }\n  const cardInfoUrl='/cardinfo?cn='+cn;\n  if(IS_PUBLIC_VIEW){\n    setInterval(()=>{ refreshStateFromServer({force:false}); }, 250);\n    window.addEventListener('storage', (ev)=>{</script></body></html>"
     views_stub.make_view_state = lambda state, mode: state
     db_stub._get_card = lambda db, cn: db.get(cn) if isinstance(db, dict) else None
     sys.modules["llocg_ui"] = pkg
@@ -24,9 +27,10 @@ except ModuleNotFoundError:
     sys.modules["llocg_ui.db"] = db_stub
 
 from llocg_dual_v2.core import DualMatchEngine, Phase
+import llocg_dual_v2.server as dual_server
 from llocg_dual_v2.server import LegacyUIAdapter, PlayerViewRuntime, _scoped_single_html
 
-BUILD_TAG = "llocg_dual_v2_judgment_yell_ack_client_close_20260717s"
+BUILD_TAG = "llocg_dual_v2_tied_success_two_zone_block_20260720a"
 
 
 def deck(prefix: str):
@@ -66,6 +70,7 @@ class FakeApp:
         self.show_attempt_summary_notice = False
         self.reopen_yell_if_live_start_reset = False
         self.state_only_yell_popup = False
+        self.filter_all_set_cards_at_live_confirm = False
         self.live_resolve_calls = 0
         self.gs = SimpleNamespace(
             deck=[], hand=[], energy_active=0, energy_wait=0, energy_total=12,
@@ -76,6 +81,7 @@ class FakeApp:
             opponent_wait_count=0, opponent_success_count=0,
             opponent_excess_heart_count=0, last_excess_heart_count=0,
             yell_reveal_notice=False, attempt_summary_notice=False,
+            yell_reveal_acknowledged_this_live=False,
             yell_revealed_cards=[], last_attempt_result="",
         )
 
@@ -97,6 +103,7 @@ class FakeApp:
             "green_room": list(self.gs.green_room),
             "pending": list(self.gs.pending),
             "yell_reveal_notice": bool(self.gs.yell_reveal_notice),
+            "yell_reveal_acknowledged_this_live": bool(self.gs.yell_reveal_acknowledged_this_live),
             "yell_revealed_cards": list(self.gs.yell_revealed_cards),
             "attempt_summary_notice": bool(self.gs.attempt_summary_notice),
             "last_attempt_result": str(self.gs.last_attempt_result),
@@ -122,6 +129,7 @@ class FakeApp:
         elif name == "ack_yell_reveal":
             self.gs.log.append("[ACK] yell reveal fallback acknowledged")
             self.gs.yell_reveal_notice = False
+            self.gs.yell_reveal_acknowledged_this_live = True
             self.state_only_yell_popup = False
             if self.gs.phase == "LIVE_PERF":
                 self.gs.phase = "LIVE_ATTEMPT"
@@ -150,6 +158,13 @@ class FakeApp:
                 del self.gs.deck[:draw_n]
                 self.gs.phase = "LIVE_CONFIRM"
             elif self.gs.phase == "LIVE_CONFIRM":
+                if self.filter_all_set_cards_at_live_confirm:
+                    moved = list(self.gs.set_zone)
+                    self.gs.green_room.extend(moved)
+                    self.gs.set_zone = []
+                    self.gs.phase = "LIVE_RESOLVE"
+                    self.gs.log.append(f"[INFO] confirm: no LIVE after filtering; moved={len(moved)}")
+                    return
                 self.gs.live_start_prompted = True
                 self.gs.phase = "LIVE_PERF"
             elif self.gs.phase == "LIVE_PERF":
@@ -329,6 +344,20 @@ class LegacyAdapterTransactionTests(unittest.TestCase):
         self.assertEqual(a.engine.state.phase, Phase.MAIN_FIRST)
         self.assertFalse(a.runtime("p1").app.gs.pending)
 
+    def test_central_next_resolves_single_auto_order_pending(self):
+        a = self.make_adapter(); self.enter_first_main(a)
+        a.runtime("p1").app.gs.pending = [{
+            "kind": "auto_order",
+            "text": "ライブ開始時効果が発生：解決するカードを選択",
+            "options": ["A-001 ライブ開始時"],
+            "queue": [{"label": "A-001 ライブ開始時", "source_cn": "A-001"}],
+        }]
+        out = a.action("NEXT", {})
+        self.assertTrue(out.get("dialog_acknowledged"))
+        self.assertEqual(a.engine.state.phase, Phase.MAIN_FIRST)
+        self.assertFalse(a.runtime("p1").app.gs.pending)
+        self.assertTrue(any("[NEXT AUTO_ORDER][P1]" in line for line in a.engine.state.log))
+
     def test_yell_confirmation_is_closed_by_central_next(self):
         a = self.make_adapter(); self.enter_performance(a)
         a.action("NEXT", {})
@@ -376,6 +405,23 @@ class LegacyAdapterTransactionTests(unittest.TestCase):
         self.assertFalse(a.runtime("p1").app.gs.pending)
         self.assertEqual(a.engine.state.phase, Phase.PERFORMANCE_SECOND)
 
+    def test_non_live_set_card_completes_performance_without_attempt_result(self):
+        a = self.make_adapter()
+        self.enter_performance(a)
+        p1 = a.runtime("p1").app
+        p1.filter_all_set_cards_at_live_confirm = True
+        set_before = list(p1.gs.set_zone)
+
+        a.action("NEXT", {})
+
+        self.assertEqual(a.engine.state.phase, Phase.PERFORMANCE_SECOND)
+        self.assertEqual(p1.gs.set_zone, [])
+        self.assertTrue(all(cn in p1.gs.green_room for cn in set_before))
+        self.assertIs(p1._dual_live_attempt_succeeded, False)
+        self.assertTrue(
+            any("no_live_after_filter=1" in line for line in a.engine.state.log)
+        )
+
     def test_higher_score_wins_moves_one_and_sets_next_first(self):
         a = self.make_adapter()
         self.enter_judgment(a)
@@ -392,18 +438,43 @@ class LegacyAdapterTransactionTests(unittest.TestCase):
         self.assertEqual(a.runtime("p1").app.gs.set_zone, [])
         self.assertEqual(a.runtime("p2").app.gs.set_zone, [])
 
-    def test_tie_both_win_but_two_live_player_does_not_move(self):
+    def test_tie_both_win_success_zone_two_player_does_not_move(self):
         a = self.make_adapter()
         self.enter_judgment(a, p1_indices=(0, 1), p2_indices=(0,))
         self.set_live_scores(a, 0, [1, 1])
-        p2_cards = self.set_live_scores(a, 1, [2])
+        self.set_live_scores(a, 1, [2])
+        a.runtime("p1").app.gs.success_zone = ["A-010", "A-011"]
+        a.runtime("p2").app.gs.success_zone = ["B-010", "B-011"]
+        a._sync_all_views_to_core()
         self.advance_to_final_score(a)
         self.calculate_and_confirm_result(a)
         self.assertEqual(a.engine.state.live_winners, [0, 1])
-        self.assertEqual(a.runtime("p1").app.gs.success_zone, [])
-        self.assertEqual(a.runtime("p2").app.gs.success_zone, [p2_cards[0]])
+        self.assertEqual(a.engine.state.success_move_queue, [])
+        self.assertEqual(a.runtime("p1").app.gs.success_zone, ["A-010", "A-011"])
+        self.assertEqual(a.runtime("p2").app.gs.success_zone, ["B-010", "B-011"])
         a.action("NEXT", {})
-        self.assertEqual(a.engine.state.first_player_id, 1)
+        self.assertEqual(a.engine.state.phase, Phase.TURN_END)
+        self.assertEqual(a.engine.state.game_result, "")
+        self.assertEqual(a.engine.state.first_player_id, 0)
+        self.assertTrue(
+            any("成功置き場2枚のため成功移動なし" in line for line in a.engine.state.log)
+        )
+
+    def test_tie_both_win_depends_on_success_zone_not_live_set_count(self):
+        a = self.make_adapter()
+        self.enter_judgment(a, p1_indices=(0, 1), p2_indices=(0,))
+        p1_cards = self.set_live_scores(a, 0, [1, 1])
+        p2_cards = self.set_live_scores(a, 1, [2])
+        self.advance_to_final_score(a)
+        self.calculate_and_confirm_result(a)
+        prompt = a.engine.state.judgment_prompt
+        self.assertEqual(a.engine.state.live_winners, [0, 1])
+        self.assertEqual(prompt.get("kind"), "pick_success_live")
+        self.assertEqual(prompt.get("player_id"), 0)
+        selected = int(prompt["candidates"][1]["index"])
+        a.action("NEXT", {"live_index": selected})
+        self.assertEqual(a.runtime("p1").app.gs.success_zone, [p1_cards[selected]])
+        self.assertEqual(a.runtime("p2").app.gs.success_zone, [p2_cards[0]])
 
     def test_multiple_live_winner_uses_dual_selection_prompt(self):
         a = self.make_adapter()
@@ -431,6 +502,33 @@ class LegacyAdapterTransactionTests(unittest.TestCase):
         self.advance_to_final_score(a)
         self.calculate_and_confirm_result(a)
         self.assertEqual(a.runtime("p1").app.gs.success_zone, [])
+        self.assertEqual(a.engine.state.judgment_step, "CLEANUP")
+
+    def test_canonical_db_text_can_forbid_success_zone_move(self):
+        a = self.make_adapter()
+        self.enter_judgment(a)
+        rt = a.runtime("p1")
+        rt.app.root = Path(".")
+        rt.app.outdir = Path(".")
+        rt.app.cards_db["PL!S-bp2-024"] = {
+            "cardnumber": "PL!S-bp2-024",
+            "cardname": "runtime placeholder",
+            "score": 3,
+            "effect_text_raw": "",
+        }
+        rt.app.gs.set_zone = ["PL!S-bp2-024"]
+        rt.app.gs.resolve_zone = []
+        rt.app.gs.last_attempt_result = "SUCCESS"
+        a.engine.state.players[0].live_set = ["PL!S-bp2-024"]
+        self.set_live_scores(a, 1, [1])
+        a._detail_db_cache = None
+
+        self.advance_to_final_score(a)
+        self.calculate_and_confirm_result(a)
+
+        self.assertTrue(a._success_move_blocked(rt, "PL!S-bp2-024"))
+        self.assertEqual(rt.app.gs.success_zone, [])
+        self.assertEqual(rt.app.gs.set_zone, ["PL!S-bp2-024"])
         self.assertEqual(a.engine.state.judgment_step, "CLEANUP")
 
     def test_cleanup_moves_remaining_live_and_yell_to_waiting_room(self):
@@ -524,19 +622,55 @@ class LegacyAdapterTransactionTests(unittest.TestCase):
         self.calculate_and_confirm_result(a)
         self.assertEqual(a.engine.state.success_moved_player_ids, [1, 0])
 
-    def test_simultaneous_third_success_is_draw(self):
+    def test_draw_result_remains_as_simultaneous_three_success_safety(self):
+        a = self.make_adapter()
+        a.runtime("p1").app.gs.success_zone = ["A-010", "A-011", "A-012"]
+        a.runtime("p2").app.gs.success_zone = ["B-010", "B-011", "B-012"]
+        winner, result = a._game_result_after_success_moves()
+        self.assertIsNone(winner)
+        self.assertEqual(result, "DRAW")
+
+    def test_third_success_winner_is_announced(self):
         a = self.make_adapter()
         self.enter_judgment(a)
-        self.set_live_scores(a, 0, [2])
-        self.set_live_scores(a, 1, [2])
+        self.set_live_scores(a, 0, [3])
+        self.set_live_scores(a, 1, [1])
         a.runtime("p1").app.gs.success_zone = ["A-010", "A-011"]
-        a.runtime("p2").app.gs.success_zone = ["B-010", "B-011"]
         a._sync_all_views_to_core()
         self.advance_to_final_score(a)
         self.calculate_and_confirm_result(a); a.action("NEXT", {})
-        self.assertEqual(a.engine.state.phase, Phase.GAME_OVER)
-        self.assertEqual(a.engine.state.game_result, "DRAW")
-        self.assertIsNone(a.engine.state.winner_player_id)
+        st = a.state()
+        self.assertEqual(st["phase"], "GAME_OVER")
+        self.assertEqual(st["winner_player_id"], 0)
+        self.assertIn("プレイヤー1の勝利", st["game_over_message"])
+        self.assertIn("対戦終了", st["phase_label"])
+
+    def test_suspend_export_import_restores_branch_point(self):
+        a = self.make_adapter()
+        self.enter_first_main(a)
+        saved_hand = list(a.runtime("p1").app.gs.hand)
+        data = a.export_suspend_data("branch")
+        self.assertEqual(data["format"], "llocg_dual_v2_suspend_state")
+        self.assertEqual(data["label"], "branch")
+        self.assertIn("snapshot_b64", data)
+        a.player_command("p1", "play", {"hand_idx": 0, "pos": "C"})
+        self.assertIsNotNone(a.runtime("p1").app.gs.stage["C"])
+        restored = a.import_suspend_data(data)
+        self.assertEqual(restored["phase"], "MAIN_FIRST")
+        self.assertEqual(a.runtime("p1").app.gs.hand, saved_hand)
+        self.assertIsNone(a.runtime("p1").app.gs.stage["C"])
+        self.assertEqual(a.history, [])
+        self.assertIn("[RESUME]", "\n".join(a.engine.state.log))
+        a.player_command("p1", "play", {"hand_idx": 0, "pos": "L"})
+        self.assertIsNotNone(a.runtime("p1").app.gs.stage["L"])
+
+    def test_shell_html_has_suspend_resume_and_game_over_notice(self):
+        html = dual_server._shell_html()
+        self.assertIn("中断保存", html)
+        self.assertIn("再開読込", html)
+        self.assertIn("/suspend_state", html)
+        self.assertIn("/resume_state", html)
+        self.assertIn("gameOverNotice", html)
 
     def test_stale_failure_from_previous_turn_is_not_applied_at_live_start(self):
         a = self.make_adapter()
@@ -682,6 +816,7 @@ class LegacyAdapterTransactionTests(unittest.TestCase):
         self.assertFalse(out.get("yell_reveal_notice"))
         self.assertFalse(p1.gs.yell_reveal_notice)
         self.assertTrue(p1._dual_yell_notice_acknowledged)
+        self.assertTrue(p1.gs.yell_reveal_acknowledged_this_live)
         self.assertEqual(p1.gs.yell_revealed_cards, ["A-YELL-001"])
 
         # A success-effect redraw must not resurrect the acknowledged popup.
@@ -712,6 +847,7 @@ class LegacyAdapterTransactionTests(unittest.TestCase):
         self.assertFalse(out.get("yell_reveal_notice"))
         self.assertFalse(out.get("state_yell_popup_open"))
         self.assertNotIn("dual_command_error", out)
+        self.assertTrue(p1.gs.yell_reveal_acknowledged_this_live)
 
     def test_card_detail_uses_tokv1_raw_record_effect_text(self):
         a = self.make_adapter()
@@ -731,6 +867,7 @@ class LegacyAdapterTransactionTests(unittest.TestCase):
         self.assertEqual(payload["name"], "詳細テスト")
         self.assertEqual(payload["type"], "MEMBER")
         self.assertEqual(payload["effect"], "<登場> カードを1枚引く。")
+        self.assertEqual(payload["abilities"], ["<登場> カードを1枚引く。"])
 
     def test_card_detail_flattens_compiled_ability_list(self):
         a = self.make_adapter()
@@ -747,6 +884,115 @@ class LegacyAdapterTransactionTests(unittest.TestCase):
         payload = a.card_info_payload("p1", cn)
         self.assertIn("<常時> ブレードを得る。", payload["effect"])
         self.assertIn("<ライブ成功時> カードを1枚引く。", payload["effect"])
+        self.assertTrue(payload["abilities"])
+
+    def test_player_state_persists_ack_marker_for_dom_derived_yell_dialog(self):
+        a = self.make_adapter()
+        p1 = a.runtime("p1").app
+        a.engine.state.phase = Phase.LIVE_JUDGMENT
+        a.engine.state.judgment_active_player_id = 0
+        p1.gs.resolve_zone = ["A-YELL-001"]
+        p1.gs.yell_reveal_notice = True
+        a.player_command("p1", "ack_yell_reveal", {})
+
+        # Even if the legacy renderer derives a dialog from LIVE_RESOLVE +
+        # resolve_zone rather than a popup flag, every later state payload keeps
+        # a client-side close marker for the same performance epoch.
+        p1.gs.phase = "LIVE_RESOLVE"
+        p1.gs.yell_reveal_notice = True
+        state = a.player_state("p1", "private")
+        self.assertTrue(state.get("dual_yell_notice_acknowledged"))
+        self.assertTrue(state.get("dual_force_close_yell_notice"))
+        self.assertFalse(state.get("yell_reveal_notice"))
+        self.assertEqual(state.get("resolve_zone"), ["A-YELL-001"])
+
+    def test_player_state_decorates_after_view_filter_and_scrubs_rebuilt_modal(self):
+        a = self.make_adapter()
+        p1 = a.runtime("p1").app
+        a.engine.state.phase = Phase.LIVE_JUDGMENT
+        a.engine.state.judgment_active_player_id = 0
+        p1.gs.yell_reveal_notice = True
+        p1.gs.resolve_zone = ["A-YELL-001"]
+        a.player_command("p1", "ack_yell_reveal", {})
+
+        original = dual_server.make_view_state
+        def rebuilding_view(state, mode):
+            # Reproduce a view adapter that drops unknown dual_* keys and
+            # recreates a generic modal from legacy YELL data.
+            out = {k: v for k, v in state.items() if not str(k).startswith("dual_")}
+            out["modal"] = {
+                "title": "エール内容確認",
+                "message": "公開カードを確認してください",
+                "open": True,
+            }
+            out["yell_reveal_notice"] = True
+            return out
+        dual_server.make_view_state = rebuilding_view
+        try:
+            state = a.player_state("p1", "private")
+        finally:
+            dual_server.make_view_state = original
+
+        self.assertTrue(state.get("dual_yell_notice_acknowledged"))
+        self.assertTrue(state.get("dual_force_close_yell_notice"))
+        self.assertFalse(state.get("yell_reveal_notice"))
+        self.assertEqual(state.get("modal"), {})
+        self.assertIn("dual_card_effects", state)
+
+    def test_card_detail_loads_canonical_tokv1_csv(self):
+        a = self.make_adapter()
+        rt = a.runtime("p1")
+        cn = next(iter(rt.app.cards_db))
+        rt.app.cards_db[cn] = {"cardnumber": cn, "cardname": "runtime only", "effect_text_raw": ""}
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            dbdir = root / "llocg_db_out_full"
+            dbdir.mkdir(parents=True)
+            (dbdir / "cards_min_tokv1.csv").write_text(
+                "cardnumber,cardname,card_type_norm,effect_text_raw\n"
+                f'{cn},canonical csv,MEMBER,"<登場> カードを2枚引く。"\n',
+                encoding="utf-8",
+            )
+            rt.app.root = root
+            a._detail_db_cache = None
+            payload = a.card_info_payload("p1", cn)
+            state = a.player_state("p1", "private")
+        self.assertEqual(payload["name"], "canonical csv")
+        self.assertEqual(payload["effect"], "<登場> カードを2枚引く。")
+        self.assertEqual(state["dual_card_effects"][cn], "<登場> カードを2枚引く。")
+
+    def test_card_detail_loads_canonical_tokv1_when_runtime_record_has_no_text(self):
+        a = self.make_adapter()
+        rt = a.runtime("p1")
+        cn = next(iter(rt.app.cards_db))
+        rt.app.cards_db[cn] = {"cardnumber": cn, "cardname": "runtime only", "effect_text_raw": ""}
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            dbdir = root / "llocg_db_out_full"
+            dbdir.mkdir(parents=True)
+            (dbdir / "cards_min_tokv1.json").write_text(json.dumps([{
+                "cardnumber": cn,
+                "cardname": "canonical",
+                "card_type_norm": "MEMBER",
+                "effect_text_raw": "<登場> カードを1枚引く。",
+            }], ensure_ascii=False), encoding="utf-8")
+            rt.app.root = root
+            a._detail_db_cache = None
+            payload = a.card_info_payload("p1", cn)
+        self.assertEqual(payload["name"], "canonical")
+        self.assertEqual(payload["effect"], "<登場> カードを1枚引く。")
+
+    def test_card_text_formats_compiled_clauses(self):
+        value = {
+            "abilities": [{
+                "ability_type": "自動",
+                "trigger": "ライブ成功時",
+                "clauses": [{"raw": "カードを2枚引き、手札を1枚控え室に置く。"}],
+            }]
+        }
+        text = LegacyUIAdapter._card_text_value(value)
+        self.assertIn("<自動><ライブ成功時>", text)
+        self.assertIn("カードを2枚引き", text)
 
     def test_turn_end_next_starts_next_turn(self):
         a = self.make_adapter()
@@ -792,6 +1038,18 @@ class JudgmentYellAckRegressionTests(unittest.TestCase):
         self.assertIn("dual_force_close_yell_notice", html)
         self.assertIn("window.dualApplyCommandState", html)
         self.assertIn("commandName==='ack_yell_reveal'", html)
+        self.assertIn("dual_yell_notice_acknowledged", html)
+        self.assertIn("ack_yell_reveal", html)
+        self.assertNotIn("dualRepairCardDetail", html)
+        self.assertNotIn("MutationObserver(queue)", html)
+        self.assertNotIn("dualCardEffectText", html)
+        self.assertIn("/p2/cardinfo?cn=", html)
+        self.assertNotIn("const cardInfoUrl='/cardinfo?cn=", html)
+        # The previous DOM workaround could hide the entire board root and
+        # leave the iframe black.  The new client repair never hides dialogs.
+        self.assertNotIn("dualHideYellConfirmationDom", html)
+        self.assertNotIn("data-dual-yell-hidden','1'", html)
+        self.assertNotIn("style.setProperty('display','none'", html)
 
 
 if __name__ == "__main__":

@@ -2,9 +2,13 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import copy
+import csv
+import datetime as _dt
 import json
 import os
+import pickle
 import threading
 from collections import Counter
 from dataclasses import dataclass
@@ -17,7 +21,7 @@ from llocg_ui.server import App, HTML as SINGLE_HTML
 from llocg_ui.views import make_view_state
 from .core import ENERGY_DECK_SIZE, DualMatchEngine, Phase, discover_data_root
 
-BUILD_TAG = "llocg_dual_v2_judgment_yell_ack_client_close_20260717s"
+BUILD_TAG = "llocg_dual_v2_tied_success_two_zone_block_20260720a"
 
 
 @dataclass
@@ -83,6 +87,9 @@ class LegacyUIAdapter:
         self.players: Dict[str, PlayerViewRuntime] = {"p1": p1, "p2": p2}
         self.lock = threading.RLock()
         self.history: list[Dict[str, Any]] = []
+        # Canonical card-detail records are loaded lazily from the project DB.
+        # The runtime cards_db can intentionally omit raw effect text.
+        self._detail_db_cache: Optional[Dict[str, Any]] = None
         self._reset_runtimes_for_new_match()
         self._sync_core_to_views(include_zones=True)
 
@@ -166,8 +173,12 @@ class LegacyUIAdapter:
         for name, value in vars(app).items():
             if name in self._APP_STATIC_ATTRS or name == "gs":
                 continue
+            if callable(value):
+                continue
             try:
-                data["attrs"][name] = copy.deepcopy(value, memo)
+                copied = copy.deepcopy(value, memo)
+                pickle.dumps(copied, protocol=pickle.HIGHEST_PROTOCOL)
+                data["attrs"][name] = copied
             except Exception:
                 # Runtime-only helpers are not required for board-state Undo.
                 pass
@@ -216,6 +227,54 @@ class LegacyUIAdapter:
         if self.history:
             snap = self.history.pop()
             self._restore_snapshot(snap)
+
+    def export_suspend_data(self, label: str = "") -> Dict[str, Any]:
+        with self.lock:
+            state = self.state()
+            payload = base64.b64encode(
+                pickle.dumps(self._capture_snapshot(), protocol=pickle.HIGHEST_PROTOCOL)
+            ).decode("ascii")
+            return {
+                "format": "llocg_dual_v2_suspend_state",
+                "format_version": 1,
+                "build_tag": BUILD_TAG,
+                "created_at": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+                "label": str(label or ""),
+                "summary": {
+                    "turn": state.get("turn"),
+                    "phase": state.get("phase"),
+                    "phase_label": state.get("phase_label"),
+                    "active_player_key": state.get("active_player_key"),
+                    "first_player_id": state.get("first_player_id"),
+                    "winner_player_id": state.get("winner_player_id"),
+                    "game_result": state.get("game_result"),
+                    "players": state.get("players"),
+                },
+                "log": list(state.get("log", []) or []),
+                "snapshot_b64": payload,
+            }
+
+    def import_suspend_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        with self.lock:
+            if not isinstance(data, dict):
+                raise ValueError("中断データの形式が不正です")
+            if data.get("format") != "llocg_dual_v2_suspend_state":
+                raise ValueError("2デッキ用シミュレーターの中断データではありません")
+            raw = str(data.get("snapshot_b64", "") or "")
+            if not raw:
+                raise ValueError("中断データに復元用スナップショットがありません")
+            try:
+                snap = pickle.loads(base64.b64decode(raw.encode("ascii"), validate=True))
+            except Exception as exc:
+                raise ValueError(f"中断データを読み込めません: {exc}") from exc
+            self._restore_snapshot(snap)
+            self.history = []
+            self.engine.history = []
+            self.engine.state.log.append(
+                f"[RESUME] 中断データから再開 label={str(data.get('label', '') or '')}"
+            )
+            self._sync_metadata_to_views()
+            return self.state()
 
     def _append_match_log(self, rt: PlayerViewRuntime) -> None:
         cursor = int(getattr(rt, "_match_log_cursor", 0) or 0)
@@ -528,9 +587,12 @@ class LegacyUIAdapter:
         low = str(name or "").strip().lower()
         if "yell" not in low and "エール" not in low:
             return False
+        if "acknowledged" in low or "確認済" in low or "確認ずみ" in low:
+            return False
         # Do not classify gameplay data such as ``yell_revealed_cards`` as a
         # popup.  Only presentation/control names are scrubbed; the revealed
-        # card list must remain available to live-success effects.
+        # card list and canonical acknowledgement marker must remain available
+        # to live-success effects and the legacy fallback popup.
         return any(token in low for token in (
             "notice", "popup", "modal", "confirm", "ack", "open", "pending",
             "show", "確認",
@@ -551,6 +613,21 @@ class LegacyUIAdapter:
         out = copy.deepcopy(state)
         def scrub(obj: Any) -> None:
             if isinstance(obj, dict):
+                # Some view generations expose a generic modal object such as
+                # {title: "エール内容確認", open: true}.  Its key does not
+                # contain "yell", so clear the presentation controls based on
+                # the object's own title/message while preserving gameplay data.
+                presentation_text = " ".join(
+                    str(obj.get(name, "") or "")
+                    for name in ("title", "message", "body", "text", "label", "notice")
+                )
+                if self._is_yell_confirmation_pending(presentation_text):
+                    for name in ("open", "visible", "show", "active", "pending", "is_open", "isOpen"):
+                        if name in obj:
+                            obj[name] = False
+                    for name in ("title", "message", "body", "text", "label", "notice"):
+                        if name in obj and isinstance(obj.get(name), str):
+                            obj[name] = ""
                 for key in list(obj.keys()):
                     value = obj.get(key)
                     if self._is_yell_notice_key(key):
@@ -562,8 +639,20 @@ class LegacyUIAdapter:
                             self._is_yell_confirmation_pending(x) for x in value
                         ):
                             obj[key] = [x for x in value if not self._is_yell_confirmation_pending(x)]
-                    elif isinstance(value, (dict, list)):
-                        scrub(value)
+                        elif isinstance(value, dict) and self._is_yell_confirmation_pending(value):
+                            obj[key] = {}
+                    elif isinstance(value, list):
+                        obj[key] = [
+                            x for x in value
+                            if not self._is_yell_confirmation_pending(x)
+                        ]
+                        for child in obj[key]:
+                            scrub(child)
+                    elif isinstance(value, dict):
+                        if self._is_yell_confirmation_pending(value):
+                            obj[key] = {}
+                        else:
+                            scrub(value)
             elif isinstance(obj, list):
                 for value in obj:
                     scrub(value)
@@ -573,6 +662,8 @@ class LegacyUIAdapter:
                 item for item in out["pending"]
                 if not self._is_yell_confirmation_pending(item)
             ]
+        out["dual_yell_notice_acknowledged"] = True
+        out["dual_force_close_yell_notice"] = True
         return out
 
     def _active_yell_notice_names(self, rt: PlayerViewRuntime) -> List[str]:
@@ -640,6 +731,10 @@ class LegacyUIAdapter:
         """Persist a YELL acknowledgement for the current performance epoch."""
         already = bool(getattr(rt.app, "_dual_yell_notice_acknowledged", False))
         setattr(rt.app, "_dual_yell_notice_acknowledged", True)
+        try:
+            rt.app.gs.yell_reveal_acknowledged_this_live = True
+        except Exception:
+            pass
         self._suppress_reopened_yell_notice(rt)
         if not already:
             self.engine.state.log.append(
@@ -676,6 +771,21 @@ class LegacyUIAdapter:
             state = {}
         return bool(self._notice_flags(gs, state if isinstance(state, dict) else {}))
 
+    @staticmethod
+    def _single_auto_order_choice(rt: PlayerViewRuntime) -> str:
+        pending = list(getattr(rt.app.gs, "pending", []) or [])
+        if len(pending) != 1 or not isinstance(pending[0], dict):
+            return ""
+        item = pending[0]
+        if str(item.get("kind", "") or "") != "auto_order":
+            return ""
+        queue = list(item.get("queue", []) or [])
+        options = [str(x or "").strip() for x in list(item.get("options", []) or []) if str(x or "").strip()]
+        if len(queue) != 1 or len(options) != 1:
+            return ""
+        label = str((queue[0] or {}).get("label", "") or "").strip()
+        return label or options[0]
+
     def _advance_active_legacy_dialog(self) -> bool:
         """Route the central NEXT to the active legacy confirmation first.
 
@@ -692,7 +802,14 @@ class LegacyUIAdapter:
         boundary_before = self._capture_live_boundary(rt)
         setattr(rt.app, "_dual_last_boundary_snapshot", copy.deepcopy(boundary_before))
         before_phase = str(boundary_before.get("phase", "") or "")
-        rt.app.cmd("next", {})
+        auto_order_choice = self._single_auto_order_choice(rt)
+        if auto_order_choice:
+            rt.app.cmd("resolve_pending", {"idx": 0, "choice": auto_order_choice})
+            self.engine.state.log.append(
+                f"[NEXT AUTO_ORDER][P{rt.player_id + 1}] {auto_order_choice}"
+            )
+        else:
+            rt.app.cmd("next", {})
         if acknowledged_yell_names:
             self._acknowledge_yell_notice(rt, source="central-next")
         after_phase = str(getattr(rt.app.gs, "phase", "") or "")
@@ -748,7 +865,7 @@ class LegacyUIAdapter:
 
     @classmethod
     def _card_text_value(cls, value: Any) -> str:
-        """Normalize raw/compiled DB card text into the detail-popup string."""
+        """Normalize tokv1/compiled card text into a readable detail string."""
         if value in (None, ""):
             return ""
         if isinstance(value, str):
@@ -757,11 +874,51 @@ class LegacyUIAdapter:
             parts = [cls._card_text_value(item) for item in value]
             return "\n".join(part for part in parts if part)
         if isinstance(value, dict):
+            if isinstance(value.get("abilities"), list):
+                ability_parts: List[str] = []
+                for ability in value.get("abilities", []):
+                    if not isinstance(ability, dict):
+                        text = cls._card_text_value(ability)
+                        if text:
+                            ability_parts.append(text)
+                        continue
+                    headers: List[str] = []
+                    for header_key in ("ability_type", "trigger"):
+                        header = str(ability.get(header_key, "") or "").strip()
+                        if header and header not in {"BODY", "-"} and header not in headers:
+                            headers.append(header)
+                    body = cls._card_text_value(
+                        ability.get("raw_text") or ability.get("raw") or ability.get("text") or ability.get("clauses")
+                    )
+                    prefix = "".join(f"<{header}>" for header in headers)
+                    text = "\n".join(x for x in (prefix, body) if x)
+                    if text:
+                        ability_parts.append(text)
+                if ability_parts:
+                    return "\n".join(ability_parts)
+            if isinstance(value.get("clauses"), list):
+                clause_parts: List[str] = []
+                for clause in value.get("clauses", []):
+                    if isinstance(clause, dict):
+                        raw = cls._card_text_value(clause.get("raw") or clause.get("raw_text") or clause.get("text"))
+                        if not raw:
+                            cost = cls._card_text_value(clause.get("cost_template"))
+                            effect = cls._card_text_value(clause.get("effect_template"))
+                            raw = "：".join(x for x in (cost, effect) if x)
+                        if raw:
+                            clause_parts.append(raw)
+                    else:
+                        text = cls._card_text_value(clause)
+                        if text:
+                            clause_parts.append(text)
+                if clause_parts:
+                    return "\n".join(clause_parts)
             preferred = (
                 "effect_text_raw", "effect_text_norm", "effect_text",
                 "card_text_raw", "card_text", "ability_text_raw",
-                "ability_text", "raw_text", "source_text", "text",
-                "description", "effect", "ability", "abilities",
+                "ability_text", "raw_text", "raw", "source_text", "text",
+                "effect_template", "description", "effect", "ability",
+                "abilities", "clauses",
             )
             parts: List[str] = []
             for key in preferred:
@@ -772,6 +929,86 @@ class LegacyUIAdapter:
                     parts.append(text)
             return "\n".join(parts)
         return str(value).strip()
+
+    @staticmethod
+    def _json_card_rows(data: Any) -> List[Dict[str, Any]]:
+        if isinstance(data, list):
+            return [dict(row) for row in data if isinstance(row, dict)]
+        if isinstance(data, dict) and isinstance(data.get("cards"), list):
+            return [dict(row) for row in data.get("cards", []) if isinstance(row, dict)]
+        if isinstance(data, dict):
+            rows: List[Dict[str, Any]] = []
+            for key, value in data.items():
+                if not isinstance(value, dict):
+                    continue
+                row = dict(value)
+                row.setdefault("cardnumber", key)
+                rows.append(row)
+            return rows
+        return []
+
+    def _canonical_detail_records(self, rt: PlayerViewRuntime) -> Dict[str, Any]:
+        if self._detail_db_cache is not None:
+            return self._detail_db_cache
+        roots: List[Path] = []
+        for raw_root in (
+            getattr(rt.app, "root", None),
+            getattr(rt.app, "outdir", None),
+            Path.cwd(),
+        ):
+            try:
+                root = Path(raw_root)
+            except Exception:
+                continue
+            if root not in roots:
+                roots.append(root)
+        candidates: List[Path] = []
+        for root in roots:
+            candidates.extend([
+                root / "llocg_db_out_full" / "cards_min_tokv1.json",
+                root / "cards_min_tokv1.json",
+                root / "llocg_db_out_full" / "cards_min_tokv1.csv",
+                root / "cards_min_tokv1.csv",
+                root / "llocg_db_out_full" / "cards_compiled_v7h.json",
+                root / "cards_compiled_v7h.json",
+            ])
+        records: Dict[str, Any] = {}
+        seen: set[str] = set()
+        for path in candidates:
+            key = str(path)
+            if key in seen or not path.is_file():
+                continue
+            seen.add(key)
+            try:
+                if path.suffix.lower() == ".csv":
+                    with path.open("r", encoding="utf-8-sig", newline="") as fh:
+                        rows = [dict(row) for row in csv.DictReader(fh)]
+                else:
+                    data = json.loads(path.read_text(encoding="utf-8"))
+                    rows = self._json_card_rows(data)
+            except Exception:
+                continue
+            for row in rows:
+                cn = str(self._record_value(row, "cardnumber", "cn", "id") or "").strip()
+                if not cn:
+                    continue
+                previous = records.get(cn)
+                if previous is None or (not self._card_text_value(previous) and self._card_text_value(row)):
+                    records[cn] = row
+        self._detail_db_cache = records
+        return records
+
+    def _detail_card_record(self, rt: PlayerViewRuntime, cardnumber: str) -> Any:
+        cn = str(cardnumber or "").strip()
+        canonical = self._canonical_detail_records(rt).get(cn)
+        runtime = self._card_record(rt, cn)
+        if canonical is None:
+            return runtime
+        if runtime is None or not isinstance(runtime, dict):
+            return canonical
+        merged = dict(runtime)
+        merged.update(dict(canonical))
+        return merged
 
     def card_info_payload(self, key: str, cardnumber: str) -> Optional[Dict[str, str]]:
         """Return card detail data from the canonical DB record.
@@ -785,7 +1022,7 @@ class LegacyUIAdapter:
         cn = str(cardnumber or "").strip()
         if not cn:
             return None
-        record = self._card_record(rt, cn)
+        record = self._detail_card_record(rt, cn)
         if record is None:
             return None
 
@@ -795,10 +1032,13 @@ class LegacyUIAdapter:
         effect_value = pick(
             "effect_text_raw", "effect_text_norm", "effect_text",
             "card_text_raw", "card_text", "ability_text_raw", "ability_text",
-            "raw_text", "source_text", "text", "effect", "ability", "abilities",
-            "effects",
+            "raw_text", "raw", "source_text", "text", "effect", "ability", "abilities",
+            "clauses", "effects",
         )
         effect = self._card_text_value(effect_value)
+        abilities = [part for part in effect.split("\n\n") if part.strip()]
+        if not abilities and effect:
+            abilities = [effect]
         return {
             "cn": cn,
             "name": str(pick("cardname", "name", "card_name") or ""),
@@ -809,7 +1049,54 @@ class LegacyUIAdapter:
             "effect": effect,
             "effect_text_raw": str(pick("effect_text_raw") or effect),
             "effect_text_norm": str(pick("effect_text_norm") or effect),
+            "abilities": abilities,
         }
+
+    def _card_effect_map(self, rt: PlayerViewRuntime) -> Dict[str, str]:
+        """Return canonical effect text keyed by card number for the client UI."""
+        cardnumbers: set[str] = set()
+        gs = rt.app.gs
+        for name in ("deck", "hand", "set_zone", "success_zone", "resolve_zone", "green_room"):
+            for value in list(getattr(gs, name, []) or []):
+                cn = self._slot_cardnumber(value)
+                if cn:
+                    cardnumbers.add(cn)
+        for value in dict(getattr(gs, "stage", {}) or {}).values():
+            cn = self._slot_cardnumber(value)
+            if cn:
+                cardnumbers.add(cn)
+        db = getattr(rt.app, "cards_db", None)
+        if isinstance(db, dict):
+            cards = db.get("cards")
+            if isinstance(cards, dict):
+                cardnumbers.update(str(k) for k in cards.keys())
+            else:
+                cardnumbers.update(
+                    str(k) for k, v in db.items()
+                    if isinstance(v, dict) and k not in {"cards", "meta"}
+                )
+        out: Dict[str, str] = {}
+        for cn in sorted(cardnumbers):
+            payload = self.card_info_payload(rt.key, cn)
+            if not payload:
+                continue
+            effect = str(payload.get("effect") or payload.get("effect_text_raw") or "").strip()
+            if effect:
+                out[cn] = effect
+        return out
+
+    def _decorate_player_state(self, rt: PlayerViewRuntime, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply dual-only metadata after legacy public/private filtering."""
+        out = self._sanitize_acknowledged_yell_state(
+            rt, state if isinstance(state, dict) else {}
+        )
+        acknowledged = bool(getattr(rt.app, "_dual_yell_notice_acknowledged", False))
+        out["dual_yell_notice_acknowledged"] = acknowledged
+        out["dual_force_close_yell_notice"] = acknowledged
+        out["dual_player_id"] = rt.key
+        out["dual_active_player_id"] = "p1" if self.engine.active_player_id() == 0 else "p2"
+        out["dual_card_effects"] = self._card_effect_map(rt)
+        return out
 
     def _card_base_score(self, rt: PlayerViewRuntime, cardnumber: str) -> int:
         record = self._card_record(rt, cardnumber)
@@ -1125,6 +1412,30 @@ class LegacyUIAdapter:
             live_before,
         )
 
+    def _is_no_live_after_confirm_transition(
+        self, rt: PlayerViewRuntime, before: Dict[str, Any]
+    ) -> bool:
+        """Detect LIVE_CONFIRM filtering that leaves no live cards to perform."""
+        phase_before = str(before.get("phase", "") or "").strip().upper()
+        if phase_before != "LIVE_CONFIRM":
+            return False
+        live_before = list(before.get("live", []) or [])
+        if not live_before:
+            return False
+        gs = rt.app.gs
+        phase_after = str(getattr(gs, "phase", "") or "").strip().upper()
+        if phase_after != "LIVE_RESOLVE":
+            return False
+        if list(getattr(gs, "set_zone", []) or []):
+            return False
+        if list(getattr(gs, "success_zone", []) or []) != list(before.get("success", []) or []):
+            return False
+        return self._counter_added_contains(
+            list(before.get("green", []) or []),
+            list(getattr(gs, "green_room", []) or []),
+            live_before,
+        )
+
     def _record_live_attempt_outcome(
         self, rt: PlayerViewRuntime, succeeded: bool, *, source: str = ""
     ) -> None:
@@ -1303,6 +1614,25 @@ class LegacyUIAdapter:
             self._complete_active_performance(rt)
             return True
 
+        # LIVE_CONFIRM can filter out every set card when the player set only
+        # non-LIVE cards.  No live attempt occurs, so no legacy attempt result
+        # exists; dual v2 should simply complete that player's performance with
+        # no live remaining.
+        if self._is_no_live_after_confirm_transition(rt, before):
+            self._record_live_attempt_outcome(rt, False, source="no-live-after-filter")
+            after_pending = list(getattr(gs, "pending", []) or [])
+            self._sync_view_to_core(rt)
+            self.engine.state.log.append(
+                f"[PERFORMANCE][P{rt.player_id + 1}] "
+                f"legacy_phase={before_phase}->{after_phase} "
+                f"pending={before_pending}->{len(after_pending)} no_live_after_filter=1"
+            )
+            if after_pending or self._has_legacy_dialog(rt):
+                setattr(rt.app, "_dual_performance_exit_pending", True)
+                return False
+            self._complete_active_performance(rt)
+            return True
+
         if self._at_dual_success_boundary(rt) or after_phase.strip().upper() in {"MAIN", "ACTIVE", "ENERGY", "DRAW"}:
             if getattr(rt.app, "_dual_live_attempt_succeeded", None) is None:
                 explicit = self._apply_explicit_attempt_result(rt, context="boundary-entry")
@@ -1427,8 +1757,8 @@ class LegacyUIAdapter:
                 return True
             if isinstance(value, dict) and bool(value.get(cardnumber) or value.get("all")):
                 return True
-        record = self._card_record(rt, cardnumber)
-        text = str(self._record_value(record, "effect_text_raw", "effect_text_norm", "effect") or "")
+        record = self._detail_card_record(rt, cardnumber)
+        text = self._card_text_value(record)
         return "成功ライブカード置き場に置くことができない" in text
 
     def _move_success_card(self, player_id: int, live_index: int) -> str:
@@ -1613,10 +1943,13 @@ class LegacyUIAdapter:
                     continue
                 rt = self.runtime("p1" if pid == 0 else "p2")
                 cards = list(getattr(rt.app.gs, "set_zone", []) or [])
+                success_count = len(list(getattr(rt.app.gs, "success_zone", []) or []))
                 # Rule 8.4.7.1: when both players win, a player with exactly
-                # two live cards does not move a card to the success zone.
-                if both_win and len(cards) == 2:
-                    match.log.append(f"[JUDGMENT 8.4.7.1][P{pid + 1}] 2枚ライブのため成功移動なし")
+                # two successful live cards does not move a card to the success
+                # zone.  This depends on the success zone count, not on how many
+                # cards were set for the current live.
+                if both_win and success_count == 2:
+                    match.log.append(f"[JUDGMENT 8.4.7.1][P{pid + 1}] 成功置き場2枚のため成功移動なし")
                     continue
                 if cards:
                     match.success_move_queue.append(pid)
@@ -1790,6 +2123,20 @@ class LegacyUIAdapter:
                 "p2": {"label": self.players["p2"].label, "deck_code": self.players["p2"].app.deck_code},
             }
             out["active_player_key"] = "p1" if out["active_player_id"] == 0 else "p2"
+            if out.get("phase") == "GAME_OVER":
+                result = str(out.get("game_result") or "対戦終了")
+                winner = out.get("winner_player_id")
+                if winner == 0:
+                    message = f"プレイヤー1の勝利 / {result}"
+                elif winner == 1:
+                    message = f"プレイヤー2の勝利 / {result}"
+                elif result == "DRAW":
+                    message = "引き分け / DRAW"
+                else:
+                    message = result
+                out["game_over_message"] = message
+            else:
+                out["game_over_message"] = ""
             return out
 
     def player_state(self, key: str, mode: str) -> Dict[str, Any]:
@@ -1797,13 +2144,14 @@ class LegacyUIAdapter:
             self._sync_metadata_to_views()
             rt = self.runtime(key)
             self._suppress_reopened_yell_notice(rt)
-            state = rt.app.state_json()
-            state = self._sanitize_acknowledged_yell_state(rt, state if isinstance(state, dict) else {})
-            state.update({
-                "dual_player_id": rt.key,
-                "dual_active_player_id": "p1" if self.engine.active_player_id() == 0 else "p2",
-            })
-            return make_view_state(state, mode)
+            raw = rt.app.state_json()
+            raw = self._sanitize_acknowledged_yell_state(
+                rt, raw if isinstance(raw, dict) else {}
+            )
+            view = make_view_state(raw, mode)
+            return self._decorate_player_state(
+                rt, view if isinstance(view, dict) else {}
+            )
 
     def _full_state_with_error(self, rt: PlayerViewRuntime, message: str) -> Dict[str, Any]:
         try:
@@ -1812,7 +2160,7 @@ class LegacyUIAdapter:
             pass
         self._suppress_reopened_yell_notice(rt)
         raw = rt.app.state_json()
-        out = self._sanitize_acknowledged_yell_state(
+        out = self._decorate_player_state(
             rt, raw if isinstance(raw, dict) else {}
         )
         out["dual_command_error"] = message
@@ -1883,7 +2231,7 @@ class LegacyUIAdapter:
                 self._acknowledge_yell_notice(rt, source="judgment-confirm-button")
                 self._sync_metadata_to_views()
                 raw = rt.app.state_json()
-                out = self._sanitize_acknowledged_yell_state(
+                out = self._decorate_player_state(
                     rt, raw if isinstance(raw, dict) else {}
                 )
                 self.engine.state.log.append(
@@ -1902,7 +2250,7 @@ class LegacyUIAdapter:
                 self._acknowledge_yell_notice(rt, source="inactive-confirm-button")
                 self._sync_metadata_to_views()
                 raw = rt.app.state_json()
-                out = self._sanitize_acknowledged_yell_state(
+                out = self._decorate_player_state(
                     rt, raw if isinstance(raw, dict) else {}
                 )
                 out["dual_transaction_committed"] = True
@@ -1951,7 +2299,7 @@ class LegacyUIAdapter:
                 # Re-read after metadata/opponent synchronization and sanitize
                 # presentation flags before returning them to the embedded UI.
                 raw = rt.app.state_json()
-                out = self._sanitize_acknowledged_yell_state(
+                out = self._decorate_player_state(
                     rt, raw if isinstance(raw, dict) else {}
                 )
                 out["dual_transaction_committed"] = True
@@ -2085,7 +2433,7 @@ def _scoped_single_html(prefix: str, *, upper: bool, label: str, color: str) -> 
     html = html.replace('src="/playmat"', f'src="/{prefix}/playmat"')
     html = html.replace("'/llocg_db_out_full/card_images/texticons/", f"'/{prefix}/llocg_db_out_full/card_images/texticons/")
     html = html.replace("`/img?cn=", f"`/{prefix}/img?cn=")
-    html = html.replace("`/cardinfo?cn=", f"`/{prefix}/cardinfo?cn=")
+    html = html.replace("/cardinfo?cn=", f"/{prefix}/cardinfo?cn=")
     html = html.replace("const url = IS_PUBLIC_VIEW ? '/state?view=public' : '/state';", f"const url = IS_PUBLIC_VIEW ? '/{prefix}/state?view=public' : '/{prefix}/state';")
     html = html.replace("fetch('/cmd',", f"fetch('/{prefix}/cmd',")
     html = html.replace('<title>LLCG Manual UI</title>', f'<title>{label} | LLCG Dual v2</title>')
@@ -2136,15 +2484,17 @@ def _scoped_single_html(prefix: str, *, upper: bool, label: str, color: str) -> 
     if(Array.isArray(value.pending)) value.pending=value.pending.filter(x=>!dualIsYellConfirmPending(x));
   }
   window.dualScrubCurrentYellNotice = function(){
+    const persistent=Boolean(st&&st.dual_yell_notice_acknowledged);
+    if(persistent&&!dualYellAckEpoch) dualYellAckEpoch=dualYellEpoch(st);
     if(!dualYellAckEpoch) return false;
     const current=dualYellEpoch(st);
-    if(current!==dualYellAckEpoch){ dualYellAckEpoch=''; return false; }
+    if(current!==dualYellAckEpoch&&!persistent){ dualYellAckEpoch=''; return false; }
     dualScrubYellNotice(st);
     return true;
   };
   window.dualApplyCommandState = function(nextState){
     if(nextState && typeof nextState==='object') st=nextState;
-    if(nextState && nextState.dual_force_close_yell_notice){
+    if(nextState && (nextState.dual_force_close_yell_notice||nextState.dual_yell_notice_acknowledged)){
       dualYellAckEpoch=dualYellEpoch(st);
       dualScrubYellNotice(st);
     }
@@ -2317,7 +2667,9 @@ html,body{{height:100%;margin:0;background:#080a0e;color:#fff;font-family:system
 #phaseSub{{display:block;font-size:13px;font-weight:750;letter-spacing:0;margin-top:3px;opacity:.82}}
 button{{border:1px solid rgba(255,255,255,.25);border-radius:9px;background:#2a3140;color:#fff;padding:9px 18px;font-weight:900;cursor:pointer;font-size:15px}}button:hover{{background:#384258}}button:disabled{{opacity:.45;cursor:wait}}
 #tag{{position:fixed;right:8px;top:4px;z-index:20;font-size:10px;color:#9aa4b5}}#controls{{position:absolute;right:14px;top:50%;transform:translateY(-50%);display:flex;gap:9px}}
-#next{{background:#276fca;min-width:130px}}#undo{{background:#555}}#error{{color:#ff8d8d}}#requestStatus{{position:absolute;left:14px;bottom:5px;font-size:11px;color:#aeb8ca}}
+#next{{background:#276fca;min-width:130px}}#undo{{background:#555}}#save{{background:#2f7658}}#loadBtn{{background:#6a537c}}#error{{color:#ff8d8d}}#requestStatus{{position:absolute;left:14px;bottom:5px;font-size:11px;color:#aeb8ca}}
+#gameOverNotice{{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:70000;display:none;min-width:min(620px,86vw);padding:22px 28px;border-radius:18px;background:rgba(22,27,38,.97);border:3px solid #ffd76b;box-shadow:0 18px 80px rgba(0,0,0,.78);text-align:center;font-weight:950}}
+#gameOverTitle{{font-size:28px;margin-bottom:8px}}#gameOverBody{{font-size:18px;color:#f4ecd0}}
 #judgmentOverlay{{position:fixed;inset:0;z-index:60000;background:rgba(3,5,9,.78);display:none;align-items:center;justify-content:center;padding:30px;box-sizing:border-box}}
 #judgmentPanel{{width:min(900px,92vw);max-height:82vh;overflow:auto;background:#171c27;border:2px solid #4d5f7d;border-radius:18px;padding:22px;box-shadow:0 18px 70px rgba(0,0,0,.75)}}
 #judgmentTitle{{font-size:24px;font-weight:950;text-align:center;margin-bottom:8px}}#judgmentMessage{{text-align:center;color:#d8e2f3;font-weight:750;margin-bottom:18px}}
@@ -2325,8 +2677,9 @@ button{{border:1px solid rgba(255,255,255,.25);border-radius:9px;background:#2a3
 .judgmentCard:hover{{background:#303b50}}.judgmentCard.selected{{border-color:#56a4ff;background:#213f69;box-shadow:0 0 0 3px rgba(86,164,255,.2)}}.judgmentCard img{{width:126px;height:176px;object-fit:contain;border-radius:8px;background:#080a0e}}.judgmentCard div{{font-size:12px;font-weight:850;word-break:break-all;margin-top:7px}}
 #judgmentHint{{text-align:center;margin-top:16px;color:#ffdd84;font-weight:850}}
 #judgmentNotice{{position:fixed;left:50%;top:50%;transform:translate(-50%,-112%);z-index:45000;display:none;max-width:min(920px,82vw);padding:12px 20px;border-radius:14px;background:rgba(21,28,42,.96);border:2px solid #6684b3;box-shadow:0 10px 40px rgba(0,0,0,.72);font-size:15px;font-weight:850;text-align:center;pointer-events:none}}
-</style></head><body><div id="tag">{BUILD_TAG}</div><div id="shell"><iframe id="p2frame" class="playerFrame" src="/p2/ui?upper=1"></iframe><div id="divider"><div id="phaseBanner">読み込み中</div><div id="requestStatus"></div><div id="controls"><form id="undoForm" method="post" action="/match_action_form"><input type="hidden" name="action" value="UNDO"><button id="undo" type="submit">UNDO</button></form><form id="nextForm" method="post" action="/match_action_form"><input type="hidden" name="action" value="NEXT"><button id="next" type="submit">NEXT</button></form></div></div><iframe id="p1frame" class="playerFrame" src="/p1/ui"></iframe></div>
+</style></head><body><div id="tag">{BUILD_TAG}</div><div id="shell"><iframe id="p2frame" class="playerFrame" src="/p2/ui?upper=1"></iframe><div id="divider"><div id="phaseBanner">読み込み中</div><div id="requestStatus"></div><div id="controls"><form id="undoForm" method="post" action="/match_action_form"><input type="hidden" name="action" value="UNDO"><button id="undo" type="submit">UNDO</button></form><button id="save" type="button">中断保存</button><button id="loadBtn" type="button">再開読込</button><input id="loadFile" type="file" accept="application/json,.json" hidden><form id="nextForm" method="post" action="/match_action_form"><input type="hidden" name="action" value="NEXT"><button id="next" type="submit">NEXT</button></form></div></div><iframe id="p1frame" class="playerFrame" src="/p1/ui"></iframe></div>
 <div id="judgmentNotice"></div>
+<div id="gameOverNotice"><div id="gameOverTitle">対戦終了</div><div id="gameOverBody"></div></div>
 <div id="judgmentOverlay"><div id="judgmentPanel"><div id="judgmentTitle">成功ライブカードを選択</div><div id="judgmentMessage"></div><div id="judgmentCards"></div><div id="judgmentHint">カードを1枚選択して、中央の「成功ライブを決定」を押してください</div></div></div>
 <script>
 let S=null,busy=false,lastError='',requestSeq=0,selectedLiveIndex=null,promptKey='';
@@ -2356,19 +2709,61 @@ function renderJudgmentPrompt(){{
   }}
   overlay.style.display='flex';
 }}
+function renderGameOver(){{
+  const box=document.getElementById('gameOverNotice');
+  const body=document.getElementById('gameOverBody');
+  if(!S||S.phase!=='GAME_OVER'){{box.style.display='none';return}}
+  const result=S.game_result||'対戦終了';
+  let winner='';
+  if(S.winner_player_id===0)winner='プレイヤー1の勝利';
+  else if(S.winner_player_id===1)winner='プレイヤー2の勝利';
+  else if(result==='DRAW')winner='引き分け';
+  body.textContent=S.game_over_message||(winner?winner+' / '+result:result);
+  box.style.display='block';
+}}
 function updateButtons(){{
   const prompt=S&&S.judgment_prompt&&S.judgment_prompt.kind==='pick_success_live';
   document.getElementById('next').disabled=busy||Boolean(prompt&&selectedLiveIndex===null);
   document.getElementById('undo').disabled=busy||!S||S.history_depth===0;
+  document.getElementById('save').disabled=busy||!S;
+  document.getElementById('loadBtn').disabled=busy;
 }}
 async function refresh(prefetched=null){{
   S=prefetched||await(await fetch('/match_state',{{cache:'no-store'}})).json();
   const p=S.players_by_key[S.active_player_key]||{{label:'',deck_code:''}};
   const score=(S.phase==='LIVE_JUDGMENT'&&Array.isArray(S.live_scores))?`　P1 ${{S.live_scores[0]}} - ${{S.live_scores[1]}} P2`:'';
-  const sub=lastError?'<span id="error">'+lastError+'</span>':'操作：'+p.label+'（'+p.deck_code+'）'+score;
+  const over=(S.phase==='GAME_OVER')?'対戦終了：'+(S.game_over_message||S.game_result||'完了'):'操作：'+p.label+'（'+p.deck_code+'）'+score;
+  const sub=lastError?'<span id="error">'+lastError+'</span>':over;
   document.getElementById('phaseBanner').innerHTML=`${{S.turn>0?'Turn '+S.turn+'　':''}}${{S.phase_label}}<span id="phaseSub">${{sub}}</span>`;
   document.getElementById('next').textContent=S.action_label||'NEXT';
-  renderJudgmentPrompt();updateButtons();
+  renderJudgmentPrompt();renderGameOver();updateButtons();
+}}
+async function saveSuspend(){{
+  if(busy||!S)return;busy=true;status('中断データ作成中…');updateButtons();
+  try{{
+    const r=await fetch('/suspend_state',{{cache:'no-store'}});
+    if(!r.ok)throw new Error(await r.text());
+    const data=await r.json();
+    const blob=new Blob([JSON.stringify(data,null,2)],{{type:'application/json'}});
+    const a=document.createElement('a');
+    const stamp=new Date().toISOString().replace(/[:.]/g,'').slice(0,15);
+    a.href=URL.createObjectURL(blob);a.download=`llocg_dual_v2_suspend_${{stamp}}.json`;
+    document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1200);
+    status('中断データを保存しました');
+  }}catch(e){{lastError=String(e.message||e);status('中断保存に失敗')}}
+  finally{{busy=false;await refresh();updateButtons()}}
+}}
+async function loadSuspendFile(file){{
+  if(!file)return;busy=true;lastError='';status('中断データ読込中…');updateButtons();
+  try{{
+    const text=await file.text();
+    const data=JSON.parse(text);
+    const r=await fetch('/resume_state',{{method:'POST',cache:'no-store',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(data)}});
+    const j=await r.json();
+    if(!r.ok||!j.ok)throw new Error(j.error||'再開に失敗しました');
+    await refresh(j.state);await refreshBoards();status('中断データから再開しました');
+  }}catch(e){{lastError=String(e.message||e);status('再開読込に失敗');await refresh()}}
+  finally{{busy=false;document.getElementById('loadFile').value='';updateButtons()}}
 }}
 async function act(action){{
   if(busy)return false;busy=true;lastError='';const seq=++requestSeq;status('送信中… #'+seq);updateButtons();
@@ -2385,6 +2780,9 @@ async function act(action){{
   finally{{busy=false;updateButtons()}}
 }}
 document.getElementById('nextForm').addEventListener('submit',e=>{{e.preventDefault();act('NEXT')}});document.getElementById('undoForm').addEventListener('submit',e=>{{e.preventDefault();act('UNDO')}});refresh();setInterval(()=>{{if(!busy&&!document.hidden)refresh()}},1000);
+document.getElementById('save').addEventListener('click',saveSuspend);
+document.getElementById('loadBtn').addEventListener('click',()=>document.getElementById('loadFile').click());
+document.getElementById('loadFile').addEventListener('change',e=>loadSuspendFile(e.target.files&&e.target.files[0]));
 </script></body></html>'''
 
 
@@ -2409,6 +2807,12 @@ class Handler(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         if u.path in {'/', '/dual'}: return self._send(200, _shell_html().encode(), 'text/html; charset=utf-8')
         if u.path == '/match_state': return self._send(200, json.dumps(self.adapter.state(), ensure_ascii=False).encode(), 'application/json; charset=utf-8')
+        if u.path == '/suspend_state':
+            return self._send(
+                200,
+                json.dumps(self.adapter.export_suspend_data(), ensure_ascii=False).encode(),
+                'application/json; charset=utf-8',
+            )
         rt, sub = self._route_player(u.path)
         if rt is None: return self._send(404, b'not found', 'text/plain')
         if sub in {'/', '/ui'}:
@@ -2464,6 +2868,20 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(400, f'{type(exc).__name__}: {exc}'.encode('utf-8'), 'text/plain; charset=utf-8')
         try: obj = json.loads(raw.decode())
         except Exception: obj = {}
+        if u.path == '/resume_state':
+            try:
+                state = self.adapter.import_suspend_data(obj)
+                return self._send(
+                    200,
+                    json.dumps({'ok': True, 'state': state}, ensure_ascii=False).encode(),
+                    'application/json; charset=utf-8',
+                )
+            except Exception as exc:
+                return self._send(
+                    400,
+                    json.dumps({'ok': False, 'error': f'{type(exc).__name__}: {exc}'}, ensure_ascii=False).encode(),
+                    'application/json; charset=utf-8',
+                )
         if u.path == '/match_action':
             try:
                 out = self.adapter.action(str(obj.get('action','')), obj.get('payload') if isinstance(obj.get('payload'),dict) else {})
