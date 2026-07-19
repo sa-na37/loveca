@@ -241,3 +241,91 @@ python3 -m unittest \
 ```
 
 結果: 4 tests OK。
+
+## 20260720 ルール再確認 / 1デッキ中断保存・再開読込反映
+
+BUILD_TAG:
+
+```text
+single_suspend_resume_and_dual_rule_recheck_20260720a
+```
+
+確認内容:
+
+- `docs/notes/loveca_runtime_implementation_rules_20260708.md` の 2デッキ対戦ルール注意を再確認。
+- 8.4.6.2: スコア同値時は両方のプレイヤーがライブに勝利する。
+- 8.4.7.1: 両方のプレイヤーが勝利している場合、成功ライブカード置き場が2枚のプレイヤーは成功ライブカード置き場へカードを移動しない。
+- 判定軸は成功ライブカード置き場の枚数であり、ライブセット枚数/現在ライブ置き場枚数ではない。
+- 1.2.1.2 の同時3枚以上DRAW判定は保険として保持。
+
+1デッキ用反映:
+
+- `llocg_ui/server.py` に `/suspend_state` と `/resume_state` を追加。
+- 1デッキ用UIのトップバーに `中断保存` / `再開読込` を追加。
+- 中断JSONには `gs`、乱数状態、公開ビュー用の公開/確認同期状態を保存。
+- 再開時は保存地点へ復帰し、UNDO履歴を空にし、ログへ `[RESUME]` を追記。
+- 公開ビューには再開後の更新通知を飛ばす。
+
+確認コマンド:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./llocg_ui/server.py ./llocg_ui/engine.py ./llocg_ui/engine_effect.py ./llocg_ui/effects/*.py ./run_llocg_ui_web.py ./llocg_dual_v2/*.py ./run_llocg_dual_v2.py
+```
+
+結果: OK。
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m unittest \
+  llocg_dual_v2.tests.test_legacy_adapter_transactions.LegacyAdapterTransactionTests.test_tie_both_win_success_zone_two_player_does_not_move \
+  llocg_dual_v2.tests.test_legacy_adapter_transactions.LegacyAdapterTransactionTests.test_tie_both_win_depends_on_success_zone_not_live_set_count \
+  llocg_dual_v2.tests.test_legacy_adapter_transactions.LegacyAdapterTransactionTests.test_draw_result_remains_as_simultaneous_three_success_safety \
+  llocg_dual_v2.tests.test_legacy_adapter_transactions.LegacyAdapterTransactionTests.test_third_success_winner_is_announced
+```
+
+結果: 4 tests OK。
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m unittest llocg_dual_v2.tests.test_rule_core llocg_dual_v2.tests.test_legacy_adapter_transactions
+```
+
+結果: 55 tests OK。
+
+1デッキWeb/API smoke:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 18182 --debug
+```
+
+別ターミナル:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+curl -s http://127.0.0.1:18182/suspend_state -o /tmp/loveca_single_suspend_smoke.json -w '%{http_code} %{size_download}\n'
+
+curl -s -X POST http://127.0.0.1:18182/cmd \
+  -H 'Content-Type: application/json' \
+  -d '{"cmd":"mulligan_next","payload":{"indices":[]}}'
+
+curl -s -X POST http://127.0.0.1:18182/resume_state \
+  -H 'Content-Type: application/json' \
+  --data-binary @/tmp/loveca_single_suspend_smoke.json
+```
+
+結果:
+
+- `/suspend_state`: `200`、中断JSON生成。
+- `mulligan_next`: `MULLIGAN` から `MAIN` へ進行。
+- `/resume_state`: `200`、`MULLIGAN` / `turn=0` / `hand=6` / `deck=54` へ復帰。ログ末尾に `[RESUME]`。
+
+注意:
+
+- 1デッキ中断JSONもローカルシミュレーター用の復元データを含むため、同じリポジトリ/同じ実装世代で使う前提。外部から入手した中断JSONは読み込まない。
