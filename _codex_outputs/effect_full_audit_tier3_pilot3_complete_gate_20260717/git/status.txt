@@ -1,0 +1,11 @@
+## work/loveca-20260708...origin/work/loveca-20260708
+ M llocg_dual_v2/__init__.py
+ M llocg_dual_v2/core.py
+ M llocg_dual_v2/server.py
+ M llocg_dual_v2/tests/test_legacy_adapter_transactions.py
+ M llocg_dual_v2/tests/test_rule_core.py
+ M run_llocg_dual_v2.py
+?? _codex_outputs/effect_full_audit_tier3_pilot3_complete_gate_20260717/
+?? _codex_outputs/effect_full_audit_tier3_runtime_reaudit_correction_20260717/
+?? _codex_outputs/effect_full_audit_tier3_setup_and_pilot_20260717/
+?? docs/debug/loveca_dual_v2_root_ack_cardinfo_smoke_20260717.md

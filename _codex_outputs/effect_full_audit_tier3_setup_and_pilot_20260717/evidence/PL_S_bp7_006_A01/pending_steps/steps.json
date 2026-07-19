@@ -1,0 +1,20 @@
+[
+  {
+    "actual_next": "live_start_score_if_live_zone_count_at_least",
+    "kind": "auto_order",
+    "options": [
+      "PL!N-bp1-029 ライブ開始時"
+    ],
+    "selected": "PL!N-bp1-029 ライブ開始時",
+    "step": 1
+  },
+  {
+    "actual_next": "",
+    "kind": "live_start_score_if_live_zone_count_at_least",
+    "options": [
+      "ok"
+    ],
+    "selected": "ok",
+    "step": 2
+  }
+]

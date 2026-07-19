@@ -1,0 +1,13 @@
+[
+  {
+    "next_pending_kind": "live_start_score_if_live_zone_count_at_least",
+    "option_count": 1,
+    "pending_kind": "auto_order",
+    "prompt": "ライブ開始時効果が発生：解決するカードを選択",
+    "selected_value": "PL!N-bp1-029 ライブ開始時",
+    "source_cardnumber": "other_source",
+    "state_after": "evidence/PL_SP_bp7_025_A01/pending_steps/step_01_after.json",
+    "state_before": "evidence/PL_SP_bp7_025_A01/pending_steps/step_01_before.json",
+    "step_index": 1
+  }
+]

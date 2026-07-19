@@ -1,0 +1,8 @@
+## work/loveca-20260708...origin/work/loveca-20260708
+ M llocg_dual_v2/__init__.py
+ M llocg_dual_v2/core.py
+ M llocg_dual_v2/server.py
+ M llocg_dual_v2/tests/test_legacy_adapter_transactions.py
+ M llocg_dual_v2/tests/test_rule_core.py
+ M run_llocg_dual_v2.py
+?? _codex_outputs/effect_full_audit_tier3_runtime_reaudit_correction_20260717/

@@ -1,0 +1,44 @@
+- img "playmat"
+- generic: "Turn: 1 | Phase: LIVE_CONFIRM | Energy: 40/40"
+- text: "Opponent wait:"
+- generic: "0"
+- text: /3
+- button "−" [disabled]
+- button "＋"
+- text: "Opp success:"
+- generic: "0"
+- text: /2
+- button "−" [disabled]
+- button "＋"
+- button "先手"
+- button "後手"
+- generic: "Selected(hand): 0"
+- button "枠表示"
+- generic: DECK
+- img "__BACK__"
+- generic: "12"
+- generic: Waiting room
+- generic: "0"
+- generic: ENERGY
+- text: "Energy: 40 / 40"
+- generic: "wait: 0"
+- button "UNDO"
+- button "NEXT"
+- generic: Success
+- generic: LIVE SET
+- generic: "0"
+- generic: L
+- img "PL!SP-bp4-003"
+- generic: SP/7/嵐千砂都
+- button "↻"
+- generic: C
+- img "PL!SP-bp7-025"
+- generic: Memories
+- button "↻"
+- generic: R
+- generic: HAND
+- img "PL!N-bp1-029"
+- generic: Eutopia
+- generic: "1"
+- generic: LOG
+- generic: "16:10:38 [NEW] code=1RCBL seed=1 opening_hand=6 turn=1 16:10:38 [PHASE] ACTIVE (refresh) E active=3 wait=0 16:10:38 [PHASE] ENERGY (+1) E active=4 wait=0 16:10:38 [PHASE] DRAW (draw 1) hand=7 deck=53 16:10:38 [PHASE] MAIN turn=1 [PHASE] MULLIGAN (choose cards to redraw) [DEBUG_START] deck_exact strict: dropped original deck remainder [DEBUG_START] phase=LIVE_SET turn=1 hand=1 E=40/99 wait=0 [EXT] public reveal metadata gate active [EXT] effect matchers active: broad generic green pick one to hand [EXT] loaded llocg_ext extensions [SET] set 0 cards (limit=3, total_in_set=0), drew 0 [PHASE] LIVE_CONFIRM (filter set cards) turn=1 [INFO] confirm: set_zone empty; skipping live. [PHASE] LIVE_RESOLVE (no live) turn=1 16:18:07 [UNDO] restored previous state"

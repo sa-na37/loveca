@@ -1,0 +1,14 @@
+15:17:32 [NEW] code=1RCBL seed=1 opening_hand=6 turn=1
+15:17:32 [PHASE] ACTIVE (refresh) E active=3 wait=0
+15:17:32 [PHASE] ENERGY (+1) E active=4 wait=0
+15:17:32 [PHASE] DRAW (draw 1) hand=7 deck=53
+15:17:32 [PHASE] MAIN turn=1
+[PHASE] MULLIGAN (choose cards to redraw)
+[DEBUG_START] deck_exact strict: dropped original deck remainder
+[DEBUG_START] phase=MAIN turn=1 hand=6 E=0/99 wait=3
+[EXT] public reveal metadata gate active
+[EXT] effect matchers active: broad generic green pick one to hand
+[EXT] loaded llocg_ext extensions
+[ACT] C: PL!N-bp7-004 activated
+[COST] moved 1 energy under C from wait (under=1; E active=0 wait=2)
+[WARN] activate: unsupported effect_template: 相手のステージにいる、元々持つ<(ブレード)>の数がこのメンバーの下にあるエネルギーカードの枚数に1を足した数以下のメンバー1人をウェイトにする。

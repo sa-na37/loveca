@@ -1,0 +1,41 @@
+- img "playmat"
+- generic: "Turn: 1 | Phase: MAIN | Energy: 40/41"
+- text: "Opponent wait:"
+- generic: "0"
+- text: /3
+- button "−" [disabled]
+- button "＋"
+- text: "Opp success:"
+- generic: "0"
+- text: /2
+- button "−" [disabled]
+- button "＋"
+- button "先手"
+- button "後手"
+- generic: "Selected(hand): 0"
+- button "枠表示"
+- generic: DECK
+- img "__BACK__"
+- generic: "12"
+- generic: Waiting room
+- generic: "0"
+- generic: ENERGY
+- text: "Energy: 40 / 41"
+- generic: "wait: 1"
+- button "UNDO"
+- button "NEXT"
+- generic: Success
+- generic: LIVE SET
+- generic: "0"
+- generic: L
+- generic: C
+- img "PL!N-bp4-008"
+- generic: N/5/エマ・ヴェルデ
+- button "↻"
+- generic: R
+- generic: HAND
+- img "PL!N-bp3-009"
+- generic: N/10/天王寺璃奈
+- generic: "1"
+- generic: LOG
+- generic: "16:10:42 [NEW] code=1RCBL seed=1 opening_hand=6 turn=1 16:10:42 [PHASE] ACTIVE (refresh) E active=3 wait=0 16:10:42 [PHASE] ENERGY (+1) E active=4 wait=0 16:10:42 [PHASE] DRAW (draw 1) hand=7 deck=53 16:10:42 [PHASE] MAIN turn=1 [PHASE] MULLIGAN (choose cards to redraw) [DEBUG_START] deck_exact strict: dropped original deck remainder [DEBUG_START] phase=MAIN turn=1 hand=1 E=40/99 wait=1 [EXT] public reveal metadata gate active [EXT] effect matchers active: broad generic green pick one to hand [EXT] loaded llocg_ext extensions [STATE] C -> WAIT (PL!N-bp4-008) 16:14:00 [UNDO] restored previous state [STATE] C -> WAIT (PL!N-bp4-008) 16:19:41 [UNDO] restored previous state"

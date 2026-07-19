@@ -1,0 +1,54 @@
+{
+  "env": {
+    "LLOCG_DEBUG_LIVE_IN_HAND": "0",
+    "LLOCG_DEBUG_MEMBER_IN_HAND": "0",
+    "LLOCG_DEBUG_PRESET": "effect",
+    "LLOCG_START_DECK_EXACT": "PL!N-bp3-009,PL!N-bp1-029,PL!S-bp2-026,PL!S-bp2-027,PL!S-bp2-028,PL!S-bp3-016,PL!S-PR-029,PL!S-PR-030,PL!S-PR-031",
+    "LLOCG_START_DECK_EXACT_STRICT": "1",
+    "LLOCG_START_ENERGY_ACTIVE": "40",
+    "LLOCG_START_ENERGY_WAIT": "3",
+    "LLOCG_START_HAND": "PL!N-bp1-029",
+    "LLOCG_START_HAND_SIZE": "0",
+    "LLOCG_START_PHASE": "LIVE_SET",
+    "LLOCG_START_SHUFFLE": "0",
+    "LLOCG_START_STAGE_C": "PL!S-bp7-006",
+    "LLOCG_START_TURN": "1"
+  },
+  "metric": {
+    "always_blade_bonus": 0,
+    "always_score_bonus": 0,
+    "can_activate": false,
+    "effective_cost": 2,
+    "energy_active": 40,
+    "energy_wait": 3,
+    "green_room": [],
+    "hand": [
+      "PL!N-bp3-009"
+    ],
+    "opponent_success_count": 0,
+    "opponent_wait_count": 0,
+    "pending": [],
+    "phase": "LIVE_CONFIRM",
+    "set_zone": [
+      "PL!N-bp1-029"
+    ],
+    "stage": {
+      "C": {
+        "active": true,
+        "cardnumber": "PL!S-bp7-006",
+        "energy_under": 0,
+        "heart_replace_color": "",
+        "temp_blade": 0,
+        "temp_cost": 0,
+        "temp_hearts": {},
+        "temp_score": 0,
+        "temp_until": "",
+        "under_cards": []
+      },
+      "L": null,
+      "R": null
+    },
+    "temp_blade": 0,
+    "temp_hearts": {}
+  }
+}

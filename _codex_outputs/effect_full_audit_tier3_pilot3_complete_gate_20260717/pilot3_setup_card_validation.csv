@@ -1,0 +1,10 @@
+canonical_id,setup_cardnumber,role,exists_in_db,card_type,cardname,group,unit,cost,score,effect_text,reason_selected,interference_risk,interference_avoided
+PL!S-bp3-016#A01,PL!S-bp3-016,source,true,MEMBER,国木田花丸,Aqours,AZALEA,4.0,,BODY,fixed role for the three-case gate,source ability only,no extra stage entry actions; success zone count is 1 or 2; live set uses one hand live
+PL!S-bp3-016#A01,PL!N-bp1-029,success_zone_positive_1,true,LIVE,Eutopia,虹ヶ咲,,,5.0,ライブ開始時,fixed role for the three-case gate,low,no extra stage entry actions; success zone count is 1 or 2; live set uses one hand live
+PL!S-bp3-016#A01,PL!N-bp3-032,success_zone_positive_2,true,LIVE,THE SECRET NiGHT,虹ヶ咲,DiverDiva,,2.0,,fixed role for the three-case gate,low,no extra stage entry actions; success zone count is 1 or 2; live set uses one hand live
+PL!N-bp4-008#A01,PL!N-bp4-008,source,true,MEMBER,エマ・ヴェルデ,虹ヶ咲,QU4RTZ,5.0,,BODY,fixed role for the three-case gate,source ability only,no extra stage entry actions; success zone count is 1 or 2; live set uses one hand live
+PL!N-bp4-008#A01,PL!N-bp3-009,hand_cost,true,MEMBER,天王寺璃奈,虹ヶ咲,QU4RTZ,10.0,,ライブ開始時,fixed role for the three-case gate,low,no extra stage entry actions; success zone count is 1 or 2; live set uses one hand live
+PL!SP-bp7-025#A01,PL!SP-bp7-025,source,true,LIVE,Memories,Liella!,,,3,ライブ開始時,fixed role for the three-case gate,source ability only,no extra stage entry actions; success zone count is 1 or 2; live set uses one hand live
+PL!SP-bp7-025#A01,PL!SP-bp4-003,positive_target_chisato,true,MEMBER,嵐千砂都,Liella!,5yncri5e!,7.0,,登場 / BODY,fixed role for the three-case gate,low,no extra stage entry actions; success zone count is 1 or 2; live set uses one hand live
+PL!SP-bp7-025#A01,PL!N-bp4-003,negative_target_non_chisato,true,MEMBER,桜坂しずく,虹ヶ咲,A・ZU・NA,4.0,,ライブ成功時,fixed role for the three-case gate,low,no extra stage entry actions; success zone count is 1 or 2; live set uses one hand live
+PL!SP-bp7-025#A01,PL!N-bp1-029,live_set_card,true,LIVE,Eutopia,虹ヶ咲,,,5.0,ライブ開始時,fixed role for the three-case gate,low,no extra stage entry actions; success zone count is 1 or 2; live set uses one hand live

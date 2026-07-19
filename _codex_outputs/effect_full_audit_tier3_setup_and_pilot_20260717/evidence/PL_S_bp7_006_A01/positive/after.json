@@ -1,0 +1,222 @@
+{
+  "banner": null,
+  "cn2cost": {
+    "PL!N-bp1-029": 0,
+    "PL!N-bp3-009": 10,
+    "PL!S-PR-029": 9,
+    "PL!S-PR-030": 9,
+    "PL!S-PR-031": 9,
+    "PL!S-bp2-026": 0,
+    "PL!S-bp3-016": 4,
+    "PL!S-bp7-006": 2
+  },
+  "cn2group": {
+    "PL!N-bp1-029": "虹ヶ咲",
+    "PL!N-bp3-009": "虹ヶ咲",
+    "PL!S-PR-029": "Aqours",
+    "PL!S-PR-030": "Aqours",
+    "PL!S-PR-031": "Aqours",
+    "PL!S-bp2-026": "Aqours",
+    "PL!S-bp3-016": "Aqours",
+    "PL!S-bp7-006": "Aqours"
+  },
+  "cn2is_live": {
+    "PL!N-bp1-029": true,
+    "PL!N-bp3-009": false,
+    "PL!S-PR-029": false,
+    "PL!S-PR-030": false,
+    "PL!S-PR-031": false,
+    "PL!S-bp2-026": true,
+    "PL!S-bp3-016": false,
+    "PL!S-bp7-006": false
+  },
+  "cn2label": {
+    "PL!N-bp1-029": "Eutopia",
+    "PL!N-bp3-009": "N/10/天王寺璃奈",
+    "PL!S-PR-029": "S/9/渡辺曜",
+    "PL!S-PR-030": "S/9/津島善子",
+    "PL!S-PR-031": "S/9/国木田花丸",
+    "PL!S-bp2-026": "ユメ語るよりユメ歌おう",
+    "PL!S-bp3-016": "S/4/国木田花丸",
+    "PL!S-bp7-006": "S/2/津島善子"
+  },
+  "cn2name": {
+    "PL!N-bp1-029": "Eutopia",
+    "PL!N-bp3-009": "天王寺璃奈",
+    "PL!S-PR-029": "渡辺曜",
+    "PL!S-PR-030": "津島善子",
+    "PL!S-PR-031": "国木田花丸",
+    "PL!S-bp2-026": "ユメ語るよりユメ歌おう",
+    "PL!S-bp3-016": "国木田花丸",
+    "PL!S-bp7-006": "津島善子"
+  },
+  "cn2score": {
+    "PL!N-bp1-029": 5,
+    "PL!N-bp3-009": 0,
+    "PL!S-PR-029": 0,
+    "PL!S-PR-030": 0,
+    "PL!S-PR-031": 0,
+    "PL!S-bp2-026": 4,
+    "PL!S-bp3-016": 0,
+    "PL!S-bp7-006": 0
+  },
+  "cn2type": {
+    "PL!N-bp1-029": "LIVE",
+    "PL!N-bp3-009": "MEMBER",
+    "PL!S-PR-029": "MEMBER",
+    "PL!S-PR-030": "MEMBER",
+    "PL!S-PR-031": "MEMBER",
+    "PL!S-bp2-026": "LIVE",
+    "PL!S-bp3-016": "MEMBER",
+    "PL!S-bp7-006": "MEMBER"
+  },
+  "cn2unit": {
+    "PL!N-bp3-009": "QU4RTZ",
+    "PL!S-PR-029": "CYaRon!",
+    "PL!S-PR-030": "Guilty Kiss",
+    "PL!S-PR-031": "AZALEA",
+    "PL!S-bp3-016": "AZALEA",
+    "PL!S-bp7-006": "Guilty Kiss"
+  },
+  "cn2yell_draw_icons": {
+    "PL!N-bp1-029": 1
+  },
+  "cn2yell_hearts": {
+    "PL!N-bp1-029": {
+      "pink": 1
+    },
+    "PL!S-bp2-026": {
+      "all": 1
+    },
+    "PL!S-bp7-006": {
+      "green": 1
+    }
+  },
+  "cn2yell_score_icons": {},
+  "code": "ui",
+  "debug": true,
+  "deck": [
+    "PL!N-bp1-029",
+    "PL!S-bp2-026",
+    "PL!S-bp2-027",
+    "PL!S-bp2-028",
+    "PL!S-bp3-016",
+    "PL!S-PR-029",
+    "PL!S-PR-030",
+    "PL!S-PR-031"
+  ],
+  "deck_code": "1RCBL",
+  "deck_refreshed_this_turn": false,
+  "effect_events": [],
+  "energy_active": 40,
+  "energy_wait": 3,
+  "green_room": [],
+  "hand": [
+    "PL!N-bp3-009"
+  ],
+  "hand_detail": [
+    {
+      "base_cost": 10,
+      "can_activate_from_hand": false,
+      "cardnumber": "PL!N-bp3-009",
+      "effective_cost": 10
+    }
+  ],
+  "live_set_limit": 3,
+  "live_start_prompted": true,
+  "log": [
+    "15:43:01 [NEW] code=1RCBL seed=1 opening_hand=6 turn=1",
+    "15:43:01 [PHASE] ACTIVE (refresh) E active=3 wait=0",
+    "15:43:01 [PHASE] ENERGY (+1) E active=4 wait=0",
+    "15:43:01 [PHASE] DRAW (draw 1) hand=7 deck=53",
+    "15:43:01 [PHASE] MAIN turn=1",
+    "[PHASE] MULLIGAN (choose cards to redraw)",
+    "[DEBUG_START] deck_exact strict: dropped original deck remainder",
+    "[DEBUG_START] phase=LIVE_SET turn=1 hand=1 E=40/99 wait=3",
+    "[EXT] public reveal metadata gate active",
+    "[EXT] effect matchers active: broad generic green pick one to hand",
+    "[EXT] loaded llocg_ext extensions",
+    "[SET] set 1 cards (limit=3, total_in_set=1), drew 1",
+    "[PHASE] LIVE_CONFIRM (filter set cards) turn=1",
+    "[DEBUG] live_start ab found: pos=C cn=PL!S-bp7-006 trig='ライブ開始時'",
+    "[DEBUG] live_start LIVE ab found: cn=PL!N-bp1-029 trig='ライブ開始時'",
+    "[PENDING] auto_order triggers=1",
+    "[PROMPT] live-start abilities queued: 1",
+    "[AUTO] live-start triggers queued=1",
+    "[AUTO] PL!N-bp1-029[ライブ開始時]: live-zone cards=1/3 -> score +0"
+  ],
+  "next_turn_order": "",
+  "opponent_excess_heart_count": 0,
+  "opponent_success_count": 0,
+  "opponent_wait_count": 0,
+  "pending": [],
+  "phase": "LIVE_CONFIRM",
+  "public_hand_reveal_events": [],
+  "public_hand_revealed_cards": [],
+  "public_hand_revealed_orient": {},
+  "public_reveal_events": [],
+  "refresh_notice_ack_seq": 0,
+  "refresh_notice_seq": 0,
+  "refresh_notices": [],
+  "resolve_zone": [],
+  "root": "/Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full",
+  "seed": 1,
+  "set_zone": [
+    "PL!N-bp1-029"
+  ],
+  "set_zone_score_rows": [
+    {
+      "base": 5,
+      "cardnumber": "PL!N-bp1-029",
+      "delta": 0,
+      "req_delta": {},
+      "score": 5
+    }
+  ],
+  "stage": {
+    "C": {
+      "active": true,
+      "cardnumber": "PL!S-bp7-006",
+      "energy_under": 0,
+      "heart_replace_color": "",
+      "temp_blade": 0,
+      "temp_cost": 0,
+      "temp_hearts": {},
+      "temp_score": 0,
+      "temp_until": "",
+      "under_cards": []
+    },
+    "L": null,
+    "R": null
+  },
+  "stage_detail": {
+    "C": {
+      "always_blade_bonus": 0,
+      "always_hearts_bonus": {},
+      "always_score_bonus": 0,
+      "base_cost": 2,
+      "can_activate": false,
+      "cardnumber": "PL!S-bp7-006",
+      "effective_cost": 2,
+      "energy_under": 0,
+      "has_sac": false,
+      "name": "津島善子",
+      "success_zone_hearts_bonus": {},
+      "temp_blade": 0,
+      "temp_hearts": {},
+      "type": "MEMBER",
+      "under_cards": []
+    },
+    "L": null,
+    "R": null
+  },
+  "success_zone": [],
+  "success_zone_heart_color": "",
+  "success_zone_heart_pos": "",
+  "success_zone_score_sum": 0,
+  "turn": 1,
+  "turn_order": "first",
+  "ui_version": "live_attempt_summary_popup_rebase_20260706f",
+  "yell_flow_completed_this_live": false,
+  "yell_reveal_acknowledged_this_live": false
+}

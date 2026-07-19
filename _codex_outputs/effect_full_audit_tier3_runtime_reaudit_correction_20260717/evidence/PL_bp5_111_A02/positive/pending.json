@@ -1,0 +1,20 @@
+[
+  {
+    "after_ctx": {
+      "effect_timing": "起動効果",
+      "pos": "C",
+      "source_cn": "PL!-bp5-111"
+    },
+    "after_effect_template": "ウェイト状態のメンバー1人をアクティブにする。これにより相手のステージにいるメンバーをアクティブにした場合、自分の控え室からライブカードを1枚控え室に置く。",
+    "after_source_cn": "PL!-bp5-111",
+    "kind": "discard_from_hand",
+    "options": [
+      "PL!N-bp3-009",
+      "PL!N-bp1-029",
+      "PL!HS-bp2-015",
+      "PL!S-bp2-026"
+    ],
+    "remaining": 1,
+    "text": "コストとして、手札を1枚控え室に置く"
+  }
+]

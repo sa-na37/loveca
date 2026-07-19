@@ -1,0 +1,266 @@
+{
+  "banner": null,
+  "cn2cost": {
+    "LL-bp5-001": 0,
+    "PL!HS-bp2-014": 4,
+    "PL!HS-bp2-015": 5,
+    "PL!N-bp1-029": 0,
+    "PL!N-bp3-009": 10,
+    "PL!N-bp3-032": 0,
+    "PL!S-PR-029": 9,
+    "PL!S-PR-039": 11,
+    "PL!S-bp2-026": 0,
+    "PL!SP-bp1-001": 9,
+    "PL!SP-bp4-003": 7
+  },
+  "cn2group": {
+    "PL!HS-bp2-014": "蓮ノ空",
+    "PL!HS-bp2-015": "蓮ノ空",
+    "PL!N-bp1-029": "虹ヶ咲",
+    "PL!N-bp3-009": "虹ヶ咲",
+    "PL!N-bp3-032": "虹ヶ咲",
+    "PL!S-PR-029": "Aqours",
+    "PL!S-PR-039": "Aqours",
+    "PL!S-bp2-026": "Aqours",
+    "PL!SP-bp1-001": "Liella!",
+    "PL!SP-bp4-003": "Liella!"
+  },
+  "cn2is_live": {
+    "LL-bp5-001": true,
+    "PL!HS-bp2-014": false,
+    "PL!HS-bp2-015": false,
+    "PL!N-bp1-029": true,
+    "PL!N-bp3-009": false,
+    "PL!N-bp3-032": true,
+    "PL!S-PR-029": false,
+    "PL!S-PR-039": false,
+    "PL!S-bp2-026": true,
+    "PL!SP-bp1-001": false,
+    "PL!SP-bp4-003": false
+  },
+  "cn2label": {
+    "LL-bp5-001": "Live with a smile!",
+    "PL!HS-bp2-014": "HS/4/大沢瑠璃乃",
+    "PL!HS-bp2-015": "HS/5/藤島慈",
+    "PL!N-bp1-029": "Eutopia",
+    "PL!N-bp3-009": "N/10/天王寺璃奈",
+    "PL!N-bp3-032": "THE SECRET NiGHT",
+    "PL!S-PR-029": "S/9/渡辺曜",
+    "PL!S-PR-039": "S/11/渡辺曜",
+    "PL!S-bp2-026": "ユメ語るよりユメ歌おう",
+    "PL!SP-bp1-001": "SP/9/澁谷かのん",
+    "PL!SP-bp4-003": "SP/7/嵐千砂都"
+  },
+  "cn2name": {
+    "LL-bp5-001": "Live with a smile!",
+    "PL!HS-bp2-014": "大沢瑠璃乃",
+    "PL!HS-bp2-015": "藤島慈",
+    "PL!N-bp1-029": "Eutopia",
+    "PL!N-bp3-009": "天王寺璃奈",
+    "PL!N-bp3-032": "THE SECRET NiGHT",
+    "PL!S-PR-029": "渡辺曜",
+    "PL!S-PR-039": "渡辺曜",
+    "PL!S-bp2-026": "ユメ語るよりユメ歌おう",
+    "PL!SP-bp1-001": "澁谷かのん",
+    "PL!SP-bp4-003": "嵐千砂都"
+  },
+  "cn2score": {
+    "LL-bp5-001": 1,
+    "PL!HS-bp2-014": 0,
+    "PL!HS-bp2-015": 0,
+    "PL!N-bp1-029": 5,
+    "PL!N-bp3-009": 0,
+    "PL!N-bp3-032": 2,
+    "PL!S-PR-029": 0,
+    "PL!S-PR-039": 0,
+    "PL!S-bp2-026": 4,
+    "PL!SP-bp1-001": 0,
+    "PL!SP-bp4-003": 0
+  },
+  "cn2type": {
+    "LL-bp5-001": "LIVE",
+    "PL!HS-bp2-014": "MEMBER",
+    "PL!HS-bp2-015": "MEMBER",
+    "PL!N-bp1-029": "LIVE",
+    "PL!N-bp3-009": "MEMBER",
+    "PL!N-bp3-032": "LIVE",
+    "PL!S-PR-029": "MEMBER",
+    "PL!S-PR-039": "MEMBER",
+    "PL!S-bp2-026": "LIVE",
+    "PL!SP-bp1-001": "MEMBER",
+    "PL!SP-bp4-003": "MEMBER"
+  },
+  "cn2unit": {
+    "PL!HS-bp2-014": "みらくらぱーく！",
+    "PL!HS-bp2-015": "みらくらぱーく！",
+    "PL!N-bp3-009": "QU4RTZ",
+    "PL!N-bp3-032": "DiverDiva",
+    "PL!S-PR-029": "CYaRon!",
+    "PL!S-PR-039": "CYaRon!",
+    "PL!SP-bp1-001": "CatChu!",
+    "PL!SP-bp4-003": "5yncri5e!"
+  },
+  "cn2yell_draw_icons": {
+    "PL!N-bp1-029": 1
+  },
+  "cn2yell_hearts": {
+    "PL!HS-bp2-014": {
+      "pink": 1
+    },
+    "PL!N-bp1-029": {
+      "pink": 1
+    },
+    "PL!N-bp3-032": {
+      "all": 1
+    },
+    "PL!S-PR-039": {
+      "red": 1
+    },
+    "PL!S-bp2-026": {
+      "all": 1
+    }
+  },
+  "cn2yell_score_icons": {
+    "LL-bp5-001": 1
+  },
+  "code": "ui",
+  "debug": true,
+  "deck": [
+    "PL!N-bp1-029",
+    "PL!N-bp3-032",
+    "PL!S-bp2-026",
+    "PL!S-bp2-027",
+    "PL!HS-bp2-015",
+    "PL!HS-bp2-014",
+    "PL!N-bp3-009",
+    "LL-bp5-001",
+    "PL!SP-bp1-001",
+    "PL!S-PR-029",
+    "PL!SP-bp4-003"
+  ],
+  "deck_code": "1RCBL",
+  "deck_refreshed_this_turn": false,
+  "effect_events": [],
+  "energy_active": 40,
+  "energy_wait": 3,
+  "green_room": [
+    "PL!N-bp3-009",
+    "PL!N-bp1-029",
+    "PL!HS-bp2-015",
+    "PL!S-bp2-026",
+    "PL!SP-bp1-001"
+  ],
+  "hand": [
+    "PL!N-bp3-009",
+    "PL!N-bp1-029",
+    "PL!HS-bp2-015",
+    "PL!S-bp2-026"
+  ],
+  "hand_detail": [
+    {
+      "base_cost": 10,
+      "can_activate_from_hand": false,
+      "cardnumber": "PL!N-bp3-009",
+      "effective_cost": 10
+    },
+    {
+      "base_cost": 0,
+      "can_activate_from_hand": false,
+      "cardnumber": "PL!N-bp1-029",
+      "effective_cost": 0
+    },
+    {
+      "base_cost": 5,
+      "can_activate_from_hand": false,
+      "cardnumber": "PL!HS-bp2-015",
+      "effective_cost": 5
+    },
+    {
+      "base_cost": 0,
+      "can_activate_from_hand": false,
+      "cardnumber": "PL!S-bp2-026",
+      "effective_cost": 0
+    }
+  ],
+  "live_set_limit": 3,
+  "live_start_prompted": false,
+  "log": [
+    "15:17:34 [NEW] code=1RCBL seed=1 opening_hand=6 turn=1",
+    "15:17:34 [PHASE] ACTIVE (refresh) E active=3 wait=0",
+    "15:17:34 [PHASE] ENERGY (+1) E active=4 wait=0",
+    "15:17:34 [PHASE] DRAW (draw 1) hand=7 deck=53",
+    "15:17:34 [PHASE] MAIN turn=1",
+    "[PHASE] MULLIGAN (choose cards to redraw)",
+    "[DEBUG_START] deck_exact strict: dropped original deck remainder",
+    "[DEBUG_START] phase=MAIN turn=1 hand=4 E=40/99 wait=3",
+    "[EXT] public reveal metadata gate active",
+    "[EXT] effect matchers active: broad generic green pick one to hand",
+    "[EXT] loaded llocg_ext extensions"
+  ],
+  "next_turn_order": "",
+  "opponent_excess_heart_count": 0,
+  "opponent_success_count": 0,
+  "opponent_wait_count": 0,
+  "pending": [],
+  "phase": "MAIN",
+  "public_hand_reveal_events": [],
+  "public_hand_revealed_cards": [],
+  "public_hand_revealed_orient": {},
+  "public_reveal_events": [],
+  "refresh_notice_ack_seq": 0,
+  "refresh_notice_seq": 0,
+  "refresh_notices": [],
+  "resolve_zone": [],
+  "root": "/Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full",
+  "seed": 1,
+  "set_zone": [],
+  "set_zone_score_rows": [],
+  "stage": {
+    "C": {
+      "active": true,
+      "cardnumber": "PL!S-PR-039",
+      "energy_under": 0,
+      "heart_replace_color": "",
+      "temp_blade": 0,
+      "temp_cost": 0,
+      "temp_hearts": {},
+      "temp_score": 0,
+      "temp_until": "",
+      "under_cards": []
+    },
+    "L": null,
+    "R": null
+  },
+  "stage_detail": {
+    "C": {
+      "always_blade_bonus": 0,
+      "always_hearts_bonus": {},
+      "always_score_bonus": 0,
+      "base_cost": 11,
+      "can_activate": false,
+      "cardnumber": "PL!S-PR-039",
+      "effective_cost": 11,
+      "energy_under": 0,
+      "has_sac": false,
+      "name": "渡辺曜",
+      "success_zone_hearts_bonus": {},
+      "temp_blade": 0,
+      "temp_hearts": {},
+      "type": "MEMBER",
+      "under_cards": []
+    },
+    "L": null,
+    "R": null
+  },
+  "success_zone": [],
+  "success_zone_heart_color": "",
+  "success_zone_heart_pos": "",
+  "success_zone_score_sum": 0,
+  "turn": 1,
+  "turn_order": "first",
+  "ui_version": "live_attempt_summary_popup_rebase_20260706f",
+  "view_build_tag": "live_attempt_summary_popup_rebase_20260706f",
+  "view_mode": "private",
+  "yell_flow_completed_this_live": false,
+  "yell_reveal_acknowledged_this_live": false
+}

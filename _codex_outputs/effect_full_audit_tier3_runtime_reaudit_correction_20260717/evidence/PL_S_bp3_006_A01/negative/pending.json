@@ -1,0 +1,22 @@
+[
+  {
+    "after_ctx": {
+      "effect_timing": "起動効果",
+      "pos": "C",
+      "source_cn": "PL!S-bp3-006"
+    },
+    "after_effect_template": "このメンバー以外の『Aqours』のメンバー1人を自分のステージから控え室に置く。そうした場合、自分の控え室から、そのメンバーのコストに2を足した数に等しいコストの『Aqours』のメンバーカードを1枚、そのメンバーがいたエリアに登場させる。",
+    "after_source_cn": "PL!S-bp3-006",
+    "kind": "discard_from_hand",
+    "options": [
+      "PL!N-bp4-030",
+      "PL!SP-pb1-014",
+      "PL!S-pb1-017",
+      "PL!SP-sd1-019",
+      "PL!-pb1-015",
+      "PL!SP-pb1-014"
+    ],
+    "remaining": 1,
+    "text": "コストとして、手札を1枚控え室に置く"
+  }
+]

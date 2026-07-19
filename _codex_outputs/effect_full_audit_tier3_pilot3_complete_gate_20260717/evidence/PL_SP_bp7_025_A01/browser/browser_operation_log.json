@@ -1,0 +1,11 @@
+[
+  {
+    "step": "click NEXT set"
+  },
+  {
+    "step": "click NEXT confirm"
+  },
+  {
+    "step": "click undo"
+  }
+]

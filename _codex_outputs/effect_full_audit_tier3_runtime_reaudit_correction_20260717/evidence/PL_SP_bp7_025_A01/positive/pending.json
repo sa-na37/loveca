@@ -1,0 +1,19 @@
+[
+  {
+    "kind": "auto_order",
+    "options": [
+      "PL!N-bp1-029 ライブ開始時"
+    ],
+    "queue": [
+      {
+        "condition_count": 3,
+        "kind": "live_start_score_if_live_zone_count_at_least",
+        "label": "PL!N-bp1-029 ライブ開始時",
+        "score_delta": 2,
+        "set_idx": 0,
+        "source_cn": "PL!N-bp1-029"
+      }
+    ],
+    "text": "ライブ開始時効果が発生：解決するカードを選択"
+  }
+]

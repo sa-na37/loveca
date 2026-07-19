@@ -1,0 +1,11 @@
+[
+  {
+    "step": "click activate"
+  },
+  {
+    "step": "click cost card"
+  },
+  {
+    "step": "click undo"
+  }
+]

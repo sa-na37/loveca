@@ -1,0 +1,25 @@
+{
+  "url": "http://127.0.0.1:8836/",
+  "check": {
+    "bodyLength": 768,
+    "buttons": [
+      "−",
+      "＋",
+      "−",
+      "＋",
+      "先手",
+      "後手",
+      "枠表示",
+      "UNDO",
+      "NEXT",
+      "↻",
+      "🙈 盤面確認",
+      "Close",
+      "×"
+    ],
+    "hasCanvas": false,
+    "textSample": "Turn: 1 | Phase: MAIN | Energy: 40/41\nOpponent wait:\n0\n/3\n−\n＋\nOpp success:\n0\n/2\n−\n＋\n先手\n後手\nSelected(hand): 0\n枠表示\nDECK\n11\nWaiting room\n0\nENERGY\nEnergy: 40 / 41\nwait: 1\nUNDO\nNEXT\nSuccess\nLIVE SET\n0\nL\nC\nN/5/エマ・ヴェルデ\n↻\nR\nHAND\nN/10/天王寺璃奈\n1\nLOG\n15:43:43 [NEW] code=1RCBL seed=1 opening_hand=6 turn=1\n15:43:43 [PHASE] ACTIVE (refresh) E active=3 wait=0\n15:43:43 [PHASE] ENERGY (+1) E active=4 wait=0\n15:43:43 [PHASE] DRAW (draw 1) hand=7 deck=53\n15:43:43 [PHASE] MAIN turn=1\n[PHASE] MULLIGAN (choose cards to redraw)\n[DEBUG_START] deck_exact strict: dropped original deck remainder\n[DEBUG_START] phase=MAIN turn=1 hand=1 E=40/99 wait=1\n[EXT] public reveal metadata gate active\n[EXT] effect matchers active: broad generic green pick one to hand\n[EXT] loaded llocg_ext extensions",
+    "title": "LLCG Manual UI"
+  },
+  "snapshotSample": "- img \"playmat\"\n- generic: \"Turn: 1 | Phase: MAIN | Energy: 40/41\"\n- text: \"Opponent wait:\"\n- generic: \"0\"\n- text: /3\n- button \"−\" [disabled]\n- button \"＋\"\n- text: \"Opp success:\"\n- generic: \"0\"\n- text: /2\n- button \"−\" [disabled]\n- button \"＋\"\n- button \"先手\"\n- button \"後手\"\n- generic: \"Selected(hand): 0\"\n- button \"枠表示\"\n- generic: DECK\n- img \"__BACK__\"\n- generic: \"11\"\n- generic: Waiting room\n- generic: \"0\"\n- generic: ENERGY\n- text: \"Energy: 40 / 41\"\n- generic: \"wait: 1\"\n- button \"UNDO\"\n- button \"NEXT\"\n- generic: Success\n- generic: LIVE SET\n- generic: \"0\"\n- generic: L\n- generic: C\n- img \"PL!N-bp4-008\"\n- generic: N/5/エマ・ヴェルデ\n- button \"↻\"\n- generic: R\n- generic: HAND\n- img \"PL!N-bp3-009\"\n- generic: N/10/天王寺璃奈\n- generic: \"1\"\n- generic: LOG\n- generic: \"15:43:43 [NEW] code=1RCBL seed=1 opening_hand=6 turn=1 15:43:43 [PHASE] ACTIVE (refresh) E active=3 wait=0 15:43:43 [PHASE] ENERGY (+1) E active=4 wait=0 15:43:43 [PHASE] DRAW (draw 1) hand=7 deck=53 15:43:43 [PHASE] MAIN turn=1 [PHASE] MULLIGAN (choose cards to redraw) [DEBUG_START] deck_exact strict: dropped original deck remainder [DEBUG_START] phase=MAIN turn=1 hand=1 E=40/99 wait=1 [EXT] public reveal metadata gate active [EXT] effect matchers active: broad generic green pick one to hand [EXT] loaded llocg_ext extensions\""
+}

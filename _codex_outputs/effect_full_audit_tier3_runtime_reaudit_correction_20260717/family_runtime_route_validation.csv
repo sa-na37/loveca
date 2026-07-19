@@ -1,0 +1,10 @@
+family,representative_id,representative_cardnumber,runtime_action,trigger_executed,resolver_entered,effect_completed,status,evidence
+activated_runtime,PL!-bp5-111#A02,PL!-bp5-111,see representative positive_evidence command.sh,true,true,false,TRIGGER_REACHED_RESOLVER_BLOCKED,evidence/PL_bp5_111_A02/positive
+blade_continuous,PL!HS-pb1-003#A02,PL!HS-pb1-003,see representative positive_evidence command.sh,true,true,false,TRIGGER_REACHED_RESOLVER_BLOCKED,evidence/PL_HS_pb1_003_A02/positive
+energy_event_or_under,PL!HS-pb1-001#A01,PL!HS-pb1-001,see representative positive_evidence command.sh,true,true,false,TRIGGER_REACHED_RESOLVER_BLOCKED,evidence/PL_HS_pb1_001_A01/positive
+live_score_continuous,PL!-bp6-009#A01,PL!-bp6-009,see representative positive_evidence command.sh,true,true,false,TRIGGER_REACHED_RESOLVER_BLOCKED,evidence/PL_bp6_009_A01/positive
+live_start_runtime,PL!S-bp7-006#A01,PL!S-bp7-006,see representative positive_evidence command.sh,true,true,false,TRIGGER_REACHED_RESOLVER_BLOCKED,evidence/PL_S_bp7_006_A01/positive
+opponent_reference_continuous,PL!-bp3-002#A02,PL!-bp3-002,see representative positive_evidence command.sh,true,true,false,TRIGGER_REACHED_RESOLVER_BLOCKED,evidence/PL_bp3_002_A02/positive
+other_tier3,PL!-bp4-002#A01,PL!-bp4-002,see representative positive_evidence command.sh,true,true,false,TRIGGER_REACHED_RESOLVER_BLOCKED,evidence/PL_bp4_002_A01/positive
+stage_entry_or_baton_event,LL-bp2-001#A02,LL-bp2-001,see representative positive_evidence command.sh,true,true,false,TRIGGER_REACHED_RESOLVER_BLOCKED,evidence/LL_bp2_001_A02/positive
+success_zone_continuous,PL!-bp6-019#A01,PL!-bp6-019,see representative positive_evidence command.sh,true,true,false,TRIGGER_REACHED_RESOLVER_BLOCKED,evidence/PL_bp6_019_A01/positive

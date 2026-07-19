@@ -1,0 +1,11 @@
+canonical_id,selection_reason,trigger,family,expected_route,complexity
+PL!S-bp3-016#A01,selected to satisfy trigger mix and avoid family overlap; exact status is pilot-gated,常時,success_zone_reference,STRONG_FAMILY_MATCH,medium
+PL!SP-bp4-003#A02,selected to satisfy trigger mix and avoid family overlap; exact status is pilot-gated,常時,blade_continuous,WEAK_GLOBAL_PRESENCE,medium
+PL!-bp3-002#A02,selected to satisfy trigger mix and avoid family overlap; exact status is pilot-gated,常時,opponent_reference,STRONG_FAMILY_MATCH,medium
+PL!SP-bp1-001#A01,selected to satisfy trigger mix and avoid family overlap; exact status is pilot-gated,常時,other,WEAK_GLOBAL_PRESENCE,medium
+PL!N-pb1-003#A01,selected to satisfy trigger mix and avoid family overlap; exact status is pilot-gated,起動,activated,STRONG_FAMILY_MATCH,high
+PL!SP-bp2-008#A01,selected to satisfy trigger mix and avoid family overlap; exact status is pilot-gated,起動,activated,STRONG_FAMILY_MATCH,high
+PL!N-bp4-008#A01,selected to satisfy trigger mix and avoid family overlap; exact status is pilot-gated,起動,activated,STRONG_FAMILY_MATCH,high
+PL!S-bp7-006#A01,selected to satisfy trigger mix and avoid family overlap; exact status is pilot-gated,ライブ開始時,live_start,STRONG_FAMILY_MATCH,high
+PL!SP-bp7-025#A01,selected to satisfy trigger mix and avoid family overlap; exact status is pilot-gated,ライブ開始時,live_start,STRONG_FAMILY_MATCH,high
+PL!S-bp6-009#A01,selected to satisfy trigger mix and avoid family overlap; exact status is pilot-gated,常時,opponent_reference,STRONG_FAMILY_MATCH,medium

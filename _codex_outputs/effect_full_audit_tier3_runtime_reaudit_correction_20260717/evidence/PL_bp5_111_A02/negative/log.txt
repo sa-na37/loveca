@@ -1,0 +1,15 @@
+15:17:27 [NEW] code=1RCBL seed=1 opening_hand=6 turn=1
+15:17:27 [PHASE] ACTIVE (refresh) E active=3 wait=0
+15:17:27 [PHASE] ENERGY (+1) E active=4 wait=0
+15:17:27 [PHASE] DRAW (draw 1) hand=7 deck=53
+15:17:27 [PHASE] MAIN turn=1
+[PHASE] MULLIGAN (choose cards to redraw)
+[DEBUG_START] deck_exact strict: dropped original deck remainder
+[DEBUG_START] phase=MAIN turn=1 hand=6 E=0/99 wait=3
+[EXT] public reveal metadata gate active
+[EXT] effect matchers active: broad generic green pick one to hand
+[EXT] loaded llocg_ext extensions
+[ACT] C: PL!-bp5-111 activated
+[PENDING] activate discard 1 then ウェイト状態のメンバー1人をアクティブにする。これにより相手のステージにいるメンバーをアクティブにした場合、自分の控え室からライブカードを1枚控え室に置く。
+[ACT] discard 1 -> PL!N-bp4-030 (remaining=0)
+[WARN] PL!-bp5-111: after-cost effect not matchable ウェイト状態のメンバー1人をアクティブにする。これにより相手のステージにいるメンバーをアクティブにした場合、自分の控え室からライブカードを1枚控え室に置く。

@@ -1,0 +1,15 @@
+15:17:34 [NEW] code=1RCBL seed=1 opening_hand=6 turn=1
+15:17:34 [PHASE] ACTIVE (refresh) E active=3 wait=0
+15:17:34 [PHASE] ENERGY (+1) E active=4 wait=0
+15:17:34 [PHASE] DRAW (draw 1) hand=7 deck=53
+15:17:34 [PHASE] MAIN turn=1
+[PHASE] MULLIGAN (choose cards to redraw)
+[DEBUG_START] deck_exact strict: dropped original deck remainder
+[DEBUG_START] phase=MAIN turn=1 hand=4 E=40/99 wait=3
+[EXT] public reveal metadata gate active
+[EXT] effect matchers active: broad generic green pick one to hand
+[EXT] loaded llocg_ext extensions
+[ACT] C: PL!S-bp3-006 activated
+[PENDING] activate discard 1 then このメンバー以外の『Aqours』のメンバー1人を自分のステージから控え室に置く。そうした場合、自分の控え室から、そのメンバーのコストに2を足した数に等しいコストの『Aqours』のメンバーカードを1枚、そのメンバーがいたエリアに登場させる。
+[ACT] discard 1 -> PL!N-bp3-009 (remaining=0)
+[WARN] PL!S-bp3-006: after-cost effect not matchable このメンバー以外の『Aqours』のメンバー1人を自分のステージから控え室に置く。そうした場合、自分の控え室から、そのメンバーのコストに2を足した数に等しいコストの『Aqours』のメンバーカードを1枚、そのメンバーがいたエリアに登場させる。

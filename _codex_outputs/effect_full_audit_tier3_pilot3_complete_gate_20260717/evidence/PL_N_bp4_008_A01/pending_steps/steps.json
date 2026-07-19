@@ -1,0 +1,13 @@
+[
+  {
+    "next_pending_kind": "null",
+    "option_count": 1,
+    "pending_kind": "discard_from_hand",
+    "prompt": "コストとして、手札を1枚控え室に置く",
+    "selected_value": "PL!N-bp3-009",
+    "source_cardnumber": "PL!N-bp4-008",
+    "state_after": "evidence/PL_N_bp4_008_A01/pending_steps/step_01_after.json",
+    "state_before": "evidence/PL_N_bp4_008_A01/pending_steps/step_01_before.json",
+    "step_index": 1
+  }
+]

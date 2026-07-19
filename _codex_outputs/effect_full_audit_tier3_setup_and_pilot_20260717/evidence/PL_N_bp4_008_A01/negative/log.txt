@@ -1,0 +1,11 @@
+15:43:00 [NEW] code=1RCBL seed=1 opening_hand=6 turn=1
+15:43:00 [PHASE] ACTIVE (refresh) E active=3 wait=0
+15:43:00 [PHASE] ENERGY (+1) E active=4 wait=0
+15:43:00 [PHASE] DRAW (draw 1) hand=7 deck=53
+15:43:00 [PHASE] MAIN turn=1
+[PHASE] MULLIGAN (choose cards to redraw)
+[DEBUG_START] deck_exact strict: dropped original deck remainder
+[DEBUG_START] phase=MAIN turn=1 hand=1 E=40/99 wait=0
+[EXT] public reveal metadata gate active
+[EXT] effect matchers active: broad generic green pick one to hand
+[EXT] loaded llocg_ext extensions

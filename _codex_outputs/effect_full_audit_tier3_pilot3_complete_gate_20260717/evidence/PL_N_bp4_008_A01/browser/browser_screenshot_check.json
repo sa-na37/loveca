@@ -1,0 +1,42 @@
+{
+  "screenshots": [
+    {
+      "name": "00_initial",
+      "bytes": 75929,
+      "sha256": "235ee70caf21138cf721fa82a2b98fd6964c929d28a38d845058cbf0273d2d8d",
+      "unique": 256
+    },
+    {
+      "name": "01_action_available",
+      "bytes": 74435,
+      "sha256": "23cccbb9fb83baf1d1a3e09441de6a025cee4ee91dff886249bf5c7a4bfa6922",
+      "unique": 256
+    },
+    {
+      "name": "02_pending",
+      "bytes": 71392,
+      "sha256": "394849b10e98e2800f44c177cf525683ec7d202aee28f304fbcff25539a6e499",
+      "unique": 256
+    },
+    {
+      "name": "03_selection_or_skip",
+      "bytes": 72241,
+      "sha256": "fd4919544fcd46731ad01a194859a04fa288ec20c508d5b4ca0e0ecb3fbdafe4",
+      "unique": 256
+    },
+    {
+      "name": "04_resolved",
+      "bytes": 71449,
+      "sha256": "828952c9a219dd0f5c491021adf77ef96a0bc6698a2652d7b01484946a19476b",
+      "unique": 256
+    },
+    {
+      "name": "05_acknowledged",
+      "bytes": 70222,
+      "sha256": "bed1617cabd8b9b251648db28a6ec340d6966ab0658a4597d32e0e24ec6131f4",
+      "unique": 256
+    }
+  ],
+  "allNonblank": true,
+  "uniqueHashes": 6
+}

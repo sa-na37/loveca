@@ -1,0 +1,7 @@
+ llocg_dual_v2/__init__.py                          |   2 +-
+ llocg_dual_v2/core.py                              |   2 +-
+ llocg_dual_v2/server.py                            | 142 +++++++++++++++++++--
+ .../tests/test_legacy_adapter_transactions.py      |  68 +++++++++-
+ llocg_dual_v2/tests/test_rule_core.py              |   2 +-
+ run_llocg_dual_v2.py                               |   2 +-
+ 6 files changed, 201 insertions(+), 17 deletions(-)

@@ -1,0 +1,4 @@
+canonical_id,browser_dir,browser_passed,pngBytes,uniqueByteValuesInPrefix
+PL!SP-bp2-008#A01,evidence/PL_SP_bp2_008_A01/browser,true,38129,256
+PL!N-bp4-008#A01,evidence/PL_N_bp4_008_A01/browser,true,33908,256
+PL!S-bp7-006#A01,evidence/PL_S_bp7_006_A01/browser,true,33833,256
