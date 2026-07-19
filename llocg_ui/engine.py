@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: hand_activated_and_reveal_cost_sum_20260717a
+# BUILD_TAG: tier3_pilot_blocked_routes_20260720a
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -348,6 +348,7 @@ _EFFECT_RULES = [
     {"id": "draw_by_context_waited_member_count", "pattern": r"^これによりウェイト状態にしたメンバー1人につき、カードを1枚引く。$", "op": "draw_by_context_waited_member_count"},
     {"id": "stage_members_free_move_notice", "pattern": r"^自分のステージにいるメンバーを、それぞれ好きなエリアに移動させてもよい。$", "op": "stage_members_free_move_notice"},
     {"id": "stage_member_or_energy_activate_choice", "pattern": r"^自分のステージにいるメンバー1人か、エネルギー(?P<n>\d+)枚をアクティブにする。$", "op": "stage_member_or_energy_activate_choice"},
+    {"id": "energy_or_stage_group_member_activate_choice", "pattern": r"^エネルギー(?P<n>\d+)枚か『(?P<group>[^』]+)』のメンバー1人をアクティブにする。$", "op": "energy_or_stage_group_member_activate_choice"},
     {"id": "stage_heart_total_opponent_live_start_required_notice", "pattern": r"^自分のステージにいるメンバーが持つハートに<(?P<color>[^<>]+)>が合計(?P<count>\d+)つ以上ある場合、相手のライブ開始時、相手のライブカード置き場にあるライブカード1枚は、成功させるための必要ハートが<任意>多くなる。$", "op": "stage_heart_total_opponent_live_start_required_notice"},
     {"id": "stage_original_blade_le_group_effect_wait_immunity_notice", "pattern": r"^ライブ終了時まで、自分のステージにいる元々持つ<(?:\(ブレード\)|ブレード)>の数が(?P<count>\d+)つ以下の『(?P<group>[^』]+)』のメンバーは、相手の効果によってはウェイトしない。$", "op": "effect_notice"},
     {"id": "self_position_change_optional", "pattern": r"^このメンバーをポジションチェンジしてもよい。$", "op": "position_change_self", "optional": True},
@@ -4285,16 +4286,120 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         return
     if op == 'stage_member_or_energy_activate_choice':
         src = str((ctx or {}).get('source_cn', '') or '')
-        n = int(gd.get('n', 0) or 0)
+        n = max(0, int(gd.get('n', 0) or 0))
+        wait_energy = max(0, int(getattr(gs, 'energy_wait', 0) or 0))
+        member_opts = [p2 for p2 in ('L', 'C', 'R') if gs.stage.get(p2) and not bool(getattr(gs.stage.get(p2), 'active', True))]
+        can_energy = bool(n > 0 and wait_energy > 0)
+        if not can_energy and not member_opts:
+            gs.pending.append({
+                'kind': 'message_ack',
+                'label': f'{src} activate choice no target',
+                'text': _auto_effect_detail_block(ctx, 'アクティブにできるウェイト状態のエネルギー、またはウェイト状態のステージメンバーがありません。'),
+                'options': ['ok'],
+                'source_cn': src,
+            })
+            gs.log.append(f'[SKIP] {src}: no WAIT stage member or WAIT energy to activate')
+            return
+        if can_energy and not member_opts:
+            actual = min(n, wait_energy)
+            gs.energy_wait -= actual
+            gs.energy_active += actual
+            gs.pending.append({
+                'kind': 'message_ack',
+                'label': f'{src} energy activated',
+                'text': _auto_effect_detail_block(ctx, f'ウェイト状態のエネルギーを{actual}/{n}枚アクティブにしました。'),
+                'options': ['ok'],
+                'source_cn': src,
+            })
+            gs.log.append(f'[AUTO] {src}: energy active {actual}/{n} (wait={gs.energy_wait} active={gs.energy_active})')
+            return
+        if member_opts and not can_energy:
+            gs.pending.append({
+                'kind': 'choose_stage_member_to_activate',
+                'text': _auto_effect_detail_block(ctx, 'ステージのウェイト状態のメンバーを1人アクティブにする'),
+                'options': list(member_opts),
+                'candidates': list(member_opts),
+                'source_cn': src,
+                'auto_effect_detail': str((ctx or {}).get('auto_effect_detail', '') or ''),
+                'suppress_card_text': bool(str((ctx or {}).get('auto_effect_detail', '') or '')),
+            })
+            gs.log.append(f'[PENDING] {src}: choose WAIT stage member to activate {member_opts}')
+            return
         gs.pending.append({
-            'kind': 'confirm_effect',
-            'text': f'{src}[登場] ステージのメンバー1人をアクティブにするなら Apply、エネルギー{n}枚をアクティブにする場合は Skip 後にエネルギーを手動確認してください。',
-            'options': ['apply', 'skip'],
-            'after_effect_template': '自分のステージにいるメンバー1人をアクティブにする。',
-            'ctx': dict(ctx or {}),
+            'kind': 'choose_energy_or_stage_group_member_to_activate',
+            'text': _auto_effect_detail_block(ctx, f'エネルギー{n}枚、またはウェイト状態のステージメンバー1人のどちらをアクティブにするか選んでください。'),
+            'options': ['energy'] + list(member_opts),
+            'candidates': list(member_opts),
+            'energy_n': int(n),
+            'group_name': '',
             'source_cn': src,
+            'auto_effect_detail': str((ctx or {}).get('auto_effect_detail', '') or ''),
+            'suppress_card_text': bool(str((ctx or {}).get('auto_effect_detail', '') or '')),
         })
-        gs.log.append(f'[PENDING] {src}: choose activate stage member or energy {n}')
+        gs.log.append(f'[PENDING] {src}: choose energy or WAIT stage member to activate {member_opts}')
+        return
+    if op == 'energy_or_stage_group_member_activate_choice':
+        src = str((ctx or {}).get('source_cn', '') or '')
+        group_name = str(gd.get('group', '') or '').strip()
+        n = max(0, int(gd.get('n', 0) or 0))
+        wait_energy = max(0, int(getattr(gs, 'energy_wait', 0) or 0))
+        member_opts: List[str] = []
+        for p2 in ('L', 'C', 'R'):
+            slot2 = gs.stage.get(p2)
+            if not slot2 or bool(getattr(slot2, 'active', True)):
+                continue
+            ci2 = _get_card(cards_db, getattr(slot2, 'cardnumber', '') or '')
+            if ci2 and _is_member_ci(ci2) and _ci_matches_group_or_unit(ci2, group_name):
+                member_opts.append(p2)
+        can_energy = bool(n > 0 and wait_energy > 0)
+        if not can_energy and not member_opts:
+            gs.pending.append({
+                'kind': 'message_ack',
+                'label': f'{src} activate choice no target',
+                'text': _auto_effect_detail_block(ctx, f'アクティブにできるウェイト状態のエネルギー、またはウェイト状態の『{group_name}』メンバーがありません。'),
+                'options': ['ok'],
+                'source_cn': src,
+            })
+            gs.log.append(f'[SKIP] {src}: no WAIT energy or WAIT 『{group_name}』 member to activate')
+            return
+        if can_energy and not member_opts:
+            actual = min(n, wait_energy)
+            gs.energy_wait -= actual
+            gs.energy_active += actual
+            gs.pending.append({
+                'kind': 'message_ack',
+                'label': f'{src} energy activated',
+                'text': _auto_effect_detail_block(ctx, f'ウェイト状態のエネルギーを{actual}/{n}枚アクティブにしました。'),
+                'options': ['ok'],
+                'source_cn': src,
+            })
+            gs.log.append(f'[AUTO] {src}: energy active {actual}/{n} (wait={gs.energy_wait} active={gs.energy_active})')
+            return
+        if member_opts and not can_energy:
+            gs.pending.append({
+                'kind': 'choose_stage_member_to_activate',
+                'text': _auto_effect_detail_block(ctx, f'ステージのウェイト状態の『{group_name}』メンバーを1人アクティブにする'),
+                'options': list(member_opts),
+                'candidates': list(member_opts),
+                'source_cn': src,
+                'auto_effect_detail': str((ctx or {}).get('auto_effect_detail', '') or ''),
+                'suppress_card_text': bool(str((ctx or {}).get('auto_effect_detail', '') or '')),
+            })
+            gs.log.append(f'[PENDING] {src}: choose WAIT 『{group_name}』 member to activate {member_opts}')
+            return
+        opts = ['energy'] + list(member_opts)
+        gs.pending.append({
+            'kind': 'choose_energy_or_stage_group_member_to_activate',
+            'text': _auto_effect_detail_block(ctx, f'エネルギー{n}枚、またはウェイト状態の『{group_name}』メンバー1人のどちらをアクティブにするか選んでください。'),
+            'options': list(opts),
+            'candidates': list(member_opts),
+            'energy_n': int(n),
+            'group_name': group_name,
+            'source_cn': src,
+            'auto_effect_detail': str((ctx or {}).get('auto_effect_detail', '') or ''),
+            'suppress_card_text': bool(str((ctx or {}).get('auto_effect_detail', '') or '')),
+        })
+        gs.log.append(f'[PENDING] {src}: choose energy or WAIT 『{group_name}』 member to activate {member_opts}')
         return
     if op == 'stage_heart_total_opponent_live_start_required_notice':
         src = str((ctx or {}).get('source_cn', '') or '')
@@ -16524,6 +16629,32 @@ def _exec_auto_trigger(gs: GameState, cards_db: Dict[str, CardInfo], trig: Dict[
         })
         gs.log.append(f"[PENDING] group-member temp blade choice ({len(cands)} candidates)")
         return
+    if kind == 'live_start_named_member_temp_blade':
+        target_name = str((trig or {}).get('target_name', '') or '').strip()
+        blade_n = max(1, int((trig or {}).get('blade_n', 1) or 1))
+        src_cn = _source_cn_or_default((trig or {}).get('source_cn', ''), 'この能力')
+        cands = _stage_positions_by_member_name(gs, cards_db, target_name)
+        if not cands:
+            gs.pending.append({
+                'kind': 'message_ack',
+                'label': f'{src_cn} live-start named blade no target',
+                'text': f'【{src_cn}】ライブ開始時：「{target_name}」のメンバーがステージにいないため、ブレード付与は行いません。',
+                'options': ['ok'],
+                'source_cn': src_cn,
+            })
+            gs.log.append(f'[SKIP] {src_cn} live-start blade target unresolved (no 「{target_name}」 member at resolution)')
+            return
+        gs.pending.append({
+            'kind': 'choose_stage_member_to_gain_blade',
+            'text': f'【{src_cn}】ライブ開始時：「{target_name}」1人を選ぶ（ライブ終了時まで、そのメンバーはブレード+{blade_n}）',
+            'options': list(cands),
+            'pos_options': list(cands),
+            'candidates': list(cands),
+            'blade_n': int(blade_n),
+            'source_cn': src_cn,
+        })
+        gs.log.append(f'[PENDING] {src_cn}: choose 「{target_name}」 member for temp blade +{blade_n} ({len(cands)} candidates)')
+        return
     if kind == 'live_start_optional_pay_energy_for_self_score_if_group':
         gs.pending.append({
             'kind': 'optional_pay_energy_for_self_score_if_group',
@@ -18932,6 +19063,16 @@ def _build_live_start_trigger_from_effect(gs: GameState, cards_db: Dict[str, Car
             'set_idx': ctx.get('set_idx', None),
             'label': str(label or ''),
             'condition_group_name': group_name,
+        }
+    m = re.match(r'^ライブ終了時まで、自分のステージにいる「(?P<name>[^」]+)」1人は(?P<blades>(?:<\(ブレード\)>)+)を得る。$', eff_norm)
+    if m:
+        return {
+            'kind': 'live_start_named_member_temp_blade',
+            'source_cn': str(source_cn or ''),
+            'set_idx': ctx.get('set_idx', None),
+            'label': str(label or ''),
+            'target_name': str(m.group('name') or '').strip(),
+            'blade_n': max(1, _count_blade_icons_from_tagblob(str(m.group('blades') or ''))),
         }
     # Generalized from Butterfly.
     m = re.match(r'^<\(E\)><\(E\)>支払ってもよい：自分のステージに『(?P<group>[^』]+)』のメンバーがいる場合、このカードのスコアを\+1する。$', eff_norm)
@@ -27077,6 +27218,40 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             return
         slot2.active = True
         gs.log.append(f"[ACT] stage {pos2} set ACTIVE")
+        _enqueue_auto_order_from_deferred()
+        return
+    if kind == 'choose_energy_or_stage_group_member_to_activate':
+        src = str(p.get('source_cn', '') or '')
+        low = str(choice_str or '').strip().lower()
+        if low in ('energy', 'e', 'エネルギー'):
+            n = max(0, int(p.get('energy_n', 0) or 0))
+            actual = min(n, max(0, int(getattr(gs, 'energy_wait', 0) or 0)))
+            if actual <= 0:
+                gs.log.append(f'[ERR] {src}: no WAIT energy to activate')
+                gs.pending.append(p)
+                return
+            gs.energy_wait -= actual
+            gs.energy_active += actual
+            gs.log.append(f'[ACT] {src}: energy active {actual}/{n} (wait={gs.energy_wait} active={gs.energy_active})')
+            _enqueue_auto_order_from_deferred()
+            return
+        pos2 = str(choice_str or '').strip().upper()
+        cand = [str(x).upper() for x in list(p.get('candidates', []) or []) if str(x).upper() in ('L','C','R')]
+        if pos2 not in ('L','C','R') or (cand and pos2 not in cand):
+            gs.log.append(f'[ERR] {src}: invalid activate choice {choice_str}')
+            gs.pending.append(p)
+            return
+        slot2 = gs.stage.get(pos2)
+        if not slot2:
+            gs.log.append(f'[ERR] {src}: empty stage {pos2}')
+            gs.pending.append(p)
+            return
+        if bool(getattr(slot2, 'active', True)):
+            gs.log.append(f'[ERR] {src}: stage {pos2} already ACTIVE')
+            gs.pending.append(p)
+            return
+        slot2.active = True
+        gs.log.append(f'[ACT] {src}: stage {pos2} set ACTIVE')
         _enqueue_auto_order_from_deferred()
         return
     if kind == 'activate_other_wait_then_both_gain_icons':
