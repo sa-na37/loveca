@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "source_csv": "/Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full/_update_work/run_20260715_135904/final/cards_min_tokv1.csv",
+  "source_csv": "llocg_db_out_full/cards_min_tokv1.csv",
   "cards": [
     {
       "cardnumber": "LL-PR-004",
@@ -21716,6 +21716,44 @@
       ]
     },
     {
+      "cardnumber": "PL!SP-bp7-006",
+      "cardname": "桜小路きな子",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "登場",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "エネルギー置き場にあるエネルギー1枚をエネルギーデッキに置いてもよい",
+              "effect_template": "自分の控え室にある『Liella!』のメンバーカードを1枚手札に加える。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "エネルギー置き場にあるエネルギー1枚をエネルギーデッキに置いてもよい：自分の控え室にある『Liella!』のメンバーカードを1枚手札に加える。"
+            }
+          ]
+        },
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ成功時",
+          "conditions": "センター",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "このターン、自分のエネルギーがエネルギー置き場からエネルギーデッキに置かれている場合、ライブの合計スコアを+1する。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "このターン、自分のエネルギーがエネルギー置き場からエネルギーデッキに置かれている場合、ライブの合計スコアを+1する。"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "cardnumber": "PL!SP-bp7-007",
       "cardname": "米女メイ",
       "card_type": "MEMBER",
@@ -22654,9 +22692,7 @@
               "effect_op": null,
               "raw": "エールにより公開された自分のカードの中にあるブレードハートを持たない『Liella!』のメンバーカード2枚につき、ライブの合計スコアを+1する。この能力では合計スコアは2までしか増えない。"
             }
-          ],
-          "manual_override_applied": 1,
-          "manual_override_reason": "20260715 local manual correction: source page/card image audit indicates PL!SP-pb2-008 timing is ライブ成功時, not ライブ開始時."
+          ]
         }
       ]
     },

@@ -7,9 +7,9 @@
     "delta_manifest": ""
   },
   "base_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist",
-  "cards_total_in_db": 1052,
+  "cards_total_in_db": 1053,
   "cards_with_manifest": 750,
-  "cards_missing_manifest": 302,
+  "cards_missing_manifest": 303,
   "expansions": {
     "BP01": {
       "cards_wanted": 80,

@@ -8,6 +8,12 @@
       "reason": "wiki typo: the condition is '3つ以上', not '3つ'.",
       "effect_text_raw": "<ライブ成功時>\n自分が余剰ハートを3つ以上持っている場合、それらをすべて失い、このカードのスコアを+1する。",
       "effect_text_norm": "<ライブ成功時>\n自分が余剰ハートを3つ以上持っている場合、それらをすべて失い、このカードのスコアを+1する。"
+    },
+    "PL!SP-pb2-008": {
+      "cardname": "若菜四季",
+      "reason": "20260715 local manual correction: source page/card image audit indicates PL!SP-pb2-008 timing is ライブ成功時, not ライブ開始時.",
+      "effect_text_raw": "<ライブ成功時>\nエールにより公開された自分のカードの中にあるブレードハートを持たない『Liella!』のメンバーカード2枚につき、ライブの合計スコアを+1する。この能力では合計スコアは2までしか増えない。",
+      "effect_text_norm": "<ライブ成功時>\nエールにより公開された自分のカードの中にあるブレードハートを持たない『Liella!』のメンバーカード2枚につき、ライブの合計スコアを+1する。この能力では合計スコアは2までしか増えない。"
     }
   }
 }
