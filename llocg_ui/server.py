@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: deck_center_energy_plain_fallback_20260720a
+# BUILD_TAG: public_view_back_redaction_audit_20260720a
 from __future__ import annotations
 
 """llocg_ui.server
@@ -71,7 +71,7 @@ from .engine import (
     _rule_refresh_main_deck,
 )
 
-APP_VERSION = "deck_center_energy_plain_fallback_20260720a"
+APP_VERSION = "public_view_back_redaction_audit_20260720a"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -2699,8 +2699,6 @@ HTML = r'''<!doctype html>
   body.publicView #topBar .miniBtn, body.publicView #topBar .oppWaitBtn{opacity:.35;cursor:not-allowed;pointer-events:none;}
   #publicViewBadge{display:none;background:#66d9ef;color:#071014;border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:6px 10px;font-size:12px;font-weight:900;letter-spacing:.04em;}
   body.publicView #publicViewBadge{display:inline-flex;}
-  .publicMaskCard{position:absolute;border-radius:8px;background:repeating-linear-gradient(135deg,rgba(40,50,60,.95),rgba(40,50,60,.95) 10px,rgba(22,28,34,.95) 10px,rgba(22,28,34,.95) 20px);border:1px solid rgba(255,255,255,.22);box-shadow:0 6px 18px rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;color:#d9e8ff;font-weight:900;font-size:18px;letter-spacing:.08em;text-shadow:0 1px 2px rgba(0,0,0,.8);user-select:none;pointer-events:none;}
-  .publicMaskCard::after{content:'SECRET';opacity:.82;}
   .publicPendingNote{margin-top:10px;padding:10px 12px;border-radius:10px;background:rgba(102,217,239,.10);border:1px solid rgba(102,217,239,.28);color:#dff9ff;font-size:13px;line-height:1.45;}
   .publicKnownHandPanel{position:absolute;right:calc(var(--sideW) + 14px);bottom:18px;z-index:8200;display:none;gap:8px;align-items:flex-end;padding:9px 10px 10px;border-radius:12px;background:rgba(0,0,0,.68);border:1px solid rgba(255,216,77,.42);box-shadow:0 8px 26px rgba(0,0,0,.55);}
   .publicKnownHandPanel .publicKnownTitle{font-size:12px;font-weight:900;color:#ffe985;writing-mode:vertical-rl;letter-spacing:.08em;line-height:1.1;}
@@ -3111,7 +3109,7 @@ HTML = r'''<!doctype html>
   // running stale JS.  Compare the state ui_version and reload once when the
   // server-side bundle changes, so public refresh notices use the current modal
   // layout and owner-OK synchronization.
-  const CLIENT_UI_VERSION = 'live_attempt_summary_popup_rebase_20260706f';
+  const CLIENT_UI_VERSION = 'public_view_back_redaction_audit_20260720a';
   let clientReloadingForVersion = false;
   const urlParams = new URLSearchParams(window.location.search || '');
   const VIEW_MODE = String(urlParams.get('view') || (window.location.pathname === '/public' ? 'public' : 'private')).toLowerCase();
@@ -4629,17 +4627,6 @@ ${text}`;
     const v = st ? Number(st[field] || 0) : 0;
     if(Number.isFinite(v) && v >= 0) return v;
     return Array.isArray(fallbackList) ? fallbackList.length : 0;
-  }
-
-  function makePublicMaskCard(x, y, w, h, z=100){
-    const d = document.createElement('div');
-    d.className = 'publicMaskCard';
-    d.style.left = x + 'px';
-    d.style.top = y + 'px';
-    d.style.width = w + 'px';
-    d.style.height = h + 'px';
-    d.style.zIndex = String(z);
-    return d;
   }
 
   function renderMaskedHand(zoneEl, count, revealedCards){

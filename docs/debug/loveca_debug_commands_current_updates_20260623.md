@@ -204,3 +204,53 @@ python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8801 --debug
 ```
 
 確認観点: `C` の起動効果を使う。コストでエネルギー1枚がこのメンバーの下に置かれ、`energy_active 3 -> 2`、`C.energy_under 0 -> 1` になる。その後、下エネルギー1枚+1により「元々持つ<(ブレード)>の数が2つ以下のメンバー1人をウェイトにする」人数入力 pending が発生する。選択肢は `0/1`、発生源は `PL!N-bp7-004`。`1` を入力すると `opponent_wait_count 0 -> 1`、pending は空になる。相手個別カード選択が出ないことは現行仕様通り。
+
+#### PL!SP-bp2-008#A01 起動: E支払い → 別エリア移動/入れ替え
+
+※20260720内部確認: `PL!SP-bp2-008#A01` を確認。カード番号専用分岐ではなく、`このメンバーがいるエリアとは別の自分のエリア1つを選ぶ。このメンバーをそのエリアに移動する。選んだエリアにメンバーがいる場合、そのメンバーは、このメンバーがいたエリアに移動させる。` の明文化されたポジションチェンジ文型を既存 `position_change_self` resolver へ接続。engine API と HTTP API で、`<(E)>` 支払い、移動先 `L/R` pending、発生源 `PL!SP-bp2-008` 表示、`L` 選択時のC/L入れ替え、pending 残留なしを確認。
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+unset LLOCG_START_STAGE LLOCG_START_STAGE_L LLOCG_START_STAGE_C LLOCG_START_STAGE_R \
+  LLOCG_START_HAND LLOCG_START_HAND_SIZE LLOCG_START_SHUFFLE \
+  LLOCG_START_GREEN LLOCG_START_SUCCESS LLOCG_START_RESOLVE \
+  LLOCG_START_DECK_TOP LLOCG_START_DECK_EXACT \
+  LLOCG_START_PHASE LLOCG_START_TURN \
+  LLOCG_START_ENERGY_ACTIVE LLOCG_START_ENERGY_WAIT \
+  LLOCG_DEBUG_PRESET LLOCG_DEBUG_EFFECT_CARD LLOCG_START_DEBUG \
+  LLOCG_DEBUG_LIVE_IN_HAND LLOCG_DEBUG_MEMBER_IN_HAND
+export LLOCG_DEBUG_PRESET=effect
+export LLOCG_START_PHASE=MAIN
+export LLOCG_START_TURN=1
+export LLOCG_START_STAGE_C='PL!SP-bp2-008'
+export LLOCG_START_STAGE_L='PL!N-bp3-009'
+export LLOCG_START_HAND_SIZE=0
+export LLOCG_START_ENERGY_ACTIVE=2
+export LLOCG_START_ENERGY_WAIT=0
+python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8801 --debug
+```
+
+確認観点: `C` の起動効果を使う。`<(E)>` コストで `energy_active 2 -> 1`、`energy_wait 0 -> 1` になる。後続 pending は `position_change` で、選択肢は元エリアC以外の `L/R`。`L` を選ぶと `PL!SP-bp2-008` が `C -> L`、元Lの `PL!N-bp3-009` が `L -> C` へ入れ替わり、pending は空になる。
+
+### 2026-07-20 パブリックウィンドウ UI / 非公開領域 redaction smoke
+
+※20260720内部確認: パブリックウィンドウの表示経路を確認。公開 view state は手札・山札のカード番号を渡さず `hand_count` / `deck_count` のみを残す。ライブカード置き場は `LIVE_CONFIRM` かつ `live_start_prompted=false` の間だけ `__BACK__` に置換し、`LIVE_PERF` 以降は実カード番号を公開する。pending 内の非公開カード番号は `__BACK__` または `非公開カード` に置換する。UI 側では公開手札、山札、裏向きライブカード、非公開 pending カードのすべてが `/img?cn=__BACK__` 経由で `back.png` を表示する。古い CSS マスク `publicMaskCard` は未使用かつ back.png ではないため削除済み。公開/メイン画面の差分は、公開ビューの読み取り専用表示と非公開領域のカード redaction に限定する方針で確認。
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+python3 -m unittest llocg_ui.tests.test_public_view
+python3 -m py_compile ./llocg_ui/server.py ./llocg_ui/views.py ./llocg_ui/engine.py ./llocg_ui/engine_effect.py ./llocg_ui/effects/*.py ./llocg_dual_v2/*.py ./run_llocg_ui_web.py ./run_llocg_dual_v2.py
+python3 -m unittest llocg_ui.tests.test_public_view llocg_dual_v2.tests.test_rule_core llocg_dual_v2.tests.test_legacy_adapter_transactions
+```
+
+確認観点: `test_public_view` で、公開 view state が `hand=[]` / `deck=[]` と枚数のみを返すこと、ステージ・控え室・解決領域・成功ライブ置き場は表のまま残ること、ライブセット直後は `set_zone=["__BACK__", ...]` になり `LIVE_PERF` 以降は表になること、非公開 pending 候補が `__BACK__` に置換されること、公開されたまま手札に移動したカードだけが `public_hand_revealed_cards` として保持されることを確認する。
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 18182 --debug
+curl -s 'http://127.0.0.1:18182/state?view=public'
+curl -s -D - 'http://127.0.0.1:18182/img?cn=__BACK__' -o /private/tmp/loveca_back_from_server.png
+cmp -s /private/tmp/loveca_back_from_server.png ./llocg_db_out_full/card_images/back.png; printf 'back_png_match=%s\n' "$?"
+```
+
+確認観点: `/state?view=public` が `view_mode=public`、`hand=[]`、`deck=[]`、`hand_count`、`deck_count` を返す。`/img?cn=__BACK__` は `llocg_db_out_full/card_images/back.png` と完全一致する。2デッキ側は同じ `make_view_state` と scoped HTML を通るため、`/p1/img?cn=__BACK__` でも同一画像を確認する。
