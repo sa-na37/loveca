@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: tier3_pilot_blocked_routes_20260720e
+# BUILD_TAG: tier3_pilot_blocked_routes_20260720f
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -166,6 +166,8 @@ _EFFECT_RULES = [
     {"id": "hand_member_cost_le_named_to_former_area_then_energy_under", "pattern": r"^自分の手札からコスト(?P<cost_max>\d+)以下の[「『](?P<name>[^」』]+)[」』]のメンバーカードを(?P<count_n>\d+)枚、このメンバーがいたエリアに登場させる。その後、自分のエネルギー置き場にあるエネルギー(?P<energy_n>\d+)枚をそのメンバーの下に置く。$", "op": "hand_member_cost_le_named_to_former_area_then_energy_under"},
     {"id": "hand_member_cost_le_not_named_to_former_area_then_energy_under", "pattern": r"^自分の手札からコスト(?P<cost_max>\d+)以下の『(?P<exclude_name>[^』]+)』以外のメンバーカードを(?P<count_n>\d+)枚、このメンバーがいたエリアに登場させる。その後、自分のエネルギー置き場にあるエネルギー(?P<energy_n>\d+)枚をそのメンバーの下に置く。$", "op": "hand_member_cost_le_not_named_to_former_area_then_energy_under"},
     {"id": "green_member_cost_le_group_to_former_area", "pattern": r"^自分の控え室からコスト(?P<cost_max>\d+)以下の『(?P<group>[^』]+)』のメンバーカードを(?P<count_n>\d+)枚、このメンバーがいたエリアに登場させる。$", "op": "green_member_cost_le_group_to_former_area"},
+    {"id": "other_stage_group_member_to_green_then_green_group_member_cost_plus_to_former_area", "pattern": r"^このメンバー以外の『(?P<group>[^』]+)』のメンバー(?P<count_n>\d+)人を自分のステージから控え室に置く。そうした場合、自分の控え室から、そのメンバーのコストに(?P<plus>\d+)を足した数に等しいコストの『(?P=group)』のメンバーカードを(?P<entry_n>\d+)枚、そのメンバーがいたエリアに登場させる。$", "op": "other_stage_group_member_to_green_then_green_group_member_cost_plus_to_former_area"},
+    {"id": "other_stage_group_member_to_green_optional_then_green_group_member_cost_plus_to_former_area", "pattern": r"^このメンバー以外の『(?P<group>[^』]+)』のメンバー(?P<count_n>\d+)人を自分のステージから控え室に置いてもよい。そうした場合、自分の控え室から、そのメンバーのコストに(?P<plus>\d+)を足した数に等しいコストの『(?P=group)』のメンバーカードを(?P<entry_n>\d+)枚、そのメンバーがいたエリアに登場させる。$", "op": "other_stage_group_member_to_green_then_green_group_member_cost_plus_to_former_area", "optional": True},
     {"id": "green_member_cost_le_group_to_empty_area", "pattern": r"^(?P<energy_icons>(?:<\(E\)>)+)?自分の控え室からコスト(?P<cost_max>\d+)以下の『(?P<group>[^』]+)』のメンバーカードを(?P<count_n>\d+)枚、メンバーのいないエリアに登場させる。$", "op": "green_member_cost_le_to_empty_area"},
     {"id": "green_member_cost_le_any_to_empty_area", "pattern": r"^(?P<energy_icons>(?:<\(E\)>)+)?自分の控え室からコスト(?P<cost_max>\d+)以下のメンバーカードを(?P<count_n>\d+)枚、メンバーのいないエリアに登場させる。$", "op": "green_member_cost_le_to_empty_area"},
     {"id": "draw_then_green_member_cost_le_group_to_empty_area", "pattern": r"^カードを(?P<draw_n>\d+)枚引き、自分の控え室にあるコスト(?P<cost_max>\d+)以下の『(?P<group>[^』]+)』のメンバーカード(?P<count_n>\d+)枚を自分のステージのメンバーのいないエリアに登場させる。$", "op": "draw_then_green_member_cost_le_group_to_empty_area"},
@@ -6394,6 +6396,53 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
             'suppress_card_text': bool(str((ctx or {}).get('auto_effect_detail', '') or '')),
         })
         gs.log.append(f"[PENDING] {src or '?'}: choose waiting-room member for former area {pos} ({len(cands)} candidates)")
+        return
+    if op == 'other_stage_group_member_to_green_then_green_group_member_cost_plus_to_former_area':
+        src = str((ctx or {}).get('source_cn', '') or '')
+        src_pos = str((ctx or {}).get('pos', '') or '').upper()
+        group_name = str(gd.get('group', '') or '').strip()
+        count_n = max(0, int(gd.get('count_n', 1) or 1))
+        entry_n = max(0, int(gd.get('entry_n', 1) or 1))
+        plus_n = int(gd.get('plus', 0) or 0)
+        allow_skip = bool(rule.get('optional', False) or rule.get('allow_less', False))
+        if count_n != 1 or entry_n != 1:
+            gs.log.append(f"[WARN] {src or '?'}: stage-to-green cost+plus supports 1->1 only (got {count_n}->{entry_n})")
+            return
+        cands = []
+        for pos2 in ('L', 'C', 'R'):
+            if pos2 == src_pos:
+                continue
+            slot2 = (getattr(gs, 'stage', {}) or {}).get(pos2)
+            if not slot2:
+                continue
+            ci2 = _get_card(cards_db, getattr(slot2, 'cardnumber', '') or '')
+            if ci2 and _is_member_ci(ci2) and _ci_matches_group_or_unit(ci2, group_name):
+                cands.append(pos2)
+        if not cands:
+            gs.log.append(f"[INFO] {src or '?'}: no other stage 『{group_name}』 member to move to waiting room")
+            if allow_skip:
+                return
+            gs.pending.append({
+                'kind': 'message_ack',
+                'source_cn': src,
+                'text': _auto_effect_detail_block(ctx, f'控え室に置けるこのメンバー以外の『{group_name}』メンバーがいないため、効果は適用されません。'),
+                'options': ['ok'],
+            })
+            return
+        gs.pending.append({
+            'kind': 'choose_stage_group_member_to_green_then_green_cost_plus_to_former_area',
+            'text': _auto_effect_detail_block(ctx, f'ステージから控え室に置くこのメンバー以外の『{group_name}』メンバーを1人選んでください。'),
+            'options': list(cands) + (['skip'] if allow_skip else []),
+            'candidates': list(cands),
+            'source_cn': src,
+            'source_pos': src_pos,
+            'group_name': group_name,
+            'plus_n': int(plus_n),
+            'allow_skip': allow_skip,
+            'auto_effect_detail': str((ctx or {}).get('auto_effect_detail', '') or ''),
+            'suppress_card_text': bool(str((ctx or {}).get('auto_effect_detail', '') or '')),
+        })
+        gs.log.append(f"[PENDING] {src or '?'}: choose other stage 『{group_name}』 member -> green, then cost+{plus_n} entry")
         return
     if op == 'green_member_cost_le_to_empty_area':
         src = str((ctx or {}).get('source_cn', '') or '')
@@ -22632,6 +22681,45 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                     'after_source_cn': ci.cardnumber,
                 })
                 gs.log.append(f"[PENDING] activate choose_stage_member_to_wait n={total_need} then {eff}")
+                return
+            # Cost: this member WAIT + discard cards from hand (required, BODY起動)
+            # Keep this before the plain hand-discard route so the self-WAIT part
+            # of compound costs is not silently dropped.
+            m_self_wait_discard = re.search(r'手札を(?P<n>\d+)枚控え室に置く', cost)
+            self_wait_discard_n = int(m_self_wait_discard.group('n') or 0) if m_self_wait_discard else 0
+            if self_wait_discard_n <= 0 and '手札を1枚控え室に置く' in cost:
+                self_wait_discard_n = 1
+            if _cost_requires_self_wait(cost) and not _cost_requires_self_to_green(cost) and self_wait_discard_n > 0:
+                if len(gs.hand) < self_wait_discard_n:
+                    gs.log.append(f"[ERR] activate: not enough cards in hand for self-wait discard cost (need {self_wait_discard_n})")
+                    return
+                if not slot:
+                    gs.log.append(f"[ERR] activate: self-wait discard cost source missing {pos}")
+                    return
+                if flags.get('once_per_turn'):
+                    try:
+                        gs.used_this_turn[akey] = 1
+                    except Exception:
+                        try:
+                            gs.used_this_turn = {akey: 1}
+                        except Exception:
+                            pass
+                try:
+                    slot.active = False
+                except Exception:
+                    pass
+                gs.log.append(f"[COST] {pos}: {getattr(slot,'cardnumber','?')} -> WAIT (self-wait cost)")
+                gs.pending.append({
+                    'kind': 'discard_from_hand',
+                    'remaining': self_wait_discard_n,
+                    'text': f'コストとして、手札を{self_wait_discard_n}枚控え室に置く',
+                    'options': list(gs.hand),
+                    'after_effect_template': eff,
+                    'after_ctx': {'pos': pos, 'source_cn': ci.cardnumber, 'effect_timing': '起動効果'},
+                    'after_source_cn': ci.cardnumber,
+                    'source_cn': ci.cardnumber,
+                })
+                gs.log.append(f"[PENDING] activate self-WAIT + discard {self_wait_discard_n} then {eff}")
                 return
             # Cost: discard from hand (required, BODY起動)
             m_req_member_discard = re.search(r'手札のメンバーカードを(\d+)枚控え室に置く', cost)

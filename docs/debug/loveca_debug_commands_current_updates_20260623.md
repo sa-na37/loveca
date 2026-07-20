@@ -254,3 +254,20 @@ cmp -s /private/tmp/loveca_back_from_server.png ./llocg_db_out_full/card_images/
 ```
 
 確認観点: `/state?view=public` が `view_mode=public`、`hand=[]`、`deck=[]`、`hand_count`、`deck_count` を返す。`/img?cn=__BACK__` は `llocg_db_out_full/card_images/back.png` と完全一致する。2デッキ側は同じ `make_view_state` と scoped HTML を通るため、`/p1/img?cn=__BACK__` でも同一画像を確認する。
+
+#### 非公開領域扱いで裏面表示される想定状況
+
+※20260720内部確認: 非公開領域扱いで `__BACK__` / `back.png` になる想定状況を列挙し、`llocg_ui.tests.test_public_view` に回帰テストを追加した。
+
+- 山札: public state は `deck=[]` と `deck_count` のみを返す。UI は山札ゾーンに `renderTopCard(..., '__BACK__', ...)` を使う。
+- 通常手札: public state は `hand=[]` と `hand_count` のみを返す。UI は `renderMaskedHand` で未知枚数分を `__BACK__` にする。
+- ライブカード置き場の裏向き期間: `LIVE_CONFIRM` かつ `live_start_prompted=false` の間は `set_zone` を `__BACK__` に置換し、`set_zone_score_rows` も伏せる。`LIVE_CONFIRM` でも `live_start_prompted=true`、および `LIVE_PERF` / `LIVE_ATTEMPT` / `LIVE_RESOLVE` は表向き扱い。
+- 非公開領域を見る/選ぶ pending: `choose_from_topk`、手札コスト/手札選択、山札上操作など、手札・山札由来のカード番号は値・リスト・dict key のいずれでも `__BACK__` または `非公開カード` に置換する。
+- 公開例外: `show_revealed_cards_ack`、`public_reveal_events`、refresh notice の returned LIVE、公開されたまま手札へ移動したカードは裏面にせず、公開カードとしてカード番号と表示用メタデータを残す。
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+python3 -m unittest llocg_ui.tests.test_public_view
+```
+
+確認結果: 9 tests OK。山札、通常手札、ライブセット裏向き期間、非公開 pending、公開例外、HTML 内の古い CSS マスク削除と `__BACK__` 描画経路を確認済み。
