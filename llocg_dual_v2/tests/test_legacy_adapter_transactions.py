@@ -28,9 +28,17 @@ except ModuleNotFoundError:
 
 from llocg_dual_v2.core import DualMatchEngine, Phase
 import llocg_dual_v2.server as dual_server
-from llocg_dual_v2.server import LegacyUIAdapter, PlayerViewRuntime, _scoped_single_html
+from llocg_dual_v2.server import (
+    LegacyUIAdapter,
+    PlayerViewRuntime,
+    _find_runtime_card_image,
+    _first_existing_file,
+    _runtime_image_candidates,
+    _scoped_single_html,
+    _transparent_png_bytes,
+)
 
-BUILD_TAG = "llocg_dual_v2_tied_success_two_zone_block_20260720a"
+BUILD_TAG = "llocg_dual_v2_deck_center_energy_plain_fallback_20260720a"
 
 
 def deck(prefix: str):
@@ -671,6 +679,47 @@ class LegacyAdapterTransactionTests(unittest.TestCase):
         self.assertIn("/suspend_state", html)
         self.assertIn("/resume_state", html)
         self.assertIn("gameOverNotice", html)
+        self.assertIn("#divider{position:relative;display:grid", html)
+        self.assertIn("grid-template-columns:minmax(150px,1fr) minmax(260px,1.35fr) minmax(390px,max-content)", html)
+        self.assertIn("#phaseBanner{grid-column:2;grid-row:1", html)
+        self.assertIn("#controls{grid-column:3;grid-row:1", html)
+        self.assertIn("#requestStatus{grid-column:1;grid-row:1", html)
+        self.assertNotIn("#controls{position:absolute", html)
+
+    def test_scoped_html_reserves_label_width_from_topbar(self):
+        html = _scoped_single_html("p1", upper=False, label="プレイヤー1（7QEC8）", color="#3355aa")
+        self.assertIn("--dualLabelW:178px", html)
+        self.assertIn("width:var(--dualLabelW)", html)
+        self.assertIn("padding-left:calc(var(--dualLabelW) + 14px)", html)
+        self.assertIn("text-overflow:ellipsis", html)
+
+    def test_dual_image_helpers_find_back_energy_and_noimage_fallback(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            img_dir = root / "llocg_db_out_full" / "card_images"
+            img_dir.mkdir(parents=True)
+            back = img_dir / "back.png"
+            energy = img_dir / "energy.png"
+            noimage = img_dir / "NoImage.PNG"
+            back.write_bytes(b"back")
+            energy.write_bytes(b"energy")
+            noimage.write_bytes(b"noimage")
+            rt = SimpleNamespace(
+                app=SimpleNamespace(
+                    root=root,
+                    outdir=root,
+                    img=SimpleNamespace(find=lambda _cn: None),
+                )
+            )
+
+            self.assertIn(back, _runtime_image_candidates(rt, "__BACK__"))
+            self.assertIsNotNone(_first_existing_file(_runtime_image_candidates(rt, "__BACK__")))
+            self.assertIn(energy, _runtime_image_candidates(rt, "__ENERGY__"))
+            self.assertEqual(_first_existing_file(_runtime_image_candidates(rt, "__ENERGY__")), energy)
+            self.assertEqual(_find_runtime_card_image(rt, "NO_SUCH_CARD_20260720").name, noimage.name)
+            energy.unlink()
+            self.assertIsNone(_first_existing_file(_runtime_image_candidates(rt, "__ENERGY__")))
+            self.assertGreater(len(_transparent_png_bytes()), 0)
 
     def test_stale_failure_from_previous_turn_is_not_applied_at_live_start(self):
         a = self.make_adapter()

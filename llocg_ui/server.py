@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: single_suspend_resume_and_dual_rule_recheck_20260720a
+# BUILD_TAG: deck_center_energy_plain_fallback_20260720a
 from __future__ import annotations
 
 """llocg_ui.server
@@ -71,7 +71,7 @@ from .engine import (
     _rule_refresh_main_deck,
 )
 
-APP_VERSION = "single_suspend_resume_and_dual_rule_recheck_20260720a"
+APP_VERSION = "deck_center_energy_plain_fallback_20260720a"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -698,7 +698,7 @@ class App:
         return {
             "format": "llocg_ui_suspend_state",
             "format_version": 1,
-            "build_tag": "single_suspend_resume_and_dual_rule_recheck_20260720a",
+                "build_tag": "deck_center_energy_plain_fallback_20260720a",
             "created_at": _dt.datetime.now(_dt.timezone.utc).isoformat(),
             "label": str(label or ""),
             "summary": {
@@ -2524,18 +2524,33 @@ class Handler(BaseHTTPRequestHandler):
             if cn == "__ENERGY__":
                 cand = []
                 try:
-                    cand.append(Path.cwd() / "energy.jpg")
                     cand.append(Path.cwd() / "energy.png")
+                    cand.append(Path.cwd() / "energy.jpg")
                     cand.append(Path.cwd() / "energy.jpeg")
-                    cand.append(self.app.root / "energy.jpg")
+                    cand.append(Path.cwd() / "energy.webp")
                     cand.append(self.app.root / "energy.png")
+                    cand.append(self.app.root / "energy.jpg")
+                    cand.append(self.app.root / "energy.jpeg")
+                    cand.append(self.app.root / "energy.webp")
+                    cand.append(self.app.root / "llocg_db_out_full" / "card_images" / "energy.png")
+                    cand.append(self.app.root / "llocg_db_out_full" / "card_images" / "energy.jpg")
+                    cand.append(self.app.root / "llocg_db_out_full" / "card_images" / "energy.jpeg")
+                    cand.append(self.app.root / "llocg_db_out_full" / "card_images" / "energy.webp")
+                    cand.append(self.app.root / "card_images" / "energy.png")
+                    cand.append(self.app.root / "card_images" / "energy.jpg")
+                    cand.append(self.app.root / "card_images" / "energy.jpeg")
+                    cand.append(self.app.root / "card_images" / "energy.webp")
+                    cand.append(Path.cwd() / "llocg_db_out_full" / "card_images" / "energy.png")
+                    cand.append(Path.cwd() / "llocg_db_out_full" / "card_images" / "energy.jpg")
+                    cand.append(Path.cwd() / "llocg_db_out_full" / "card_images" / "energy.jpeg")
+                    cand.append(Path.cwd() / "llocg_db_out_full" / "card_images" / "energy.webp")
                     cand.append(self.app.root / "llocg_db_out_full" / "energy.jpg")
                 except Exception:
                     pass
                 for p2 in cand:
                     try:
                         if p2 and p2.exists():
-                            ctype = "image/jpeg" if str(p2).lower().endswith((".jpg",".jpeg")) else "image/png"
+                            ctype = "image/webp" if str(p2).lower().endswith(".webp") else "image/jpeg" if str(p2).lower().endswith((".jpg",".jpeg")) else "image/png"
                             self._send(200, p2.read_bytes(), ctype)
                             return
                     except Exception:
@@ -4543,7 +4558,9 @@ ${text}`;
     if(opts && opts.useStandardSize){
       const std = standardSize(wantOrient);
       if(std && std.w > 0 && std.h > 0){
-        sz = {w: std.w, h: std.h};
+        const fit = Math.min(1.0, availW / std.w, availH / std.h);
+        const scale = (isFinite(fit) && fit > 0) ? fit : 1.0;
+        sz = {w: std.w * scale, h: std.h * scale};
       }
     }
     const x = (zoneW - sz.w)/2;

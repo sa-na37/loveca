@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: tier3_pilot_blocked_routes_20260720a
+# BUILD_TAG: tier3_pilot_blocked_routes_20260720e
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -79,6 +79,7 @@ _EFFECT_RULES = [
     {"id": "retrieve_waiting_group_live_score_le_1", "pattern": r"^自分の控え室からスコア(?P<score_lim>\d+)以下の『(?P<group>[^』]+)』のライブカードを1枚手札に加える。$", "op": "retrieve_from_waiting_room", "card_kind": "LIVE", "n": 1},
     {"id": "retrieve_waiting_member_cost_le_n", "pattern": r"^自分の控え室からコスト(?P<cost_lim>\d+)以下のメンバーカードを(?P<n>\d+)枚(?:まで)?手札に加える。$", "op": "retrieve_from_waiting_room_cost_range", "card_kind": "MEMBER"},
     {"id": "retrieve_waiting_group_member_cost_le_n", "pattern": r"^自分の控え室からコスト(?P<cost_lim>\d+)以下の『(?P<group>[^』]+)』のメンバーカードを(?P<n>\d+)枚手札に加える。$", "op": "retrieve_from_waiting_room_cost_range", "card_kind": "MEMBER"},
+    {"id": "green_live_optional_pay_score_energy_retrieve", "pattern": r"^自分の控え室にあるライブカードを(?P<n>\d+)枚選び、そのカードのスコアに等しい数の<\(E\)>を支払ってもよい。そうした場合、そのライブカードを手札に加える。$", "op": "green_live_optional_pay_score_energy_retrieve"},
     {"id": "look_top_k_choose_1_rest_waiting", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から1枚を手札に加え、残りを控え室に置く。$", "op": "look_top_choose"},
     {"id": "look_top_k_choose_1_rest_waiting_sentence_split", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から1枚を手札に加える。残りを控え室に置く。$", "op": "look_top_choose"},
     {"id": "look_top_k_choose_n_rest_waiting", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中からカードを(?P<n>\d+)枚手札に加え、残りを控え室に置く。$", "op": "look_top_choose_n"},
@@ -305,6 +306,7 @@ _EFFECT_RULES = [
     {"id": "activate_stage_group_member_upto1", "pattern": r"^自分のステージにいる『(?P<group>[^』]+)』のメンバーを1人までアクティブにする。$", "op": "activate_stage_group_member_one", "optional": True},
     {"id": "activate_stage_member_optional_any", "pattern": r"^メンバー1人をアクティブにしてもよい。$", "op": "activate_stage_member", "optional": True},
     {"id": "position_change_self", "pattern": r"^このメンバー(?:を|は)ポジションチェンジする。$", "op": "position_change_self"},
+    {"id": "move_self_to_other_area_swap", "pattern": r"^このメンバーがいるエリアとは別の自分のエリア1つを選ぶ。このメンバーをそのエリアに移動する。選んだエリアにメンバーがいる場合、そのメンバーは、このメンバーがいたエリアに移動させる。$", "op": "position_change_self"},
     {"id": "position_change_stage_member_optional_any", "pattern": r"^メンバー1人をポジションチェンジさせてもよい。$", "op": "position_change_stage_member", "optional": True},
     {"id": "formation_change_stage_member_optional_any", "pattern": r"^自分のステージにいるメンバーをフォーメーションチェンジしてもよい。$", "op": "position_change_stage_member", "optional": True},
     {"id": "stage_group_count_formation_change_optional", "pattern": r"^自分のステージに『(?P<group>[^』]+)』のメンバーが(?P<count>\d+)人以上いる場合、自分のステージにいるメンバーをフォーメーションチェンジしてもよい。$", "op": "stage_group_count_formation_change_optional"},
@@ -337,6 +339,7 @@ _EFFECT_RULES = [
     {"id": "stage_distinct_group_members_choose_header_noop", "pattern": r"^自分のステージに名前の異なる『(?P<group>[^』]+)』のメンバーが(?P<count>\d+)人いる場合、以下から1つを選ぶ。$", "op": "body_always_noop"},
     {"id": "green_members_cost_sum_le_to_stage", "pattern": r"^自分の控え室から、コストの合計が(?P<cost_sum>\d+)以下になるようにメンバーカードを(?P<n>\d+)枚までステージに登場させる。$", "op": "green_members_cost_sum_le_to_stage"},
     {"id": "retrieve_by_context_discarded_group_live", "pattern": r"^自分の控え室から、これにより控え室に置いたカードと同じ枚数の『(?P<group>[^』]+)』のライブカードを手札に加える。$", "op": "retrieve_by_context_discarded_group_live"},
+    {"id": "retrieve_member_lower_cost_than_context_discarded_member", "pattern": r"^自分の控え室から、これにより控え室に置いたメンバーカードより、コストの低いメンバーカードを(?P<n>\d+)枚手札に加える。$", "op": "retrieve_member_lower_cost_than_context_discarded_member"},
     {"id": "position_change_to_group_area", "pattern": r"^このメンバーを『(?P<choices>[^』]+(?:』か『[^』]+)*)』のメンバーがいるエリアにポジションチェンジする。$", "op": "position_change_to_group_area"},
     {"id": "disable_stage_group_live_start_then_retrieve", "pattern": r"^自分のステージにいる『(?P<group>[^』]+)』メンバー(?P<n>\d+)人のすべての<ライブ開始時>能力を、ライブ終了時まで、無効にしてもよい。これにより無効にした場合、自分の控え室から『(?P=group)』のカードを(?P<retrieve_n>\d+)枚手札に加える。$", "op": "disable_stage_group_live_start_then_retrieve"},
     {"id": "green_distinct_live_names_opponent_choose_to_hand", "pattern": r"^自分の控え室にある、カード名の異なるライブカードを(?P<n>\d+)枚選ぶ。そうした場合、相手はそれらのカードのうち(?P<pick_n>\d+)枚を選ぶ。これにより相手に選ばれたカードを自分の手札に加える。$", "op": "green_distinct_live_names_opponent_choose_to_hand"},
@@ -529,6 +532,7 @@ _EFFECT_RULES = [
     {"id": "set_opponent_wait_exactly1", "pattern": r"^相手のステージ(?:に)?いるコスト(?P<cost>\d+)以下のメンバ(?:ー)?1人をウェイト(?:状態)?にする。$", "op": "set_opponent_wait_exactly1"},
     {"id": "set_opponent_wait_all_cost", "pattern": r"^相手のステージ(?:に)?いるすべてのコスト(?P<cost>\d+)以下のメンバーをウェイト(?:状態)?にする。$", "op": "set_opponent_wait_all_cost"},
     {"id": "set_opponent_wait_original_blade_le", "pattern": r"^相手のステージにいる元々持つ<\(ブレード\)>(?:の数)?が(?P<blade_lim>\d+)(?:つ|個)?以下のメンバー1人をウェイトにする。$", "op": "set_opponent_wait_original_blade_le"},
+    {"id": "set_opponent_wait_original_blade_le_under_energy_plus", "pattern": r"^相手のステージにいる、?元々持つ<\(ブレード\)>の数がこのメンバーの下にあるエネルギーカードの枚数に(?P<plus>\d+)を足した数以下のメンバー(?P<n>\d+)人をウェイトにする。$", "op": "set_opponent_wait_original_blade_le_under_energy_plus"},
     {"id": "set_opponent_wait_original_blade_eq", "pattern": r"^相手のステージにいる元々持つ<\(ブレード\)>(?:の数)?がちょうど(?P<blade_eq>\d+)(?:つ|個)?のメンバー1人をウェイトにする。$", "op": "set_opponent_wait_original_blade_eq"},
     {"id": "set_opponent_wait_original_blade_le_not_group", "pattern": r"^相手のステージにいる元々持つ<\(ブレード\)>(?:の数)?が(?P<blade_lim>\d+)(?:つ|個)?以下の『(?P<group>[^』]+)』以外のメンバー1人をウェイトにする。$", "op": "set_opponent_wait_original_blade_le_not_group"},
     {"id": "set_opponent_wait_all_original_blade_le", "pattern": r"^相手のステージにいる元々持つ<\(ブレード\)>(?:の数)?が(?P<blade_lim>\d+)(?:つ|個)?以下のすべてのメンバーをウェイトにする。$", "op": "set_opponent_wait_all_original_blade_le"},
@@ -1957,6 +1961,18 @@ def can_activate_in_state(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: s
             need_e = _parse_energy_cost(cost)
             if need_e > 0 and int(gs.energy_active or 0) < need_e:
                 continue
+            if re.search(r'手札のメンバーカードを\d+枚控え室に置く', cost):
+                member_hand_n = 0
+                for hcn in list(getattr(gs, 'hand', []) or []):
+                    hci = _get_card(cards_db, hcn)
+                    if hci and _is_member_ci(hci):
+                        member_hand_n += 1
+                try:
+                    need_member_hand_n = int(re.search(r'手札のメンバーカードを(\d+)枚控え室に置く', cost).group(1))
+                except Exception:
+                    need_member_hand_n = 1
+                if member_hand_n < need_member_hand_n:
+                    continue
             need_energy_to_deck = _parse_energy_to_deck_cost(cost)
             if need_energy_to_deck > 0 and (int(gs.energy_active or 0) + int(gs.energy_wait or 0)) < need_energy_to_deck:
                 continue
@@ -3421,6 +3437,29 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         else:
             gs.log.append(f'[PENDING] retrieve LIVE then manual check for score>={score_n} 『{group_name}』 energy +{energy_n}')
         return
+    if op == 'green_live_optional_pay_score_energy_retrieve':
+        n = max(1, int(gd.get('n', 1) or 1))
+        src = str((ctx or {}).get('source_cn', '') or '')
+        cands = [str(cn) for cn in list(getattr(gs, 'green_room', []) or []) if _is_live_ci(_get_card(cards_db, cn))]
+        if len(cands) < n:
+            gs.pending.append({
+                'kind': 'message_ack',
+                'text': _auto_effect_detail_block(ctx, f'控え室にライブカードが必要枚数ありません（{len(cands)}/{n}枚）。'),
+                'options': ['ok'],
+                'source_cn': src,
+            })
+            gs.log.append(f'[SKIP] {src}: waiting-room LIVE insufficient {len(cands)}/{n} for optional score-energy retrieve')
+            return
+        gs.pending.append({
+            'kind': 'choose_green_live_for_optional_score_energy_retrieve',
+            'text': _auto_effect_detail_block(ctx, '控え室のライブカードを1枚選び、そのカードのスコアに等しい数のエネルギーを支払うか選んでください。'),
+            'options': list(cands),
+            'display_cards': list(cands),
+            'source_cn': src,
+            'ctx': dict(ctx or {}),
+        })
+        gs.log.append(f'[PENDING] {src}: choose waiting-room LIVE for optional score-energy retrieve candidates={len(cands)}')
+        return
     if op == 'draw_then_draw_if_success_zone_group_exists':
         n = int(gd.get('n', 0) or 0)
         bonus_n = int(gd.get('bonus_n', 0) or 0)
@@ -4098,6 +4137,57 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
             gs.log.append(f'[NOTICE] {src}: context discarded count missing for group LIVE retrieve')
             return
         _enqueue_choose_from_green(gs, cards_db, kind='LIVE', n=n, group=group, ctx=ctx)
+        return
+    if op == 'retrieve_member_lower_cost_than_context_discarded_member':
+        n = max(1, int(gd.get('n', 1) or 1))
+        src = str((ctx or {}).get('source_cn', '') or '')
+        discarded_cn = _canon_cardno(str((ctx or {}).get('discarded_cn', '') or ''))
+        discarded_ci = _get_card(cards_db, discarded_cn) if discarded_cn else None
+        if not discarded_ci or not _is_member_ci(discarded_ci):
+            gs.pending.append({
+                'kind': 'message_ack',
+                'text': _auto_effect_detail_block(ctx, 'これにより控え室に置いたメンバーカードが記録されていないため、低コストメンバー回収は行いません。'),
+                'options': ['ok'],
+                'source_cn': src,
+            })
+            gs.log.append(f'[NOTICE] {src}: discarded MEMBER context missing for lower-cost retrieve')
+            return
+        try:
+            discarded_cost = int(getattr(discarded_ci, 'cost', 0) or 0)
+        except Exception:
+            discarded_cost = 0
+        cands = []
+        for cn0 in list(getattr(gs, 'green_room', []) or []):
+            ci0 = _get_card(cards_db, cn0)
+            if not ci0 or not _is_member_ci(ci0):
+                continue
+            try:
+                cst = int(getattr(ci0, 'cost', 0) or 0)
+            except Exception:
+                cst = 0
+            if cst < discarded_cost:
+                cands.append(str(cn0))
+        if len(cands) < n:
+            gs.pending.append({
+                'kind': 'message_ack',
+                'text': _auto_effect_detail_block(ctx, f'控え室に、これにより控え室に置いたメンバーカード（コスト{discarded_cost}）よりコストの低いメンバーカードが必要枚数ありません（{len(cands)}/{n}枚）。'),
+                'options': ['ok'],
+                'source_cn': src,
+            })
+            gs.log.append(f'[SKIP] {src}: waiting-room MEMBER cost<{discarded_cost} insufficient {len(cands)}/{n} after discarded {discarded_cn}')
+            return
+        gs.pending.append({
+            'kind': 'choose_member_from_green_multi_up_to',
+            'min_picks': n,
+            'max_picks': min(n, len(cands)),
+            'text': _auto_effect_detail_block(ctx, f'控え室から、これにより控え室に置いたメンバーカード（コスト{discarded_cost}）よりコストの低いメンバーカードを{n}枚手札に加える。'),
+            'options': list(cands),
+            'display_cards': list(cands),
+            'source_cn': src,
+            'discarded_cn': discarded_cn,
+            'discarded_cost': int(discarded_cost),
+        })
+        gs.log.append(f'[PENDING] {src}: choose waiting-room MEMBER cost<{discarded_cost} to hand candidates={len(cands)}')
         return
     if op == 'position_change_to_group_area':
         choices_raw = str(gd.get('choices', '') or '')
@@ -9907,6 +9997,20 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
     if op == 'set_opponent_wait_original_blade_le':
         blade_lim = int(gd.get('blade_lim', 99) or 99)
         _enqueue_opponent_wait_notice(gs, ctx, f'元々持つ<(ブレード)>の数が{blade_lim}つ以下のメンバー1人をウェイトにする')
+        return
+    if op == 'set_opponent_wait_original_blade_le_under_energy_plus':
+        plus_n = int(gd.get('plus', 0) or 0)
+        target_n = int(gd.get('n', 1) or 1)
+        pos = str((ctx or {}).get('pos', '') or '').upper()
+        slot = (getattr(gs, 'stage', {}) or {}).get(pos) if pos in ('L', 'C', 'R') else None
+        under_n = int(getattr(slot, 'energy_under', 0) or 0) if slot else 0
+        blade_lim = under_n + plus_n
+        _enqueue_opponent_wait_notice(
+            gs,
+            ctx,
+            f'元々持つ<(ブレード)>の数が{blade_lim}つ以下のメンバー{target_n}人をウェイトにする',
+            max_delta=target_n,
+        )
         return
     if op == 'set_opponent_wait_original_blade_eq':
         blade_eq = int(gd.get('blade_eq', 99) or 99)
@@ -22530,6 +22634,46 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                 gs.log.append(f"[PENDING] activate choose_stage_member_to_wait n={total_need} then {eff}")
                 return
             # Cost: discard from hand (required, BODY起動)
+            m_req_member_discard = re.search(r'手札のメンバーカードを(\d+)枚控え室に置く', cost)
+            if m_req_member_discard:
+                try:
+                    req_member_discard_n = int(m_req_member_discard.group(1) or 0)
+                except Exception:
+                    req_member_discard_n = 0
+                if req_member_discard_n <= 0:
+                    req_member_discard_n = 1
+                member_options = []
+                for hcn in list(getattr(gs, 'hand', []) or []):
+                    hci = _get_card(cards_db, hcn)
+                    if hci and _is_member_ci(hci):
+                        member_options.append(str(hcn))
+                if len(member_options) < req_member_discard_n:
+                    gs.log.append(f"[ERR] activate: not enough MEMBER cards in hand for discard cost (need {req_member_discard_n})")
+                    return
+                if flags.get('once_per_turn'):
+                    try:
+                        gs.used_this_turn[akey] = 1
+                    except Exception:
+                        try:
+                            gs.used_this_turn = {akey: 1}
+                        except Exception:
+                            pass
+                gs.pending.append({
+                    'kind': 'choose_member_from_green_multi_up_to',
+                    'source_zone': 'hand',
+                    'action': 'discard_from_hand',
+                    'min_picks': req_member_discard_n,
+                    'max_picks': req_member_discard_n,
+                    'text': f'コストとして、手札のメンバーカードを{req_member_discard_n}枚控え室に置く',
+                    'options': list(member_options),
+                    'display_cards': list(member_options),
+                    'after_effect_template': eff,
+                    'after_ctx': {'pos': pos, 'source_cn': ci.cardnumber, 'effect_timing': '起動効果'},
+                    'after_source_cn': ci.cardnumber,
+                    'source_cn': ci.cardnumber,
+                })
+                gs.log.append(f"[PENDING] activate discard MEMBER {req_member_discard_n} then {eff}")
+                return
             m_req_discard = re.search(r'手札を(\d+)枚控え室に置く', cost)
             req_discard_n = 0
             if m_req_discard:
@@ -27046,6 +27190,79 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         ok = _grant_stage_member_temp_icons(gs, cards_db, pos2, str(p.get('icons', '') or ''), source_cn=str(p.get('source_cn', '') or ''))
         if not ok:
             gs.log.append(f'[ERR] choose_stage_member_to_gain_icons: failed target {pos2}')
+        return
+    if kind == 'choose_green_live_for_optional_score_energy_retrieve':
+        src = str(p.get('source_cn', '') or '')
+        cn = _canon_cardno(choice_str)
+        opts = [_canon_cardno(str(x or '')) for x in list(p.get('options', []) or [])]
+        if not cn or cn not in opts:
+            gs.log.append(f'[ERR] {src}: invalid LIVE choice for score-energy retrieve {choice_str}')
+            gs.pending.append(p)
+            return
+        ci = _get_card(cards_db, cn)
+        if not ci or not _is_live_ci(ci):
+            gs.log.append(f'[ERR] {src}: chosen card is not LIVE for score-energy retrieve {choice_str}')
+            gs.pending.append(p)
+            return
+        try:
+            score_n = max(0, int(getattr(ci, 'score', 0) or 0))
+        except Exception:
+            score_n = 0
+        gs.pending.append({
+            'kind': 'pay_score_energy_for_green_live_to_hand',
+            'text': f'【{src or "この能力"}】{cn}（スコア{score_n}）を手札に加えるため、エネルギー{score_n}枚を支払いますか？',
+            'options': ['pay', 'skip'],
+            'source_cn': src,
+            'target_cn': cn,
+            'score_n': int(score_n),
+        })
+        gs.log.append(f'[PENDING] {src}: pay energy {score_n} to retrieve LIVE {cn}')
+        return
+    if kind == 'pay_score_energy_for_green_live_to_hand':
+        src = str(p.get('source_cn', '') or '')
+        low = str(choice_str or '').strip().lower()
+        cn = _canon_cardno(str(p.get('target_cn', '') or ''))
+        score_n = max(0, int(p.get('score_n', 0) or 0))
+        if low in ('skip', '__skip__', 'no', 'n', '0', 'false', '使わない', 'いいえ', 'スキップ'):
+            gs.log.append(f'[SKIP] {src}: did not pay energy for LIVE retrieve {cn}')
+            _enqueue_auto_order_from_deferred()
+            return
+        if low not in ('pay', 'yes', 'y', '1', 'true', '使う', 'はい'):
+            gs.log.append(f'[ERR] {src}: invalid pay choice {choice_str}')
+            gs.pending.append(p)
+            return
+        if int(getattr(gs, 'energy_active', 0) or 0) < score_n:
+            gs.log.append(f'[ERR] {src}: not enough active energy for LIVE retrieve {cn} need={score_n} active={int(getattr(gs, "energy_active", 0) or 0)}')
+            gs.pending.append(p)
+            return
+        pick_idx = None
+        pick_cn = ''
+        for i, gcn in enumerate(list(getattr(gs, 'green_room', []) or [])):
+            if _canon_cardno(gcn) == cn:
+                pick_idx = i
+                pick_cn = str(gcn)
+                break
+        if pick_idx is None:
+            gs.log.append(f'[ERR] {src}: chosen LIVE not in waiting room {cn}')
+            gs.pending.append(p)
+            return
+        if score_n > 0:
+            gs.energy_active = int(getattr(gs, 'energy_active', 0) or 0) - score_n
+            gs.energy_wait = int(getattr(gs, 'energy_wait', 0) or 0) + score_n
+            try:
+                _clamp_energy_zone(gs)
+            except Exception:
+                pass
+        try:
+            gs.green_room.pop(pick_idx)
+        except Exception:
+            try:
+                gs.green_room.remove(pick_cn)
+            except Exception:
+                pass
+        gs.hand.append(pick_cn or cn)
+        gs.log.append(f'[ACT] {src}: paid energy {score_n}; waiting-room LIVE {pick_cn or cn} -> hand')
+        _enqueue_auto_order_from_deferred()
         return
     if kind == 'choose_stage_member_to_gain_blade':
         pos2 = str(choice_str or '').strip().upper()

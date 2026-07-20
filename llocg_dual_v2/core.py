@@ -10,7 +10,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-BUILD_TAG = "llocg_dual_v2_tied_success_two_zone_block_20260720a"
+BUILD_TAG = "llocg_dual_v2_deck_center_energy_plain_fallback_20260720a"
 ENERGY_DECK_SIZE = 12
 OPENING_HAND_SIZE = 6
 OPENING_ENERGY_SIZE = 3

@@ -120,3 +120,87 @@ python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8801 --debug
 ```
 
 確認観点: `PL!SP-bp7-025` を手札からライブカード置き場へセットし、ライブ開始時解決へ進む。auto_order に `PL!SP-bp7-025 ライブ開始時` が発生し、解決後に対象 `L` を選ぶとステージの `嵐千砂都` がライブ終了時まで `temp_blade=1` を得る。以前のように LIVE カードをステージへ置く初期状態ではなく、正式なライブセット手順で確認する。
+
+### 20260720 Tier 3 P1 activated green-to-hand follow-up
+
+※20260720内部確認: `PL!N-bp1-008#A01` を確認。カード番号専用分岐ではなく、`手札のメンバーカードをN枚控え室に置く` コスト候補の MEMBER 限定と、`これにより控え室に置いたメンバーカードよりコストの低いメンバーカードをN枚手札に加える` の汎用 route を `llocg_ui/engine.py` に追加。engine API と HTTP API で、起動可否 true、コスト候補から LIVE 除外、discarded context のコスト10参照、控え室候補のコスト10未満 MEMBER 限定、回収後 pending 残留なしを確認。手札に MEMBER がない場合は `can_activate=false` も確認。
+
+#### PL!N-bp1-008#A01 起動: 手札 MEMBER discard → 低コスト MEMBER 回収
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+unset LLOCG_START_STAGE LLOCG_START_STAGE_L LLOCG_START_STAGE_C LLOCG_START_STAGE_R \
+  LLOCG_START_HAND LLOCG_START_HAND_SIZE LLOCG_START_SHUFFLE \
+  LLOCG_START_GREEN LLOCG_START_SUCCESS LLOCG_START_RESOLVE \
+  LLOCG_START_DECK_TOP LLOCG_START_DECK_EXACT \
+  LLOCG_START_PHASE LLOCG_START_TURN \
+  LLOCG_START_ENERGY_ACTIVE LLOCG_START_ENERGY_WAIT \
+  LLOCG_DEBUG_PRESET LLOCG_DEBUG_EFFECT_CARD LLOCG_START_DEBUG \
+  LLOCG_DEBUG_LIVE_IN_HAND LLOCG_DEBUG_MEMBER_IN_HAND
+export LLOCG_DEBUG_PRESET=effect
+export LLOCG_START_PHASE=MAIN
+export LLOCG_START_TURN=1
+export LLOCG_START_STAGE_C='PL!N-bp1-008'
+export LLOCG_START_HAND='PL!N-bp3-009,PL!N-bp1-029'
+export LLOCG_START_HAND_SIZE=0
+export LLOCG_START_GREEN='PL!N-pb1-005,PL!N-bp1-012,PL!N-bp1-029'
+export LLOCG_START_DECK_TOP='PL!N-bp4-030,PL!N-bp3-032'
+python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8801 --debug
+```
+
+確認観点: `C` の起動効果が表示される。起動後のコスト選択は手札の MEMBER のみで、LIVE `PL!N-bp1-029` は候補に出ない。`PL!N-bp3-009`（コスト10）を控え室に置くと、回収候補はコスト10未満の MEMBER `PL!N-pb1-005` のみになり、LIVE とコスト10以上 MEMBER は候補外。選択後、`PL!N-pb1-005` が手札へ移動し、pending は残らない。
+
+#### PL!N-bp5-003#A01 起動: 控え室 LIVE 選択 → スコア分エネルギー任意支払い → 回収
+
+※20260720内部確認: `PL!N-bp5-003#A01` を確認。カード番号専用分岐ではなく、`控え室のライブカードをN枚選び、そのカードのスコアに等しい数のエネルギーを支払ってもよい。そうした場合、そのライブカードを手札に加える` の汎用 route を追加。engine API で pay / skip / エネルギー不足を確認し、HTTP API で代表 pay 経路を確認。控え室 LIVE のみ候補、pay pending に対象カード番号・スコア・発生源が出ること、pay 後に `energy_active 5 -> 0 / energy_wait 0 -> 5`、対象 LIVE が手札へ移動、pending 残留なしを確認。
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+unset LLOCG_START_STAGE LLOCG_START_STAGE_L LLOCG_START_STAGE_C LLOCG_START_STAGE_R \
+  LLOCG_START_HAND LLOCG_START_HAND_SIZE LLOCG_START_SHUFFLE \
+  LLOCG_START_GREEN LLOCG_START_SUCCESS LLOCG_START_RESOLVE \
+  LLOCG_START_DECK_TOP LLOCG_START_DECK_EXACT \
+  LLOCG_START_PHASE LLOCG_START_TURN \
+  LLOCG_START_ENERGY_ACTIVE LLOCG_START_ENERGY_WAIT \
+  LLOCG_DEBUG_PRESET LLOCG_DEBUG_EFFECT_CARD LLOCG_START_DEBUG \
+  LLOCG_DEBUG_LIVE_IN_HAND LLOCG_DEBUG_MEMBER_IN_HAND
+export LLOCG_DEBUG_PRESET=effect
+export LLOCG_START_PHASE=MAIN
+export LLOCG_START_TURN=1
+export LLOCG_START_STAGE_C='PL!N-bp5-003'
+export LLOCG_START_HAND='PL!N-bp3-009'
+export LLOCG_START_HAND_SIZE=0
+export LLOCG_START_GREEN='PL!N-bp1-029,PL!N-bp3-032,PL!N-bp3-009'
+export LLOCG_START_ENERGY_ACTIVE=5
+export LLOCG_START_ENERGY_WAIT=0
+export LLOCG_START_DECK_TOP='PL!N-bp4-030,PL!N-bp3-032'
+python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8801 --debug
+```
+
+確認観点: `C` の起動効果を使い、手札1枚を控え室へ置く。後続 pending は控え室 LIVE `PL!N-bp1-029` / `PL!N-bp3-032` のみを候補にする。`PL!N-bp1-029` を選ぶと、スコア5に基づく pay/skip pending が出る。`pay` でエネルギー5枚を支払い、`PL!N-bp1-029` が手札へ移動する。`skip` ではエネルギーと控え室 LIVE は変化しない。エネルギー不足時に `pay` を選ぶと pending は残り、エラーログを出す。
+
+#### PL!N-bp7-004#A01 起動: エネルギー下置き → 下エネルギー枚数+1以下ブレード相手ウェイト
+
+※20260720内部確認: `PL!N-bp7-004#A01` を確認。カード番号専用分岐ではなく、`このメンバーの下にあるエネルギーカードの枚数にNを足した数以下` の動的しきい値を持つ相手ウェイト汎用 route を追加。相手個別カード state は現行正式仕様では保持しないため、既存の `opponent_wait_notify` 人数入力方式へ接続した。engine API で起動コスト支払い後の `energy_under=1` を解決時に参照し、しきい値2の pending を生成すること、人数1入力で `opponent_wait_count=1`、pending 残留なしを確認。エネルギー不足時はコスト支払い前に止まり、pending を生成しないことも確認。HTTP API でも同経路を確認済み。
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+unset LLOCG_START_STAGE LLOCG_START_STAGE_L LLOCG_START_STAGE_C LLOCG_START_STAGE_R \
+  LLOCG_START_HAND LLOCG_START_HAND_SIZE LLOCG_START_SHUFFLE \
+  LLOCG_START_GREEN LLOCG_START_SUCCESS LLOCG_START_RESOLVE \
+  LLOCG_START_DECK_TOP LLOCG_START_DECK_EXACT \
+  LLOCG_START_PHASE LLOCG_START_TURN \
+  LLOCG_START_ENERGY_ACTIVE LLOCG_START_ENERGY_WAIT \
+  LLOCG_DEBUG_PRESET LLOCG_DEBUG_EFFECT_CARD LLOCG_START_DEBUG \
+  LLOCG_DEBUG_LIVE_IN_HAND LLOCG_DEBUG_MEMBER_IN_HAND
+export LLOCG_DEBUG_PRESET=effect
+export LLOCG_START_PHASE=MAIN
+export LLOCG_START_TURN=1
+export LLOCG_START_STAGE_C='PL!N-bp7-004'
+export LLOCG_START_HAND_SIZE=0
+export LLOCG_START_ENERGY_ACTIVE=3
+export LLOCG_START_ENERGY_WAIT=0
+python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8801 --debug
+```
+
+確認観点: `C` の起動効果を使う。コストでエネルギー1枚がこのメンバーの下に置かれ、`energy_active 3 -> 2`、`C.energy_under 0 -> 1` になる。その後、下エネルギー1枚+1により「元々持つ<(ブレード)>の数が2つ以下のメンバー1人をウェイトにする」人数入力 pending が発生する。選択肢は `0/1`、発生源は `PL!N-bp7-004`。`1` を入力すると `opponent_wait_count 0 -> 1`、pending は空になる。相手個別カード選択が出ないことは現行仕様通り。

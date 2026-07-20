@@ -329,3 +329,199 @@ curl -s -X POST http://127.0.0.1:18182/resume_state \
 注意:
 
 - 1デッキ中断JSONもローカルシミュレーター用の復元データを含むため、同じリポジトリ/同じ実装世代で使う前提。外部から入手した中断JSONは読み込まない。
+
+## 2026-07-20 dual中央バーUI被り修正
+
+対象BUILD_TAG:
+
+- `llocg_dual_v2_center_bar_grid_no_overlap_20260720a`
+
+修正内容:
+
+- dual画面中央部の `#divider` を3カラムgridに変更し、左からステータス表示、中央フェーズ表示、右操作ボタンに固定。
+- `#controls` の絶対配置を廃止し、フェーズ表示やステータスと重ならない通常gridセルへ移動。
+- `#phaseBanner` / `#controls` / `#requestStatus` に `grid-row:1` を明示し、ブラウザの自動配置で中央帯内の別行へ流れないようにした。
+- 中央帯の高さは `74px` のまま維持。
+
+確認コマンド:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./llocg_dual_v2/*.py ./run_llocg_dual_v2.py
+```
+
+結果: OK。
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m unittest llocg_dual_v2.tests.test_rule_core llocg_dual_v2.tests.test_legacy_adapter_transactions
+```
+
+結果: 55 tests OK。
+
+ブラウザ実寸確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./run_llocg_dual_v2.py --deck1 7QEC8 --deck2 1RCBL --seed 17 --host 127.0.0.1 --port 18181 --debug
+```
+
+`http://127.0.0.1:18181/dual` を 1280x720 表示で確認。
+
+- `#shell` rows: `323px 74px 323px`
+- `#divider`: `y=323`, `h=74`
+- `#phaseBanner`: `y=325`, `h=70`, divider内に収まる
+- `#controls`: `y=344.52`, `h=30.95`, divider内に収まる
+- `#controls` computed position: `static`
+- `phaseBanner` / `controls` / `requestStatus` はすべて divider 内
+- `phaseBanner` と `controls` の重なりなし
+- `requestStatus` と `controls` の重なりなし
+- `requestStatus` と `phaseBanner` の重なりなし
+
+注意:
+
+- 確認中のブラウザ再読込・停止タイミングにより、開発サーバーログに `BrokenPipeError` / `ConnectionResetError` が出る場合がある。画面再読込やブラウザ側の接続切断に伴うログで、今回の中央バー配置修正とは別件。
+
+## 2026-07-20 dual UI追加監査 / NoImage接続確認
+
+対象BUILD_TAG:
+
+- `llocg_dual_v2_ui_audit_noimage_fallback_20260720a`
+
+確認・修正内容:
+
+- dual内プレイヤーラベルと各プレイヤーUIの `#topBar` が被る可能性を確認。
+- `body.dualPlayerView` に `--dualLabelW` を追加し、ラベル幅とtopBar退避幅を同じCSS変数で管理するよう修正。
+- ラベルは固定幅、1行、省略表示にし、長い日本語ラベルでもtopBarに重なりにくくした。
+- dual側の `/p1/img` / `/p2/img` 配信について、カード背面・NoImage候補の探索を明示化。
+- 通常カード画像が見つからない場合、`rt.app.img.find()` が失敗しても `NoImage.PNG` へ落ちる保険を追加。
+
+HTTP確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./run_llocg_dual_v2.py --deck1 7QEC8 --deck2 1RCBL --seed 17 --host 127.0.0.1 --port 18181 --debug
+```
+
+別ターミナル:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+curl -s -D /tmp/loveca_dual_noimage_headers2.txt \
+  -o /tmp/loveca_dual_noimage_body2.bin \
+  'http://127.0.0.1:18181/p1/img?cn=NO_SUCH_CARD_20260720'
+
+curl -s -D /tmp/loveca_dual_back_headers2.txt \
+  -o /tmp/loveca_dual_back_body2.bin \
+  'http://127.0.0.1:18181/p1/img?cn=__BACK__'
+
+curl -s -D /tmp/loveca_dual_energy_headers2.txt \
+  -o /tmp/loveca_dual_energy_body2.bin \
+  'http://127.0.0.1:18181/p1/img?cn=__ENERGY__'
+```
+
+結果:
+
+- `NO_SUCH_CARD_20260720`: `200 image/png`、`llocg_db_out_full/card_images/NoImage.PNG` と完全一致。
+- `__BACK__`: `200 image/png`、`llocg_db_out_full/card_images/back.png` と完全一致。
+- `__ENERGY__`: `200 image/png`、この時点ではエネルギー専用画像ファイルがローカルに無かったため `NoImage.PNG` と完全一致。その後の `deck_center_energy_plain_fallback_20260720a` で、エネルギーはNoImageではなく専用画像または透明PNGへ戻した。
+
+確認コマンド:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m unittest \
+  llocg_dual_v2.tests.test_legacy_adapter_transactions.LegacyAdapterTransactionTests.test_dual_image_helpers_find_back_energy_and_noimage_fallback \
+  llocg_dual_v2.tests.test_legacy_adapter_transactions.LegacyAdapterTransactionTests.test_scoped_html_reserves_label_width_from_topbar \
+  llocg_dual_v2.tests.test_legacy_adapter_transactions.LegacyAdapterTransactionTests.test_shell_html_has_suspend_resume_and_game_over_notice
+```
+
+結果: 3 tests OK。
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m unittest llocg_dual_v2.tests.test_rule_core llocg_dual_v2.tests.test_legacy_adapter_transactions
+```
+
+結果: 57 tests OK。
+
+注意:
+
+- アプリ内ブラウザでの追加DOM測定はタブ接続がタイムアウトしたため未完了。HTTP応答とHTML/CSS単体確認では、NoImage接続とラベル/topBar被り回避は確認済み。
+
+## 2026-07-20 1デッキ/2デッキ共通 山札枠中央寄せ / エネルギー無地フォールバック
+
+対象BUILD_TAG:
+
+- 1デッキ: `deck_center_energy_plain_fallback_20260720a`
+- 2デッキ: `llocg_dual_v2_deck_center_energy_plain_fallback_20260720a`
+
+修正内容:
+
+- エネルギー下敷き表示用の `__ENERGY__` は、`energy.png` / `energy.jpg` / `energy.jpeg` / `energy.webp` を `llocg_db_out_full/card_images`、`card_images`、ルート周辺から探索する。
+- エネルギー専用画像が無い場合は、NoImageではなく以前と同じ透明PNGへ戻す。
+- 山札表示は `renderTopCard(..., {useStandardSize:true})` の標準カードサイズを使いつつ、枠内の `availW` / `availH` を超えない倍率で縮小し、枠中央に収める。
+- 山札描画は1デッキ用 `llocg_ui/server.py` の共通UIで修正しているため、dualのiframe内表示にも同じ修正が適用される。
+
+HTTP確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 18182 --debug
+python3 ./run_llocg_dual_v2.py --deck1 7QEC8 --deck2 1RCBL --seed 17 --host 127.0.0.1 --port 18181 --debug
+```
+
+別ターミナル:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+curl -s -D /tmp/loveca_single_energy_headers3.txt \
+  -o /tmp/loveca_single_energy_body3.bin \
+  'http://127.0.0.1:18182/img?cn=__ENERGY__'
+
+curl -s -D /tmp/loveca_dual_energy_headers3.txt \
+  -o /tmp/loveca_dual_energy_body3.bin \
+  'http://127.0.0.1:18181/p1/img?cn=__ENERGY__'
+
+curl -s -D /tmp/loveca_single_back_headers3.txt \
+  -o /tmp/loveca_single_back_body3.bin \
+  'http://127.0.0.1:18182/img?cn=__BACK__'
+
+curl -s -D /tmp/loveca_dual_back_headers3.txt \
+  -o /tmp/loveca_dual_back_body3.bin \
+  'http://127.0.0.1:18181/p1/img?cn=__BACK__'
+```
+
+結果:
+
+- 1デッキ `__ENERGY__`: `200 image/png`、66 bytes。
+- 2デッキ `__ENERGY__`: `200 image/png`、66 bytes。
+- 1デッキ/2デッキの `__ENERGY__` 応答は完全一致。現時点では専用画像が無いため透明PNG。
+- 1デッキ `__BACK__`: `llocg_db_out_full/card_images/back.png` と完全一致。
+- 2デッキ `__BACK__`: `llocg_db_out_full/card_images/back.png` と完全一致。
+
+確認コマンド:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./llocg_ui/server.py ./llocg_dual_v2/*.py ./run_llocg_dual_v2.py
+
+python3 -m unittest \
+  llocg_dual_v2.tests.test_legacy_adapter_transactions.LegacyAdapterTransactionTests.test_dual_image_helpers_find_back_energy_and_noimage_fallback \
+  llocg_dual_v2.tests.test_legacy_adapter_transactions.LegacyAdapterTransactionTests.test_shell_html_has_suspend_resume_and_game_over_notice
+```
+
+結果:
+
+- py_compile OK。
+- 2 tests OK。

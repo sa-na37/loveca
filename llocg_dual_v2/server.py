@@ -21,7 +21,7 @@ from llocg_ui.server import App, HTML as SINGLE_HTML
 from llocg_ui.views import make_view_state
 from .core import ENERGY_DECK_SIZE, DualMatchEngine, Phase, discover_data_root
 
-BUILD_TAG = "llocg_dual_v2_tied_success_two_zone_block_20260720a"
+BUILD_TAG = "llocg_dual_v2_deck_center_energy_plain_fallback_20260720a"
 
 
 @dataclass
@@ -2534,12 +2534,14 @@ def _scoped_single_html(prefix: str, *, upper: bool, label: str, color: str) -> 
     window.addEventListener('storage', (ev)=>{"""
     html = html.replace(poll_old, poll_new, 1)
     injected = f'''<style>
-body.dualPlayerView::before{{content:{json.dumps(label, ensure_ascii=False)};position:fixed;left:12px;top:10px;z-index:50000;padding:7px 13px;border-radius:999px;background:{color};color:#fff;font-size:15px;font-weight:900;box-shadow:0 3px 14px rgba(0,0,0,.55)}}
+body.dualPlayerView{{--dualLabelW:178px}}
+body.dualPlayerView::before{{content:{json.dumps(label, ensure_ascii=False)};position:fixed;left:12px;top:10px;z-index:50000;box-sizing:border-box;width:var(--dualLabelW);max-width:calc(100vw - 24px);padding:7px 12px;border-radius:999px;background:{color};color:#fff;font-size:14px;line-height:1.15;font-weight:900;box-shadow:0 3px 14px rgba(0,0,0,.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}}
 body.dualUpper #zones{{transform:rotate(180deg);transform-origin:50% 50%}}
 body.dualUpper #zones>.zone{{transform:rotate(180deg);transform-origin:50% 50%}}
 body.dualPlayerView .energyUI button{{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important;overflow:hidden!important}}
 body.dualPlayerView #topBar .oppWaitPill{{display:none!important}}
-body.dualPlayerView #topBar{{padding-left:130px}}
+body.dualPlayerView #topBar{{padding-left:calc(var(--dualLabelW) + 14px);max-width:calc(100% - var(--dualLabelW) - 24px);box-sizing:border-box}}
+@media (max-width: 760px){{body.dualPlayerView{{--dualLabelW:150px}}body.dualPlayerView::before{{font-size:12px;padding-left:9px;padding-right:9px}}body.dualPlayerView #topBar{{padding-left:calc(var(--dualLabelW) + 10px)}}}}
 html,body{{overflow:hidden}}
 </style>'''
     html = html.replace('</head>', injected + '</head>')
@@ -2662,12 +2664,13 @@ def _shell_html() -> str:
 <title>LLCG 2デッキ対戦 v2</title><style>
 html,body{{height:100%;margin:0;background:#080a0e;color:#fff;font-family:system-ui,-apple-system,sans-serif;overflow:hidden}}
 #shell{{height:100%;display:grid;grid-template-rows:1fr 74px 1fr}}.playerFrame{{width:100%;height:100%;border:0;background:#111}}
-#divider{{position:relative;display:flex;align-items:center;justify-content:center;background:#151922;border-top:2px solid #343b4c;border-bottom:2px solid #343b4c;z-index:10;box-shadow:0 0 18px rgba(0,0,0,.6)}}
-#phaseBanner{{font-weight:950;font-size:25px;letter-spacing:.04em;text-align:center;white-space:nowrap;text-shadow:0 2px 8px rgba(0,0,0,.75)}}
-#phaseSub{{display:block;font-size:13px;font-weight:750;letter-spacing:0;margin-top:3px;opacity:.82}}
-button{{border:1px solid rgba(255,255,255,.25);border-radius:9px;background:#2a3140;color:#fff;padding:9px 18px;font-weight:900;cursor:pointer;font-size:15px}}button:hover{{background:#384258}}button:disabled{{opacity:.45;cursor:wait}}
-#tag{{position:fixed;right:8px;top:4px;z-index:20;font-size:10px;color:#9aa4b5}}#controls{{position:absolute;right:14px;top:50%;transform:translateY(-50%);display:flex;gap:9px}}
-#next{{background:#276fca;min-width:130px}}#undo{{background:#555}}#save{{background:#2f7658}}#loadBtn{{background:#6a537c}}#error{{color:#ff8d8d}}#requestStatus{{position:absolute;left:14px;bottom:5px;font-size:11px;color:#aeb8ca}}
+#divider{{position:relative;display:grid;grid-template-columns:minmax(150px,1fr) minmax(260px,1.35fr) minmax(390px,max-content);align-items:center;gap:12px;padding:0 14px;box-sizing:border-box;background:#151922;border-top:2px solid #343b4c;border-bottom:2px solid #343b4c;z-index:10;box-shadow:0 0 18px rgba(0,0,0,.6);overflow:hidden}}
+#phaseBanner{{grid-column:2;grid-row:1;align-self:stretch;min-width:0;display:flex;flex-direction:column;justify-content:center;font-weight:950;font-size:23px;line-height:1.08;letter-spacing:.03em;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 2px 8px rgba(0,0,0,.75)}}
+#phaseSub{{display:block;min-width:0;font-size:12px;font-weight:750;line-height:1.15;letter-spacing:0;margin-top:3px;opacity:.82;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+button{{border:1px solid rgba(255,255,255,.25);border-radius:8px;background:#2a3140;color:#fff;padding:7px 11px;font-weight:900;cursor:pointer;font-size:13px;line-height:1.15;white-space:nowrap}}button:hover{{background:#384258}}button:disabled{{opacity:.45;cursor:wait}}
+#tag{{position:fixed;right:8px;top:4px;z-index:20;font-size:10px;color:#9aa4b5}}#controls{{grid-column:3;grid-row:1;justify-self:end;display:flex;align-items:center;gap:6px;min-width:0}}#controls form{{display:flex;margin:0}}
+#next{{background:#276fca;min-width:108px}}#undo{{background:#555}}#save{{background:#2f7658}}#loadBtn{{background:#6a537c}}#error{{color:#ff8d8d}}#requestStatus{{grid-column:1;grid-row:1;justify-self:start;min-width:0;max-width:100%;font-size:11px;color:#aeb8ca;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+@media (max-width: 980px){{#divider{{grid-template-columns:minmax(80px,.6fr) minmax(160px,1fr) minmax(300px,max-content);gap:8px;padding:0 8px}}#phaseBanner{{font-size:20px}}button{{padding:6px 8px;font-size:12px}}#next{{min-width:92px}}}}
 #gameOverNotice{{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:70000;display:none;min-width:min(620px,86vw);padding:22px 28px;border-radius:18px;background:rgba(22,27,38,.97);border:3px solid #ffd76b;box-shadow:0 18px 80px rgba(0,0,0,.78);text-align:center;font-weight:950}}
 #gameOverTitle{{font-size:28px;margin-bottom:8px}}#gameOverBody{{font-size:18px;color:#f4ecd0}}
 #judgmentOverlay{{position:fixed;inset:0;z-index:60000;background:rgba(3,5,9,.78);display:none;align-items:center;justify-content:center;padding:30px;box-sizing:border-box}}
@@ -2786,6 +2789,83 @@ document.getElementById('loadFile').addEventListener('change',e=>loadSuspendFile
 </script></body></html>'''
 
 
+def _image_content_type(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix in {'.jpg', '.jpeg'}:
+        return 'image/jpeg'
+    if suffix == '.webp':
+        return 'image/webp'
+    return 'image/png'
+
+
+def _runtime_image_candidates(rt: PlayerViewRuntime, token: str) -> List[Path]:
+    roots = []
+    for root in (Path.cwd(), getattr(rt.app, 'root', None), getattr(rt.app, 'outdir', None)):
+        try:
+            p = Path(root)
+        except Exception:
+            continue
+        if p not in roots:
+            roots.append(p)
+    try:
+        project_root = Path(__file__).resolve().parents[1]
+        if project_root not in roots:
+            roots.append(project_root)
+    except Exception:
+        pass
+
+    if token == '__BACK__':
+        names = ('back.png', 'back.jpg', 'back.jpeg', 'back.webp', 'card_back.png', 'card_back.jpg', 'card_back.jpeg', 'card_back.webp')
+        dirs = ('llocg_db_out_full/card_images', 'card_images', '')
+    elif token == '__ENERGY__':
+        names = ('energy.png', 'energy.jpg', 'energy.jpeg', 'energy.webp')
+        dirs = ('llocg_db_out_full/card_images', 'card_images', 'llocg_db_out_full', '')
+    else:
+        names = ('NoImage.PNG', 'NoImage.png', 'noimage.png', 'noimage.PNG')
+        dirs = ('llocg_db_out_full/card_images', 'card_images', '')
+
+    cands: List[Path] = []
+    for root in roots:
+        for rel_dir in dirs:
+            base = root / rel_dir if rel_dir else root
+            for name in names:
+                p = base / name
+                if p not in cands:
+                    cands.append(p)
+    return cands
+
+
+def _transparent_png_bytes() -> bytes:
+    return bytes.fromhex(
+        '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489'
+        '0000000a49444154789c6360000002000154a24f5d0000000049454e44ae426082'
+    )
+
+
+def _first_existing_file(paths: List[Path]) -> Optional[Path]:
+    for p in paths:
+        try:
+            if p.is_file():
+                return p
+        except Exception:
+            continue
+    return None
+
+
+def _find_runtime_card_image(rt: PlayerViewRuntime, cardnumber: str) -> Optional[Path]:
+    try:
+        finder = getattr(getattr(rt.app, 'img', None), 'find', None)
+        if callable(finder):
+            found = finder(cardnumber)
+            if found:
+                p = Path(found)
+                if p.is_file():
+                    return p
+    except Exception:
+        pass
+    return _first_existing_file(_runtime_image_candidates(rt, 'NoImage'))
+
+
 class Handler(BaseHTTPRequestHandler):
     adapter: LegacyUIAdapter
     verbose_http: bool = False
@@ -2829,15 +2909,17 @@ class Handler(BaseHTTPRequestHandler):
         if sub == '/img':
             cn = parse_qs(u.query).get('cn', [''])[0]
             if cn == '__BACK__':
-                for p in [Path.cwd()/'card_back.jpg', rt.app.root/'card_back.jpg']:
-                    if p.is_file(): return self._send(200, p.read_bytes(), 'image/jpeg')
+                p = _first_existing_file(_runtime_image_candidates(rt, '__BACK__'))
+                if p:
+                    return self._send(200, p.read_bytes(), _image_content_type(p))
             if cn == '__ENERGY__':
-                for p in [Path.cwd()/'energy.jpg', rt.app.root/'energy.jpg']:
-                    if p.is_file(): return self._send(200, p.read_bytes(), 'image/jpeg')
-            p = rt.app.img.find(cn)
+                p = _first_existing_file(_runtime_image_candidates(rt, '__ENERGY__'))
+                if p:
+                    return self._send(200, p.read_bytes(), _image_content_type(p))
+                return self._send(200, _transparent_png_bytes(), 'image/png')
+            p = _find_runtime_card_image(rt, cn)
             if p and p.exists():
-                ct = 'image/jpeg' if p.suffix.lower() in {'.jpg','.jpeg'} else 'image/webp' if p.suffix.lower()=='.webp' else 'image/png'
-                return self._send(200, p.read_bytes(), ct)
+                return self._send(200, p.read_bytes(), _image_content_type(p))
             return self._send(404, b'', 'text/plain')
         if sub == '/cardinfo':
             cn = parse_qs(u.query).get('cn', [''])[0]
