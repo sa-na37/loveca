@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: tier3_pilot_blocked_routes_20260720f
+# BUILD_TAG: tier3_pilot_blocked_routes_20260720g
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -22721,6 +22721,42 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                 })
                 gs.log.append(f"[PENDING] activate self-WAIT + discard {self_wait_discard_n} then {eff}")
                 return
+            # Cost: [E] payment + discard cards from hand (required, BODY起動).
+            # This must run before the plain hand-discard route so combined costs
+            # do not lose their energy component.
+            m_energy_discard = re.search(r'手札を(?P<n>\d+)枚控え室に置く', cost)
+            energy_discard_n = int(m_energy_discard.group('n') or 0) if m_energy_discard else 0
+            if energy_discard_n <= 0 and '手札を1枚控え室に置く' in cost:
+                energy_discard_n = 1
+            energy_discard_need_e = int(_parse_energy_cost(cost) or 0)
+            if energy_discard_need_e > 0 and energy_discard_n > 0:
+                if len(gs.hand) < energy_discard_n:
+                    gs.log.append(f"[ERR] activate: not enough cards in hand for [E]+discard cost (need {energy_discard_n})")
+                    return
+                if not pay_energy(gs, energy_discard_need_e):
+                    gs.log.append(f"[ERR] activate: insufficient energy for [E]{energy_discard_need_e} (have {gs.energy_active})")
+                    return
+                gs.log.append(f"[COST] paid [E]{energy_discard_need_e} (E active={gs.energy_active} wait={gs.energy_wait})")
+                if flags.get('once_per_turn'):
+                    try:
+                        gs.used_this_turn[akey] = 1
+                    except Exception:
+                        try:
+                            gs.used_this_turn = {akey: 1}
+                        except Exception:
+                            pass
+                gs.pending.append({
+                    'kind': 'discard_from_hand',
+                    'remaining': energy_discard_n,
+                    'text': f'コストとして、手札を{energy_discard_n}枚控え室に置く',
+                    'options': list(gs.hand),
+                    'after_effect_template': eff,
+                    'after_ctx': {'pos': pos, 'source_cn': ci.cardnumber, 'effect_timing': '起動効果'},
+                    'after_source_cn': ci.cardnumber,
+                    'source_cn': ci.cardnumber,
+                })
+                gs.log.append(f"[PENDING] activate [E]{energy_discard_need_e} + discard {energy_discard_n} then {eff}")
+                return
             # Cost: discard from hand (required, BODY起動)
             m_req_member_discard = re.search(r'手札のメンバーカードを(\d+)枚控え室に置く', cost)
             if m_req_member_discard:
@@ -23363,6 +23399,81 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         _record_stage_area_movement(gs, moved_cards, src_pos=src_pos, dst_pos=dst_pos, reason='position_change', source_cn=source_cn)
         gs.log.append(f"[POSITION_CHANGE] {source_cn or '?'} {src_pos} -> {dst_pos}; moved_this_turn={bool(getattr(gs, 'stage_moved_this_turn', False))}")
         _enqueue_stage_movement_auto_triggers(gs, cards_db, moved_cards)
+        return
+    if kind == 'choose_stage_group_member_to_green_then_green_cost_plus_to_former_area':
+        src = str(p.get('source_cn', '') or '')
+        group_name = str(p.get('group_name', '') or '').strip()
+        plus_n = int(p.get('plus_n', 0) or 0)
+        allow_skip = bool(p.get('allow_skip', False))
+        low = str(choice_str or '').strip().lower()
+        if allow_skip and low in ('skip', '__skip__', 'no', 'n', '0', 'false', '使わない', 'いいえ', 'スキップ'):
+            gs.log.append(f'[SKIP] {src}: optional stage member to waiting room skipped')
+            return
+        pos = str(choice_str or '').strip().upper()
+        cands = [str(x).upper() for x in list(p.get('candidates', []) or []) if str(x).upper() in ('L', 'C', 'R')]
+        if pos not in ('L', 'C', 'R') or (cands and pos not in cands):
+            gs.log.append(f'[ERR] choose_stage_group_member_to_green_then_green_cost_plus_to_former_area: invalid choice {choice_str}')
+            gs.pending.append(p)
+            return
+        slot = (getattr(gs, 'stage', {}) or {}).get(pos)
+        if not slot:
+            gs.log.append(f'[ERR] choose_stage_group_member_to_green_then_green_cost_plus_to_former_area: stage {pos} empty')
+            return
+        moved_cn = str(getattr(slot, 'cardnumber', '') or '')
+        ci_moved = _get_card(cards_db, moved_cn)
+        if not ci_moved or not _is_member_ci(ci_moved):
+            gs.log.append(f'[ERR] choose_stage_group_member_to_green_then_green_cost_plus_to_former_area: not member {moved_cn}')
+            return
+        if group_name and not _ci_matches_group_or_unit(ci_moved, group_name):
+            gs.log.append(f'[ERR] choose_stage_group_member_to_green_then_green_cost_plus_to_former_area: group mismatch {moved_cn} for {group_name}')
+            gs.pending.append(p)
+            return
+        try:
+            base_cost = int(_slot_effective_cost(gs, cards_db, pos, slot) or getattr(ci_moved, 'cost', 0) or 0)
+        except Exception:
+            base_cost = int(getattr(ci_moved, 'cost', 0) or 0)
+        target_cost = int(base_cost) + int(plus_n)
+        try:
+            _return_under_energy_to_deck_from_slot(gs, slot, pos=pos, reason=f'{moved_cn} leaves stage by effect', cards_db=cards_db)
+        except Exception:
+            pass
+        gs.green_room.append(moved_cn)
+        gs.stage[pos] = None
+        gs.log.append(f'[ACT] {src or "effect"}: stage {pos} {moved_cn} -> waiting room; target_cost={base_cost}+{plus_n}={target_cost}')
+        cands2 = []
+        for cn0 in list(getattr(gs, 'green_room', []) or []):
+            ci0 = _get_card(cards_db, cn0)
+            if not ci0 or not _is_member_ci(ci0):
+                continue
+            if group_name and not _ci_matches_group_or_unit(ci0, group_name):
+                continue
+            try:
+                actual_cost = int(getattr(ci0, 'cost', 0) or 0)
+            except Exception:
+                actual_cost = 0
+            if actual_cost == target_cost:
+                cands2.append(str(cn0))
+        if not cands2:
+            gs.log.append(f'[INFO] {src or "effect"}: no waiting-room 『{group_name}』 member cost={target_cost} for former area {pos}')
+            gs.pending.append({
+                'kind': 'message_ack',
+                'source_cn': src,
+                'text': f'条件に合う控え室の『{group_name}』メンバー（コスト{target_cost}）がいないため、登場させるカードはありません。',
+                'options': ['ok'],
+            })
+            return
+        gs.pending.append({
+            'kind': 'green_member_to_former_area',
+            'text': f'控え室からコスト{target_cost}の『{group_name}』メンバーを1枚、{pos}に登場させます。',
+            'options': list(cands2),
+            'display_cards': list(cands2),
+            'source_cn': src,
+            'target_pos': pos,
+            'cost_max': int(target_cost),
+            'cost_exact': int(target_cost),
+            'group_name': group_name,
+        })
+        gs.log.append(f'[PENDING] {src or "effect"}: choose waiting-room 『{group_name}』 member cost={target_cost} for former area {pos}')
         return
     if kind == 'position_change_to_target_then_gain_icons':
         src_pos = str(p.get('src_pos', '') or '').upper()
