@@ -84,6 +84,15 @@ python3 -m py_compile ./llocg_db_tool_v7.py ./llocg_fetch_all_card_images.py ./l
 - synthetic official HTML から、`PL!SP-pb1-026` に対して画像URLフォルダ `PBSP02` の `L2` をmanifest entryとして抽出。
 - fetcherにて、`L` manifest取得成功後に `L2` manifestが失敗しても、registry由来の `BP09` フォルダ横断で `PL!N-bp1-001-L2.png` を取得できることを確認。
 
+### 20260721 Windows launcher encoding hotfix
+
+※20260721内部確認: Windowsで `launch_loveca.bat` 実行時に `'ca' は、内部コマンドまたは外部コマンド...` や文字化けした日本語断片が表示される件に対応。原因は `.bat` 内のUTF-8日本語echoがcmdのコードページによって安全に解釈されず、文字化けした断片がコマンド扱いになる可能性。`launch_loveca.bat` をASCIIのみへ変更し、`python` 実行失敗時だけ `py -3` へfallbackする単純な構造にした。
+
+確認結果:
+
+- `launch_loveca.bat` の全byteがASCII範囲内であることを確認。
+- ランチャー内容は `python .\run_loveca_app.py --window-mode app`、失敗時に `py -3 .\run_loveca_app.py --window-mode app` の順で実行。
+
 ### 20260717 Phase 4 confirmed backlog implementation
 
 ※20260717内部確認: `CODEX_INSTRUCTION_loveca_phase4_confirmed_backlog_implementation_20260717.md` 対応。対象は `PL!HS-bp6-014#A01` と `PL!SP-bp1-003#A01` の2能力のみ。runtime 14件 PASS、実ブラウザで手札起動ボタン、発生源つき pending、公開カード MEMBER-only 候補、0枚送信、合計10送信、public reveal 表示を確認。証跡は `_codex_outputs/loveca_phase4_confirmed_backlog_implementation_20260717`。
