@@ -2045,3 +2045,33 @@ git diff --check -- llocg_update_database.py
 ```
 
 ※20260721内部確認: ローカルキャッシュでは `cached_candidates=10 missing_cards=3` を確認。実機では更新ログに `reprint_missing` が表示され、未取得再録画像がある場合は `IMAGE-FETCH-MODE targets=0` で止まらない想定。
+
+### 2026-07-21 reprint image display resolution
+
+実装内容:
+
+- デッキ内容表示/デッキ構築で使う画像バリアント解決に、`official_image_manifest.json` の `remote_filename` 対応表を追加した。
+- 公式画像が収録弾フォルダ側のファイル名で保存されていても、manifest上の `cardnumber` / `rarity_norm` を使って元カードへ紐付けるようにした。
+- `L2` / `SEC2` / `PR2` / `PE2` など、数値付きレアリティの画像ファイル名からのレアリティ抽出漏れを修正した。`L2` は表示・検索上 `L＋` として扱う。
+
+確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/core.py
+
+python3 - <<'PY'
+from pathlib import Path
+from loveca_app.core import AppState
+app=AppState(Path('.').resolve())
+assert app.find_card_image('PL!S-bp5-021', rarity='SECL') is not None
+assert app.find_card_image('PL!SP-pb1-026', rarity='L＋') is not None
+assert app.find_card_image('PL!SP-pb1-026', rarity='L2') is not None
+print('OK reprint/L2 image resolution')
+PY
+
+git diff --check -- loveca_app/core.py
+```
+
+※20260721内部確認: デッキ内容表示と同じ `find_card_image(card_no, rarity=...)` 経路で確認。`PL!SP-pb1-026-L2.png` が `L＋` バリアントとして解決されることを確認した。
