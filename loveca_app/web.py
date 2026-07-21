@@ -1,4 +1,4 @@
-# BUILD_TAG = "mac_app_internal_navigation_shutdown_guard_20260721a"
+# BUILD_TAG = "rm_rarity_image_resolution_20260721a"
 """Loveca local web UI and HTTP routing."""
 from __future__ import annotations
 
@@ -828,6 +828,8 @@ class Handler(BaseHTTPRequestHandler):
             rarity = (query.get("rarity") or [""])[0]
             image_path = self.app.find_card_image(card_no, variant_id=variant_id, rarity=rarity)
             if image_path is None:
+                image_path = self.app.no_image_path()
+            if image_path is None:
                 self.send_error(HTTPStatus.NOT_FOUND)
             else:
                 self.send_file(image_path)
@@ -1029,6 +1031,9 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/update/start":
             ok, message = self.app.start_update()
             self.send_json({"ok": ok, "message": message}, HTTPStatus.OK if ok else HTTPStatus.CONFLICT)
+        elif path == "/api/update/startup-confirmed":
+            ok, message = self.app.maybe_start_startup_update()
+            self.send_json({"ok": ok, "message": message}, HTTPStatus.OK if ok else HTTPStatus.CONFLICT)
         elif path == "/decks/import/run":
             form = self.read_form()
             try:
@@ -1152,7 +1157,12 @@ class Handler(BaseHTTPRequestHandler):
                 key_length = int(form.get("remote_key_length", "4"))
                 if key_length < 3 or key_length > 5:
                     raise ValueError("キー長は3〜5桁で指定してください。")
-                self.app.save_settings({"player_id": player, "remote_key_length": key_length})
+                auto_update = form.get("auto_update_on_startup", "") == "1"
+                self.app.save_settings({
+                    "player_id": player,
+                    "remote_key_length": key_length,
+                    "auto_update_on_startup": auto_update,
+                })
                 self.send_html(page("設定", "<section class='panel'><h2>設定を保存しました</h2><a class='button' href='/settings'>戻る</a></section>"))
             except ValueError as exc:
                 self.send_html(page("入力エラー", f"<section class='panel'><p class='bad'>{html.escape(str(exc))}</p><a class='button secondary' href='/settings'>戻る</a></section>"), HTTPStatus.BAD_REQUEST)
@@ -3778,6 +3788,16 @@ if(document.readyState==="loading") {{
   border-radius:8px;
 }
 .update-stat strong {display:block;font-size:18px}
+.startup-update-dialog {
+  display:none;
+  margin:0 0 16px;
+  padding:14px;
+  border:1px solid var(--warn);
+  border-radius:10px;
+  background:#292517;
+}
+.startup-update-dialog.open { display:block; }
+.startup-update-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
 #jobLog {
   max-height:360px;
   overflow:auto;
@@ -3790,6 +3810,15 @@ if(document.readyState==="loading") {{
 <section class="panel">
 <h2>データ更新</h2>
 <p>新しいカード情報、商品情報、先行公開カード、カード画像を順番に確認します。取得後はグループ・ユニット・カード種別・数値項目などの定義済みフィールドを自動補正し、監査結果も保存します。処理には時間がかかる場合があります。</p>
+<p class="status">起動時更新確認が有効な場合、この画面で確認してから更新を開始できます。更新では外部サイトからカード情報と画像情報を取得します。</p>
+<div id="startupUpdateDialog" class="startup-update-dialog">
+  <strong>カードデータの更新を確認しますか？</strong>
+  <p class="status">公式情報・Wiki・画像取得先などの外部サイトへアクセスします。時間がかかる場合があります。許可した場合のみ更新を開始します。</p>
+  <div class="startup-update-actions">
+    <button type="button" onclick="confirmStartupUpdate()">更新する</button>
+    <button type="button" class="secondary" onclick="dismissStartupUpdate()">あとで</button>
+  </div>
+</div>
 <button id="startButton" onclick="startUpdate()">更新開始</button>
 
 <div class="update-progress-wrap">
@@ -3836,6 +3865,37 @@ async function startUpdate() {
   await poll();
 }
 
+function isStartupUpdatePrompt() {
+  const params=new URLSearchParams(location.search);
+  return params.get("startup")==="1";
+}
+
+function setStartupDialog(open) {
+  const dialog=document.getElementById("startupUpdateDialog");
+  if(dialog) dialog.classList.toggle("open",!!open);
+}
+
+async function confirmStartupUpdate() {
+  setStartupDialog(false);
+  const button=document.getElementById("startButton");
+  button.disabled=true;
+  document.getElementById("jobMessage").textContent="カードデータ更新を開始しています...";
+  try {
+    const res=await fetch("/api/update/startup-confirmed",{method:"POST"});
+    const data=await res.json();
+    document.getElementById("jobMessage").textContent=data.message;
+  } catch(e) {
+    document.getElementById("jobMessage").textContent=String(e);
+  }
+  await poll();
+}
+
+function dismissStartupUpdate() {
+  setStartupDialog(false);
+  document.getElementById("jobMessage").textContent="起動時更新確認はキャンセルされました。必要なときは「更新開始」を押してください。";
+  history.replaceState(null,"",location.pathname);
+}
+
 async function poll() {
   try {
     const res=await fetch("/api/update/status",{cache:"no-store"});
@@ -3871,6 +3931,13 @@ async function poll() {
     setTimeout(poll,3000);
   }
 }
+if(isStartupUpdatePrompt()) {
+  setStartupDialog(true);
+  document.getElementById("jobStage").textContent="確認待ち";
+  document.getElementById("jobMessage").textContent="カードデータ更新はまだ開始していません。確認してから開始できます。";
+} else {
+  setStartupDialog(false);
+}
 poll();
 </script>
 """
@@ -3899,6 +3966,7 @@ poll();
         settings = self.app.load_settings()
         player = html.escape(str(settings.get("player_id") or ""))
         key_length = int(settings.get("remote_key_length") or 4)
+        auto_update_checked = "checked" if bool(settings.get("auto_update_on_startup", True)) else ""
         options = "".join(
             f'<option value="{n}" {"selected" if n == key_length else ""}>{n}桁</option>'
             for n in (3, 4, 5)
@@ -3911,6 +3979,8 @@ poll();
 <input id="player_id" name="player_id" maxlength="24" value="{player}" required>
 <label for="remote_key_length">リモート対戦キー長</label>
 <select id="remote_key_length" name="remote_key_length">{options}</select>
+<label><input type="checkbox" name="auto_update_on_startup" value="1" {auto_update_checked} style="width:auto;margin-right:8px">起動時にカードデータ更新を確認する</label>
+<p class="status">有効な場合、アプリ起動後にデータ更新ページと同じ処理を自動で開始します。失敗した場合も、現在のカードデータでアプリは起動したままになります。</p>
 <p class="status">画面表示サイズと操作部サイズは、右上の「簡易設定」からページ遷移なしで変更できます。</p>
 <div style="margin-top:16px"><button type="submit">保存</button></div>
 </form>

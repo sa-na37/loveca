@@ -19,7 +19,7 @@ Deps:
 
 from __future__ import annotations
 
-BUILD_TAG = "db_field_schema_noise_idempotence_20260716b"
+BUILD_TAG = "rm_rarity_image_manifest_20260721a"
 
 import argparse
 import csv
@@ -546,7 +546,12 @@ OFFICIAL_RARITY_ALIAS = {
     "SEC＋": "SEC2", "SEC+": "SEC2",
     "PR＋": "PR2", "PR+": "PR2",
 }
-OFFICIAL_CARD_RARITY_TAIL_RE = re.compile(r"^(?P<base>.+)-(?P<rarity>[A-Za-z0-9＋\+]{1,8})$")
+OFFICIAL_RARITY_TOKENS = {
+    "SD", "CL", "N", "R", "R2", "L", "L2", "PR", "PR2",
+    "P", "P2", "SEC", "SEC2", "SECL", "SRL", "DUO", "AR",
+    "RM", "RE", "PE", "PE2", "SECE", "LLE", "PP", "SR", "UR", "SP",
+}
+OFFICIAL_CARD_RARITY_TAIL_RE = re.compile(r"^(?P<base>.+?)[-_\s](?P<rarity>[A-Za-z0-9＋\+]{1,8})$")
 
 
 def _card_prefix_from_cardno(cardno: str) -> str:
@@ -606,15 +611,19 @@ def split_display_card_and_rarity(display_card: str) -> Tuple[str, str]:
         return s, ""
     base = m.group("base").strip()
     rarity = m.group("rarity").strip()
+    if official_normalize_rarity_token(rarity) not in OFFICIAL_RARITY_TOKENS:
+        return s, ""
     return base, rarity
 
 
 def infer_rarity_from_filename(filename: str) -> str:
-    stem = Path(filename).stem
-    if "-" not in stem:
+    stem = Path(urllib.parse.unquote(filename or "")).stem
+    parts = [part for part in re.split(r"[-_\s]+", stem) if part]
+    if len(parts) < 2:
         return ""
-    tail = stem.rsplit("-", 1)[-1]
-    return official_normalize_rarity_token(tail)
+    tail = parts[-1]
+    normalized = official_normalize_rarity_token(tail)
+    return normalized if normalized in OFFICIAL_RARITY_TOKENS else ""
 
 
 def infer_cardnumber_from_official_filename(
@@ -1040,16 +1049,21 @@ def fetch(
     *,
     stage: str = "unknown",
     fetch_state: Optional[FetchState] = None,
+    cache_ttl_sec: Optional[float] = None,
 ) -> str:
     cache_dir.mkdir(parents=True, exist_ok=True)
     p = sha_path(cache_dir, url)
     if p.exists():
-        cache_ttl_sec = max(0.0, float(CONFIG.get("cache_ttl_sec", 0.0)))
+        effective_cache_ttl_sec = (
+            max(0.0, float(cache_ttl_sec))
+            if cache_ttl_sec is not None
+            else max(0.0, float(CONFIG.get("cache_ttl_sec", 0.0)))
+        )
         try:
             cache_age_sec = max(0.0, time.time() - p.stat().st_mtime)
         except OSError:
-            cache_age_sec = cache_ttl_sec + 1.0
-        if cache_ttl_sec <= 0.0 or cache_age_sec <= cache_ttl_sec:
+            cache_age_sec = effective_cache_ttl_sec + 1.0
+        if effective_cache_ttl_sec <= 0.0 or cache_age_sec <= effective_cache_ttl_sec:
             if fetch_state is not None:
                 fetch_state.clear_failure(url, stage)
             return p.read_text(encoding="utf-8", errors="ignore")
@@ -2651,6 +2665,7 @@ def cmd_scrape(
     manual_overrides: Optional[Path] = None,
     released_product_grace_days: int = 7,
     field_schema: Optional[Path] = None,
+    product_page_cache_ttl_days: float = 3650.0,
 ) -> Tuple[Path, Path]:
     outdir.mkdir(parents=True, exist_ok=True)
     if fetch_state is None:
@@ -2702,6 +2717,7 @@ def cmd_scrape(
         )
         product_fetch_count = 0
         product_reuse_count = 0
+        product_long_cache_ttl_sec = max(0.0, float(product_page_cache_ttl_days)) * 86400.0
         product_fetch_reasons: Counter[str] = Counter()
         today = date.today()
 
@@ -2734,6 +2750,7 @@ def cmd_scrape(
                         user_agent=user_agent,
                         stage="product_page",
                         fetch_state=fetch_state,
+                        cache_ttl_sec=None if fresh else product_long_cache_ttl_sec,
                     )
                     card_urls.update(extract_card_links_from_product(h))
                     product_registry_entries.append(
@@ -3977,6 +3994,7 @@ def build_parser() -> argparse.ArgumentParser:
     ps.add_argument("--outdir", default=CONFIG["outdir"])
     ps.add_argument("--cache", default=CONFIG["cache"])
     ps.add_argument("--delay", type=float, default=CONFIG["delay"])
+    ps.add_argument("--cache-ttl-sec", type=float, default=CONFIG["cache_ttl_sec"])
     ps.add_argument("--checkpoint-every", type=int, default=CONFIG["checkpoint_every"])
     ps.add_argument("--max-fail", type=int, default=CONFIG["max_fail"])
     ps.add_argument(
@@ -4001,6 +4019,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=7,
         help="incremental mode: refetch product pages until this many days after release",
+    )
+    ps.add_argument(
+        "--product-page-cache-ttl-days",
+        type=float,
+        default=3650.0,
+        help="incremental mode: reuse cached product-page HTML for this many days",
     )
 
     pn = sub.add_parser("normalize")
@@ -4049,6 +4073,7 @@ def build_parser() -> argparse.ArgumentParser:
     pall.add_argument("--outdir", default=CONFIG["outdir"])
     pall.add_argument("--cache", default=CONFIG["cache"])
     pall.add_argument("--delay", type=float, default=CONFIG["delay"])
+    pall.add_argument("--cache-ttl-sec", type=float, default=CONFIG["cache_ttl_sec"])
     pall.add_argument("--checkpoint-every", type=int, default=CONFIG["checkpoint_every"])
     pall.add_argument("--max-fail", type=int, default=CONFIG["max_fail"])
     pall.add_argument(
@@ -4080,6 +4105,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=7,
         help="incremental mode: refetch product pages until this many days after release",
     )
+    pall.add_argument(
+        "--product-page-cache-ttl-days",
+        type=float,
+        default=3650.0,
+        help="incremental mode: reuse cached product-page HTML for this many days",
+    )
 
     return p
 
@@ -4088,6 +4119,7 @@ def main() -> None:
     args = build_parser().parse_args()
 
     if args.cmd == "scrape":
+        CONFIG["cache_ttl_sec"] = max(0.0, float(args.cache_ttl_sec))
         outdir = Path(args.outdir)
         fetch_state = FetchState(
             outdir / "failed_fetches.csv",
@@ -4109,6 +4141,7 @@ def main() -> None:
             manual_overrides=Path(args.manual_overrides) if args.manual_overrides else None,
             released_product_grace_days=args.released_product_grace_days,
             field_schema=Path(args.field_schema) if args.field_schema else None,
+            product_page_cache_ttl_days=args.product_page_cache_ttl_days,
         )
         return
 
@@ -4159,6 +4192,7 @@ def main() -> None:
         return
 
     if args.cmd == "all":
+        CONFIG["cache_ttl_sec"] = max(0.0, float(args.cache_ttl_sec))
         outdir = Path(args.outdir)
         fetch_state = FetchState(
             outdir / "failed_fetches.csv",
@@ -4180,6 +4214,7 @@ def main() -> None:
             manual_overrides=Path(args.manual_overrides) if args.manual_overrides else None,
             released_product_grace_days=args.released_product_grace_days,
             field_schema=Path(args.field_schema) if args.field_schema else None,
+            product_page_cache_ttl_days=args.product_page_cache_ttl_days,
         )
         norm_csv, norm_json = cmd_normalize(out_csv, out_json, outdir, args.suffix, manual_overrides=Path(args.manual_overrides) if args.manual_overrides else None, field_schema=Path(args.field_schema) if args.field_schema else None)
         cmd_mine(norm_csv, outdir, args.mine_top)

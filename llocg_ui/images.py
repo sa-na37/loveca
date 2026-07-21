@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: noimage_fallback_db_card_images_20260710a
+# BUILD_TAG: rm_rarity_image_resolution_20260721a
 from __future__ import annotations
 
 """llocg_ui.images
@@ -21,6 +21,8 @@ from typing import Dict, Iterable, List, Optional
 import re
 
 from .db import _cardno_variants
+
+BUILD_TAG = "rm_rarity_image_resolution_20260721a"
 
 RARITY_PREF = [
     "N", "R", "R2", "L", "L2", "SD", "CL",
@@ -72,18 +74,27 @@ class ImageLocator:
         #   <cardno>-<RARITY>-PREVIEW.jpg
         #   <cardno>-<RARITY>-PREVIEW-02.webp
         #   <cardno>-PREVIEW.jpg
-        m = re.search(r"-([A-Za-z0-9+]+)-PREVIEW(?:-\d+)?$", stem, re.IGNORECASE)
+        m = re.search(r"[-_\s]([A-Za-z0-9＋+]+)[-_\s]PREVIEW(?:[-_\s]\d+)?$", stem, re.IGNORECASE)
         if m:
             return m.group(1).upper()
-        m = re.search(r"-([A-Za-z0-9+]+)$", stem)
+        m = re.search(r"[-_\s]([A-Za-z0-9＋+]+)$", stem)
         return m.group(1).upper() if m else ""
 
-    def _choose_best(self, paths: List[Path]) -> Optional[Path]:
+    def _normalize_rarity(self, value: str) -> str:
+        text = str(value or "").strip().upper()
+        return text.replace("＋", "+").replace("+", "2")
+
+    def _choose_best(self, paths: List[Path], rarity: str = "") -> Optional[Path]:
         if not paths:
             return None
+        wanted = self._normalize_rarity(rarity)
+        if wanted:
+            exact = [p for p in paths if self._normalize_rarity(self._rarity_from_name(p)) == wanted]
+            if exact:
+                paths = exact
         scored = []
         for p in paths:
-            rarity = self._rarity_from_name(p)
+            rarity = self._normalize_rarity(self._rarity_from_name(p))
             try:
                 r_rank = RARITY_PREF.index(rarity)
             except ValueError:
@@ -99,13 +110,18 @@ class ImageLocator:
                 if not base.exists() or not base.is_dir():
                     continue
                 for ext in IMAGE_EXTENSIONS:
-                    hits.extend(
-                        p for p in base.glob(f"*/{key}-*{ext}")
-                        if p.is_file()
-                    )
+                    for pattern in (
+                        f"*/{key}-*{ext}",
+                        f"*/{key}_*{ext}",
+                        f"*/{key} *{ext}",
+                        f"{key}-*{ext}",
+                        f"{key}_*{ext}",
+                        f"{key} *{ext}",
+                    ):
+                        hits.extend(p for p in base.glob(pattern) if p.is_file())
         return hits
 
-    def find(self, cardnumber: str) -> Optional[Path]:
+    def find(self, cardnumber: str, rarity: str = "") -> Optional[Path]:
         cn = (cardnumber or "").strip()
         if not cn:
             return None
@@ -119,30 +135,32 @@ class ImageLocator:
             return None
 
         cands = _cardno_variants(cn)
+        rarity_key = self._normalize_rarity(rarity)
+        cache_keys = [f"{key}|rarity={rarity_key}" for key in cands] if rarity_key else list(cands)
 
         # Canonical images are always resolved first, even when a preview path
         # is already cached. This preserves card_images > preview_card_images.
-        canonical = self._choose_best(self._find_hits(self.canonical_bases, cands))
+        canonical = self._choose_best(self._find_hits(self.canonical_bases, cands), rarity=rarity_key)
         if canonical:
-            for key in cands:
+            for key in cache_keys:
                 self.cache[key] = canonical
             return canonical
 
         # No canonical image exists. A cached preview/fallback may be reused.
-        for key in cands:
+        for key in cache_keys:
             cached = self.cache.get(key)
             if cached and cached.exists():
                 return cached
 
-        preview = self._choose_best(self._find_hits(self.preview_bases, cands))
+        preview = self._choose_best(self._find_hits(self.preview_bases, cands), rarity=rarity_key)
         if preview:
-            for key in cands:
+            for key in cache_keys:
                 self.cache[key] = preview
             return preview
 
         fallback = self._no_image_path()
         if fallback:
-            for key in cands:
+            for key in cache_keys:
                 self.cache[key] = fallback
             return fallback
 

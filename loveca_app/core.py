@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# BUILD_TAG = "loveca_distribution_launcher_20260721a"
+# BUILD_TAG = "rm_rarity_image_resolution_20260721a"
 """
 Loveca application launcher (phase 1).
 
@@ -49,7 +49,7 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 
 
-BUILD_TAG = "loveca_distribution_launcher_20260721a"
+BUILD_TAG = "rm_rarity_image_resolution_20260721a"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8875
 SESSION_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -299,6 +299,16 @@ class AppState:
     def path(self, relative: str) -> Path:
         return self.root / relative
 
+    def _invalidate_card_data_caches(self) -> None:
+        self._card_index_cache = None
+        self._image_index_cache = None
+        self._rarity_meta_cache = None
+        self._signature_normal_rarity_cache = None
+        self._image_variants_cache = None
+        self._variants_by_card_cache = None
+        self._variant_path_cache = None
+        self._product_catalog_cache = None
+
     def load_settings(self) -> dict[str, Any]:
         path = self.path(SETTINGS_PATH)
         defaults: dict[str, Any] = {
@@ -308,6 +318,7 @@ class AppState:
             "active_deck": "",
             "ui_scale_percent": 100,
             "control_size": "standard",
+            "auto_update_on_startup": True,
         }
         if not path.exists():
             return defaults
@@ -1064,6 +1075,15 @@ class AppState:
             if wanted in tokens:
                 return cls._normalize_rarity(wanted)
         return ""
+
+    def no_image_path(self) -> Path | None:
+        for relative_dir in CARD_IMAGE_DIRS:
+            base = self.path(relative_dir)
+            for name in ("NoImage.PNG", "NoImage.png", "noimage.png", "noimage.PNG"):
+                candidate = base / name
+                if candidate.is_file():
+                    return candidate
+        return None
 
     @staticmethod
     def _base_variant_rank(card_no: str, rarity: str, path_text: str) -> tuple[int, str]:
@@ -2704,16 +2724,33 @@ class AppState:
                 env["LLOCG_APP_DECK_VARIANTS_JSON"] = json.dumps(
                     runtime_deck["variants"], ensure_ascii=False, separators=(",", ":")
                 )
-                # The simulator treats LLOCG_START_DECK_EXACT as a complete
-                # starting deck and then separately creates its normal six-card
-                # opening hand.  Passing all 60 cards therefore produces
-                # hand=6 and deck=60.  Build the real opening state here:
-                # shuffle the selected 60 cards, move six into the hand, and
-                # pass the remaining 54 as the deck.
-                shuffled_cards = list(runtime_deck["cards"])
-                random.SystemRandom().shuffle(shuffled_cards)
-                opening_hand = shuffled_cards[:6]
-                remaining_deck = shuffled_cards[6:]
+                # Shuffle real deck copies, not only card numbers.  This keeps
+                # image rarity/variant metadata attached to each opening hand
+                # and deck copy for the simulator's instance display layer.
+                expanded_entries: list[dict[str, Any]] = []
+                instance_seq = 0
+                for row in runtime_deck["variants"]:
+                    card_no = str(row.get("card_no") or "").strip()
+                    if not card_no:
+                        continue
+                    try:
+                        count = max(0, int(row.get("count", 0) or 0))
+                    except Exception:
+                        count = 0
+                    for _ in range(count):
+                        instance_seq += 1
+                        expanded_entries.append({
+                            "instance_id": f"dc{instance_seq:03d}",
+                            "cardnumber": card_no,
+                            "rarity": str(row.get("rarity", "") or ""),
+                            "variant_id": str(row.get("variant_id", "") or ""),
+                        })
+
+                random.SystemRandom().shuffle(expanded_entries)
+                opening_entries = expanded_entries[:6]
+                remaining_entries = expanded_entries[6:]
+                opening_hand = [str(x.get("cardnumber") or "") for x in opening_entries]
+                remaining_deck = [str(x.get("cardnumber") or "") for x in remaining_entries]
 
                 if len(opening_hand) != 6 or len(remaining_deck) != 54:
                     raise ValueError(
@@ -2728,6 +2765,11 @@ class AppState:
                 env["LLOCG_START_DECK_EXACT"] = ",".join(remaining_deck)
                 env["LLOCG_START_DECK_EXACT_STRICT"] = "1"
                 env["LLOCG_START_SHUFFLE"] = "0"
+                env["LLOCG_APP_INITIAL_INSTANCES_JSON"] = json.dumps(
+                    {"hand": opening_entries, "deck": remaining_entries},
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                )
 
                 # Phase, turn and energy overrides remain unset.  The simulator
                 # continues through its ordinary mulligan and energy setup.
@@ -2813,7 +2855,7 @@ class AppState:
         )
         return True, message
 
-    def start_update(self) -> tuple[bool, str]:
+    def start_update(self, *, source: str = "manual") -> tuple[bool, str]:
         script = self.path(UPDATE_SCRIPT)
         if not script.exists():
             return False, f"{UPDATE_SCRIPT} が見つかりません。"
@@ -2827,21 +2869,44 @@ class AppState:
         with self.lock:
             if self.update_job.status == "running":
                 return False, "データ更新はすでに実行中です。"
-            self.update_job.reset("database_update")
+            job_name = "startup_database_update" if source == "startup" else "database_update"
+            self.update_job.reset(job_name)
+            if source == "startup":
+                self.update_job.stage = "起動時更新"
+                self.update_job.message = "許可されたため、カードデータ更新を開始しています。"
 
         def worker() -> None:
             try:
                 update_env = os.environ.copy()
                 update_env["PYTHONUNBUFFERED"] = "1"
+                update_args = [
+                    sys.executable,
+                    "-u",
+                    str(script),
+                    "--require-preview-posts",
+                ]
+                if source == "startup":
+                    update_args.extend([
+                        "--delay",
+                        "10.0",
+                        "--max-429",
+                        "8",
+                        "--http-cache-ttl-hours",
+                        "24",
+                        "--released-product-grace-days",
+                        "0",
+                        "--product-page-cache-ttl-days",
+                        "3650",
+                        "--preview-index-cache-minutes",
+                        "360",
+                        "--preview-page-cache-ttl-hours",
+                        "24",
+                        "--preview-empty-recheck-hours",
+                        "24",
+                    ])
+                self.update_job.append("[APP-UPDATE] command=" + " ".join(update_args))
                 process = subprocess.Popen(
-                    [
-                        sys.executable,
-                        "-u",
-                        str(script),
-                        "--require-preview-posts",
-                        "--field-schema",
-                        str(field_schema),
-                    ],
+                    update_args,
                     cwd=str(self.root),
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
@@ -2864,6 +2929,7 @@ class AppState:
                     self.update_job.status = "success" if returncode == 0 else "failed"
                     self.update_job.finished_at = utc_now_iso()
                     if returncode == 0:
+                        self._invalidate_card_data_caches()
                         self.update_job.stage = "完了"
                         self.update_job.progress_percent = 100
                         self.update_job.message = "カードデータの更新が完了しました。"
@@ -2883,7 +2949,15 @@ class AppState:
                     self.update_job.finished_at = utc_now_iso()
 
         threading.Thread(target=worker, daemon=True).start()
+        if source == "startup":
+            return True, "カードデータ更新を開始しました。外部サイトからカード情報と画像情報を取得します。"
         return True, "DBフィールド補正を含むデータ更新を開始しました。"
+
+    def maybe_start_startup_update(self) -> tuple[bool, str]:
+        settings = self.load_settings()
+        if not bool(settings.get("auto_update_on_startup", True)):
+            return False, "起動時更新確認は設定で無効です。"
+        return self.start_update(source="startup")
 
     def create_remote_session(
         self,
