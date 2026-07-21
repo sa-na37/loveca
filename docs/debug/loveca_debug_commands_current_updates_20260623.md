@@ -103,6 +103,16 @@ python3 -m py_compile ./llocg_db_tool_v7.py ./llocg_fetch_all_card_images.py ./l
 - ローカル環境の不足なしパスで `ensure_update_python_dependencies(allow_install=False)` が成功。
 - updater help に `--skip-dependency-install` が表示されることを確認。
 
+### 20260721 seeded HTTP cache distribution
+
+※20260721内部確認: 配布版初回更新時の429が重い件に対応。`llocg_db_out_full/_http_cache` は337ファイル/約10MBで、商品ページ/更新用HTMLキャッシュとして配布可能なサイズ。カード画像は引き続き同梱せず、配布ビルダーで `_http_cache` の `.html` / `.json` / `.txt` だけを公開zipへ入れる専用経路を追加した。これにより、利用者初回更新ではキャッシュ済みページを優先し、未キャッシュの新規ページだけ外部取得する。
+
+確認観点:
+
+- 公開zipに `llocg_db_out_full/_http_cache` が含まれる。
+- 公開zip内の画像ファイル数は引き続き0件。
+- UI画像バンドル/カード画像はGitHub公開zipには含めない。
+
 ### 20260717 Phase 4 confirmed backlog implementation
 
 ※20260717内部確認: `CODEX_INSTRUCTION_loveca_phase4_confirmed_backlog_implementation_20260717.md` 対応。対象は `PL!HS-bp6-014#A01` と `PL!SP-bp1-003#A01` の2能力のみ。runtime 14件 PASS、実ブラウザで手札起動ボタン、発生源つき pending、公開カード MEMBER-only 候補、0枚送信、合計10送信、public reveal 表示を確認。証跡は `_codex_outputs/loveca_phase4_confirmed_backlog_implementation_20260717`。

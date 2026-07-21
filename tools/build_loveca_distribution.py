@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# BUILD_TAG = "loveca_distribution_targets_20260721a"
+# BUILD_TAG = "loveca_seed_http_cache_distribution_20260721a"
 """Build a pruned Loveca Application distribution zip."""
 from __future__ import annotations
 
@@ -13,23 +13,26 @@ from datetime import datetime
 from pathlib import Path
 
 
-BUILD_TAG = "loveca_distribution_targets_20260721a"
+BUILD_TAG = "loveca_seed_http_cache_distribution_20260721a"
 
 
-DEFAULT_INCLUDE_DIRS = (
-    "docs/debug",
-    "docs/notes",
+RUNTIME_INCLUDE_DIRS = (
     "llocg_dual_v2",
     "llocg_ext",
     "llocg_ui",
     "loveca_app",
     "manual_overrides",
     "tools",
-    "user_data",
+)
+
+SOURCE_DOC_DIRS = (
+    "docs/debug",
+    "docs/handoffs",
+    "docs/notes",
 )
 
 DEFAULT_INCLUDE_FILES = (
-    "AGENTS.md",
+    "README.md",
     "LLCrule251121.pdf",
     "llocg_build_preview_manifest_from_x.py",
     "llocg_db_tool_v7.py",
@@ -38,13 +41,16 @@ DEFAULT_INCLUDE_FILES = (
     "llocg_fetch_decklog_by_code.py",
     "llocg_sim_tool_v7.py",
     "llocg_update_database.py",
-    "playmat.jpg",
     "refresh_loveca_product_catalog.py",
     "run_llocg_dual_v2.py",
     "run_llocg_ui_web.py",
     "run_loveca_app.py",
     "launch_loveca.command",
     "launch_loveca.bat",
+)
+
+SOURCE_ONLY_FILES = (
+    "AGENTS.md",
 )
 
 DB_INCLUDE = (
@@ -55,7 +61,7 @@ DB_INCLUDE = (
     "official_preview_image_manifest.json",
     "product_catalog.json",
     "product_release_registry.json",
-    "card_images",
+    "_http_cache",
     "decklists",
 )
 
@@ -69,6 +75,8 @@ EXCLUDED_DIR_NAMES = {
     "_update_backups",
     "jank",
     "loveca_reports",
+    "remote_sessions",
+    "runtime",
 }
 
 EXCLUDED_SUFFIXES = {
@@ -82,6 +90,12 @@ EXCLUDED_SUFFIXES = {
 
 def project_root() -> Path:
     return Path(__file__).resolve().parents[1]
+
+
+if str(project_root()) not in sys.path:
+    sys.path.insert(0, str(project_root()))
+
+from loveca_app.assets import build_ui_asset_bundle
 
 
 def should_skip(path: Path, root: Path) -> bool:
@@ -119,6 +133,22 @@ def add_tree(zf: zipfile.ZipFile, root: Path, base: Path, package_root: str) -> 
         add_file(zf, root, path, package_root)
 
 
+def add_http_cache_tree(zf: zipfile.ZipFile, root: Path, base: Path, package_root: str) -> None:
+    if not base.exists() or not base.is_dir():
+        return
+    allowed_suffixes = {".html", ".json", ".txt"}
+    for path in sorted(base.rglob("*")):
+        if not path.is_file():
+            continue
+        if path.name == ".DS_Store" or path.suffix.lower() not in allowed_suffixes:
+            continue
+        arcname = Path(package_root) / path.relative_to(root)
+        zinfo = zipfile.ZipInfo(str(arcname).replace(os.sep, "/"))
+        zinfo.date_time = datetime.fromtimestamp(path.stat().st_mtime).timetuple()[:6]
+        zinfo.external_attr = (0o644 & 0xFFFF) << 16
+        zf.writestr(zinfo, path.read_bytes(), compress_type=zipfile.ZIP_DEFLATED)
+
+
 def build(output: Path, *, include_docs: bool = True, target: str = "source") -> Path:
     root = project_root()
     package_root = "loveca"
@@ -126,15 +156,20 @@ def build(output: Path, *, include_docs: bool = True, target: str = "source") ->
     if output.exists():
         output.unlink()
 
-    include_dirs = list(DEFAULT_INCLUDE_DIRS)
-    if not include_docs:
-        include_dirs = [item for item in include_dirs if not item.startswith("docs/")]
-
     selected_target = str(target or "source").strip().lower()
     if selected_target not in {"source", "macos", "windows"}:
         raise ValueError("target must be source, macos, or windows")
 
+    if selected_target in {"macos", "windows"} and include_docs:
+        include_docs = False
+
+    include_dirs = list(RUNTIME_INCLUDE_DIRS)
+    if include_docs:
+        include_dirs.extend(SOURCE_DOC_DIRS)
+
     include_files = list(DEFAULT_INCLUDE_FILES)
+    if selected_target == "source":
+        include_files.extend(SOURCE_ONLY_FILES)
     if selected_target == "macos":
         include_files = [item for item in include_files if item != "launch_loveca.bat"]
     elif selected_target == "windows":
@@ -150,7 +185,9 @@ def build(output: Path, *, include_docs: bool = True, target: str = "source") ->
         db_root = root / "llocg_db_out_full"
         for rel in DB_INCLUDE:
             path = db_root / rel
-            if path.is_dir():
+            if rel == "_http_cache" and path.is_dir():
+                add_http_cache_tree(zf, root, path, package_root)
+            elif path.is_dir():
                 add_tree(zf, root, path, package_root)
             else:
                 add_file(zf, root, path, package_root)
@@ -167,19 +204,34 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--no-docs", action="store_true")
     parser.add_argument(
+        "--include-docs",
+        action="store_true",
+        help="Include development/debug docs. Ignored for macos/windows release zips.",
+    )
+    parser.add_argument(
         "--target",
-        choices=("source", "macos", "windows"),
+        choices=("source", "macos", "windows", "ui-assets"),
         default="source",
-        help="Prune launcher files for a target platform",
+        help="Prune launcher files for a target platform, or build the separate UI asset bundle",
     )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+    if str(args.target) == "ui-assets":
+        out = build_ui_asset_bundle(project_root(), args.output.expanduser().resolve())
+        print("[LOVECA DIST] BUILD_TAG={}".format(BUILD_TAG))
+        print("[LOVECA DIST] target ui-assets")
+        print("[LOVECA DIST] wrote {}".format(out))
+        print("[LOVECA DIST] place this zip beside the downloaded Loveca app folder before launch")
+        return 0
+    include_docs = args.include_docs or (str(args.target) == "source" and not args.no_docs)
+    if args.no_docs:
+        include_docs = False
     out = build(
         args.output.expanduser().resolve(),
-        include_docs=not args.no_docs,
+        include_docs=include_docs,
         target=str(args.target),
     )
     print("[LOVECA DIST] BUILD_TAG={}".format(BUILD_TAG))
