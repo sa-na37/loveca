@@ -1790,6 +1790,30 @@ PY
 python3 ./llocg_sim_tool_v7.py compile --csv ./llocg_db_out_full/cards_min_tokv1.csv --out /private/tmp/loveca_compile_smoke.json --patterns-dir ./llocg_db_out_full
 ```
 
+追記3 20260721:
+
+- Windowsでアプリを `pythonw.exe` 起動にした状態からDB更新を実行すると、更新用 `python.exe` のコンソールウインドウが前面に出ることを確認。ログはアプリ側で取得できているため、Windowsの更新子プロセスには `CREATE_NO_WINDOW` を付け、コンソールウインドウを作らないようにした。
+- 対象はアプリ本体からの `llocg_update_database.py` 起動と、更新スクリプト内の `scrape` / `normalize` / `compile` / `audit` / pip確認・導入コマンド。
+
+確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/core.py ./llocg_update_database.py
+
+python3 - <<'PY'
+from unittest import mock
+import loveca_app.core as core
+import llocg_update_database as upd
+with mock.patch('loveca_app.core.platform.system', lambda: 'Windows'), mock.patch('loveca_app.core.subprocess.CREATE_NO_WINDOW', 0x08000000, create=True):
+    assert core.no_window_subprocess_kwargs() == {'creationflags': 0x08000000}
+with mock.patch('llocg_update_database.os.name', 'nt'), mock.patch('llocg_update_database.subprocess.CREATE_NO_WINDOW', 0x08000000, create=True):
+    assert upd.no_window_subprocess_kwargs() == {'creationflags': 0x08000000}
+print('OK CREATE_NO_WINDOW kwargs')
+PY
+```
+
 ### 2026-07-21 effect-debug residual policy cleanup
 
 ※20260721内部確認: 効果処理関連の残件を現行仕様に合わせて再分類した。2デッキ用UIでは秘匿不要のため、相手手札候補をactive側で表示することは不具合扱いしない。1デッキ版では相手個別カードstateを持たないため、相手成功ライブ置き場、相手ステージ、相手ライブカード置き場などの一部比較・反映は手入力/手動反映を正式経路とする。

@@ -21,7 +21,7 @@ BUILD_TAG is intentionally visible for delivery verification.
 
 from __future__ import annotations
 
-BUILD_TAG = "update_pyyaml_dependency_20260721a"
+BUILD_TAG = "hide_update_console_window_20260721a"
 
 import argparse
 import csv
@@ -115,6 +115,13 @@ def console_python_executable() -> str:
     return sys.executable or "python3"
 
 
+def no_window_subprocess_kwargs() -> Dict[str, Any]:
+    if os.name != "nt":
+        return {}
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    return {"creationflags": flags} if flags else {}
+
+
 def run(cmd: Sequence[str], *, cwd: Path, env: Dict[str, str] | None = None) -> None:
     printable = " ".join(str(x) for x in cmd)
     print(f"\n[RUN] {printable}")
@@ -126,6 +133,7 @@ def run(cmd: Sequence[str], *, cwd: Path, env: Dict[str, str] | None = None) -> 
         cwd=str(cwd),
         env=merged_env,
         check=False,
+        **no_window_subprocess_kwargs(),
     )
     if result.returncode != 0:
         raise SystemExit(
@@ -155,12 +163,14 @@ def install_update_python_packages(missing: Sequence[Tuple[str, str]]) -> None:
     pip_check = subprocess.run(
         [console_python_executable(), "-m", "pip", "--version"],
         check=False,
+        **no_window_subprocess_kwargs(),
     )
     if pip_check.returncode != 0:
         print("[PY-DEPS] pip is not available. Trying ensurepip...")
         ensurepip = subprocess.run(
             [console_python_executable(), "-m", "ensurepip", "--upgrade"],
             check=False,
+            **no_window_subprocess_kwargs(),
         )
         if ensurepip.returncode != 0:
             raise SystemExit(
@@ -176,7 +186,7 @@ def install_update_python_packages(missing: Sequence[Tuple[str, str]]) -> None:
         "--disable-pip-version-check",
         *package_names,
     ]
-    result = subprocess.run(base_cmd, check=False)
+    result = subprocess.run(base_cmd, check=False, **no_window_subprocess_kwargs())
     if result.returncode != 0:
         user_cmd = [
             console_python_executable(),
@@ -188,7 +198,7 @@ def install_update_python_packages(missing: Sequence[Tuple[str, str]]) -> None:
             *package_names,
         ]
         print("[PY-DEPS] normal install failed. Retrying with --user...")
-        result = subprocess.run(user_cmd, check=False)
+        result = subprocess.run(user_cmd, check=False, **no_window_subprocess_kwargs())
         if result.returncode != 0:
             raise SystemExit(
                 "[ERROR] failed to install required Python packages: "

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# BUILD_TAG = "update_cli_python_for_pythonw_20260721a"
+# BUILD_TAG = "hide_update_console_window_20260721a"
 """
 Loveca application launcher (phase 1).
 
@@ -49,7 +49,7 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 
 
-BUILD_TAG = "update_cli_python_for_pythonw_20260721a"
+BUILD_TAG = "hide_update_console_window_20260721a"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8875
 SESSION_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -158,6 +158,13 @@ def console_python_executable() -> str:
         if candidate.exists():
             return str(candidate)
     return sys.executable or "python3"
+
+
+def no_window_subprocess_kwargs() -> dict[str, Any]:
+    if platform.system() != "Windows":
+        return {}
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    return {"creationflags": flags} if flags else {}
 
 
 @dataclass
@@ -2939,6 +2946,7 @@ class AppState:
                     bufsize=1,
                     env=update_env,
                     start_new_session=True,
+                    **no_window_subprocess_kwargs(),
                 )
                 with self.lock:
                     self.update_process = process
