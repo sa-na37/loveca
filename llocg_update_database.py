@@ -21,10 +21,11 @@ BUILD_TAG is intentionally visible for delivery verification.
 
 from __future__ import annotations
 
-BUILD_TAG = "loveca_field_schema_audit_summary_20260716b"
+BUILD_TAG = "update_dependency_bootstrap_20260721a"
 
 import argparse
 import csv
+import importlib.util
 import json
 import os
 import re
@@ -96,6 +97,13 @@ PUBLISH_OPTIONAL_FILES = [
     "field_validation_idempotence_failures_scrape_finalize.json",
 ]
 
+UPDATE_PYTHON_PACKAGES = [
+    ("requests", "requests"),
+    ("bs4", "beautifulsoup4"),
+    ("lxml", "lxml"),
+    ("pandas", "pandas"),
+]
+
 
 def run(cmd: Sequence[str], *, cwd: Path, env: Dict[str, str] | None = None) -> None:
     printable = " ".join(str(x) for x in cmd)
@@ -113,6 +121,91 @@ def run(cmd: Sequence[str], *, cwd: Path, env: Dict[str, str] | None = None) -> 
         raise SystemExit(
             f"[ERROR] command failed with exit={result.returncode}: {printable}"
         )
+
+
+def missing_update_python_packages() -> List[Tuple[str, str]]:
+    missing: List[Tuple[str, str]] = []
+    for module_name, package_name in UPDATE_PYTHON_PACKAGES:
+        if importlib.util.find_spec(module_name) is None:
+            missing.append((module_name, package_name))
+    return missing
+
+
+def install_update_python_packages(missing: Sequence[Tuple[str, str]]) -> None:
+    package_names = [package_name for _module_name, package_name in missing]
+    if not package_names:
+        return
+
+    print(
+        "[PY-DEPS] Missing Python packages for data update: "
+        + ", ".join(package_names)
+    )
+    print("[PY-DEPS] Installing required packages with pip. This may take a few minutes.")
+
+    pip_check = subprocess.run(
+        [sys.executable, "-m", "pip", "--version"],
+        check=False,
+    )
+    if pip_check.returncode != 0:
+        print("[PY-DEPS] pip is not available. Trying ensurepip...")
+        ensurepip = subprocess.run(
+            [sys.executable, "-m", "ensurepip", "--upgrade"],
+            check=False,
+        )
+        if ensurepip.returncode != 0:
+            raise SystemExit(
+                "[ERROR] pip is not available and ensurepip failed. "
+                "Install Python with pip enabled, then run update again."
+            )
+
+    base_cmd = [
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "--disable-pip-version-check",
+        *package_names,
+    ]
+    result = subprocess.run(base_cmd, check=False)
+    if result.returncode != 0:
+        user_cmd = [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--user",
+            "--disable-pip-version-check",
+            *package_names,
+        ]
+        print("[PY-DEPS] normal install failed. Retrying with --user...")
+        result = subprocess.run(user_cmd, check=False)
+        if result.returncode != 0:
+            raise SystemExit(
+                "[ERROR] failed to install required Python packages: "
+                + ", ".join(package_names)
+            )
+
+    still_missing = missing_update_python_packages()
+    if still_missing:
+        raise SystemExit(
+            "[ERROR] Python packages were installed but still cannot be imported: "
+            + ", ".join(package_name for _module, package_name in still_missing)
+        )
+    print("[PY-DEPS] required Python packages are ready.")
+
+
+def ensure_update_python_dependencies(*, allow_install: bool) -> None:
+    missing = missing_update_python_packages()
+    if not missing:
+        print("[PY-DEPS] required Python packages are already available.")
+        return
+    if not allow_install:
+        raise SystemExit(
+            "[ERROR] missing required Python packages: "
+            + ", ".join(package_name for _module, package_name in missing)
+            + ". Re-run without --skip-dependency-install to install them automatically."
+        )
+    install_update_python_packages(missing)
 
 
 def canonical_cardnumber(value: str) -> Tuple[str, str]:
@@ -567,6 +660,18 @@ def parser() -> argparse.ArgumentParser:
     )
     ap.add_argument("--delay", type=float, default=5.0)
     ap.add_argument(
+        "--max-429",
+        type=int,
+        default=6,
+        help="Maximum consecutive HTTP 429 responses before the DB scraper stops safely",
+    )
+    ap.add_argument(
+        "--http-cache-ttl-hours",
+        type=float,
+        default=24.0,
+        help="Freshness window for cached WIKIWIKI product/card pages used by the DB scraper",
+    )
+    ap.add_argument(
         "--full-refresh",
         action="store_true",
         help=(
@@ -584,6 +689,12 @@ def parser() -> argparse.ArgumentParser:
         type=int,
         default=7,
         help="Recheck product pages until this many days after release; stable older products reuse registry data",
+    )
+    ap.add_argument(
+        "--product-page-cache-ttl-days",
+        type=float,
+        default=3650.0,
+        help="Reuse cached WIKIWIKI product-page HTML for this many days during incremental updates",
     )
     ap.add_argument(
         "--preview-empty-recheck-hours",
@@ -651,6 +762,11 @@ def parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Keep work/cache directories after success",
     )
+    ap.add_argument(
+        "--skip-dependency-install",
+        action="store_true",
+        help="Do not install missing Python packages automatically before update",
+    )
     return ap
 
 
@@ -663,6 +779,11 @@ def main() -> int:
         else (project_root / args.dbdir).resolve()
     )
     dbdir.mkdir(parents=True, exist_ok=True)
+
+    print(f"BUILD_TAG={BUILD_TAG}")
+    ensure_update_python_dependencies(
+        allow_install=not bool(args.skip_dependency_install)
+    )
 
     db_tool = project_root / "llocg_db_tool_v7.py"
     sim_tool = project_root / "llocg_sim_tool_v7.py"
@@ -695,7 +816,6 @@ def main() -> int:
         print(f"[CACHE] cleared persistent HTTP cache: {cache_dir}")
     cache_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"BUILD_TAG={BUILD_TAG}")
     print(f"project_root={project_root}")
     print(f"dbdir={dbdir}")
     print(f"work_root={work_root}")
@@ -747,8 +867,14 @@ def main() -> int:
         str(cache_dir),
         "--delay",
         str(args.delay),
+        "--max-429",
+        str(max(1, int(args.max_429))),
+        "--cache-ttl-sec",
+        str(max(0.0, float(args.http_cache_ttl_hours)) * 3600.0),
         "--released-product-grace-days",
         str(max(0, args.released_product_grace_days)),
+        "--product-page-cache-ttl-days",
+        str(max(0.0, float(args.product_page_cache_ttl_days))),
     ]
 
     if args.full_refresh:

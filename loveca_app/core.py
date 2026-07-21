@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# BUILD_TAG = "rm_rarity_image_resolution_20260721a"
+# BUILD_TAG = "update_dependency_bootstrap_20260721a"
 """
 Loveca application launcher (phase 1).
 
@@ -49,7 +49,7 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 
 
-BUILD_TAG = "rm_rarity_image_resolution_20260721a"
+BUILD_TAG = "update_dependency_bootstrap_20260721a"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8875
 SESSION_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -2873,7 +2873,7 @@ class AppState:
             self.update_job.reset(job_name)
             if source == "startup":
                 self.update_job.stage = "起動時更新"
-                self.update_job.message = "許可されたため、カードデータ更新を開始しています。"
+                self.update_job.message = "許可されたため、必要部品の確認とカードデータ更新を開始しています。"
 
         def worker() -> None:
             try:
@@ -2950,7 +2950,7 @@ class AppState:
 
         threading.Thread(target=worker, daemon=True).start()
         if source == "startup":
-            return True, "カードデータ更新を開始しました。外部サイトからカード情報と画像情報を取得します。"
+            return True, "カードデータ更新を開始しました。初回は必要なPython追加部品を確認してから、外部サイトのカード情報と画像情報を取得します。"
         return True, "DBフィールド補正を含むデータ更新を開始しました。"
 
     def maybe_start_startup_update(self) -> tuple[bool, str]:

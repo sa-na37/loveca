@@ -1,4 +1,4 @@
-# BUILD_TAG = "rm_rarity_image_resolution_20260721a"
+# BUILD_TAG = "update_dependency_bootstrap_20260721a"
 """Loveca local web UI and HTTP routing."""
 from __future__ import annotations
 
@@ -3810,10 +3810,10 @@ if(document.readyState==="loading") {{
 <section class="panel">
 <h2>データ更新</h2>
 <p>新しいカード情報、商品情報、先行公開カード、カード画像を順番に確認します。取得後はグループ・ユニット・カード種別・数値項目などの定義済みフィールドを自動補正し、監査結果も保存します。処理には時間がかかる場合があります。</p>
-<p class="status">起動時更新確認が有効な場合、この画面で確認してから更新を開始できます。更新では外部サイトからカード情報と画像情報を取得します。</p>
+<p class="status">起動時更新確認が有効な場合、この画面で確認してから更新を開始できます。更新では、初回に必要なPython追加部品を確認し、外部サイトからカード情報と画像情報を取得します。</p>
 <div id="startupUpdateDialog" class="startup-update-dialog">
   <strong>カードデータの更新を確認しますか？</strong>
-  <p class="status">公式情報・Wiki・画像取得先などの外部サイトへアクセスします。時間がかかる場合があります。許可した場合のみ更新を開始します。</p>
+  <p class="status">初回はPython追加部品の導入が必要になる場合があります。その後、公式情報・Wiki・画像取得先などの外部サイトへアクセスします。時間がかかる場合があります。許可した場合のみ更新を開始します。</p>
   <div class="startup-update-actions">
     <button type="button" onclick="confirmStartupUpdate()">更新する</button>
     <button type="button" class="secondary" onclick="dismissStartupUpdate()">あとで</button>

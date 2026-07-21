@@ -93,6 +93,16 @@ python3 -m py_compile ./llocg_db_tool_v7.py ./llocg_fetch_all_card_images.py ./l
 - `launch_loveca.bat` の全byteがASCII範囲内であることを確認。
 - ランチャー内容は `python .\run_loveca_app.py --window-mode app`、失敗時に `py -3 .\run_loveca_app.py --window-mode app` の順で実行。
 
+### 20260721 Windows update dependency bootstrap hotfix
+
+※20260721内部確認: Windows配布版でデータ更新開始直後、`llocg_build_preview_manifest_from_x.py` の `import requests` が `ModuleNotFoundError: No module named 'requests'` で停止する件に対応。原因は、Python本体のみ導入された利用者環境に更新用追加パッケージ `requests` / `beautifulsoup4` / `lxml` / `pandas` が入っていないこと。`llocg_update_database.py` の開始直後に必要パッケージを確認し、不足時は同じPython環境へ `pip install` してから更新を続行する。pipがない場合は `ensurepip` を試し、通常install失敗時は `--user` で再試行する。ユーザー操作なしで更新を進めるため、更新確認UIとREADMEには初回更新時にPython追加部品を導入する場合がある旨を追記。
+
+確認結果:
+
+- `python3 -m py_compile ./llocg_update_database.py ./loveca_app/core.py ./loveca_app/web.py` OK。
+- ローカル環境の不足なしパスで `ensure_update_python_dependencies(allow_install=False)` が成功。
+- updater help に `--skip-dependency-install` が表示されることを確認。
+
 ### 20260717 Phase 4 confirmed backlog implementation
 
 ※20260717内部確認: `CODEX_INSTRUCTION_loveca_phase4_confirmed_backlog_implementation_20260717.md` 対応。対象は `PL!HS-bp6-014#A01` と `PL!SP-bp1-003#A01` の2能力のみ。runtime 14件 PASS、実ブラウザで手札起動ボタン、発生源つき pending、公開カード MEMBER-only 候補、0枚送信、合計10送信、public reveal 表示を確認。証跡は `_codex_outputs/loveca_phase4_confirmed_backlog_implementation_20260717`。
