@@ -2075,3 +2075,52 @@ git diff --check -- loveca_app/core.py
 ```
 
 ※20260721内部確認: デッキ内容表示と同じ `find_card_image(card_no, rarity=...)` 経路で確認。`PL!SP-pb1-026-L2.png` が `L＋` バリアントとして解決されることを確認した。
+
+### 2026-07-21 deck view lookup for reprint product-folder aliases
+
+実装内容:
+
+- デッキ内容確認の `card_no + rarity` 画像検索で、公式カードリストHTMLキャッシュから作った `remote_filename -> 元カード番号/レアリティ` 対応表も使うようにした。
+- 例: 元カード番号 `PL!-bp3-012` / レアリティ `RM` の画像が、収録弾フォルダ `BP05` 内の別名ファイルとして保存されている場合でも、デッキ内容確認から該当画像へ到達できる。
+- デッキ行の `rarity` が空でも、保存済み `variant_id` が `card_no|RM|...` 形式なら、そこからレアリティを補完して画像検索するようにした。
+
+確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/core.py
+
+python3 - <<'PY'
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import json
+from loveca_app.core import AppState
+
+with TemporaryDirectory() as td:
+    root=Path(td).resolve()
+    db=root/'llocg_db_out_full'
+    (db/'card_images'/'BP05').mkdir(parents=True)
+    (db/'_http_cache').mkdir(parents=True)
+    (db/'cards_min_tokv1.json').write_text(json.dumps([
+        {'cardnumber':'PL!-bp3-012','cardname':'test','card_type':'メンバー'},
+    ], ensure_ascii=False), encoding='utf-8')
+    (db/'cards_compiled_v7h.json').write_text('[]', encoding='utf-8')
+    image_path=db/'card_images'/'BP05'/'PL!-bp5-012-RM.png'
+    image_path.write_bytes(b'fake-png')
+    (db/'_http_cache'/'cached.html').write_text('''
+      <div card="PL!-bp3-012-RM"><img src="/wordpress/wp-content/images/cardlist/BP05/PL!-bp5-012-RM.png"></div>
+    ''', encoding='utf-8')
+    app=AppState(root)
+    assert app.find_card_image('PL!-bp3-012', rarity='RM') == image_path
+    row={'count':'1','card_no':'PL!-bp3-012','rarity':'','variant_id':'PL!-bp3-012|RM|old','name':''}
+    display=app.card_display_data(row)
+    assert display['rarity']=='RM', display
+    assert app.find_card_image(display['card_no'], variant_id=display['variant_id'], rarity=display['rarity']) == image_path
+print('OK deck view reprint alias lookup')
+PY
+
+git diff --check -- loveca_app/core.py
+```
+
+※20260721内部確認: ローカル実DBに `PL!-bp3-012` のRM実画像が無いため、一時DBで「元カード番号bp3、保存先フォルダ/ファイル名bp5」の状態を作り、デッキ内容確認と同じ画像解決経路を確認した。

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# BUILD_TAG = "reprint_image_variant_resolution_20260721a"
+# BUILD_TAG = "reprint_deck_view_image_lookup_20260721a"
 """
 Loveca application launcher (phase 1).
 
@@ -49,7 +49,7 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 
 
-BUILD_TAG = "reprint_image_variant_resolution_20260721a"
+BUILD_TAG = "reprint_deck_view_image_lookup_20260721a"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8875
 SESSION_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -669,6 +669,7 @@ class AppState:
 
     def card_display_data(self, row: dict[str, str]) -> dict[str, str]:
         record = self.card_record(row["card_no"])
+        row_rarity = row.get("rarity", "") or self._rarity_from_variant_id(row.get("variant_id", ""))
         def first(*keys: str) -> str:
             for key in keys:
                 value = record.get(key)
@@ -680,7 +681,7 @@ class AppState:
         return {
             "count": row["count"],
             "card_no": row["card_no"],
-            "rarity": row.get("rarity", "") or first("rarity"),
+            "rarity": row_rarity or first("rarity"),
             "variant_id": row.get("variant_id", ""),
             "name": row.get("name", "") or first("cardname", "name", "card_name"),
             "card_type": first("card_type", "type", "cardtype"),
@@ -1017,6 +1018,13 @@ class AppState:
             "PR+": "PR＋",
         }.get(text, text)
 
+    @classmethod
+    def _rarity_from_variant_id(cls, variant_id: Any) -> str:
+        parts = str(variant_id or "").split("|")
+        if len(parts) < 2:
+            return ""
+        return cls._normalize_rarity(parts[1])
+
     @staticmethod
     def _card_text_signature(record: dict[str, Any]) -> str:
         fields = (
@@ -1091,25 +1099,99 @@ class AppState:
                 rarity = self._normalize_rarity(entry.get("rarity_norm") or entry.get("rarity_display") or "")
                 if not folder or not remote_filename:
                     continue
-                candidates = [
-                    base / folder / remote_filename,
-                ]
-                if rarity:
-                    candidates.append(base / folder / f"{card_no}-{rarity}.png")
-                    # Fetcher stores normalized filesystem rarity tokens.
-                    reverse_alias = {
-                        "R＋": "R2",
-                        "L＋": "L2",
-                        "P＋": "P2",
-                        "PE＋": "PE2",
-                        "SEC＋": "SEC2",
-                        "PR＋": "PR2",
-                    }
-                    if rarity in reverse_alias:
-                        candidates.append(base / folder / f"{card_no}-{reverse_alias[rarity]}.png")
-                for candidate in candidates:
+                for candidate in self._image_alias_candidates(base, folder, card_no, rarity, remote_filename):
                     aliases[str(candidate.resolve())] = (card_no, rarity)
         return aliases
+
+    def _cached_official_image_aliases(self) -> dict[str, tuple[str, str]]:
+        cache_dir = self.path("llocg_db_out_full/_http_cache")
+        if not cache_dir.is_dir():
+            return {}
+        try:
+            from bs4 import BeautifulSoup
+        except Exception:
+            return {}
+        aliases: dict[str, tuple[str, str]] = {}
+        base = self.path("llocg_db_out_full/card_images")
+        for cache_path in sorted(cache_dir.glob("*.html")):
+            try:
+                html_text = cache_path.read_text(encoding="utf-8", errors="ignore")
+            except Exception:
+                continue
+            if "/cardlist/" not in html_text:
+                continue
+            soup = BeautifulSoup(html_text, "lxml")
+            for node in soup.select("[card]"):
+                card_attr = str(node.get("card") or "").strip()
+                card_no, rarity = self._split_display_card_and_rarity(card_attr)
+                if not card_no:
+                    continue
+                img = node.find("img")
+                src = str(img.get("src") or "").strip() if img else ""
+                match = re.search(r"/cardlist/([^/]+)/([^/?#]+)", unquote(src))
+                if not match:
+                    continue
+                folder = match.group(1).strip()
+                remote_filename = match.group(2).strip()
+                rarity = rarity or self._rarity_from_image_filename(remote_filename)
+                rarity = self._normalize_rarity(rarity)
+                if not folder or not remote_filename:
+                    continue
+                for candidate in self._image_alias_candidates(base, folder, card_no, rarity, remote_filename):
+                    aliases[str(candidate.resolve())] = (card_no, rarity)
+        return aliases
+
+    @classmethod
+    def _split_display_card_and_rarity(cls, value: Any) -> tuple[str, str]:
+        text = unicodedata.normalize("NFKC", str(value or "")).strip()
+        match = re.match(r"^(?P<card>.+?)[-_\s](?P<rarity>[A-Za-z0-9+＋]{1,8})$", text)
+        if not match:
+            return text, ""
+        rarity = cls._normalize_rarity(match.group("rarity"))
+        known = {
+            "SD", "CL", "N", "R", "R＋", "L", "L＋", "PR", "PR＋",
+            "P", "P＋", "SEC", "SEC＋", "SECL", "SRL", "DUO", "AR",
+            "RM", "RE", "PE", "PE＋", "SECE", "LLE", "PP", "SR", "UR", "SP",
+        }
+        if rarity not in known:
+            return text, ""
+        return match.group("card").strip(), rarity
+
+    @classmethod
+    def _rarity_from_image_filename(cls, filename: str) -> str:
+        stem = unicodedata.normalize("NFKC", Path(unquote(filename or "")).stem)
+        tokens = [token for token in re.split(r"[^A-Za-z0-9+＋]+", stem) if token]
+        if not tokens:
+            return ""
+        return cls._normalize_rarity(tokens[-1])
+
+    @classmethod
+    def _filesystem_rarity_token(cls, rarity: str) -> str:
+        reverse_alias = {
+            "R＋": "R2",
+            "L＋": "L2",
+            "P＋": "P2",
+            "PE＋": "PE2",
+            "SEC＋": "SEC2",
+            "PR＋": "PR2",
+        }
+        return reverse_alias.get(cls._normalize_rarity(rarity), cls._normalize_rarity(rarity))
+
+    @classmethod
+    def _image_alias_candidates(
+        cls,
+        base: Path,
+        folder: str,
+        card_no: str,
+        rarity: str,
+        remote_filename: str,
+    ) -> list[Path]:
+        candidates = [base / folder / remote_filename]
+        fs_rarity = cls._filesystem_rarity_token(rarity)
+        if fs_rarity:
+            candidates.append(base / folder / f"{card_no}-{fs_rarity}.png")
+            candidates.append(base / folder / f"{card_no}-{rarity}.png")
+        return candidates
 
     @classmethod
     def _rarity_from_image_path(cls, image_path: Path, card_no: str) -> str:
@@ -1186,6 +1268,7 @@ class AppState:
         variant_paths: dict[str, Path] = {}
         seen: set[Path] = set()
         manifest_aliases = self._official_image_manifest_aliases()
+        manifest_aliases.update(self._cached_official_image_aliases())
 
         image_sources = [
             *((relative_dir, False) for relative_dir in CARD_IMAGE_DIRS),
@@ -1336,7 +1419,7 @@ class AppState:
             path = self._variant_path_cache.get(variant_id)
             if path is not None:
                 return path
-        normalized_rarity = self._normalize_rarity(rarity)
+        normalized_rarity = self._normalize_rarity(rarity) or self._rarity_from_variant_id(variant_id)
         for variant in self.card_variants(card_no):
             if normalized_rarity and self._normalize_rarity(
                 variant.get("raw_rarity")
