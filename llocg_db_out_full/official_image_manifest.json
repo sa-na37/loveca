@@ -4,119 +4,135 @@
   "generated_from": {
     "mode": "incremental_merge",
     "base_manifest": "/Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full/official_image_manifest.json",
-    "delta_manifest": ""
+    "delta_manifest": "/Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full/_update_work/run_20260721_232118/image_manifest_delta/official_image_manifest.json"
   },
   "base_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist",
-  "cards_total_in_db": 1053,
-  "cards_with_manifest": 750,
-  "cards_missing_manifest": 303,
+  "cards_total_in_db": 1060,
+  "cards_with_manifest": 759,
+  "cards_missing_manifest": 301,
   "expansions": {
     "BP01": {
-      "cards_wanted": 80,
-      "pages_fetched": 46,
+      "cards_wanted": 3,
+      "pages_fetched": 24,
       "max_page": 12,
       "variants": [
-        "https://llofficial-cardgame.com/cardlist/searchresults/?title=BP01&view=image&sort=new :: items=12 max_page=12",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP01&view=image&page=2 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP01&view=image&page=2 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP01&view=image&page=3 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP01&view=image&page=3 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP01&view=image&page=4 :: items=8",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP01&view=image&page=4 :: items=8",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP01&view=image&page=5 :: items=6",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP01&view=image&page=5 :: items=6",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP01&view=image&page=6 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP01&view=image&page=6 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP01&view=image&page=7 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP01&view=image&page=7 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP01&view=image&page=8 :: items=8",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP01&view=image&page=8 :: items=8",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP01&view=image&page=9 :: items=7",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP01&view=image&page=9 :: items=7",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP01&view=image&page=10 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP01&view=image&page=10 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP01&view=image&page=11 :: items=15"
+        "https://llofficial-cardgame.com/cardlist/searchresults/?title=BP01&view=image&sort=new :: items=0 max_page=12",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP01&view=image&page=2 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP01&view=image&page=3 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP01&view=image&page=4 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP01&view=image&page=5 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP01&view=image&page=6 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP01&view=image&page=7 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP01&view=image&page=8 :: items=1",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP01&view=image&page=9 :: items=2",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP01&view=image&page=10 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP01&view=image&page=11 :: items=1",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP01&view=image&page=12 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/searchresults/?expansion=BP01&view=image&sort=new :: items=0 max_page=12",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP01&view=image&page=2 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP01&view=image&page=3 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP01&view=image&page=4 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP01&view=image&page=5 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP01&view=image&page=6 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP01&view=image&page=7 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP01&view=image&page=8 :: items=1",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP01&view=image&page=9 :: items=2",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP01&view=image&page=10 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP01&view=image&page=11 :: items=1",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP01&view=image&page=12 :: items=0"
       ]
     },
     "BP02": {
-      "cards_wanted": 80,
-      "pages_fetched": 46,
+      "cards_wanted": 5,
+      "pages_fetched": 24,
       "max_page": 12,
       "variants": [
-        "https://llofficial-cardgame.com/cardlist/searchresults/?title=BP02&view=image&sort=new :: items=15 max_page=12",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP02&view=image&page=2 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP02&view=image&page=2 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP02&view=image&page=3 :: items=11",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP02&view=image&page=3 :: items=11",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP02&view=image&page=4 :: items=5",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP02&view=image&page=4 :: items=5",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP02&view=image&page=5 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP02&view=image&page=5 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP02&view=image&page=6 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP02&view=image&page=6 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP02&view=image&page=7 :: items=11",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP02&view=image&page=7 :: items=11",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP02&view=image&page=8 :: items=4",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP02&view=image&page=8 :: items=4",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP02&view=image&page=9 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP02&view=image&page=9 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP02&view=image&page=10 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP02&view=image&page=10 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP02&view=image&page=11 :: items=7"
+        "https://llofficial-cardgame.com/cardlist/searchresults/?title=BP02&view=image&sort=new :: items=0 max_page=12",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP02&view=image&page=2 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP02&view=image&page=3 :: items=1",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP02&view=image&page=4 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP02&view=image&page=5 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP02&view=image&page=6 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP02&view=image&page=7 :: items=1",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP02&view=image&page=8 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP02&view=image&page=9 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP02&view=image&page=10 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP02&view=image&page=11 :: items=3",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP02&view=image&page=12 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/searchresults/?expansion=BP02&view=image&sort=new :: items=0 max_page=12",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP02&view=image&page=2 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP02&view=image&page=3 :: items=1",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP02&view=image&page=4 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP02&view=image&page=5 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP02&view=image&page=6 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP02&view=image&page=7 :: items=1",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP02&view=image&page=8 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP02&view=image&page=9 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP02&view=image&page=10 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP02&view=image&page=11 :: items=3",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP02&view=image&page=12 :: items=0"
       ]
     },
     "BP03": {
-      "cards_wanted": 84,
-      "pages_fetched": 46,
+      "cards_wanted": 3,
+      "pages_fetched": 24,
       "max_page": 12,
       "variants": [
-        "https://llofficial-cardgame.com/cardlist/searchresults/?title=BP03&view=image&sort=new :: items=15 max_page=12",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP03&view=image&page=2 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP03&view=image&page=2 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP03&view=image&page=3 :: items=11",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP03&view=image&page=3 :: items=11",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP03&view=image&page=4 :: items=8",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP03&view=image&page=4 :: items=8",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP03&view=image&page=5 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP03&view=image&page=5 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP03&view=image&page=6 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP03&view=image&page=6 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP03&view=image&page=7 :: items=4",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP03&view=image&page=7 :: items=4",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP03&view=image&page=8 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP03&view=image&page=8 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP03&view=image&page=9 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP03&view=image&page=9 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP03&view=image&page=10 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP03&view=image&page=10 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP03&view=image&page=11 :: items=5"
+        "https://llofficial-cardgame.com/cardlist/searchresults/?title=BP03&view=image&sort=new :: items=0 max_page=12",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP03&view=image&page=2 :: items=1",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP03&view=image&page=3 :: items=1",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP03&view=image&page=4 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP03&view=image&page=5 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP03&view=image&page=6 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP03&view=image&page=7 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP03&view=image&page=8 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP03&view=image&page=9 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP03&view=image&page=10 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP03&view=image&page=11 :: items=1",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP03&view=image&page=12 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/searchresults/?expansion=BP03&view=image&sort=new :: items=0 max_page=12",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP03&view=image&page=2 :: items=1",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP03&view=image&page=3 :: items=1",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP03&view=image&page=4 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP03&view=image&page=5 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP03&view=image&page=6 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP03&view=image&page=7 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP03&view=image&page=8 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP03&view=image&page=9 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP03&view=image&page=10 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP03&view=image&page=11 :: items=1",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP03&view=image&page=12 :: items=0"
       ]
     },
     "BP04": {
-      "cards_wanted": 89,
-      "pages_fetched": 46,
+      "cards_wanted": 1,
+      "pages_fetched": 24,
       "max_page": 12,
       "variants": [
-        "https://llofficial-cardgame.com/cardlist/searchresults/?title=BP04&view=image&sort=new :: items=15 max_page=12",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP04&view=image&page=2 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP04&view=image&page=2 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP04&view=image&page=3 :: items=9",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP04&view=image&page=3 :: items=9",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP04&view=image&page=4 :: items=11",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP04&view=image&page=4 :: items=11",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP04&view=image&page=5 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP04&view=image&page=5 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP04&view=image&page=6 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP04&view=image&page=6 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP04&view=image&page=7 :: items=11",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP04&view=image&page=7 :: items=11",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP04&view=image&page=8 :: items=4",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP04&view=image&page=8 :: items=4",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP04&view=image&page=9 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP04&view=image&page=9 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP04&view=image&page=10 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP04&view=image&page=10 :: items=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP04&view=image&page=11 :: items=15"
+        "https://llofficial-cardgame.com/cardlist/searchresults/?title=BP04&view=image&sort=new :: items=0 max_page=12",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP04&view=image&page=2 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP04&view=image&page=3 :: items=1",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP04&view=image&page=4 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP04&view=image&page=5 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP04&view=image&page=6 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP04&view=image&page=7 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP04&view=image&page=8 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP04&view=image&page=9 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP04&view=image&page=10 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP04&view=image&page=11 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=BP04&view=image&page=12 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/searchresults/?expansion=BP04&view=image&sort=new :: items=0 max_page=12",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP04&view=image&page=2 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP04&view=image&page=3 :: items=1",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP04&view=image&page=4 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP04&view=image&page=5 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP04&view=image&page=6 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP04&view=image&page=7 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP04&view=image&page=8 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP04&view=image&page=9 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP04&view=image&page=10 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP04&view=image&page=11 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=BP04&view=image&page=12 :: items=0"
       ]
     },
     "BP05": {
@@ -183,32 +199,26 @@
       ]
     },
     "HSSD01": {
-      "cards_wanted": 20,
-      "pages_fetched": 6,
+      "cards_wanted": 1,
+      "pages_fetched": 4,
       "max_page": 2,
       "variants": [
-        "https://llofficial-cardgame.com/cardlist/searchresults/?title=HSSD01&view=image&sort=new :: items=14 max_page=2",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=HSSD01&view=image&page=2 :: items=6",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=HSSD01&view=image&page=2 :: items=6",
-        "https://llofficial-cardgame.com/cardlist/searchresults/?expansion=HSSD01&view=image&sort=new :: items=14 max_page=2",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=HSSD01&view=image&page=2 :: items=6",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=HSSD01&view=image&page=2 :: items=6"
+        "https://llofficial-cardgame.com/cardlist/searchresults/?title=HSSD01&view=image&sort=new :: items=0 max_page=2",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=HSSD01&view=image&page=2 :: items=1",
+        "https://llofficial-cardgame.com/cardlist/searchresults/?expansion=HSSD01&view=image&sort=new :: items=0 max_page=2",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=HSSD01&view=image&page=2 :: items=1"
       ]
     },
     "NSD01": {
-      "cards_wanted": 28,
-      "pages_fetched": 10,
+      "cards_wanted": 1,
+      "pages_fetched": 6,
       "max_page": 3,
       "variants": [
-        "https://llofficial-cardgame.com/cardlist/searchresults/?title=NSD01&view=image&sort=new :: items=14 max_page=3",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=NSD01&view=image&page=2 :: items=14",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=NSD01&view=image&page=2 :: items=14",
+        "https://llofficial-cardgame.com/cardlist/searchresults/?title=NSD01&view=image&sort=new :: items=1 max_page=3",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=NSD01&view=image&page=2 :: items=0",
         "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=NSD01&view=image&page=3 :: items=0",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=NSD01&view=image&page=3 :: items=0",
-        "https://llofficial-cardgame.com/cardlist/searchresults/?expansion=NSD01&view=image&sort=new :: items=14 max_page=3",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=NSD01&view=image&page=2 :: items=14",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=NSD01&view=image&page=2 :: items=14",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=NSD01&view=image&page=3 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/searchresults/?expansion=NSD01&view=image&sort=new :: items=1 max_page=3",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=NSD01&view=image&page=2 :: items=0",
         "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=NSD01&view=image&page=3 :: items=0"
       ]
     },
@@ -285,36 +295,28 @@
       ]
     },
     "PLSD01": {
-      "cards_wanted": 22,
-      "pages_fetched": 10,
+      "cards_wanted": 1,
+      "pages_fetched": 6,
       "max_page": 3,
       "variants": [
-        "https://llofficial-cardgame.com/cardlist/searchresults/?title=PLSD01&view=image&sort=new :: items=14 max_page=3",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=PLSD01&view=image&page=2 :: items=8",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=PLSD01&view=image&page=2 :: items=8",
+        "https://llofficial-cardgame.com/cardlist/searchresults/?title=PLSD01&view=image&sort=new :: items=1 max_page=3",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=PLSD01&view=image&page=2 :: items=0",
         "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=PLSD01&view=image&page=3 :: items=0",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=PLSD01&view=image&page=3 :: items=0",
-        "https://llofficial-cardgame.com/cardlist/searchresults/?expansion=PLSD01&view=image&sort=new :: items=14 max_page=3",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=PLSD01&view=image&page=2 :: items=8",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=PLSD01&view=image&page=2 :: items=8",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=PLSD01&view=image&page=3 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/searchresults/?expansion=PLSD01&view=image&sort=new :: items=1 max_page=3",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=PLSD01&view=image&page=2 :: items=0",
         "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=PLSD01&view=image&page=3 :: items=0"
       ]
     },
     "SPSD01": {
-      "cards_wanted": 26,
-      "pages_fetched": 10,
+      "cards_wanted": 2,
+      "pages_fetched": 6,
       "max_page": 3,
       "variants": [
-        "https://llofficial-cardgame.com/cardlist/searchresults/?title=SPSD01&view=image&sort=new :: items=14 max_page=3",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=SPSD01&view=image&page=2 :: items=12",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=SPSD01&view=image&page=2 :: items=12",
+        "https://llofficial-cardgame.com/cardlist/searchresults/?title=SPSD01&view=image&sort=new :: items=0 max_page=3",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=SPSD01&view=image&page=2 :: items=2",
         "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=SPSD01&view=image&page=3 :: items=0",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=SPSD01&view=image&page=3 :: items=0",
-        "https://llofficial-cardgame.com/cardlist/searchresults/?expansion=SPSD01&view=image&sort=new :: items=14 max_page=3",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=SPSD01&view=image&page=2 :: items=12",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=SPSD01&view=image&page=2 :: items=12",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?title=SPSD01&view=image&page=3 :: items=0",
+        "https://llofficial-cardgame.com/cardlist/searchresults/?expansion=SPSD01&view=image&sort=new :: items=0 max_page=3",
+        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=SPSD01&view=image&page=2 :: items=2",
         "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=SPSD01&view=image&page=3 :: items=0"
       ]
     },
@@ -696,6 +698,16 @@
         "folder": "BP03",
         "remote_filename": "PL!-bp3-N-012-N.png",
         "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP03/PL!-bp3-N-012-N.png"
+      },
+      {
+        "cardnumber": "PL!-bp3-012",
+        "card_attr": "PL!-bp3-012-RM",
+        "rarity_display": "RM",
+        "rarity_norm": "RM",
+        "folder": "BP05",
+        "remote_filename": "PL!-bp3-012-RM.png",
+        "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP05/PL!-bp3-012-RM.png",
+        "source": "official_cached_reprint_scan"
       }
     ],
     "PL!-bp3-013": [
@@ -784,6 +796,26 @@
         "folder": "BP03",
         "remote_filename": "PL!-bp3-L-020-L.png",
         "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP03/PL!-bp3-L-020-L.png"
+      },
+      {
+        "cardnumber": "PL!-bp3-020",
+        "card_attr": "PL!-bp3-020-L＋",
+        "rarity_display": "L＋",
+        "rarity_norm": "L2",
+        "folder": "PBLL",
+        "remote_filename": "PL!-bp3-L2.png",
+        "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/PBLL/PL!-bp3-L2.png",
+        "source": "official_cached_reprint_scan"
+      },
+      {
+        "cardnumber": "PL!-bp3-020",
+        "card_attr": "PL!-bp3-020-SECL",
+        "rarity_display": "SECL",
+        "rarity_norm": "SECL",
+        "folder": "BP05",
+        "remote_filename": "PL!-bp3-SECL.png",
+        "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP05/PL!-bp3-SECL.png",
+        "source": "official_cached_reprint_scan"
       }
     ],
     "PL!-bp3-021": [
@@ -1209,6 +1241,16 @@
         "folder": "BP04",
         "remote_filename": "PL!-bp4-022-L.png",
         "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP04/PL!-bp4-022-L.png"
+      },
+      {
+        "cardnumber": "PL!-bp4-022",
+        "card_attr": "PL!-bp4-022-SECL",
+        "rarity_display": "SECL",
+        "rarity_norm": "SECL",
+        "folder": "BP06",
+        "remote_filename": "PL!-bp4-022-SECL.png",
+        "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP06/PL!-bp4-022-SECL.png",
+        "source": "official_cached_reprint_scan"
       }
     ],
     "PL!-bp4-023": [
@@ -2743,6 +2785,16 @@
         "folder": "PLSD01",
         "remote_filename": "PL!-sd1-005-SD.png",
         "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/PLSD01/PL!-sd1-005-SD.png"
+      },
+      {
+        "cardnumber": "PL!-sd1-005",
+        "card_attr": "PL!-sd1-005-RM",
+        "rarity_display": "RM",
+        "rarity_norm": "RM",
+        "folder": "BP05",
+        "remote_filename": "PL!-bp3-005-RM.png",
+        "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP05/PL!-bp3-005-RM.png",
+        "source": "official_cached_reprint_scan"
       }
     ],
     "PL!-sd1-006": [
@@ -2932,6 +2984,54 @@
         "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/PLSD01/PL!-pb1-022-SD.png"
       }
     ],
+    "PL!HS-PR-014": [
+      {
+        "cardnumber": "PL!HS-PR-014",
+        "card_attr": "PL!HS-PR-014-RM",
+        "rarity_display": "RM",
+        "rarity_norm": "RM",
+        "folder": "BP05",
+        "remote_filename": "PL!HS-PR-014-RM.png",
+        "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP05/PL!HS-PR-014-RM.png",
+        "source": "official_cached_reprint_scan"
+      }
+    ],
+    "PL!HS-PR-018": [
+      {
+        "cardnumber": "PL!HS-PR-018",
+        "card_attr": "PL!HS-PR-018-RM",
+        "rarity_display": "RM",
+        "rarity_norm": "RM",
+        "folder": "BP05",
+        "remote_filename": "PL!HS-PR-018-RM.png",
+        "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP05/PL!HS-PR-018-RM.png",
+        "source": "official_cached_reprint_scan"
+      }
+    ],
+    "PL!HS-PR-019": [
+      {
+        "cardnumber": "PL!HS-PR-019",
+        "card_attr": "PL!HS-PR-019-RM",
+        "rarity_display": "RM",
+        "rarity_norm": "RM",
+        "folder": "BP05",
+        "remote_filename": "PL!HS-PR-019-RM.png",
+        "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP05/PL!HS-PR-019-RM.png",
+        "source": "official_cached_reprint_scan"
+      }
+    ],
+    "PL!HS-PR-021": [
+      {
+        "cardnumber": "PL!HS-PR-021",
+        "card_attr": "PL!HS-PR-021-RM",
+        "rarity_display": "RM",
+        "rarity_norm": "RM",
+        "folder": "BP05",
+        "remote_filename": "PL!HS-PR-021-RM.png",
+        "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP05/PL!HS-PR-021-RM.png",
+        "source": "official_cached_reprint_scan"
+      }
+    ],
     "PL!HS-bp1-001": [
       {
         "cardnumber": "PL!HS-bp1-001",
@@ -2970,6 +3070,16 @@
         "folder": "BP01",
         "remote_filename": "PL!HS-bp1-002-P.png",
         "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP01/PL!HS-bp1-002-P.png"
+      },
+      {
+        "cardnumber": "PL!HS-bp1-002",
+        "card_attr": "PL!HS-bp1-002-RM",
+        "rarity_display": "RM",
+        "rarity_norm": "RM",
+        "folder": "BP05",
+        "remote_filename": "PL!HS-bp1-002-RM.png",
+        "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP05/PL!HS-bp1-002-RM.png",
+        "source": "official_cached_reprint_scan"
       }
     ],
     "PL!HS-bp1-003": [
@@ -3274,6 +3384,16 @@
         "folder": "BP01",
         "remote_filename": "PL!HS-bp1-019-L.png",
         "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP01/PL!HS-bp1-019-L.png"
+      },
+      {
+        "cardnumber": "PL!HS-bp1-019",
+        "card_attr": "PL!HS-bp1-019-SECL",
+        "rarity_display": "SECL",
+        "rarity_norm": "SECL",
+        "folder": "BP05",
+        "remote_filename": "PL!HS-bp1-019-SECL.png",
+        "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP05/PL!HS-bp1-019-SECL.png",
+        "source": "official_cached_reprint_scan"
       }
     ],
     "PL!HS-bp1-020": [
@@ -3695,6 +3815,16 @@
         "folder": "BP02",
         "remote_filename": "PL!HS-bp2-022-L.png",
         "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP02/PL!HS-bp2-022-L.png"
+      },
+      {
+        "cardnumber": "PL!HS-bp2-022",
+        "card_attr": "PL!HS-bp2-022-L＋",
+        "rarity_display": "L＋",
+        "rarity_norm": "L2",
+        "folder": "PBHS",
+        "remote_filename": "PL!HS-bp2-022-L2.png",
+        "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/PBHS/PL!HS-bp2-022-L2.png",
+        "source": "official_cached_reprint_scan"
       }
     ],
     "PL!HS-bp2-023": [
@@ -3717,6 +3847,16 @@
         "folder": "BP02",
         "remote_filename": "PL!HS-bp2-024-L.png",
         "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP02/PL!HS-bp2-024-L.png"
+      },
+      {
+        "cardnumber": "PL!HS-bp2-024",
+        "card_attr": "PL!HS-bp2-024-L＋",
+        "rarity_display": "L＋",
+        "rarity_norm": "L2",
+        "folder": "PBHS",
+        "remote_filename": "PL!HS-bp2-024-L2.png",
+        "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/PBHS/PL!HS-bp2-024-L2.png",
+        "source": "official_cached_reprint_scan"
       }
     ],
     "PL!HS-bp2-025": [
@@ -3739,6 +3879,16 @@
         "folder": "BP02",
         "remote_filename": "PL!HS-bp2-026-L.png",
         "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP02/PL!HS-bp2-026-L.png"
+      },
+      {
+        "cardnumber": "PL!HS-bp2-026",
+        "card_attr": "PL!HS-bp2-026-L＋",
+        "rarity_display": "L＋",
+        "rarity_norm": "L2",
+        "folder": "PBHS",
+        "remote_filename": "PL!HS-bp2-026-L2.png",
+        "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/PBHS/PL!HS-bp2-026-L2.png",
+        "source": "official_cached_reprint_scan"
       }
     ],
     "PL!HS-bp5-001": [
@@ -4828,6 +4978,16 @@
         "folder": "HSSD01",
         "remote_filename": "PL!HS-sd1-018-SD.png",
         "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/HSSD01/PL!HS-sd1-018-SD.png"
+      },
+      {
+        "cardnumber": "PL!HS-sd1-018",
+        "card_attr": "PL!HS-sd1-018-SECL",
+        "rarity_display": "SECL",
+        "rarity_norm": "SECL",
+        "folder": "BP06",
+        "remote_filename": "PL!HS-sd1-018-SECL.png",
+        "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP06/PL!HS-sd1-018-SECL.png",
+        "source": "official_cached_reprint_scan"
       }
     ],
     "PL!HS-sd1-019": [
@@ -4850,6 +5010,42 @@
         "folder": "HSSD01",
         "remote_filename": "PL!HS-sd1-020-SD.png",
         "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/HSSD01/PL!HS-sd1-020-SD.png"
+      }
+    ],
+    "PL!N-PR-009": [
+      {
+        "cardnumber": "PL!N-PR-009",
+        "card_attr": "PL!N-PR-009-RM",
+        "rarity_display": "RM",
+        "rarity_norm": "RM",
+        "folder": "BP05",
+        "remote_filename": "PL!N-PR-009-RM.png",
+        "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP05/PL!N-PR-009-RM.png",
+        "source": "official_cached_reprint_scan"
+      }
+    ],
+    "PL!N-PR-012": [
+      {
+        "cardnumber": "PL!N-PR-012",
+        "card_attr": "PL!N-PR-012-RM",
+        "rarity_display": "RM",
+        "rarity_norm": "RM",
+        "folder": "BP05",
+        "remote_filename": "PL!N-PR-012-RM.png",
+        "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP05/PL!N-PR-012-RM.png",
+        "source": "official_cached_reprint_scan"
+      }
+    ],
+    "PL!N-PR-014": [
+      {
+        "cardnumber": "PL!N-PR-014",
+        "card_attr": "PL!N-PR-014-RM",
+        "rarity_display": "RM",
+        "rarity_norm": "RM",
+        "folder": "BP05",
+        "remote_filename": "PL!N-PR-014-RM.png",
+        "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP05/PL!N-PR-014-RM.png",
+        "source": "official_cached_reprint_scan"
       }
     ],
     "PL!N-bp1-001": [
@@ -5837,6 +6033,16 @@
         "folder": "BP03",
         "remote_filename": "PL!N-bp3-L-028-L.png",
         "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP03/PL!N-bp3-L-028-L.png"
+      },
+      {
+        "cardnumber": "PL!N-bp3-028",
+        "card_attr": "PL!N-bp3-028-SECL",
+        "rarity_display": "SECL",
+        "rarity_norm": "SECL",
+        "folder": "BP05",
+        "remote_filename": "PL!N-bp3-028-SECL.png",
+        "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP05/PL!N-bp3-028-SECL.png",
+        "source": "official_cached_reprint_scan"
       }
     ],
     "PL!N-bp3-029": [
@@ -7083,6 +7289,16 @@
         "folder": "NSD01",
         "remote_filename": "PL!N-sd1-008-SD.png",
         "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/NSD01/PL!N-sd1-008-SD.png"
+      },
+      {
+        "cardnumber": "PL!N-sd1-008",
+        "card_attr": "PL!N-sd1-008-RM",
+        "rarity_display": "RM",
+        "rarity_norm": "RM",
+        "folder": "BP05",
+        "remote_filename": "PL!N-sd1-008-RM.png",
+        "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP05/PL!N-sd1-008-RM.png",
+        "source": "official_cached_reprint_scan"
       }
     ],
     "PL!N-sd1-009": [
@@ -7303,6 +7519,30 @@
         "folder": "NSD01",
         "remote_filename": "PL!N-sd1-028-SD.png",
         "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/NSD01/PL!N-sd1-028-SD.png"
+      }
+    ],
+    "PL!S-PR-025": [
+      {
+        "cardnumber": "PL!S-PR-025",
+        "card_attr": "PL!S-PR-025-RM",
+        "rarity_display": "RM",
+        "rarity_norm": "RM",
+        "folder": "BP05",
+        "remote_filename": "PL!S-PR-025-RM.png",
+        "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP05/PL!S-PR-025-RM.png",
+        "source": "official_cached_reprint_scan"
+      }
+    ],
+    "PL!S-PR-027": [
+      {
+        "cardnumber": "PL!S-PR-027",
+        "card_attr": "PL!S-PR-027-RM",
+        "rarity_display": "RM",
+        "rarity_norm": "RM",
+        "folder": "BP05",
+        "remote_filename": "PL!S-PR-027-RM.png",
+        "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP05/PL!S-PR-027-RM.png",
+        "source": "official_cached_reprint_scan"
       }
     ],
     "PL!S-bp2-001": [
@@ -7702,6 +7942,16 @@
         "folder": "BP02",
         "remote_filename": "PL!S-bp2-024-L.png",
         "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP02/PL!S-bp2-024-L.png"
+      },
+      {
+        "cardnumber": "PL!S-bp2-024",
+        "card_attr": "PL!S-bp2-024-SECL",
+        "rarity_display": "SECL",
+        "rarity_norm": "SECL",
+        "folder": "BP06",
+        "remote_filename": "PL!S-bp2-024-SECL.png",
+        "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP06/PL!S-bp2-024-SECL.png",
+        "source": "official_cached_reprint_scan"
       }
     ],
     "PL!S-bp2-025": [
@@ -9694,6 +9944,16 @@
         "folder": "BP01",
         "remote_filename": "PL!SP-bp1-025-L.png",
         "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP01/PL!SP-bp1-025-L.png"
+      },
+      {
+        "cardnumber": "PL!SP-bp1-025",
+        "card_attr": "PL!SP-bp1-025-L＋",
+        "rarity_display": "L＋",
+        "rarity_norm": "L2",
+        "folder": "PBSP",
+        "remote_filename": "PL!SP-bp1-025-L2.png",
+        "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/PBSP/PL!SP-bp1-025-L2.png",
+        "source": "official_cached_reprint_scan"
       }
     ],
     "PL!SP-bp1-026": [
@@ -10151,6 +10411,16 @@
         "folder": "BP02",
         "remote_filename": "PL!SP-bp2-024-L.png",
         "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP02/PL!SP-bp2-024-L.png"
+      },
+      {
+        "cardnumber": "PL!SP-bp2-024",
+        "card_attr": "PL!SP-bp2-024-SECL",
+        "rarity_display": "SECL",
+        "rarity_norm": "SECL",
+        "folder": "BP05",
+        "remote_filename": "PL!SP-bp2-SECL.png",
+        "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP05/PL!SP-bp2-SECL.png",
+        "source": "official_cached_reprint_scan"
       }
     ],
     "PL!SP-bp2-025": [
@@ -11868,6 +12138,16 @@
         "folder": "SPSD01",
         "remote_filename": "PL!SP-sd1-019-SD.png",
         "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/SPSD01/PL!SP-sd1-019-SD.png"
+      },
+      {
+        "cardnumber": "PL!SP-sd1-019",
+        "card_attr": "PL!SP-sd1-019-RM",
+        "rarity_display": "RM",
+        "rarity_norm": "RM",
+        "folder": "BP05",
+        "remote_filename": "PL!SP-sd1-019-RM.png",
+        "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP05/PL!SP-sd1-019-RM.png",
+        "source": "official_cached_reprint_scan"
       }
     ],
     "PL!SP-sd1-020": [
@@ -11879,6 +12159,16 @@
         "folder": "SPSD01",
         "remote_filename": "PL!SP-sd1-020-SD.png",
         "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/SPSD01/PL!SP-sd1-020-SD.png"
+      },
+      {
+        "cardnumber": "PL!SP-sd1-020",
+        "card_attr": "PL!SP-sd1-020-RM",
+        "rarity_display": "RM",
+        "rarity_norm": "RM",
+        "folder": "BP05",
+        "remote_filename": "PL!SP-sd1-020-RM.png",
+        "exact_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/BP05/PL!SP-sd1-020-RM.png",
+        "source": "official_cached_reprint_scan"
       }
     ],
     "PL!SP-sd1-021": [

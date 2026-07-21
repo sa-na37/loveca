@@ -1,9 +1,11 @@
-# BUILD_TAG = "ui_asset_search_and_image_dirs_20260721a"
+# BUILD_TAG = "ui_asset_bundle_glob_search_20260721a"
 """Install locally supplied Loveca UI assets.
 
 The public GitHub package intentionally excludes downloaded card images.  Small
 UI images such as playmat/back/NoImage/texticons can be distributed separately
 and placed next to the application folder as ``loveca-ui-assets.zip``.
+Date-suffixed bundles such as ``loveca-ui-assets-20260721.zip`` are also
+accepted.
 """
 from __future__ import annotations
 
@@ -13,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-BUILD_TAG = "ui_asset_search_and_image_dirs_20260721a"
+BUILD_TAG = "ui_asset_bundle_glob_search_20260721a"
 
 ASSET_BUNDLE_NAMES = (
     "loveca-ui-assets.zip",
@@ -23,6 +25,16 @@ ASSET_BUNDLE_NAMES = (
 ASSET_DIR_NAMES = (
     "loveca-ui-assets",
     "loveca_ui_assets",
+)
+
+ASSET_BUNDLE_PATTERNS = (
+    "loveca-ui-assets*.zip",
+    "loveca_ui_assets*.zip",
+)
+
+ASSET_DIR_PATTERNS = (
+    "loveca-ui-assets*",
+    "loveca_ui_assets*",
 )
 
 ALLOWED_ASSET_PATHS = {
@@ -154,6 +166,58 @@ def _asset_search_dirs(root: Path) -> list[Path]:
     return out
 
 
+def _sorted_existing(paths: list[Path]) -> list[Path]:
+    def key(path: Path) -> tuple[float, str]:
+        try:
+            return (-path.stat().st_mtime, path.name)
+        except OSError:
+            return (0.0, path.name)
+
+    return sorted(paths, key=key)
+
+
+def _find_asset_bundles(search_dir: Path) -> list[Path]:
+    candidates: list[Path] = []
+    seen: set[Path] = set()
+    for name in ASSET_BUNDLE_NAMES:
+        path = search_dir / name
+        if path.is_file():
+            resolved = path.resolve()
+            seen.add(resolved)
+            candidates.append(path)
+    for pattern in ASSET_BUNDLE_PATTERNS:
+        for path in search_dir.glob(pattern):
+            if not path.is_file():
+                continue
+            resolved = path.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            candidates.append(path)
+    return _sorted_existing(candidates)
+
+
+def _find_asset_dirs(search_dir: Path) -> list[Path]:
+    candidates: list[Path] = []
+    seen: set[Path] = set()
+    for name in ASSET_DIR_NAMES:
+        path = search_dir / name
+        if path.is_dir():
+            resolved = path.resolve()
+            seen.add(resolved)
+            candidates.append(path)
+    for pattern in ASSET_DIR_PATTERNS:
+        for path in search_dir.glob(pattern):
+            if not path.is_dir():
+                continue
+            resolved = path.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            candidates.append(path)
+    return _sorted_existing(candidates)
+
+
 def ensure_ui_assets_from_local_bundle(root: Path) -> AssetInstallResult:
     """Install UI assets from a local bundle beside the application root.
 
@@ -163,14 +227,10 @@ def ensure_ui_assets_from_local_bundle(root: Path) -> AssetInstallResult:
     root = Path(root)
     ensure_image_directories(root)
     for search_dir in _asset_search_dirs(root):
-        for name in ASSET_BUNDLE_NAMES:
-            bundle = search_dir / name
-            if bundle.exists() and bundle.is_file():
-                return _install_from_zip(root, bundle)
-        for name in ASSET_DIR_NAMES:
-            folder = search_dir / name
-            if folder.exists() and folder.is_dir():
-                return _install_from_dir(root, folder)
+        for bundle in _find_asset_bundles(search_dir):
+            return _install_from_zip(root, bundle)
+        for folder in _find_asset_dirs(search_dir):
+            return _install_from_dir(root, folder)
     return AssetInstallResult()
 
 

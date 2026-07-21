@@ -2124,3 +2124,59 @@ git diff --check -- loveca_app/core.py
 ```
 
 ※20260721内部確認: ローカル実DBに `PL!-bp3-012` のRM実画像が無いため、一時DBで「元カード番号bp3、保存先フォルダ/ファイル名bp5」の状態を作り、デッキ内容確認と同じ画像解決経路を確認した。
+
+### 2026-07-21 UI asset bundle date-suffix extraction
+
+実装内容:
+
+- UI画像バンドル自動配置で、`loveca-ui-assets.zip` / `loveca_ui_assets.zip` の完全一致に加えて、`loveca-ui-assets-20260721.zip` のような日付付きzipも検出するようにした。
+- 展開済みフォルダも `loveca-ui-assets-20260721` のような日付付き名称を許容するようにした。
+- 本体フォルダ直下だけでなく、本体フォルダの親階層、起動時カレント、Downloads の探索順は維持した。
+- READMEの初回起動手順に、日付付きUI画像バンドルをそのまま置ける旨を追記した。
+
+確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/assets.py ./loveca_app/main.py ./tools/build_loveca_distribution.py
+
+python3 - <<'PY'
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import shutil
+from loveca_app.assets import ensure_ui_assets_from_local_bundle
+
+source = Path('_codex_outputs/github_release/loveca-ui-assets-20260721.zip').resolve()
+with TemporaryDirectory() as td:
+    root = Path(td) / 'loveca'
+    root.mkdir()
+    shutil.copy2(source, root / source.name)
+    result = ensure_ui_assets_from_local_bundle(root)
+    assert Path(result.source).name == 'loveca-ui-assets-20260721.zip'
+    assert (root / 'llocg_db_out_full/card_images/NoImage.PNG').exists()
+    assert (root / 'llocg_db_out_full/card_images/back.png').exists()
+    assert (root / 'llocg_db_out_full/card_images/texticons/heart_00.png').exists()
+    print('OK ui asset bundle extraction', len(result.installed))
+PY
+
+python3 - <<'PY'
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import shutil
+from loveca_app.assets import ensure_ui_assets_from_local_bundle
+
+source = Path('_codex_outputs/github_release/loveca-ui-assets-20260721.zip').resolve()
+with TemporaryDirectory() as td:
+    parent = Path(td)
+    root = parent / 'loveca'
+    root.mkdir()
+    shutil.copy2(source, parent / source.name)
+    result = ensure_ui_assets_from_local_bundle(root)
+    assert Path(result.source).name == 'loveca-ui-assets-20260721.zip'
+    assert (root / 'llocg_db_out_full/card_images/NoImage.PNG').exists()
+    print('OK parent folder ui asset bundle extraction', len(result.installed))
+PY
+```
+
+※20260721内部確認: 修正前は日付付き `loveca-ui-assets-20260721.zip` を本体フォルダ直下へ置いても `source="" installed=0` となり、`NoImage.PNG` が配置されなかった。修正後は同じzipで `installed=13`、親フォルダ配置でも `installed=13` を確認した。

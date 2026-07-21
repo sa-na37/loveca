@@ -9,7 +9,7 @@ Loveca Simulator は Python という実行環境を使って動きます。
 このガイドは、配布者から次の2つを受け取っている想定で書いています。
 
 - GitHub Release のURL
-- UI画像バンドル `loveca-ui-assets.zip`
+- UI画像バンドル `loveca-ui-assets.zip` または `loveca-ui-assets-日付.zip`
 
 Python を普段使っていない場合でも、次の手順どおりに進めれば起動できます。Windows ユーザーが多い想定のため、Windows の手順を先に記載します。
 
@@ -29,7 +29,7 @@ Python を普段使っていない場合でも、次の手順どおりに進め�
 
 `loveca-source-YYYYMMDD.zip` は管理者/開発者向けです。普通に遊ぶだけなら不要です。
 
-UI画像バンドル `loveca-ui-assets.zip` は GitHub Release ではなく、配布者から別で受け取ります。本体zipと同じ場所、または後で分かりやすい場所に置いてください。
+UI画像バンドル `loveca-ui-assets.zip` は GitHub Release ではなく、配布者から別で受け取ります。日付付きの `loveca-ui-assets-20260721.zip` のような名前でも使えます。本体zipと同じ場所、または後で分かりやすい場所に置いてください。
 
 ### Windowsで初めて起動する
 
@@ -75,15 +75,15 @@ UI画像バンドル `loveca-ui-assets.zip` は GitHub Release ではなく、�
 
 5. UI画像バンドルを配置します。
 
-   配布者から受け取った `loveca-ui-assets.zip` を、展開後の `loveca` フォルダ直下に置いてください。
+   配布者から受け取った `loveca-ui-assets.zip` または日付付きのUI画像バンドルを、展開後の `loveca` フォルダ直下に置いてください。
 
-   `loveca-ui-assets.zip` 自体は展開しなくて大丈夫です。
+   UI画像バンドルのzip自体は展開しなくて大丈夫です。
 
    ```text
    loveca
    ├─ launch_loveca.bat
    ├─ run_loveca_app.py
-   └─ loveca-ui-assets.zip
+   └─ loveca-ui-assets-20260721.zip
    ```
 
    初回起動時に、プレイマット、裏面画像、NoImage画像、ハート/ブレードなどのUI用アイコンが自動で配置されます。
@@ -156,9 +156,9 @@ UI画像バンドル `loveca-ui-assets.zip` は GitHub Release ではなく、�
 
 4. UI画像バンドルを配置します。
 
-   配布者から受け取った `loveca-ui-assets.zip` を、展開後の `loveca` フォルダ直下に置いてください。
+   配布者から受け取った `loveca-ui-assets.zip` または日付付きのUI画像バンドルを、展開後の `loveca` フォルダ直下に置いてください。
 
-   `loveca-ui-assets.zip` 自体は展開しなくて大丈夫です。
+   UI画像バンドルのzip自体は展開しなくて大丈夫です。
 
    初回起動時に、プレイマット、裏面画像、NoImage画像、ハート/ブレードなどのUI用アイコンが自動で配置されます。
 
@@ -257,12 +257,12 @@ GitHubで配布する本体zipには、外部サイトから取得したカー�
 
 ## UI画像バンドル
 
-プレイマット、カード裏面、NoImage、ハート/ブレードなどのUI用画像は、カード画像とは分けて `loveca-ui-assets.zip` として配布できます。
+プレイマット、カード裏面、NoImage、ハート/ブレードなどのUI用画像は、カード画像とは分けて `loveca-ui-assets.zip` として配布できます。日付付きの `loveca-ui-assets-20260721.zip` のような名前でも読み込めます。
 
 配置方法:
 
 1. 本体zipを展開します。
-2. 展開後の `loveca` フォルダ直下へ `loveca-ui-assets.zip` を置きます。
+2. 展開後の `loveca` フォルダ直下へ `loveca-ui-assets.zip` または日付付きのUI画像バンドルを置きます。
 3. アプリを起動します。
 
 起動時にバンドルが見つかった場合、必要な場所へ自動配置します。バンドルを展開して `loveca-ui-assets` フォルダとして置いた場合も同様に読み込みます。

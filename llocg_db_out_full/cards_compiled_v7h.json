@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "source_csv": "llocg_db_out_full/cards_min_tokv1.csv",
+  "source_csv": "/Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full/_update_work/run_20260721_232118/final/cards_min_tokv1.csv",
   "cards": [
     {
       "cardnumber": "LL-PR-004",
@@ -12786,6 +12786,60 @@
       ]
     },
     {
+      "cardnumber": "PL!N-bp7-006",
+      "cardname": "近江彼方",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "起動",
+          "trigger": "BODY",
+          "conditions": "ターン1回",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "<(E)>",
+              "effect_template": "自分のデッキの上からカードを4枚見る。その後、それらを好きな順番でデッキの上に置く。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "<(E)>：自分のデッキの上からカードを4枚見る。その後、それらを好きな順番でデッキの上に置く。"
+            }
+          ]
+        },
+        {
+          "ability_type": "起動",
+          "trigger": "BODY",
+          "conditions": "ターン2回",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "デッキの上からカードを3枚控え室に置く",
+              "effect_template": "これにより控え室に置いたカードの中に、『虹ヶ咲』のライブカードかブレードハートを持たない『虹ヶ咲』のメンバーカードがある場合、以下から1つを選ぶ。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "デッキの上からカードを3枚控え室に置く：これにより控え室に置いたカードの中に、『虹ヶ咲』のライブカードかブレードハートを持たない『虹ヶ咲』のメンバーカードがある場合、以下から1つを選ぶ。"
+            },
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "エネルギーを2枚アクティブにする。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "・エネルギーを2枚アクティブにする。"
+            },
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "ライブ終了時まで、<(ブレード)><(ブレード)>を得る。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "・ライブ終了時まで、<(ブレード)><(ブレード)>\nを得る。"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "cardnumber": "PL!N-bp7-007",
       "cardname": "優木せつ菜",
       "card_type": "MEMBER",
@@ -12902,6 +12956,29 @@
               "cost_op": null,
               "effect_op": null,
               "raw": "自分のステージにいる『虹ヶ咲』のメンバー1人を選ぶ。そのメンバーが、自分と相手のステージにいるほかのすべてのメンバーより多くの<(ブレード)>\nを持つ場合、このカードのスコアを+1する。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!N-bp7-028",
+      "cardname": "Cooking with Love",
+      "card_type": "LIVE",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ開始時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分の控え室に『虹ヶ咲』のライブカードと、ブレードハートを持たない『虹ヶ咲』のメンバーカードがある場合、自分の控え室にあるすべてのカードをシャッフルし、デッキの下に置いてもよい。そうしたとき、ライブ終了時まで、自分のステージにいるすべての『虹ヶ咲』のメンバーは<桃>を得る。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分の控え室に『虹ヶ咲』のライブカードと、ブレードハートを持たない『虹ヶ咲』のメンバーカードがある場合、自分の控え室にあるすべてのカードをシャッフルし、デッキの下に置いてもよい。そうしたとき、ライブ終了時まで、自分のステージにいるすべての『虹ヶ咲』のメンバーは\n<桃>\nを得る。"
             }
           ]
         }
@@ -17317,6 +17394,44 @@
       ]
     },
     {
+      "cardnumber": "PL!S-bp7-004",
+      "cardname": "黒澤ダイヤ",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "登場",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "『Aqours』のメンバーからバトンタッチして登場した場合、自分と相手はそれぞれ、自身の手札のカードを3枚まで選び、選んだカード以外のカードをシャッフルし、自身のデッキの下に置く。その後、自分と相手はそれぞれカードを3枚引く。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "『Aqours』のメンバーからバトンタッチして登場した場合、自分と相手はそれぞれ、自身の手札のカードを3枚まで選び、選んだカード以外のカードをシャッフルし、自身のデッキの下に置く。その後、自分と相手はそれぞれカードを3枚引く。"
+            }
+          ]
+        },
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ開始時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分のデッキの下からカードを3枚見る。その中から好きな枚数を好きな順番でデッキの下に置き、残りを控え室に置く。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分のデッキの下からカードを3枚見る。その中から好きな枚数を好きな順番でデッキの下に置き、残りを控え室に置く。"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "cardnumber": "PL!S-bp7-005",
       "cardname": "渡辺曜",
       "card_type": "MEMBER",
@@ -21655,6 +21770,29 @@
       ]
     },
     {
+      "cardnumber": "PL!SP-bp7-002",
+      "cardname": "唐可可",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "常時",
+          "trigger": "BODY",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分のエネルギーが7枚以上あり、かつ自分のエネルギーが相手より多いかぎり、ステージにいるこのメンバーのコストを+2する。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分のエネルギーが7枚以上あり、かつ自分のエネルギーが相手より多いかぎり、ステージにいるこのメンバーのコストを+2する。"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "cardnumber": "PL!SP-bp7-004",
       "cardname": "平安名すみれ",
       "card_type": "MEMBER",
@@ -21807,6 +21945,29 @@
       ]
     },
     {
+      "cardnumber": "PL!SP-bp7-013",
+      "cardname": "唐可可",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "常時",
+          "trigger": "BODY",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分のステージに『KALEIDOSCORE』のメンバーが3人いるかぎり、<紫><(ブレード)>を得る。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分のステージに『KALEIDOSCORE』のメンバーが3人いるかぎり、\n<紫>\n<(ブレード)>を得る。"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "cardnumber": "PL!SP-bp7-014",
       "cardname": "嵐千砂都",
       "card_type": "MEMBER",
@@ -21847,6 +22008,67 @@
               "cost_op": null,
               "effect_op": null,
               "raw": "ライブ終了時まで、自分のステージにいる「嵐千砂都」1人は<(ブレード)>を得る。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!SP-bp7-026",
+      "cardname": "Dears",
+      "card_type": "LIVE",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ開始時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "エネルギー置き場にあるエネルギー1枚をエネルギーデッキに置いてもよい",
+              "effect_template": "自分のステージに「葉月恋」がいる場合、カードを2枚引き、手札を1枚控え室に置く。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "エネルギー置き場にあるエネルギー1枚をエネルギーデッキに置いてもよい：自分のステージに「葉月恋」がいる場合、カードを2枚引き、手札を1枚控え室に置く。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!SP-bp7-028",
+      "cardname": "未来の音が聴こえる",
+      "card_type": "LIVE",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ開始時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分の控え室にある『Liella!』のメンバーカードを9枚選び、それらをシャッフルし、デッキの一番下に置いてもよい。そうしたとき、ライブ終了時まで、自分のステージにいるすべてのメンバーは<(ブレード)>を得る。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分の控え室にある『Liella!』のメンバーカードを9枚選び、それらをシャッフルし、デッキの一番下に置いてもよい。そうしたとき、ライブ終了時まで、自分のステージにいるすべてのメンバーは<(ブレード)>\nを得る。"
+            }
+          ]
+        },
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ成功時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "エールにより公開された自分のカードがすべて『Liella!』の場合、このカードのスコアを+1する。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "エールにより公開された自分のカードがすべて『Liella!』の場合、このカードのスコアを+1する。"
             }
           ]
         }
