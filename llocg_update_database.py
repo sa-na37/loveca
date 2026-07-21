@@ -21,7 +21,7 @@ BUILD_TAG is intentionally visible for delivery verification.
 
 from __future__ import annotations
 
-BUILD_TAG = "initial_image_fetch_when_images_missing_20260721a"
+BUILD_TAG = "unbuffered_image_fetch_progress_20260721a"
 
 import argparse
 import csv
@@ -122,14 +122,29 @@ def no_window_subprocess_kwargs() -> Dict[str, Any]:
     return {"creationflags": flags} if flags else {}
 
 
+def unbuffered_python_command(cmd: Sequence[str]) -> List[str]:
+    parts = [str(x) for x in cmd]
+    if len(parts) < 2:
+        return parts
+    exe_name = os.path.basename(parts[0]).lower()
+    if exe_name not in {"python", "python.exe", "python3", "python3.exe"}:
+        return parts
+    if parts[1] == "-u":
+        return parts
+    if parts[1].lower().endswith(".py"):
+        return [parts[0], "-u", *parts[1:]]
+    return parts
+
+
 def run(cmd: Sequence[str], *, cwd: Path, env: Dict[str, str] | None = None) -> None:
-    printable = " ".join(str(x) for x in cmd)
+    actual_cmd = unbuffered_python_command(cmd)
+    printable = " ".join(str(x) for x in actual_cmd)
     print(f"\n[RUN] {printable}")
     merged_env = os.environ.copy()
     if env:
         merged_env.update(env)
     result = subprocess.run(
-        list(cmd),
+        actual_cmd,
         cwd=str(cwd),
         env=merged_env,
         check=False,

@@ -1900,3 +1900,63 @@ PY
 - 旧デバッグ文書に残る `発生源なし` / `自動効果の無言処理` 系の代表指摘は、現行では `source_cn`、実行中効果本文、`message_ack` / `confirm_effect` / `auto_order` で確認対象を渡す方針に整理済み。直近P1/P2/2デッキbridge確認では再発なし。
 - 旧デバッグ文書に残る相手未モデルコメントは、1デッキ版では手動確認仕様、2デッキ版では相手context/action bridgeで実反映する対象、という分類へ更新済み。
 - UI目視・操作感に属するものは runtime 成否とは分離し、ユーザー実機確認用の日本語チェックリスト `docs/handoffs/loveca_handoff_20260721_visual_confirmation_checklist_ja.md` へ集約する。
+
+### 2026-07-21 image fetch progress log / deck copy button
+
+実装内容:
+
+- `llocg_fetch_all_card_images.py` に開始ログと `--progress-every` を追加し、初期値10件ごとに `[IMAGE-FETCH-PROGRESS]` を即時表示するようにした。
+- `llocg_update_database.py` からPython子スクリプトを呼ぶ際、`.py` 実行は `-u` 付きに自動変換し、画像取得中のログが更新画面へ溜まらず流れるようにした。
+- デッキ一覧の操作欄に「コピー」ボタンを追加した。押すと元デッキを維持したまま、新しいデッキファイルとして保存し、コピー元情報をメタデータに残す。
+
+確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./llocg_fetch_all_card_images.py ./llocg_update_database.py ./loveca_app/core.py ./loveca_app/web.py
+
+python3 - <<'PY'
+import llocg_update_database as upd
+assert upd.unbuffered_python_command(['python3', 'tool.py', '--x']) == ['python3', '-u', 'tool.py', '--x']
+assert upd.unbuffered_python_command(['python3', '-u', 'tool.py']) == ['python3', '-u', 'tool.py']
+assert upd.unbuffered_python_command(['python3', '-m', 'json.tool']) == ['python3', '-m', 'json.tool']
+print('OK unbuffered python command injection')
+PY
+
+python3 ./llocg_fetch_all_card_images.py --help
+
+python3 - <<'PY'
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import json
+from loveca_app.core import AppState
+
+with TemporaryDirectory() as td:
+    root = Path(td).resolve()
+    db = root / 'llocg_db_out_full'
+    deckdir = db / 'decklists'
+    deckdir.mkdir(parents=True)
+    cards = [
+        {'cardnumber':'PL!N-test-001','cardname':'member','card_type':'メンバー'},
+        {'cardnumber':'PL!N-test-002','cardname':'live','card_type':'ライブ'},
+    ]
+    (db / 'cards_min_tokv1.json').write_text(json.dumps(cards, ensure_ascii=False), encoding='utf-8')
+    (db / 'cards_compiled_v7h.json').write_text('[]', encoding='utf-8')
+    source = deckdir / 'deck_source.tsv'
+    source.write_text('count\tcard_no\trarity\tname\tvariant_id\n4\tPL!N-test-001\tN\tmember\tPL!N-test-001__N\n1\tPL!N-test-002\tN\tlive\tPL!N-test-002__N\n', encoding='utf-8')
+    source.with_suffix('.meta.json').write_text(json.dumps({'deck_id':'source','deck_name':'テストデッキ','tags':['確認']}, ensure_ascii=False), encoding='utf-8')
+    app = AppState(root)
+    record = app.copy_deck('llocg_db_out_full/decklists/deck_source.tsv')
+    assert record['name'] == 'テストデッキ のコピー'
+    assert Path(root / record['path']).exists()
+    meta = json.loads((root / record['path']).with_suffix('.meta.json').read_text(encoding='utf-8'))
+    assert meta['source'] == 'deck_copy'
+    assert meta['copied_from'].endswith('deck_source.tsv')
+    _, rows = app.read_deck_rows(record['path'])
+    assert len(rows) == 2
+print('OK deck copy creates a new deck and preserves variant rows')
+PY
+```
+
+※20260721内部確認: 実画像取得は外部通信と時間を伴うためここではヘルプと呼び出し変換を確認。実機更新では `[IMAGE-FETCH-START]` と `[IMAGE-FETCH-PROGRESS]` が更新ログへ表示される想定。

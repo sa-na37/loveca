@@ -1,4 +1,4 @@
-# BUILD_TAG = "deck_builder_image_fallback_20260721a"
+# BUILD_TAG = "deck_copy_button_20260721a"
 """Loveca local web UI and HTTP routing."""
 from __future__ import annotations
 
@@ -1151,6 +1151,23 @@ class Handler(BaseHTTPRequestHandler):
 """))
             except ValueError as exc:
                 self.send_html(page("入力エラー", f"<section class='panel'><p class='bad'>{html.escape(str(exc))}</p><a class='button secondary' href='/decks'>一覧へ</a></section>"), HTTPStatus.BAD_REQUEST)
+        elif path == "/decks/copy":
+            form = self.read_form()
+            try:
+                record = self.app.copy_deck(form.get("deck_path", ""))
+                self.send_html(page("コピー完了", f"""
+<section class="panel">
+<h2>デッキをコピーしました</h2>
+<p><strong>{html.escape(record['name'])}</strong></p>
+<p>元デッキ：<code>{html.escape(record['source_path'])}</code></p>
+<p>カード種類数：{record['card_types']} / 合計枚数：{record['card_count']}</p>
+<a class="button" href="/decks/edit?path={html.escape(record['path'], quote=True)}">コピーしたデッキを編集</a>
+<a class="button secondary" href="/decks/view?path={html.escape(record['path'], quote=True)}">内容を確認</a>
+<a class="button secondary" href="/decks">一覧へ</a>
+</section>
+"""))
+            except ValueError as exc:
+                self.send_html(page("コピーエラー", f"<section class='panel'><p class='bad'>{html.escape(str(exc))}</p><a class='button secondary' href='/decks'>一覧へ</a></section>"), HTTPStatus.BAD_REQUEST)
         elif path == "/decks/delete":
             form = self.read_form()
             try:
@@ -1915,6 +1932,10 @@ function beginDeckCodeImport() {{
   <td class="deck-actions">
     <a class="button secondary" href="/decks/view?path={path_attr}">確認</a>
     <a class="button secondary" href="/decks/edit?path={path_attr}">編集</a>
+    <form method="post" action="/decks/copy">
+      <input type="hidden" name="deck_path" value="{path_attr}">
+      <button type="submit" class="secondary">コピー</button>
+    </form>
     {start}
     <form method="post" action="/decks/delete"
           onsubmit="return confirm('このデッキを削除しますか？\\n削除後は元に戻せません。')">

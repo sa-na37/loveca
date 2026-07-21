@@ -23,7 +23,7 @@ Runtime contract:
 """
 from __future__ import annotations
 
-BUILD_TAG = "fetch_reprint_rarity_mismatch_expansion_20260721a"
+BUILD_TAG = "image_fetch_progress_logging_20260721a"
 
 import argparse
 import datetime as dt
@@ -796,6 +796,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--jitter", type=float, default=0.03)
     ap.add_argument("--max-warn-total", type=int, default=40)
     ap.add_argument("--max-warn-per-card", type=int, default=2)
+    ap.add_argument("--progress-every", type=int, default=10, help="Print image fetch progress every N cards")
     ap.add_argument("--user-agent", type=str, default="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36")
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--insecure", action="store_true")
@@ -804,6 +805,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     def _log(*a, **k):
         if not args.quiet:
+            k.setdefault("flush", True)
             print(*a, **k)
 
     root = args.root.resolve()
@@ -838,15 +840,22 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
     if not target_records:
         if cardnumber_filter is not None:
-            print("[DONE] no matching cardnumbers for incremental image fetch")
+            print("[DONE] no matching cardnumbers for incremental image fetch", flush=True)
             return 0
-        print("[ERR] No card numbers found in tokv1/compiled DB.")
-        print("      tokv1   :", tokv1_path)
-        print("      compiled:", compiled_path)
+        print("[ERR] No card numbers found in tokv1/compiled DB.", flush=True)
+        print("      tokv1   :", tokv1_path, flush=True)
+        print("      compiled:", compiled_path, flush=True)
         return 2
 
     manifest = load_official_manifest(root)
     preview_manifest = load_preview_manifest(preview_manifest_path)
+    progress_every = max(1, int(args.progress_every or 1))
+    _log(
+        "[IMAGE-FETCH-START] "
+        f"targets={len(target_records)} outdir={outdir} preview={preview_outdir} "
+        f"manifest={bool(manifest)} preview_manifest={bool(preview_manifest)} "
+        f"progress_every={progress_every}"
+    )
 
     sess = requests.Session() if requests is not None else None
     state: Dict[str, Any] = {
@@ -1076,8 +1085,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
         results.extend(per_card_results)
 
-        if i % 100 == 0 or i == 1:
-            _log(f"[{i}/{len(target_records)}] ok_files={ok_files} skipped={skip_files} preview={preview_success} prerelease_skip={skipped_prerelease} fail_attempts={fail_attempts} manifest_cards={manifest_cards} ...")
+        if i == 1 or i == len(target_records) or i % progress_every == 0:
+            _log(
+                "[IMAGE-FETCH-PROGRESS] "
+                f"{i}/{len(target_records)} card={cardno} "
+                f"ok_files={ok_files} skipped={skip_files} preview={preview_success} "
+                f"prerelease_skip={skipped_prerelease} fail_attempts={fail_attempts} "
+                f"manifest_cards={manifest_cards}"
+            )
 
     report = {
         "root": str(root),
@@ -1125,28 +1140,28 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     fail_log = outdir / "_failures.log"
     fail_log.write_text("\n".join(fail_lines) + ("\n" if fail_lines else ""), encoding="utf-8")
 
-    print("[DONE]")
-    print("tokv1    :", tokv1_path)
-    print("compiled :", compiled_path)
-    print("outdir   :", outdir)
-    print("preview  :", preview_outdir)
-    print("manifest :", bool(manifest))
-    print("preview_manifest:", bool(preview_manifest), preview_manifest_path)
-    print("product_registry:", product_registry_path.exists(), product_registry_path)
-    print("release_products:", len(product_release_dates))
-    print("as_of    :", as_of.isoformat())
-    print("rarities :", ", ".join(global_rarities))
-    print("ok_files :", ok_files)
-    print("skipped  :", skip_files)
-    print("preview_ok:", preview_success)
-    print("preview_skipped:", preview_skip_files)
-    print("prerelease_skipped:", skipped_prerelease)
-    print("failed   :", len(fail_lines))
-    print("report   :", rep_path)
-    print("fail_log :", fail_log)
+    print("[DONE]", flush=True)
+    print("tokv1    :", tokv1_path, flush=True)
+    print("compiled :", compiled_path, flush=True)
+    print("outdir   :", outdir, flush=True)
+    print("preview  :", preview_outdir, flush=True)
+    print("manifest :", bool(manifest), flush=True)
+    print("preview_manifest:", bool(preview_manifest), preview_manifest_path, flush=True)
+    print("product_registry:", product_registry_path.exists(), product_registry_path, flush=True)
+    print("release_products:", len(product_release_dates), flush=True)
+    print("as_of    :", as_of.isoformat(), flush=True)
+    print("rarities :", ", ".join(global_rarities), flush=True)
+    print("ok_files :", ok_files, flush=True)
+    print("skipped  :", skip_files, flush=True)
+    print("preview_ok:", preview_success, flush=True)
+    print("preview_skipped:", preview_skip_files, flush=True)
+    print("prerelease_skipped:", skipped_prerelease, flush=True)
+    print("failed   :", len(fail_lines), flush=True)
+    print("report   :", rep_path, flush=True)
+    print("fail_log :", fail_log, flush=True)
 
     if ok_files == 0 and skip_files == 0 and preview_success == 0 and preview_skip_files == 0 and skipped_prerelease == 0:
-        print("[ERR] No files were downloaded, skipped, previewed, or safely skipped as prerelease. This usually means target extraction failed or all URLs are unreachable.")
+        print("[ERR] No files were downloaded, skipped, previewed, or safely skipped as prerelease. This usually means target extraction failed or all URLs are unreachable.", flush=True)
         return 3
 
     return 0

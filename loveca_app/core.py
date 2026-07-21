@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# BUILD_TAG = "hide_update_console_window_20260721a"
+# BUILD_TAG = "deck_copy_button_20260721a"
 """
 Loveca application launcher (phase 1).
 
@@ -49,7 +49,7 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 
 
-BUILD_TAG = "hide_update_console_window_20260721a"
+BUILD_TAG = "deck_copy_button_20260721a"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8875
 SESSION_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -2340,6 +2340,67 @@ class AppState:
             "composition": composition,
             "copy_totals": cardnumber_totals,
         }
+
+    def copy_deck(self, relative_path: str) -> dict[str, Any]:
+        source_path = self._resolve_known_deck_path(relative_path)
+        metadata, rows = self.read_deck_rows(relative_path)
+        source_name = str(metadata.get("deck_name") or source_path.stem).strip()
+        base_name = f"{source_name} のコピー" if source_name else "コピーしたデッキ"
+        existing_names = {
+            str(deck.get("name") or "").strip().casefold()
+            for deck in self.list_decks()
+        }
+        new_name = base_name
+        suffix = 2
+        while new_name.casefold() in existing_names:
+            new_name = f"{base_name} {suffix}"
+            suffix += 1
+
+        output = io.StringIO()
+        writer = csv.DictWriter(
+            output,
+            fieldnames=["count", "card_no", "rarity", "name", "variant_id"],
+            delimiter="\t",
+            lineterminator="\n",
+        )
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({
+                "count": str(row.get("count") or "1"),
+                "card_no": str(row.get("card_no") or ""),
+                "rarity": str(row.get("rarity") or ""),
+                "name": str(row.get("name") or ""),
+                "variant_id": str(row.get("variant_id") or ""),
+            })
+
+        record = self.save_deck(
+            deck_name=new_name,
+            tsv_text=output.getvalue(),
+            existing_path="",
+            tags=self._normalize_deck_tags(metadata.get("tags")),
+        )
+
+        copied_path = (self.root / record["path"]).resolve()
+        meta_path = copied_path.with_suffix(".meta.json")
+        try:
+            copied_meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            if not isinstance(copied_meta, dict):
+                copied_meta = {}
+        except Exception:
+            copied_meta = {}
+        copied_meta.update({
+            "source": "deck_copy",
+            "copied_at": utc_now_iso(),
+            "copied_from": str(source_path.relative_to(self.root)),
+            "copied_from_deck_id": str(metadata.get("deck_id") or source_path.stem.removeprefix("deck_")),
+            "copied_from_deck_name": source_name,
+        })
+        meta_path.write_text(
+            json.dumps(copied_meta, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        record["source_path"] = str(source_path.relative_to(self.root))
+        return record
 
     def delete_deck(self, relative_path: str) -> dict[str, str]:
         path = self._resolve_known_deck_path(relative_path)
