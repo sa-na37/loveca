@@ -1,3 +1,4 @@
+# BUILD_TAG = "mac_app_internal_navigation_shutdown_guard_20260721a"
 """Loveca local web UI and HTTP routing."""
 from __future__ import annotations
 
@@ -483,6 +484,20 @@ window.addEventListener("orientationchange",scheduleLovecaViewportScale,{{passiv
 // navigation briefly unloads the page, so the server waits before shutting
 // down and cancels that shutdown as soon as the next page becomes active.
 let lovecaWindowClosing=false;
+let lovecaInternalNavigation=false;
+function markLovecaInternalNavigation() {{ lovecaInternalNavigation=true; }}
+document.addEventListener('click',(event)=>{{
+  const anchor=event.target && event.target.closest ? event.target.closest('a[href]') : null;
+  if(!anchor) return;
+  const url=new URL(anchor.href,location.href);
+  if(url.origin===location.origin) markLovecaInternalNavigation();
+}},{{capture:true}});
+document.addEventListener('submit',(event)=>{{
+  const form=event.target;
+  if(!form || !form.action) return;
+  const url=new URL(form.action,location.href);
+  if(url.origin===location.origin) markLovecaInternalNavigation();
+}},{{capture:true}});
 const lovecaWindowHeartbeat=()=>{{
   if(lovecaWindowClosing) return;
   fetch('/api/app/window-heartbeat',{{method:'POST',keepalive:true}}).catch(()=>{{}});
@@ -490,6 +505,7 @@ const lovecaWindowHeartbeat=()=>{{
 lovecaWindowHeartbeat();
 const lovecaHeartbeatTimer=setInterval(lovecaWindowHeartbeat,1000);
 window.addEventListener('pagehide',()=>{{
+  if(lovecaInternalNavigation) return;
   lovecaWindowClosing=true;
   clearInterval(lovecaHeartbeatTimer);
   try {{ navigator.sendBeacon('/api/app/window-closed',''); }} catch(_e) {{}}
@@ -731,7 +747,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
-        self.wfile.write(payload)
+        if not getattr(self, "_head_only", False):
+            self.wfile.write(payload)
 
     def send_file(self, path: Path) -> None:
         try:
@@ -745,7 +762,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "public, max-age=3600")
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
-        self.wfile.write(payload)
+        if not getattr(self, "_head_only", False):
+            self.wfile.write(payload)
 
     def send_json(self, data: Any, status: int = HTTPStatus.OK) -> None:
         payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -754,13 +772,21 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
-        self.wfile.write(payload)
+        if not getattr(self, "_head_only", False):
+            self.wfile.write(payload)
 
     def read_form(self) -> dict[str, str]:
         length = int(self.headers.get("Content-Length", "0"))
         raw = self.rfile.read(length).decode("utf-8")
         parsed = parse_qs(raw)
         return {key: values[0] for key, values in parsed.items() if values}
+
+    def do_HEAD(self) -> None:
+        self._head_only = True
+        try:
+            self.do_GET()
+        finally:
+            self._head_only = False
 
     def do_GET(self) -> None:
         self.server.note_launcher_activity()
@@ -1239,6 +1265,19 @@ class Handler(BaseHTTPRequestHandler):
   <iframe class="simulator-frame" src="{private_url}" title="Loveca simulator"></iframe>
 </div>
 <script>
+let lovecaSimulatorPageClosing=false;
+const lovecaSimulatorHeartbeat=()=>{{
+  if(lovecaSimulatorPageClosing) return;
+  fetch('/api/app/window-heartbeat',{{method:'POST',keepalive:true}}).catch(()=>{{}});
+}};
+lovecaSimulatorHeartbeat();
+const lovecaSimulatorHeartbeatTimer=setInterval(lovecaSimulatorHeartbeat,1000);
+window.addEventListener('pagehide',()=>{{
+  lovecaSimulatorPageClosing=true;
+  clearInterval(lovecaSimulatorHeartbeatTimer);
+  try {{ navigator.sendBeacon('/api/app/window-closed',''); }} catch(_e) {{}}
+}},{{capture:true}});
+
 async function stopEmbeddedSimulator() {{
   if(!confirm('シミュレータを終了しますか？')) return;
   const res=await fetch('/api/manual/stop',{{method:'POST'}});
@@ -1393,6 +1432,7 @@ async function startManual(deckPath) {{
       const statusRes=await fetch('/api/manual/window-status',{{cache:'no-store'}});
       const state=await statusRes.json();
       if(state.status==='ready' && state.private_url) {{
+        markLovecaInternalNavigation();
         location.replace('/simulator');
         return;
       }}
@@ -1537,6 +1577,7 @@ async function startRemote(event) {{
       if(state.status==='ready') {{
         box.className='status ok';
         box.textContent='シミュレータとパブリック画面を開きました。';
+        markLovecaInternalNavigation();
         location.replace('/simulator');
         return false;
       }}
@@ -1951,7 +1992,7 @@ async function startDeck(deckPath) {{
     for(let i=0;i<140;i++) {{
       const r=await fetch('/api/manual/window-status',{{cache:'no-store'}});
       const state=await r.json();
-      if(state.status==='ready' && state.private_url) {{ location.replace('/simulator'); return; }}
+      if(state.status==='ready' && state.private_url) {{ markLovecaInternalNavigation(); location.replace('/simulator'); return; }}
       if(state.status==='failed'||state.status==='timeout') {{
         box.className='status bad'; box.textContent=state.message; return;
       }}
@@ -2085,7 +2126,7 @@ async function startDeckGame(deckPath) {{
     if(!data.ok) {{ box.className='status bad'; box.textContent=data.message; return; }}
     for(let i=0;i<140;i++) {{
       const r=await fetch('/api/manual/window-status',{{cache:'no-store'}}); const state=await r.json();
-      if(state.status==='ready' && state.private_url) {{ location.replace('/simulator'); return; }}
+      if(state.status==='ready' && state.private_url) {{ markLovecaInternalNavigation(); location.replace('/simulator'); return; }}
       if(state.status==='failed'||state.status==='timeout') {{ box.className='status bad'; box.textContent=state.message; return; }}
       await new Promise(resolve=>setTimeout(resolve,350));
     }}

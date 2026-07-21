@@ -1,1 +1,1 @@
-BUILD_TAG = "loveca_app_update_field_schema_20260716br"
+BUILD_TAG = "loveca_distribution_launcher_20260721a"
