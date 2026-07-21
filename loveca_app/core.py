@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# BUILD_TAG = "update_dependency_bootstrap_20260721a"
+# BUILD_TAG = "update_cancel_windows_exit_20260721a"
 """
 Loveca application launcher (phase 1).
 
@@ -49,7 +49,7 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 
 
-BUILD_TAG = "update_dependency_bootstrap_20260721a"
+BUILD_TAG = "update_cancel_windows_exit_20260721a"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8875
 SESSION_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -2595,7 +2595,7 @@ class AppState:
                 self.manual_launch_state.update(state)
             return state
 
-    def stop_update(self) -> tuple[bool, str]:
+    def stop_update(self, *, reason: str = "user") -> tuple[bool, str]:
         with self.lock:
             process = self.update_process
             if process is None or process.poll() is not None:
@@ -2604,7 +2604,18 @@ class AppState:
             pid = int(process.pid)
 
         try:
-            if hasattr(os, "killpg"):
+            if platform.system() == "Windows":
+                try:
+                    subprocess.run(
+                        ["taskkill", "/PID", str(pid), "/T", "/F"],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=6.0,
+                        check=False,
+                    )
+                except (FileNotFoundError, subprocess.TimeoutExpired):
+                    process.terminate()
+            elif hasattr(os, "killpg"):
                 os.killpg(pid, signal.SIGTERM)
             else:
                 process.terminate()
@@ -2626,15 +2637,18 @@ class AppState:
         with self.lock:
             self.update_process = None
             if self.update_job.status == "running":
-                self.update_job.status = "failed"
+                self.update_job.status = "cancelled"
                 self.update_job.stage = "中断"
-                self.update_job.message = "アプリ終了に伴いデータ更新を中断しました。"
+                if reason == "shutdown":
+                    self.update_job.message = "アプリ終了に伴いデータ更新を中断しました。"
+                else:
+                    self.update_job.message = "ユーザー操作によりデータ更新を中断しました。"
                 self.update_job.finished_at = utc_now_iso()
                 self.update_job.returncode = -15
         return True, "データ更新処理を終了しました。"
 
     def stop_all_child_processes(self) -> tuple[bool, str]:
-        update_ok, update_message = self.stop_update()
+        update_ok, update_message = self.stop_update(reason="shutdown")
         manual_ok, manual_message = self.stop_manual()
         return (
             update_ok and manual_ok,
@@ -2925,6 +2939,9 @@ class AppState:
                 with self.lock:
                     if self.update_process is process:
                         self.update_process = None
+                    if self.update_job.status == "cancelled":
+                        self.update_job.append("[APP-UPDATE] update was cancelled.")
+                        return
                     self.update_job.returncode = returncode
                     self.update_job.status = "success" if returncode == 0 else "failed"
                     self.update_job.finished_at = utc_now_iso()

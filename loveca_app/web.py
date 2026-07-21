@@ -1,4 +1,4 @@
-# BUILD_TAG = "update_dependency_bootstrap_20260721a"
+# BUILD_TAG = "update_cancel_windows_exit_20260721a"
 """Loveca local web UI and HTTP routing."""
 from __future__ import annotations
 
@@ -562,26 +562,28 @@ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded'
 else enhanceNumberInputs();
 loadQuickSettings();
 
+function closeLovecaWindowSoon() {{
+  let attempts=0;
+  const timer=setInterval(()=>{{
+    attempts+=1;
+    try {{
+      window.open('', '_self');
+      window.close();
+    }} catch(_closeError) {{}}
+    if(attempts>=8) clearInterval(timer);
+  }},200);
+}}
+
 async function shutdownLovecaApp() {{
   if(!confirm('Loveca Applicationを終了しますか？\\n起動中のシミュレータも終了します。')) return;
   try {{
     const res=await fetch('/api/app/shutdown',{{method:'POST'}});
     const data=await res.json();
     document.body.innerHTML='<main><section class="panel"><h2>アプリを終了しました</h2><p>'+String(data.message||'ウインドウを閉じます。')+'</p></section></main>';
-    setTimeout(()=>{{
-      try {{
-        window.open('', '_self');
-        window.close();
-      }} catch(_closeError) {{}}
-    }},150);
+    setTimeout(closeLovecaWindowSoon,150);
   }} catch(e) {{
     document.body.innerHTML='<main><section class="panel"><h2>アプリを終了しました</h2><p>ウインドウを閉じます。</p></section></main>';
-    setTimeout(()=>{{
-      try {{
-        window.open('', '_self');
-        window.close();
-      }} catch(_closeError) {{}}
-    }},150);
+    setTimeout(closeLovecaWindowSoon,150);
   }}
 }}
 </script>
@@ -1034,6 +1036,12 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/update/startup-confirmed":
             ok, message = self.app.maybe_start_startup_update()
             self.send_json({"ok": ok, "message": message}, HTTPStatus.OK if ok else HTTPStatus.CONFLICT)
+        elif path == "/api/update/stop":
+            ok, message = self.app.stop_update(reason="user")
+            self.send_json(
+                {"ok": ok, "message": message},
+                HTTPStatus.OK if ok else HTTPStatus.INTERNAL_SERVER_ERROR,
+            )
         elif path == "/decks/import/run":
             form = self.read_form()
             try:
@@ -1300,7 +1308,12 @@ async function shutdownLovecaApp() {{
   try {{
     await fetch('/api/app/shutdown',{{method:'POST'}});
   }} finally {{
-    try {{ window.open('', '_self'); window.close(); }} catch(_e) {{}}
+    let attempts=0;
+    const timer=setInterval(()=>{{
+      attempts+=1;
+      try {{ window.open('', '_self'); window.close(); }} catch(_e) {{}}
+      if(attempts>=8) clearInterval(timer);
+    }},200);
   }}
 }}
 </script>
@@ -3820,6 +3833,7 @@ if(document.readyState==="loading") {{
   </div>
 </div>
 <button id="startButton" onclick="startUpdate()">更新開始</button>
+<button id="stopButton" class="secondary" style="display:none;background:var(--bad);color:white" onclick="stopUpdate()">更新中断</button>
 
 <div class="update-progress-wrap">
   <div class="update-stage">
@@ -3854,9 +3868,24 @@ function formatDuration(seconds) {
 async function startUpdate() {
   const button=document.getElementById("startButton");
   button.disabled=true;
+  document.getElementById("stopButton").style.display="inline-block";
   document.getElementById("jobMessage").textContent="更新処理を開始しています...";
   try {
     const res=await fetch("/api/update/start",{method:"POST"});
+    const data=await res.json();
+    document.getElementById("jobMessage").textContent=data.message;
+  } catch(e) {
+    document.getElementById("jobMessage").textContent=String(e);
+  }
+  await poll();
+}
+
+async function stopUpdate() {
+  const button=document.getElementById("stopButton");
+  button.disabled=true;
+  document.getElementById("jobMessage").textContent="更新処理を中断しています...";
+  try {
+    const res=await fetch("/api/update/stop",{method:"POST"});
     const data=await res.json();
     document.getElementById("jobMessage").textContent=data.message;
   } catch(e) {
@@ -3879,6 +3908,7 @@ async function confirmStartupUpdate() {
   setStartupDialog(false);
   const button=document.getElementById("startButton");
   button.disabled=true;
+  document.getElementById("stopButton").style.display="inline-block";
   document.getElementById("jobMessage").textContent="カードデータ更新を開始しています...";
   try {
     const res=await fetch("/api/update/startup-confirmed",{method:"POST"});
@@ -3916,7 +3946,7 @@ async function poll() {
     bar.style.width=`${percent}%`;
     bar.classList.toggle("running",running);
     document.getElementById("jobMessage").className=
-      "status "+(data.stale?"warn":data.status==="success"?"ok":data.status==="failed"?"bad":"");
+      "status "+(data.stale?"warn":data.status==="success"?"ok":data.status==="failed"?"bad":data.status==="cancelled"?"warn":"");
 
     const log=document.getElementById("jobLog");
     const nearBottom=log.scrollHeight-log.scrollTop-log.clientHeight<60;
@@ -3924,6 +3954,9 @@ async function poll() {
     if(nearBottom) log.scrollTop=log.scrollHeight;
 
     document.getElementById("startButton").disabled=running;
+    const stopButton=document.getElementById("stopButton");
+    stopButton.disabled=!running;
+    stopButton.style.display=running?"inline-block":"none";
     if(running) setTimeout(poll,1000);
   } catch(e) {
     document.getElementById("jobMessage").className="status bad";

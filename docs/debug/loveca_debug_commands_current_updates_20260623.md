@@ -1689,6 +1689,45 @@ PY
 - 2デッキ用UIでは情報秘匿不要のため、active側boardに相手手札候補を表示して選ぶ現行UIは残件扱いしない。1デッキ用リモートのパブリックウィンドウでは、従来どおり public view redaction が秘匿境界になる。
 - 相手ポジションの「正面」対応は L↔R / C↔C の対面対応で実装。盤面表示/ルール解釈で逆向き定義が必要ならここだけ調整対象。
 
+### 2026-07-21 app update cancel / Windows launcher close
+
+実装内容:
+
+- データ更新画面に「更新中断」ボタンを追加。更新中のみ表示し、押下時に `/api/update/stop` から実行中の更新処理を停止する。
+- 更新中断後のジョブ状態を `cancelled` / `中断` として保持し、更新監視スレッドが後から `failed` に上書きしないようにした。
+- Windowsでは更新処理が追加の子プロセスを起こす場合に備え、更新停止時は `taskkill /T /F` でプロセスツリーごと終了する。mac/Linuxでは既存どおりプロセスグループへ停止シグナルを送る。
+- Windows用 `launch_loveca.bat` は、`pythonw` または `pyw` が見つかる場合にターミナルを残さない専用起動へ変更。見つからない場合は従来どおりコンソール起動にフォールバックする。
+- アプリ終了ボタン押下後の専用ウインドウ閉じ処理を複数回リトライするようにした。
+
+確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./run_loveca_app.py ./loveca_app/core.py ./loveca_app/web.py ./loveca_app/main.py ./loveca_app/launcher.py ./loveca_app/assets.py
+
+python3 - <<'PY'
+import subprocess
+from pathlib import Path
+from loveca_app.core import AppState
+app=AppState(Path('.').resolve())
+proc=subprocess.Popen(['python3','-c','import time; time.sleep(60)'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
+with app.lock:
+    app.update_process=proc
+    app.update_job.reset('cancel-smoke')
+    app.update_job.status='running'
+    app.update_job.stage='実行中'
+ok,msg=app.stop_update(reason='user')
+assert ok, msg
+assert proc.poll() is not None
+assert app.update_job.status == 'cancelled'
+assert app.update_job.stage == '中断'
+print('OK update cancel smoke')
+PY
+```
+
+※20260721内部確認: mac上の内部スモークでは更新中断APIの中核処理は正常。Windows固有の `pythonw` / `pyw` 起動と `taskkill /T /F` は配布zip反映後に実機確認対象。
+
 ### 2026-07-21 effect-debug residual policy cleanup
 
 ※20260721内部確認: 効果処理関連の残件を現行仕様に合わせて再分類した。2デッキ用UIでは秘匿不要のため、相手手札候補をactive側で表示することは不具合扱いしない。1デッキ版では相手個別カードstateを持たないため、相手成功ライブ置き場、相手ステージ、相手ライブカード置き場などの一部比較・反映は手入力/手動反映を正式経路とする。
