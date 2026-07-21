@@ -1814,6 +1814,31 @@ print('OK CREATE_NO_WINDOW kwargs')
 PY
 ```
 
+### 2026-07-21 deck builder image fallback
+
+実装内容:
+
+- デッキ構築ツールのカード画像が読み込めない場合に `visibility:hidden` で透明化していた箇所を、共通 `fallbackCardImage()` で `/card-image` のフォールバック画像へ差し替える形に変更した。
+- `/card-image` はカード画像が見つからない場合に従来どおり `NoImage.PNG` を優先し、NoImage自体も無い環境ではサーバ生成のSVGプレースホルダーを返すようにした。これにより、配布直後・UI画像バンドル未配置・カード画像未取得の状態でも、デッキ構築画面の画像枠が透明にならない。
+- 対象画面はデッキ構築のデッキ行、検索結果、デッキ分析カード、デッキコード読込結果。デッキ詳細画面は既存の「画像なし」ラベル表示を維持する。
+
+確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/web.py ./loveca_app/core.py ./run_loveca_app.py
+git diff --check -- loveca_app/web.py
+
+python3 ./run_loveca_app.py --host 127.0.0.1 --port 8891 --window-mode none --skip-startup-update
+
+curl -s -I 'http://127.0.0.1:8891/card-image?card_no=NO-SUCH-CARD'
+curl -s 'http://127.0.0.1:8891/decks/new' | rg -n "fallbackCardImage|search-card-image" -C 2
+curl -s 'http://127.0.0.1:8891/api/cards/search?limit=1' | python3 -m json.tool | rg -n "variant_id|card_no|has_image" -C 1
+```
+
+※20260721内部確認: ローカルではNoImageが存在するため、存在しないカード番号でも `/card-image` はNoImage PNGをHTTP 200で返すことを確認。NoImage未配置時は同経路でSVGプレースホルダーを返す実装にした。
+
 ### 2026-07-21 effect-debug residual policy cleanup
 
 ※20260721内部確認: 効果処理関連の残件を現行仕様に合わせて再分類した。2デッキ用UIでは秘匿不要のため、相手手札候補をactive側で表示することは不具合扱いしない。1デッキ版では相手個別カードstateを持たないため、相手成功ライブ置き場、相手ステージ、相手ライブカード置き場などの一部比較・反映は手入力/手動反映を正式経路とする。

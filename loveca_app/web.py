@@ -1,4 +1,4 @@
-# BUILD_TAG = "update_cancel_windows_exit_20260721a"
+# BUILD_TAG = "deck_builder_image_fallback_20260721a"
 """Loveca local web UI and HTTP routing."""
 from __future__ import annotations
 
@@ -767,6 +767,22 @@ class Handler(BaseHTTPRequestHandler):
         if not getattr(self, "_head_only", False):
             self.wfile.write(payload)
 
+    def send_card_placeholder_svg(self, card_no: str = "") -> None:
+        label = html.escape(str(card_no or "No Image"))
+        payload = f"""<svg xmlns="http://www.w3.org/2000/svg" width="451" height="630" viewBox="0 0 451 630">
+<rect width="451" height="630" rx="24" fill="#141821"/>
+<rect x="18" y="18" width="415" height="594" rx="18" fill="#202632" stroke="#465064" stroke-width="3"/>
+<text x="225.5" y="286" text-anchor="middle" font-family="Arial, sans-serif" font-size="36" font-weight="700" fill="#d7deea">No Image</text>
+<text x="225.5" y="334" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" fill="#9aa6ba">{label}</text>
+</svg>""".encode("utf-8")
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "image/svg+xml; charset=utf-8")
+        self.send_header("Cache-Control", "public, max-age=3600")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        if not getattr(self, "_head_only", False):
+            self.wfile.write(payload)
+
     def send_json(self, data: Any, status: int = HTTPStatus.OK) -> None:
         payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
@@ -832,7 +848,7 @@ class Handler(BaseHTTPRequestHandler):
             if image_path is None:
                 image_path = self.app.no_image_path()
             if image_path is None:
-                self.send_error(HTTPStatus.NOT_FOUND)
+                self.send_card_placeholder_svg(card_no)
             else:
                 self.send_file(image_path)
         elif path == "/api/cards/search":
@@ -1747,7 +1763,7 @@ function beginDeckCodeImport() {{
                 """
 <article class="import-card">
   <div class="import-count">×{count}</div>
-  <img src="{image}" alt="{name}" onerror="this.style.visibility='hidden'">
+  <img src="{image}" alt="{name}" onerror="this.onerror=null;this.src='/card-image?card_no='">
   <div class="import-name">{name}</div>
   <div class="import-number">{card_no}</div>
 </article>
@@ -2919,6 +2935,13 @@ function imageUrl(card) {{
   else if(card.rarity) params.set("rarity",card.rarity);
   return "/card-image?"+params.toString();
 }}
+function fallbackCardImage(image, cardNo) {{
+  image.onerror=null;
+  image.style.visibility="visible";
+  image.style.display="";
+  const params=new URLSearchParams({{card_no:cardNo||""}});
+  image.src="/card-image?"+params.toString();
+}}
 function typeKind(card) {{
   const t=String(card.card_type||"").toLowerCase();
   if(t.includes("メンバー")||t.includes("member")) return "member";
@@ -2990,7 +3013,7 @@ function renderDeck() {{
   }}
   deckRows.innerHTML=cards.map(card=>`
     <div class="deck-row">
-      <img src="${{imageUrl(card)}}" alt="" onerror="this.style.visibility='hidden'">
+      <img src="${{imageUrl(card)}}" alt="" onerror="fallbackCardImage(this,'${{esc(card.card_no)}}')">
       <div><div>${{esc(card.name||card.card_no)}}</div><div class="search-meta">${{esc(card.card_no)}} / ${{esc(card.card_type||"—")}}</div></div>
       <div class="count-controls">
         <button type="button" class="secondary" onclick='changeCount(${{JSON.stringify(deckKey(card))}},-1)'>−</button>
@@ -3154,7 +3177,7 @@ function buildDeckAnalysis() {{
     <article class="deck-analysis-card">
       <div class="deck-analysis-count">×${{Number(card.count)||0}}</div>
       <img src="${{imageUrl(card)}}" alt="${{esc(card.name||card.card_no)}}"
-           onerror="this.style.visibility='hidden'">
+           onerror="fallbackCardImage(this,'${{esc(card.card_no)}}')">
       <div class="deck-analysis-card-name" title="${{esc(card.name||card.card_no)}}">
         ${{esc(card.name||card.card_no)}}
       </div>
@@ -3260,7 +3283,7 @@ async function searchCards() {{
     for (const card of data.cards) searchCardCache.set(card.variant_id, card);
     searchResults.innerHTML=data.cards.map(card=>`
       <article class="search-card">
-        <img class="search-card-image" data-variant-id="${{esc(card.variant_id)}}" src="${{imageUrl(card)}}" alt="${{esc(card.name)}}" onerror="this.style.visibility='hidden'">
+        <img class="search-card-image" data-variant-id="${{esc(card.variant_id)}}" src="${{imageUrl(card)}}" alt="${{esc(card.name)}}" onerror="fallbackCardImage(this,'${{esc(card.card_no)}}')">
         <div class="search-name">${{esc(card.name||card.card_no)}}</div>
         <div class="search-meta">${{esc(card.card_no)}}</div>
         <div class="search-meta">${{esc(card.expansion_name||card.product||"—")}}</div>
