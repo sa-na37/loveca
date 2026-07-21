@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: tier3_p2_continuous_routes_20260721a
+# BUILD_TAG: tier3_p2_success_zone_continuous_20260721a
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -13187,6 +13187,62 @@ def _body_always_success_group_hand_cost_reduction_from_blob(gs: 'GameState', ca
     except Exception:
         return 0
 
+def _success_zone_live_hand_cost_reduction(gs: 'GameState', cards_db: Dict[str, CardInfo], target_ci: Optional[CardInfo]) -> int:
+    """Return non-stacking hand play cost reduction granted by BODY LIVE cards in success zone."""
+    try:
+        if not target_ci or not _is_member_ci(target_ci):
+            return 0
+        base_cost = int(getattr(target_ci, 'cost', 0) or 0)
+        best = 0
+        for scn in list(getattr(gs, 'success_zone', []) or []):
+            sci = _get_card(cards_db, scn)
+            if not sci or not _is_live_ci(sci):
+                continue
+            for _eff, blob in _iter_body_always_effects(sci):
+                if 'このカードが自分の成功ライブカード置き場にある' not in blob:
+                    continue
+                if 'メンバーカードを自分の手札から登場させるためのコストは' not in blob:
+                    continue
+                m = re.search(r'元々のコストが(\d+)以上の『([^』]+)』のメンバーカード.*?コストは(\d+)減る', blob)
+                if not m:
+                    continue
+                need_cost = int(m.group(1) or 0)
+                tag = str(m.group(2) or '').strip()
+                red = int(m.group(3) or 0)
+                if base_cost >= need_cost and tag and red > 0 and _slot_matches_group_tag(target_ci, tag):
+                    best = max(best, red)
+        return int(best)
+    except Exception:
+        return 0
+
+def _success_zone_live_required_any_reduction(gs: 'GameState', cards_db: Dict[str, CardInfo], target_ci: Optional[CardInfo]) -> int:
+    """Return non-stacking required-heart reduction granted by BODY LIVE cards in success zone."""
+    try:
+        if not target_ci or not _is_live_ci(target_ci):
+            return 0
+        base_score = int(getattr(target_ci, 'score', 0) or 0)
+        best = 0
+        for scn in list(getattr(gs, 'success_zone', []) or []):
+            sci = _get_card(cards_db, scn)
+            if not sci or not _is_live_ci(sci):
+                continue
+            for _eff, blob in _iter_body_always_effects(sci):
+                if 'このカードが自分の成功ライブカード置き場にある' not in blob:
+                    continue
+                if 'ライブカードの必要ハートを' not in blob or '減らす' not in blob:
+                    continue
+                m = re.search(r'元々のスコア(\d+)以上の『([^』]+)』のライブカードの必要ハートを(?P<anys>(?:<\(任意\)>)+)減らす', blob)
+                if not m:
+                    continue
+                need_score = int(m.group(1) or 0)
+                tag = str(m.group(2) or '').strip()
+                red = int(_parse_heart_icons(m.group('anys') or '').get('any', 0) or 0)
+                if base_score >= need_score and tag and red > 0 and _slot_matches_group_tag(target_ci, tag):
+                    best = max(best, red)
+        return int(best)
+    except Exception:
+        return 0
+
 def _body_always_under_group_member_cost_bonus_from_blob(gs: 'GameState', cards_db: Dict[str, CardInfo], slot, blob: str) -> int:
     """Parse BODY 常時: under matching group/unit member count -> this member cost +N each."""
     try:
@@ -13637,6 +13693,7 @@ def _card_effective_play_cost_from_hand(gs: 'GameState', cards_db: Dict[str, Car
         reduction += int(_body_always_stage_group_hand_cost_reduction_from_blob(gs, cards_db, blob) or 0)
         reduction += int(_body_always_wait_group_hand_cost_reduction_from_blob(gs, cards_db, blob) or 0)
         reduction += int(_body_always_moved_stage_group_hand_cost_reduction_from_blob(gs, cards_db, blob) or 0)
+    reduction += int(_success_zone_live_hand_cost_reduction(gs, cards_db, ci) or 0)
     return max(0, int(base) - int(reduction or 0))
 
 def _activated_success_count_discard_cost_reduction(effect_text: str, success_count: int) -> int:
@@ -21167,6 +21224,12 @@ def _effective_live_required_hearts(cn_live, ci, gs: GameState, cards_db: Option
             reduce_any = 0
     if reduce_any > 0:
         req['any'] = max(0, int(req.get('any', 0) or 0) - reduce_any)
+    try:
+        success_zone_reduce_any = int(_success_zone_live_required_any_reduction(gs, (cards_db or {}), ci) or 0)
+    except Exception:
+        success_zone_reduce_any = 0
+    if success_zone_reduce_any > 0:
+        req['any'] = max(0, int(req.get('any', 0) or 0) - success_zone_reduce_any)
     try:
         color_reduce = _live_start_required_color_reduction_for_set_idx(gs, set_idx, source_cn=cn_live)
     except Exception:

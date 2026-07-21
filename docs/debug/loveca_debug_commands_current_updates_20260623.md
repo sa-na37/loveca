@@ -467,6 +467,12 @@ python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8802 --debug
 
 確認観点: 初期 `opponent_wait_count=0` では `C.always_blade_bonus=0`。UI/APIの正式な相手ウェイト人数入力で `opponent_wait_delta +2` を送ると `opponent_wait_count=2`、`C.always_blade_bonus=2` になる。undoで `opponent_wait_count=0` と `C.always_blade_bonus=0` に戻る。相手個別カードstateの不在は現行正式仕様のため不具合扱いしない。
 
+#### 成功ライブカード置き場 LIVE 常時: 手札登場コスト/必要ハート軽減
+
+※20260721内部確認: `PL!-bp6-019#A01` / `PL!-bp6-022#A01` を確認。成功ライブカード置き場にある LIVE の `<常時>` から、元々のコスト/スコア閾値とグループ条件を参照し、手札から登場させる MEMBER のコスト軽減、およびLIVEの必要ハート `<任意>` 軽減へ反映する汎用 helper を追加。`この効果は重複しない` 文面に合わせ、同型複数枚は最大軽減値のみを使う。カード番号専用分岐なし。
+
+確認観点: `success_zone=['PL!-bp6-019']` で元々のコスト17以上の `μ's` MEMBER を手札から登場させる場合、必要コストが2減る。`success_zone=['PL!-bp6-022']` で元々のスコア5以上の `μ's` LIVE をセットする場合、必要ハートの `<任意>` が2減る。条件外のグループ/低コスト/低スコアカードには適用されない。
+
 #### PL!-bp4-002#A01 常時: 開始時/成功時を持たないライブ中LIVEがあるかぎり紫+2
 
 ```bash
