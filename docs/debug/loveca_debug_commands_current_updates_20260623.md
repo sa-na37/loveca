@@ -1839,6 +1839,58 @@ curl -s 'http://127.0.0.1:8891/api/cards/search?limit=1' | python3 -m json.tool 
 
 ※20260721内部確認: ローカルではNoImageが存在するため、存在しないカード番号でも `/card-image` はNoImage PNGをHTTP 200で返すことを確認。NoImage未配置時は同経路でSVGプレースホルダーを返す実装にした。
 
+### 2026-07-21 first-run image directory / asset bundle / card image fetch
+
+実装内容:
+
+- 起動時に `llocg_db_out_full/card_images`、`llocg_db_out_full/card_images/texticons`、`llocg_db_out_full/preview_card_images` を必ず作成するようにした。配布zipが空ディレクトリを保持できない場合でも、初回起動後に画像配置先が存在する。
+- UI用画像バンドル探索を、`loveca` フォルダ直下だけでなく、`loveca` の親フォルダ、現在の作業フォルダ、ユーザーの `Downloads` まで広げた。`loveca-ui-assets.zip` / `loveca_ui_assets.zip` と展開済み `loveca-ui-assets` / `loveca_ui_assets` に対応。
+- DB更新時、`official_image_manifest.json` が同梱済みでも `card_images` に実カード画像が無い場合は初回画像取得として全カードを `image_fetch_targets` に入れるようにした。これにより、配布zipの「manifestあり・画像なし」状態で画像取得がスキップされない。
+
+確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/assets.py ./loveca_app/main.py ./llocg_update_database.py
+
+PYTHONPATH=/Users/tekitou/Desktop/gsim/loveca python3 - <<'PY'
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import zipfile
+from loveca_app.assets import ensure_ui_assets_from_local_bundle
+with TemporaryDirectory() as td:
+    base=Path(td)
+    root=base/'loveca'
+    root.mkdir()
+    bundle=base/'loveca-ui-assets.zip'
+    with zipfile.ZipFile(bundle,'w') as z:
+        z.writestr('loveca-ui-assets/llocg_db_out_full/card_images/NoImage.PNG', b'png')
+    result=ensure_ui_assets_from_local_bundle(root)
+    assert (root/'llocg_db_out_full/card_images').is_dir()
+    assert (root/'llocg_db_out_full/card_images/texticons').is_dir()
+    assert (root/'llocg_db_out_full/preview_card_images').is_dir()
+    assert (root/'llocg_db_out_full/card_images/NoImage.PNG').read_bytes()==b'png'
+print('OK ui asset parent search and image dirs')
+PY
+
+python3 - <<'PY'
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import llocg_update_database as upd
+with TemporaryDirectory() as td:
+    root=Path(td)
+    image_dir=root/'card_images'
+    image_dir.mkdir()
+    assert not upd.scan_image_cardnumbers(image_dir)
+    (image_dir/'NoImage.PNG').write_bytes(b'x')
+    assert not upd.scan_image_cardnumbers(image_dir)
+print('OK empty/noimage-only card_images triggers initial image fetch')
+PY
+```
+
+※20260721内部確認: 実際の画像ダウンロードは外部通信と時間がかかるため、ここでは初回判定条件とディレクトリ/バンドル展開経路を内部確認した。Windows実機では更新ログに `[IMAGE-FETCH-INIT]` が出れば初回画像取得対象化が動いている。
+
 ### 2026-07-21 effect-debug residual policy cleanup
 
 ※20260721内部確認: 効果処理関連の残件を現行仕様に合わせて再分類した。2デッキ用UIでは秘匿不要のため、相手手札候補をactive側で表示することは不具合扱いしない。1デッキ版では相手個別カードstateを持たないため、相手成功ライブ置き場、相手ステージ、相手ライブカード置き場などの一部比較・反映は手入力/手動反映を正式経路とする。

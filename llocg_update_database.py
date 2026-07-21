@@ -21,7 +21,7 @@ BUILD_TAG is intentionally visible for delivery verification.
 
 from __future__ import annotations
 
-BUILD_TAG = "hide_update_console_window_20260721a"
+BUILD_TAG = "initial_image_fetch_when_images_missing_20260721a"
 
 import argparse
 import csv
@@ -827,11 +827,15 @@ def main() -> int:
         if args.http_cache.is_absolute()
         else (project_root / args.http_cache).resolve()
     )
+    canonical_image_dir = dbdir / "card_images"
+    preview_image_dir = dbdir / "preview_card_images"
     backup_dir = backup_parent / f"backup_{stamp}"
     work_parent.mkdir(parents=True, exist_ok=True)
     backup_parent.mkdir(parents=True, exist_ok=True)
     fresh_dir.mkdir(parents=True, exist_ok=True)
     final_dir.mkdir(parents=True, exist_ok=True)
+    canonical_image_dir.mkdir(parents=True, exist_ok=True)
+    preview_image_dir.mkdir(parents=True, exist_ok=True)
     if args.clear_http_cache:
         shutil.rmtree(cache_dir, ignore_errors=True)
         print(f"[CACHE] cleared persistent HTTP cache: {cache_dir}")
@@ -1029,6 +1033,8 @@ def main() -> int:
     release_dates = load_release_dates(final_dir / "product_release_registry.json")
     today = date.today()
     base_image_manifest = dbdir / "official_image_manifest.json"
+    canonical_image_cards_at_start = scan_image_cardnumbers(canonical_image_dir)
+    initial_image_fetch_needed = not canonical_image_cards_at_start
 
     if args.full_image_refresh or not base_image_manifest.exists():
         image_manifest_targets = {
@@ -1057,6 +1063,11 @@ def main() -> int:
         f"mode={image_manifest_mode} targets={len(image_manifest_targets)} "
         f"new_cards={len(new_cardnumbers)} base_manifest={base_image_manifest.exists()}"
     )
+    if initial_image_fetch_needed:
+        print(
+            "[IMAGE-FETCH-INIT] canonical card image folder is missing or empty; "
+            "first update will fetch card images using the bundled manifest"
+        )
 
     image_manifest_delta_dir = work_root / "image_manifest_delta"
     delta_manifest = image_manifest_delta_dir / "official_image_manifest.json"
@@ -1180,6 +1191,8 @@ def main() -> int:
         | set(image_manifest_targets)
         | set(preview_changed_cards)
     )
+    if initial_image_fetch_needed:
+        image_fetch_targets.update(all_cardnumbers)
     if args.full_image_refresh:
         image_fetch_targets = set(all_cardnumbers)
 
