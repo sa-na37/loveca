@@ -232,6 +232,272 @@ python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8801 --debug
 
 確認観点: `C` の起動効果を使う。`<(E)>` コストで `energy_active 2 -> 1`、`energy_wait 0 -> 1` になる。後続 pending は `position_change` で、選択肢は元エリアC以外の `L/R`。`L` を選ぶと `PL!SP-bp2-008` が `C -> L`、元Lの `PL!N-bp3-009` が `L -> C` へ入れ替わり、pending は空になる。
 
+### 20260721 Tier 3 P1 completion
+
+※20260721内部確認: P1残件 `PL!S-bp3-006#A01` / `PL!S-bp6-003#A01` / `PL!S-pb1-006#A01` / `PL!-bp5-111#A01` を確認。カード番号専用分岐ではなく、複合起動コスト、ステージ→控え室→元エリア登場、手札LIVE公開コスト、相手任意手札discard、相手ウェイト人数方式の汎用 route と pending resolver へ接続した。engine API で主要分岐を確認し、HTTP API で各カードの代表経路を確認済み。発生源なし・自動効果の無言処理・複合コストの一部落ち・相手個別カードstate要求の再発がないことを確認。
+
+#### PL!S-bp3-006#A01 起動: 自身WAIT+手札discard → 他Aqours控え室 → コスト+2登場
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+unset LLOCG_START_STAGE LLOCG_START_STAGE_L LLOCG_START_STAGE_C LLOCG_START_STAGE_R \
+  LLOCG_START_HAND LLOCG_START_HAND_SIZE LLOCG_START_SHUFFLE \
+  LLOCG_START_GREEN LLOCG_START_SUCCESS LLOCG_START_RESOLVE \
+  LLOCG_START_DECK_TOP LLOCG_START_DECK_EXACT \
+  LLOCG_START_PHASE LLOCG_START_TURN \
+  LLOCG_START_ENERGY_ACTIVE LLOCG_START_ENERGY_WAIT \
+  LLOCG_DEBUG_PRESET LLOCG_DEBUG_EFFECT_CARD LLOCG_START_DEBUG \
+  LLOCG_DEBUG_LIVE_IN_HAND LLOCG_DEBUG_MEMBER_IN_HAND
+export LLOCG_DEBUG_PRESET=effect
+export LLOCG_START_PHASE=MAIN
+export LLOCG_START_TURN=1
+export LLOCG_START_STAGE_C='PL!S-bp3-006'
+export LLOCG_START_STAGE_L='PL!S-bp3-001'
+export LLOCG_START_HAND='PL!S-bp5-111'
+export LLOCG_START_HAND_SIZE=0
+export LLOCG_START_GREEN='PL!S-bp6-006,PL!S-bp3-004'
+export LLOCG_START_DECK_TOP='PL!S-bp5-001,PL!S-bp5-002,PL!S-bp5-003'
+export LLOCG_START_ENERGY_ACTIVE=0
+export LLOCG_START_ENERGY_WAIT=0
+python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8801 --debug
+```
+
+確認観点: 起動直後に `C.active true -> false` となり、自身WAITコストが落ちない。手札discard pending は `source_cn=PL!S-bp3-006` と後続効果を保持する。手札1枚を控え室に置いた後、`L` の他Aqoursを控え室へ置く pending が出る。`PL!S-bp3-001`（コスト15）を選ぶと、控え室候補はコスト17のAqours `PL!S-bp6-006` のみ。選択後、元エリア `L` に登場し、登場時効果も通常通り解決し、pending は空。
+
+#### PL!S-bp6-003#A01 起動: E2+手札discard → 任意で他Aqours控え室 → コスト+2登場
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+unset LLOCG_START_STAGE LLOCG_START_STAGE_L LLOCG_START_STAGE_C LLOCG_START_STAGE_R \
+  LLOCG_START_HAND LLOCG_START_HAND_SIZE LLOCG_START_SHUFFLE \
+  LLOCG_START_GREEN LLOCG_START_SUCCESS LLOCG_START_RESOLVE \
+  LLOCG_START_DECK_TOP LLOCG_START_DECK_EXACT \
+  LLOCG_START_PHASE LLOCG_START_TURN \
+  LLOCG_START_ENERGY_ACTIVE LLOCG_START_ENERGY_WAIT \
+  LLOCG_DEBUG_PRESET LLOCG_DEBUG_EFFECT_CARD LLOCG_START_DEBUG \
+  LLOCG_DEBUG_LIVE_IN_HAND LLOCG_DEBUG_MEMBER_IN_HAND
+export LLOCG_DEBUG_PRESET=effect
+export LLOCG_START_PHASE=MAIN
+export LLOCG_START_TURN=1
+export LLOCG_START_STAGE_C='PL!S-bp6-003'
+export LLOCG_START_STAGE_L='PL!S-bp3-001'
+export LLOCG_START_HAND='PL!S-bp5-111'
+export LLOCG_START_HAND_SIZE=0
+export LLOCG_START_GREEN='PL!S-bp6-006,PL!S-bp3-004'
+export LLOCG_START_DECK_TOP='PL!S-bp5-001,PL!S-bp5-002,PL!S-bp5-003'
+export LLOCG_START_ENERGY_ACTIVE=3
+export LLOCG_START_ENERGY_WAIT=0
+python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8801 --debug
+```
+
+確認観点: 起動直後に `energy_active 3 -> 1`、`energy_wait 0 -> 2` となり、E2コストが手札discard routeに飲まれない。手札discard後のステージ選択 pending は `L` と `skip` を持つ。`skip` では後続なしでpending空。`L` を選ぶと `PL!S-bp3-001` を控え室へ置き、コスト17のAqours `PL!S-bp6-006` だけを候補にし、登場後pending空。
+
+#### PL!S-pb1-006#A01 起動: 手札LIVE公開 → 相手discard分岐 → 自身ブレード4
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+unset LLOCG_START_STAGE LLOCG_START_STAGE_L LLOCG_START_STAGE_C LLOCG_START_STAGE_R \
+  LLOCG_START_HAND LLOCG_START_HAND_SIZE LLOCG_START_SHUFFLE \
+  LLOCG_START_GREEN LLOCG_START_SUCCESS LLOCG_START_RESOLVE \
+  LLOCG_START_DECK_TOP LLOCG_START_DECK_EXACT \
+  LLOCG_START_PHASE LLOCG_START_TURN \
+  LLOCG_START_ENERGY_ACTIVE LLOCG_START_ENERGY_WAIT \
+  LLOCG_DEBUG_PRESET LLOCG_DEBUG_EFFECT_CARD LLOCG_START_DEBUG \
+  LLOCG_DEBUG_LIVE_IN_HAND LLOCG_DEBUG_MEMBER_IN_HAND
+export LLOCG_DEBUG_PRESET=effect
+export LLOCG_START_PHASE=MAIN
+export LLOCG_START_TURN=1
+export LLOCG_START_STAGE_C='PL!S-pb1-006'
+export LLOCG_START_HAND='PL!S-bp5-020,PL!S-bp5-111'
+export LLOCG_START_HAND_SIZE=0
+python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8801 --debug
+```
+
+確認観点: 起動後の公開コスト候補は手札LIVEのみで、MEMBERは候補外。LIVEを公開しても手札から移動しない。後続 pending は `opponent_discard` / `not_discard` を持ち、発生源は `PL!S-pb1-006`。`not_discard` で `C.temp_blade 0 -> 4`、`temp_until=end_of_live`、pending空。`opponent_discard` ではブレード付与なしでpending空。
+
+#### PL!-bp5-111#A01 起動: 手札discard → WAITメンバーアクティブ / 相手WAIT人数方式
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+unset LLOCG_START_STAGE LLOCG_START_STAGE_L LLOCG_START_STAGE_C LLOCG_START_STAGE_R \
+  LLOCG_START_HAND LLOCG_START_HAND_SIZE LLOCG_START_SHUFFLE \
+  LLOCG_START_GREEN LLOCG_START_SUCCESS LLOCG_START_RESOLVE \
+  LLOCG_START_DECK_TOP LLOCG_START_DECK_EXACT \
+  LLOCG_START_PHASE LLOCG_START_TURN \
+  LLOCG_START_ENERGY_ACTIVE LLOCG_START_ENERGY_WAIT \
+  LLOCG_START_OPPONENT_WAIT \
+  LLOCG_DEBUG_PRESET LLOCG_DEBUG_EFFECT_CARD LLOCG_START_DEBUG \
+  LLOCG_DEBUG_LIVE_IN_HAND LLOCG_DEBUG_MEMBER_IN_HAND
+export LLOCG_DEBUG_PRESET=effect
+export LLOCG_START_PHASE=MAIN
+export LLOCG_START_TURN=1
+export LLOCG_START_STAGE_C='PL!-bp5-111'
+export LLOCG_START_HAND='PL!S-bp5-111'
+export LLOCG_START_HAND_SIZE=0
+export LLOCG_START_GREEN='PL!S-bp5-020'
+export LLOCG_START_OPPONENT_WAIT=2
+python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8801 --debug
+```
+
+確認観点: 手札discard後、相手ウェイト人数がある場合は `opponent_wait` 選択肢が出る。`opponent_wait` 選択で `opponent_wait_count 2 -> 1`、pending空。DB文面の「自分の控え室からライブカードを1枚控え室に置く」は同一ゾーン移動のため no-op として明示ログを残す。自分ステージにWAITメンバーがいる場合は、そのエリア選択で自分のメンバーがACTIVEになる。相手個別カードstateを要求しないのは現行正式仕様通り。
+
+### 20260721 Tier 3 runtime P1 remaining completion
+
+※20260721内部確認: `tier3_runtime_reaudit_correction` のP1 12件のうち、未処理だった `PL!N-pb1-003#A01` / `PL!S-bp7-006#A01` を確認。これにより同P1は全件実装/代表経路確認済み。`PL!N-pb1-003` は手札起動汎用 route にEコスト支払いとグループ名対象抽出を追加し、`PL!S-bp7-006` はデッキ下ミル all group member 判定から自身へ一時ハートを付与する汎用 route を追加。どちらもカード番号専用分岐なし。
+
+#### PL!N-pb1-003#A01 手札起動: E2 + 自身控え室 → 1ドロー → 虹ヶ咲メンバーへブレード
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+unset LLOCG_START_STAGE LLOCG_START_STAGE_L LLOCG_START_STAGE_C LLOCG_START_STAGE_R \
+  LLOCG_START_HAND LLOCG_START_HAND_SIZE LLOCG_START_SHUFFLE \
+  LLOCG_START_GREEN LLOCG_START_SUCCESS LLOCG_START_RESOLVE \
+  LLOCG_START_DECK_TOP LLOCG_START_DECK_EXACT \
+  LLOCG_START_PHASE LLOCG_START_TURN \
+  LLOCG_START_ENERGY_ACTIVE LLOCG_START_ENERGY_WAIT \
+  LLOCG_START_OPPONENT_WAIT \
+  LLOCG_DEBUG_PRESET LLOCG_DEBUG_EFFECT_CARD LLOCG_START_DEBUG \
+  LLOCG_DEBUG_LIVE_IN_HAND LLOCG_DEBUG_MEMBER_IN_HAND
+export LLOCG_DEBUG_PRESET=effect
+export LLOCG_START_PHASE=MAIN
+export LLOCG_START_TURN=1
+export LLOCG_START_STAGE_C='PL!N-bp3-009'
+export LLOCG_START_HAND='PL!N-pb1-003'
+export LLOCG_START_HAND_SIZE=0
+export LLOCG_START_DECK_TOP='PL!N-bp4-030,PL!N-bp3-032'
+export LLOCG_START_ENERGY_ACTIVE=3
+export LLOCG_START_ENERGY_WAIT=0
+python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8801 --debug
+```
+
+確認観点: 手札の `PL!N-pb1-003` に起動ボタンが出る。起動後、`energy_active 3 -> 1`、`energy_wait 0 -> 2`、`PL!N-pb1-003` は手札から控え室へ移動し、1ドローする。後続 pending は発生源 `PL!N-pb1-003` 付きで、対象候補はステージの『虹ヶ咲』メンバー `C`。`C` 選択で `temp_blade 0 -> 1`、`temp_until=end_of_live`、pending空。エネルギー不足時は `can_activate_from_hand=false` かつ起動しても手札/控え室は動かない。
+
+#### PL!S-bp7-006#A01 ライブ開始時: デッキ下3枚控え室 → 全Aqours MEMBERなら自身に緑
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+unset LLOCG_START_STAGE LLOCG_START_STAGE_L LLOCG_START_STAGE_C LLOCG_START_STAGE_R \
+  LLOCG_START_HAND LLOCG_START_HAND_SIZE LLOCG_START_SHUFFLE \
+  LLOCG_START_GREEN LLOCG_START_SUCCESS LLOCG_START_RESOLVE \
+  LLOCG_START_DECK_TOP LLOCG_START_DECK_EXACT \
+  LLOCG_START_PHASE LLOCG_START_TURN \
+  LLOCG_START_ENERGY_ACTIVE LLOCG_START_ENERGY_WAIT \
+  LLOCG_START_OPPONENT_WAIT \
+  LLOCG_DEBUG_PRESET LLOCG_DEBUG_EFFECT_CARD LLOCG_START_DEBUG \
+  LLOCG_DEBUG_LIVE_IN_HAND LLOCG_DEBUG_MEMBER_IN_HAND
+export LLOCG_DEBUG_PRESET=effect
+export LLOCG_START_PHASE=LIVE_SET
+export LLOCG_START_TURN=1
+export LLOCG_START_STAGE_C='PL!S-bp7-006'
+export LLOCG_START_HAND='PL!N-bp1-029'
+export LLOCG_START_HAND_SIZE=0
+export LLOCG_START_SHUFFLE=0
+export LLOCG_START_DECK_EXACT='PL!N-bp4-030,PL!N-bp3-032,PL!S-bp5-020,PL!S-bp3-001,PL!S-bp6-006,PL!S-bp3-004'
+python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8801 --debug
+```
+
+確認観点: LIVEをセットしてLIVE_CONFIRMへ進めると、`PL!S-bp7-006 ライブ開始時` が auto_order に出る。解決するとデッキ下3枚 `PL!S-bp3-004,PL!S-bp6-006,PL!S-bp3-001` が控え室へ移動し、全てAqours MEMBERのため `C.temp_hearts.green=1`、`temp_until=end_of_live` になる。Aqours MEMBER以外が混じるnegativeではミルのみ行い、ハート付与なし。
+
+### 20260721 Tier 3 runtime P2 start
+
+※20260721内部確認: `tier3_runtime_reaudit_correction` のP2先頭 `LL-bp2-001#A02` を再監査。過去 evidence は起動のみで、指定名カードが手札にないため実効果解決まで到達していなかった。正規の指定名カード `渡辺曜` / `鬼塚夏美` / `大沢瑠璃乃` を手札に置くコマンドへ補正し、ライブ開始時 auto_order 到達、発生源表示、指定名候補抽出、2枚支払い時の `discarded_count=2` / `C.temp_blade=2`、0枚スキップ時のログあり・ブレード増加なしを確認。監査中に、auto_orderの途中pendingをundoした場合に内部の残auto queueが復元されず、スキップ後に後続自動効果が復帰しない問題を確認したため、undo snapshotへ deferred auto queue/text を保存・復元する汎用修正を追加。カード番号専用分岐なし。
+
+#### LL-bp2-001#A02 ライブ開始時: 指定名手札を任意枚数控え室 → 枚数ぶん自身にブレード
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+unset LLOCG_START_STAGE LLOCG_START_STAGE_L LLOCG_START_STAGE_C LLOCG_START_STAGE_R \
+  LLOCG_START_HAND LLOCG_START_HAND_SIZE LLOCG_START_SHUFFLE \
+  LLOCG_START_GREEN LLOCG_START_SUCCESS LLOCG_START_RESOLVE \
+  LLOCG_START_DECK_TOP LLOCG_START_DECK_EXACT LLOCG_START_DECK_EXACT_STRICT \
+  LLOCG_START_PHASE LLOCG_START_TURN \
+  LLOCG_START_ENERGY_ACTIVE LLOCG_START_ENERGY_WAIT \
+  LLOCG_START_OPPONENT_WAIT \
+  LLOCG_DEBUG_PRESET LLOCG_DEBUG_EFFECT_CARD LLOCG_START_DEBUG \
+  LLOCG_DEBUG_LIVE_IN_HAND LLOCG_DEBUG_MEMBER_IN_HAND
+export LLOCG_DEBUG_PRESET=effect
+export LLOCG_DEBUG_LIVE_IN_HAND=0
+export LLOCG_DEBUG_MEMBER_IN_HAND=0
+export LLOCG_START_PHASE=LIVE_SET
+export LLOCG_START_TURN=1
+export LLOCG_START_STAGE_C='LL-bp2-001'
+export LLOCG_START_STAGE_L=''
+export LLOCG_START_STAGE_R=''
+export LLOCG_START_HAND='PL!S-PR-029,PL!SP-bp1-009,PL!HS-bp2-014,PL!N-bp1-029'
+export LLOCG_START_HAND_SIZE=0
+export LLOCG_START_SHUFFLE=0
+export LLOCG_START_DECK_EXACT='PL!N-bp3-032,PL!S-bp2-026,PL!S-bp2-027,PL!HS-bp2-015,PL!HS-bp2-014,PL!N-bp3-009,LL-bp5-001,PL!SP-bp1-001,PL!S-PR-029,PL!SP-bp4-003'
+export LLOCG_START_DECK_EXACT_STRICT=1
+export LLOCG_START_ENERGY_ACTIVE=4
+export LLOCG_START_ENERGY_WAIT=0
+python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8802 --debug
+```
+
+確認観点: `PL!N-bp1-029` をLIVEセットして `LIVE_CONFIRM` へ進める。次の `next` で auto_order に `C: LL-bp2-001 ライブ開始時` と `PL!N-bp1-029 ライブ開始時` が出る。`LL-bp2-001` を選ぶと、手札選択pendingは発生源 `LL-bp2-001` 付きで、候補は `PL!S-PR-029` / `PL!SP-bp1-009` / `PL!HS-bp2-014` の3枚のみ。`PL!S-PR-029,PL!SP-bp1-009` を選ぶと2枚が控え室へ移動し、`C.temp_blade=2`、`temp_until=end_of_live`、後続auto_order `PL!N-bp1-029` が残る。undoで手札・控え室・ブレード・選択pendingが復帰する。さらに空選択でスキップすると `[SKIP] LL-bp2-001: skipped optional multi-discard cost` が残り、ブレードは増えず、後続auto_order `PL!N-bp1-029 ライブ開始時` が復帰する。
+
+#### PL!-bp3-002#A02 常時: 相手ウェイト状態メンバー1人につきブレード
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+unset LLOCG_START_STAGE LLOCG_START_STAGE_L LLOCG_START_STAGE_C LLOCG_START_STAGE_R \
+  LLOCG_START_HAND LLOCG_START_HAND_SIZE LLOCG_START_SHUFFLE \
+  LLOCG_START_GREEN LLOCG_START_SUCCESS LLOCG_START_RESOLVE \
+  LLOCG_START_DECK_TOP LLOCG_START_DECK_EXACT LLOCG_START_DECK_EXACT_STRICT \
+  LLOCG_START_PHASE LLOCG_START_TURN \
+  LLOCG_START_ENERGY_ACTIVE LLOCG_START_ENERGY_WAIT \
+  LLOCG_START_OPPONENT_WAIT \
+  LLOCG_DEBUG_PRESET LLOCG_DEBUG_EFFECT_CARD LLOCG_START_DEBUG \
+  LLOCG_DEBUG_LIVE_IN_HAND LLOCG_DEBUG_MEMBER_IN_HAND
+export LLOCG_DEBUG_PRESET=effect
+export LLOCG_DEBUG_LIVE_IN_HAND=0
+export LLOCG_DEBUG_MEMBER_IN_HAND=0
+export LLOCG_START_PHASE=MAIN
+export LLOCG_START_TURN=1
+export LLOCG_START_STAGE_C='PL!-bp3-002'
+export LLOCG_START_HAND=''
+export LLOCG_START_HAND_SIZE=0
+export LLOCG_START_SHUFFLE=0
+export LLOCG_START_DECK_EXACT='PL!N-bp1-029,PL!N-bp3-032,PL!S-bp2-026,PL!S-bp2-027,PL!HS-bp2-015,PL!HS-bp2-014,PL!N-bp3-009,LL-bp5-001'
+export LLOCG_START_DECK_EXACT_STRICT=1
+export LLOCG_START_ENERGY_ACTIVE=4
+export LLOCG_START_ENERGY_WAIT=0
+export LLOCG_START_OPPONENT_WAIT=0
+python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8802 --debug
+```
+
+確認観点: 初期 `opponent_wait_count=0` では `C.always_blade_bonus=0`。UI/APIの正式な相手ウェイト人数入力で `opponent_wait_delta +2` を送ると `opponent_wait_count=2`、`C.always_blade_bonus=2` になる。undoで `opponent_wait_count=0` と `C.always_blade_bonus=0` に戻る。相手個別カードstateの不在は現行正式仕様のため不具合扱いしない。
+
+#### PL!-bp4-002#A01 常時: 開始時/成功時を持たないライブ中LIVEがあるかぎり紫+2
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+unset LLOCG_START_STAGE LLOCG_START_STAGE_L LLOCG_START_STAGE_C LLOCG_START_STAGE_R \
+  LLOCG_START_HAND LLOCG_START_HAND_SIZE LLOCG_START_SHUFFLE \
+  LLOCG_START_GREEN LLOCG_START_SUCCESS LLOCG_START_RESOLVE \
+  LLOCG_START_DECK_TOP LLOCG_START_DECK_EXACT LLOCG_START_DECK_EXACT_STRICT \
+  LLOCG_START_PHASE LLOCG_START_TURN \
+  LLOCG_START_ENERGY_ACTIVE LLOCG_START_ENERGY_WAIT \
+  LLOCG_START_OPPONENT_WAIT \
+  LLOCG_DEBUG_PRESET LLOCG_DEBUG_EFFECT_CARD LLOCG_START_DEBUG \
+  LLOCG_DEBUG_LIVE_IN_HAND LLOCG_DEBUG_MEMBER_IN_HAND
+export LLOCG_DEBUG_PRESET=effect
+export LLOCG_DEBUG_LIVE_IN_HAND=0
+export LLOCG_DEBUG_MEMBER_IN_HAND=0
+export LLOCG_START_PHASE=LIVE_SET
+export LLOCG_START_TURN=1
+export LLOCG_START_STAGE_C='PL!-bp4-002'
+export LLOCG_START_HAND='PL!N-bp3-032,PL!N-bp1-029'
+export LLOCG_START_HAND_SIZE=0
+export LLOCG_START_SHUFFLE=0
+export LLOCG_START_DECK_EXACT='PL!S-bp2-026,PL!S-bp2-027,PL!HS-bp2-015,PL!HS-bp2-014,PL!N-bp3-009,LL-bp5-001'
+export LLOCG_START_DECK_EXACT_STRICT=1
+export LLOCG_START_ENERGY_ACTIVE=4
+export LLOCG_START_ENERGY_WAIT=0
+python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8802 --debug
+```
+
+確認観点: `PL!N-bp3-032`（<ライブ開始時>/<ライブ成功時>なし）をLIVEセットすると、`C.always_hearts_bonus.purple=2` になる。undo後、`PL!N-bp1-029`（<ライブ開始時>あり）をLIVEセットした場合は `C.always_hearts_bonus={}` のまま。監査中、BODY常時blobが `<紫>` と `<ライブ開始時>` / `<ライブ成功時>` の表記を正規化できず、条件を満たしても紫+2が出ない問題を確認したため、BODY常時共通イテレータのアイコン正規化と能力ラベル有無の両対応を追加。
+
 ### 2026-07-20 パブリックウィンドウ UI / 非公開領域 redaction smoke
 
 ※20260720内部確認: パブリックウィンドウの表示経路を確認。公開 view state は手札・山札のカード番号を渡さず `hand_count` / `deck_count` のみを残す。ライブカード置き場は `LIVE_CONFIRM` かつ `live_start_prompted=false` の間だけ `__BACK__` に置換し、`LIVE_PERF` 以降は実カード番号を公開する。pending 内の非公開カード番号は `__BACK__` または `非公開カード` に置換する。UI 側では公開手札、山札、裏向きライブカード、非公開 pending カードのすべてが `/img?cn=__BACK__` 経由で `back.png` を表示する。古い CSS マスク `publicMaskCard` は未使用かつ back.png ではないため削除済み。公開/メイン画面の差分は、公開ビューの読み取り専用表示と非公開領域のカード redaction に限定する方針で確認。
