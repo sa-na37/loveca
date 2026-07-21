@@ -21,7 +21,7 @@ BUILD_TAG is intentionally visible for delivery verification.
 
 from __future__ import annotations
 
-BUILD_TAG = "unbuffered_image_fetch_progress_20260721a"
+BUILD_TAG = "reprint_image_targets_in_update_20260721a"
 
 import argparse
 import csv
@@ -41,6 +41,16 @@ RARITY_SUFFIXES = {
     "SEC", "SEC2", "SECL", "SRL", "DUO", "AR", "RM", "RE", "PE", "PE2",
     "SECE", "LLE",
 }
+RARITY_ALIASES = {
+    "R+": "R2", "R＋": "R2",
+    "L+": "L2", "L＋": "L2",
+    "P+": "P2", "P＋": "P2",
+    "PE+": "PE2", "PE＋": "PE2",
+    "SEC+": "SEC2", "SEC＋": "SEC2",
+    "PR+": "PR2", "PR＋": "PR2",
+}
+REPRINT_IMAGE_RARITIES = {"RM", "SECL", "L2", "SRL"}
+CARD_RARITY_TAIL_RE = re.compile(r"^(?P<base>.+?)[-_\s](?P<rarity>[A-Za-z0-9＋\+]{1,8})$")
 
 PB_PREFIX_TO_PRODUCT = {
     "PL!HS": "PBHS",
@@ -528,6 +538,22 @@ def is_prerelease_card(cardno: str, *, release_dates: Dict[str, date], as_of: da
     return bool(release_day and as_of < release_day)
 
 
+def normalize_rarity_token(value: str) -> str:
+    rarity = str(value or "").strip().upper().replace("＋", "+")
+    return RARITY_ALIASES.get(rarity, rarity)
+
+
+def split_display_card_and_rarity(value: str) -> Tuple[str, str]:
+    raw = str(value or "").strip()
+    match = CARD_RARITY_TAIL_RE.match(raw)
+    if not match:
+        return raw, ""
+    rarity = normalize_rarity_token(match.group("rarity"))
+    if rarity not in RARITY_SUFFIXES:
+        return raw, ""
+    return match.group("base").strip(), rarity
+
+
 def scan_image_cardnumbers(root: Path) -> set[str]:
     """Scan an image tree once and recover canonical cardnumbers from filenames."""
     if not root.is_dir():
@@ -544,6 +570,74 @@ def scan_image_cardnumbers(root: Path) -> set[str]:
         if match:
             canonical, _rarity = canonical_cardnumber(match.group(1))
             out.add(canonical)
+    return out
+
+
+def scan_image_rarity_pairs(root: Path) -> set[Tuple[str, str]]:
+    if not root.is_dir():
+        return set()
+    pattern = re.compile(
+        r"^(.+-(?:bp|pb|sd|cl)\d+-\d{3}|.+-PR-\d{3})-([A-Za-z0-9]+)$",
+        flags=re.IGNORECASE,
+    )
+    out: set[Tuple[str, str]] = set()
+    for path in root.rglob("*"):
+        if not path.is_file() or path.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp"}:
+            continue
+        match = pattern.match(path.stem)
+        if not match:
+            continue
+        canonical, _old_rarity = canonical_cardnumber(match.group(1))
+        rarity = normalize_rarity_token(match.group(2))
+        if rarity:
+            out.add((canonical, rarity))
+    return out
+
+
+def cached_reprint_image_targets(
+    *,
+    cache_dir: Path,
+    wanted_cardnumbers: Iterable[str],
+    existing_pairs: set[Tuple[str, str]],
+) -> set[str]:
+    if not cache_dir.is_dir():
+        return set()
+    try:
+        from bs4 import BeautifulSoup
+    except Exception:
+        return set()
+
+    wanted = {str(cardno or "").strip() for cardno in wanted_cardnumbers if str(cardno or "").strip()}
+    needles = tuple(f"-{rarity}.png" for rarity in REPRINT_IMAGE_RARITIES)
+    out: set[str] = set()
+    candidate_count = 0
+
+    for path in sorted(cache_dir.glob("*.html")):
+        try:
+            html = path.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            continue
+        if not any(needle in html for needle in needles):
+            continue
+        soup = BeautifulSoup(html, "lxml")
+        for node in soup.select("[card]"):
+            cardno, rarity = split_display_card_and_rarity(str(node.get("card") or ""))
+            cardno = cardno.strip()
+            rarity = normalize_rarity_token(rarity)
+            if cardno not in wanted or rarity not in REPRINT_IMAGE_RARITIES:
+                continue
+            img = node.find("img")
+            src = str(img.get("src") or "") if img else ""
+            if not src or not any(needle in src for needle in needles):
+                continue
+            candidate_count += 1
+            if (cardno, rarity) not in existing_pairs:
+                out.add(cardno)
+
+    print(
+        "[REPRINT-IMAGE-TARGETS] "
+        f"cached_candidates={candidate_count} missing_cards={len(out)}"
+    )
     return out
 
 
@@ -1049,7 +1143,17 @@ def main() -> int:
     today = date.today()
     base_image_manifest = dbdir / "official_image_manifest.json"
     canonical_image_cards_at_start = scan_image_cardnumbers(canonical_image_dir)
+    canonical_image_rarity_pairs_at_start = scan_image_rarity_pairs(canonical_image_dir)
     initial_image_fetch_needed = not canonical_image_cards_at_start
+    reprint_image_targets = cached_reprint_image_targets(
+        cache_dir=cache_dir,
+        wanted_cardnumbers=[
+            cardno
+            for cardno in all_cardnumbers
+            if not is_prerelease_card(cardno, release_dates=release_dates, as_of=today)
+        ],
+        existing_pairs=canonical_image_rarity_pairs_at_start,
+    )
 
     if args.full_image_refresh or not base_image_manifest.exists():
         image_manifest_targets = {
@@ -1072,11 +1176,14 @@ def main() -> int:
             if cardno in preview_image_cards and cardno not in canonical_image_cards:
                 image_manifest_targets.add(cardno)
         image_manifest_mode = "incremental"
+    image_manifest_targets.update(reprint_image_targets)
 
     print(
         "[IMAGE-MANIFEST-MODE] "
         f"mode={image_manifest_mode} targets={len(image_manifest_targets)} "
-        f"new_cards={len(new_cardnumbers)} base_manifest={base_image_manifest.exists()}"
+        f"new_cards={len(new_cardnumbers)} "
+        f"reprint_missing={len(reprint_image_targets)} "
+        f"base_manifest={base_image_manifest.exists()}"
     )
     if initial_image_fetch_needed:
         print(
@@ -1205,6 +1312,7 @@ def main() -> int:
         set(new_cardnumbers)
         | set(image_manifest_targets)
         | set(preview_changed_cards)
+        | set(reprint_image_targets)
     )
     if initial_image_fetch_needed:
         image_fetch_targets.update(all_cardnumbers)

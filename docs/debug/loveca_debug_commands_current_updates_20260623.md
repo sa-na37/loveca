@@ -2011,3 +2011,37 @@ PY
 ```
 
 ※20260721内部確認: 外部通信なしの既存HTTPキャッシュ確認。実画像のHTTP取得は実機更新時に `[IMAGE-FETCH-START] reprint_cache_cards=...` が出る状態で確認する。
+
+### 2026-07-21 reprint image targets in update pipeline
+
+実装内容:
+
+- DB更新パイプライン側で、公式カードリストHTMLキャッシュ内の RM / SECL / L2 / SRL 画像候補を確認するようにした。
+- 通常更新で `new_cards=0` かつ `official_manifest_targets=0` の場合でも、再録系画像候補があり、該当レアリティ画像が未取得なら `image_manifest_targets` / `image_fetch_targets` へ追加する。
+- 更新ログに `[REPRINT-IMAGE-TARGETS] cached_candidates=N missing_cards=M` と `[IMAGE-MANIFEST-MODE] ... reprint_missing=M ...` が出るようにした。`M>0` なら画像取得フェーズがスキップされない。
+
+確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./llocg_update_database.py
+
+python3 - <<'PY'
+from pathlib import Path
+import llocg_update_database as upd
+pairs=upd.scan_image_rarity_pairs(Path('llocg_db_out_full/card_images'))
+targets=upd.cached_reprint_image_targets(
+    cache_dir=Path('llocg_db_out_full/_http_cache'),
+    wanted_cardnumbers={'PL!S-bp5-021','PL!-bp3-020','PL!N-bp3-028','PL!SP-bp1-025'},
+    existing_pairs=pairs,
+)
+assert 'PL!S-bp5-021' in targets or ('PL!S-bp5-021','SECL') in pairs
+assert 'PL!-bp3-020' in targets or ('PL!-bp3-020','SECL') in pairs
+print('OK reprint missing target detection')
+PY
+
+git diff --check -- llocg_update_database.py
+```
+
+※20260721内部確認: ローカルキャッシュでは `cached_candidates=10 missing_cards=3` を確認。実機では更新ログに `reprint_missing` が表示され、未取得再録画像がある場合は `IMAGE-FETCH-MODE targets=0` で止まらない想定。
