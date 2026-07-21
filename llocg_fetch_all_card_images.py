@@ -23,7 +23,7 @@ Runtime contract:
 """
 from __future__ import annotations
 
-BUILD_TAG = "image_fetch_progress_logging_20260721a"
+BUILD_TAG = "cached_reprint_image_fetch_20260721a"
 
 import argparse
 import datetime as dt
@@ -40,6 +40,11 @@ try:
     import requests
 except Exception:
     requests = None  # type: ignore
+
+try:
+    from bs4 import BeautifulSoup
+except Exception:
+    BeautifulSoup = None  # type: ignore
 
 BASE_URL = "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist"
 
@@ -90,6 +95,7 @@ RARITY_ALIAS = {
     "SEC+": "SEC2", "SEC＋": "SEC2",
     "PR+": "PR2", "PR＋": "PR2",
 }
+CARD_RARITY_TAIL_RE = re.compile(r"^(?P<base>.+?)[-_\s](?P<rarity>[A-Za-z0-9＋\+]{1,8})$")
 
 BP_RE = re.compile(r"(?:^|-)bp([1-9][0-9]*)(?:-|$)", re.IGNORECASE)
 SD_RE = re.compile(r"(?:^|-)sd([0-9]+)(?:-|$)", re.IGNORECASE)
@@ -134,6 +140,26 @@ def _sanitize_rarities(items: List[str]) -> List[str]:
             if re.fullmatch(r"[A-Z0-9\+]{1,8}", p):
                 out.append(p)
     return _uniq_keep_order(out)
+
+
+def _split_display_card_and_rarity(display_card: str) -> Tuple[str, str]:
+    s = (display_card or "").strip()
+    m = CARD_RARITY_TAIL_RE.match(s)
+    if not m:
+        return s, ""
+    rarity = _normalize_rarity_token(m.group("rarity"))
+    if rarity not in set(DEFAULT_RARITIES):
+        return s, ""
+    return m.group("base").strip(), rarity
+
+
+def _infer_rarity_from_filename(filename: str) -> str:
+    stem = Path(urllib.parse.unquote(filename or "")).stem
+    parts = [part for part in re.split(r"[-_\s]+", stem) if part]
+    if len(parts) < 2:
+        return ""
+    rarity = _normalize_rarity_token(parts[-1])
+    return rarity if rarity in set(DEFAULT_RARITIES) else ""
 
 
 def load_rarities(root: Path, outdir: Path, extra_cli: Optional[str]) -> List[str]:
@@ -414,10 +440,66 @@ def _rarity_mid_token(rarity: str) -> str:
     return r
 
 
+def _folder_product_token(folder: str, family: str) -> str:
+    f = (folder or "").strip().upper()
+    if family == "bp":
+        m = re.fullmatch(r"BP([0-9]{2})", f)
+        return f"bp{int(m.group(1))}" if m else ""
+    if family == "pb":
+        m = re.fullmatch(r"(PB[A-Z]+)([0-9]{2})?", f)
+        if not m:
+            return ""
+        suffix = m.group(2)
+        return f"pb{int(suffix)}" if suffix else "pb1"
+    if family == "sd":
+        m = re.search(r"SD([0-9]{2})$", f)
+        return f"sd{int(m.group(1))}" if m else ""
+    if family == "cl":
+        m = re.search(r"([0-9]{2})$", f)
+        return f"cl{int(m.group(1))}" if m else ""
+    return ""
+
+
+def _replace_cardno_product_token(cardno: str, folder: str) -> str:
+    replacements = [
+        ("bp", BP_RE),
+        ("pb", PB_RE),
+        ("sd", SD_RE),
+        ("cl", CL_RE),
+    ]
+    for family, pattern in replacements:
+        m = pattern.search(cardno)
+        if not m:
+            continue
+        folder_token = _folder_product_token(folder, family)
+        if not folder_token:
+            return ""
+        original = m.group(0)
+        prefix = "-" if original.startswith("-") else ""
+        suffix = "-" if original.endswith("-") else ""
+        return cardno[:m.start()] + prefix + folder_token + suffix + cardno[m.end():]
+    return ""
+
+
+def _drop_trailing_card_number(cardno: str) -> str:
+    return re.sub(r"-[0-9]{3}(?:-[A-Za-z0-9]+)?$", "", cardno)
+
+
 def remote_filename_variants(folder: str, cardno: str, rarity: str) -> List[str]:
     folder_u = (folder or "").strip().upper()
     r = _normalize_rarity_token(rarity)
-    out: List[str] = [f"{cardno}-{r}.png"]
+    stems = [cardno]
+    folder_cardno = _replace_cardno_product_token(cardno, folder_u)
+    if folder_cardno:
+        stems.append(folder_cardno)
+
+    if r in REPRINT_FOLDER_SCAN_RARITIES:
+        for stem in list(stems):
+            dropped = _drop_trailing_card_number(stem)
+            if dropped and dropped != stem:
+                stems.append(dropped)
+
+    out: List[str] = [f"{stem}-{r}.png" for stem in _uniq_keep_order(stems)]
 
     # Official PR image filename exception:
     # PL!N-PR-022-PR is published with a SAMPLE prefix immediately before
@@ -480,6 +562,88 @@ def load_preview_manifest(path: Path) -> Dict[str, List[Dict[str, Any]]]:
         for cn, entries in cards.items():
             if isinstance(cn, str) and isinstance(entries, list):
                 out[_norm_cardno_for_filename(cn)] = [e for e in entries if isinstance(e, dict)]
+    return out
+
+
+def _cached_reprint_image_index(
+    root: Path,
+    target_cardnos: Sequence[str],
+) -> Dict[str, List[Dict[str, Any]]]:
+    if BeautifulSoup is None:
+        return {}
+    cache_dir = root / "_http_cache"
+    if not cache_dir.is_dir():
+        return {}
+    target_set = {_norm_cardno_for_filename(cardno) for cardno in target_cardnos}
+    needles = tuple(f"-{rarity}.png" for rarity in REPRINT_FOLDER_SCAN_RARITIES)
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    seen: set[Tuple[str, str, str]] = set()
+
+    for path in sorted(cache_dir.glob("*.html")):
+        try:
+            html = path.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            continue
+        if not any(needle in html for needle in needles):
+            continue
+        soup = BeautifulSoup(html, "lxml")
+        for node in soup.select("[card]"):
+            display_card = str(node.get("card") or "").strip()
+            cardno, display_rarity = _split_display_card_and_rarity(display_card)
+            cardno = _norm_cardno_for_filename(cardno)
+            if cardno not in target_set:
+                continue
+            img = node.find("img")
+            src = str(img.get("src") or "").strip() if img else ""
+            if not src or not any(needle in src for needle in needles):
+                continue
+            url = urllib.parse.urljoin("https://llofficial-cardgame.com", src)
+            parsed = urllib.parse.urlparse(url)
+            remote_filename = Path(urllib.parse.unquote(parsed.path)).name
+            rarity = _infer_rarity_from_filename(remote_filename) or display_rarity
+            rarity = _normalize_rarity_token(rarity)
+            if rarity not in REPRINT_FOLDER_SCAN_RARITIES:
+                continue
+            folder = ""
+            mm = re.search(r"/cardlist/([^/]+)/[^/]+$", parsed.path)
+            if mm:
+                folder = mm.group(1)
+            if not folder or not remote_filename:
+                continue
+            key = (cardno, rarity, remote_filename)
+            if key in seen:
+                continue
+            seen.add(key)
+            out.setdefault(cardno, []).append({
+                "cardnumber": cardno,
+                "rarity_display": display_rarity,
+                "rarity_norm": rarity,
+                "folder": folder,
+                "remote_filename": remote_filename,
+                "exact_url": url,
+                "source": "http_cache_reprint_index",
+            })
+    return out
+
+
+def _merge_manifest_entries(
+    base_entries: Sequence[Dict[str, Any]],
+    extra_entries: Sequence[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    seen: set[Tuple[str, str, str]] = set()
+    for entry in list(base_entries) + list(extra_entries):
+        if not isinstance(entry, dict):
+            continue
+        key = (
+            _normalize_rarity_token(str(entry.get("rarity_norm", "") or "")),
+            str(entry.get("folder", "") or ""),
+            str(entry.get("remote_filename", "") or entry.get("exact_url", "") or ""),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(dict(entry))
     return out
 
 
@@ -849,11 +1013,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     manifest = load_official_manifest(root)
     preview_manifest = load_preview_manifest(preview_manifest_path)
+    reprint_cache_index = _cached_reprint_image_index(
+        root,
+        [
+            _norm_cardno_for_filename(str(rec.get("cardnumber", "") or "").strip())
+            for rec in target_records
+        ],
+    )
     progress_every = max(1, int(args.progress_every or 1))
     _log(
         "[IMAGE-FETCH-START] "
         f"targets={len(target_records)} outdir={outdir} preview={preview_outdir} "
         f"manifest={bool(manifest)} preview_manifest={bool(preview_manifest)} "
+        f"reprint_cache_cards={len(reprint_cache_index)} "
         f"progress_every={progress_every}"
     )
 
@@ -881,7 +1053,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     for i, rec in enumerate(target_records, 1):
         cardno = _norm_cardno_for_filename(rec["cardnumber"].strip())
-        manifest_entries = manifest.get(cardno, [])
+        manifest_entries = _merge_manifest_entries(
+            manifest.get(cardno, []),
+            reprint_cache_index.get(cardno, []),
+        )
         preview_entries = preview_manifest.get(cardno, [])
         pre = prerelease_info(cardno, as_of, product_release_dates)
         if manifest_entries:

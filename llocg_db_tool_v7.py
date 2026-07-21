@@ -19,7 +19,7 @@ Deps:
 
 from __future__ import annotations
 
-BUILD_TAG = "reprint_image_manifest_cardno_enrichment_20260721a"
+BUILD_TAG = "cached_reprint_image_manifest_enrichment_20260721a"
 
 import argparse
 import csv
@@ -736,6 +736,43 @@ def parse_official_cardlist_items(
     return items
 
 
+def parse_cached_official_reprint_items(
+    cache_dir: Path,
+    wanted_cardnos: Set[str],
+) -> List[Dict[str, Any]]:
+    items: List[Dict[str, Any]] = []
+    if not cache_dir.is_dir():
+        return items
+    needles = tuple(f"-{rarity}.png" for rarity in OFFICIAL_REPRINT_IMAGE_RARITIES)
+    seen: Set[Tuple[str, str, str]] = set()
+    for path in sorted(cache_dir.glob("*.html")):
+        try:
+            html = path.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            continue
+        if not any(needle in html for needle in needles):
+            continue
+        for item in parse_official_cardlist_items(
+            html,
+            "CACHE",
+            wanted_cardnos=wanted_cardnos,
+        ):
+            rarity = official_normalize_rarity_token(str(item.get("rarity_norm", "") or ""))
+            if rarity not in OFFICIAL_REPRINT_IMAGE_RARITIES:
+                continue
+            key = (
+                str(item.get("cardnumber", "")),
+                rarity,
+                str(item.get("remote_filename", "")),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            item["source"] = "official_cached_reprint_scan"
+            items.append(item)
+    return items
+
+
 def extract_official_max_page(html: str) -> int:
     m = re.search(r"max_page\s*=\s*([0-9]+)", html)
     if not m:
@@ -935,6 +972,19 @@ def cmd_official_image_manifest(
             "variants": variants,
         }
 
+    cached_reprint_items = parse_cached_official_reprint_items(cache_dir, wanted_set)
+    cached_reprint_before = sum(len(x) for x in cards_map.values())
+    push_items(cached_reprint_items)
+    cached_reprint_added = max(
+        0,
+        sum(len(x) for x in cards_map.values()) - cached_reprint_before,
+    )
+    print(
+        "[IMAGE-MANIFEST] "
+        f"cached_reprint_scan candidates={len(cached_reprint_items)} "
+        f"added={cached_reprint_added}"
+    )
+
     missing_after_expansion = [cn for cn in wanted_cardnos if cn not in cards_map]
     if per_card_fallback and missing_after_expansion:
         print(
@@ -1007,6 +1057,8 @@ def cmd_official_image_manifest(
             "cards_with_additions": reprint_enrichment_targets,
             "entries_added": reprint_enrichment_added,
             "rarities": sorted(OFFICIAL_REPRINT_IMAGE_RARITIES),
+            "cached_scan_candidates": len(cached_reprint_items),
+            "cached_scan_added": cached_reprint_added,
         },
         "expansions": expansions_summary,
         "cards": {

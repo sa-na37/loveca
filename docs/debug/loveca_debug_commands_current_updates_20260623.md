@@ -1960,3 +1960,54 @@ PY
 ```
 
 ※20260721内部確認: 実画像取得は外部通信と時間を伴うためここではヘルプと呼び出し変換を確認。実機更新では `[IMAGE-FETCH-START]` と `[IMAGE-FETCH-PROGRESS]` が更新ログへ表示される想定。
+
+### 2026-07-21 cached reprint image route for RM / SECL / L2 / SRL
+
+実装内容:
+
+- RM / SECL / L2 / SRL を再録系画像レアリティとして扱い、通常画像の取得成功とは別ルートで補足できるようにした。
+- `llocg_db_tool_v7.py` の official image manifest 生成時、既存HTTPキャッシュ内の公式カードリストHTMLを走査し、`card` 属性と画像URLから再録系画像を逆引きしてmanifestへ補強するようにした。
+- `llocg_fetch_all_card_images.py` でも同じくHTTPキャッシュ逆引きを行い、manifest未更新でも `PL!S-bp5-021 -> BP05/PL!S-bp5-SECL.png` のような番号省略URLを直接取得候補へ追加するようにした。
+- 再録系画像の推測URLでは、カード番号内の product token を画像フォルダ側へ合わせた候補も試す。例: `BP05 + PL!S-bp3-021 + SECL` から `PL!S-bp5-021-SECL.png` と `PL!S-bp5-SECL.png` を追加する。
+
+確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./llocg_fetch_all_card_images.py ./llocg_db_tool_v7.py
+
+python3 - <<'PY'
+from llocg_fetch_all_card_images import remote_filename_variants
+cases=[
+ ('BP05','PL!S-bp3-021','SECL','PL!S-bp5-SECL.png'),
+ ('BP05','PL!S-bp3-021','SECL','PL!S-bp5-021-SECL.png'),
+ ('BP05','PL!-bp3-020','SECL','PL!-bp5-SECL.png'),
+ ('PBSP','PL!SP-bp1-025','L2','PL!SP-bp1-025-L2.png'),
+]
+for folder, cardno, rarity, expected in cases:
+    got=remote_filename_variants(folder, cardno, rarity)
+    assert expected in got, (expected, got)
+print('OK reprint filename variants')
+PY
+
+python3 - <<'PY'
+from pathlib import Path
+from llocg_fetch_all_card_images import _cached_reprint_image_index
+idx=_cached_reprint_image_index(Path('llocg_db_out_full'), ['PL!S-bp5-021','PL!-bp3-020','PL!N-bp3-028','PL!SP-bp1-025'])
+assert any(e['rarity_norm']=='SECL' and e['remote_filename']=='PL!S-bp5-SECL.png' for e in idx['PL!S-bp5-021'])
+assert any(e['rarity_norm']=='SECL' and e['remote_filename']=='PL!-bp3-SECL.png' for e in idx['PL!-bp3-020'])
+print('OK cached reprint index')
+PY
+
+python3 - <<'PY'
+from pathlib import Path
+import llocg_db_tool_v7 as db
+items=db.parse_cached_official_reprint_items(Path('llocg_db_out_full/_http_cache'), {'PL!S-bp5-021','PL!-bp3-020','PL!N-bp3-028','PL!SP-bp1-025'})
+assert any(item['cardnumber']=='PL!S-bp5-021' and item['remote_filename']=='PL!S-bp5-SECL.png' for item in items)
+assert any(item['cardnumber']=='PL!-bp3-020' and item['remote_filename']=='PL!-bp3-SECL.png' for item in items)
+print('OK db cached manifest enrichment parser')
+PY
+```
+
+※20260721内部確認: 外部通信なしの既存HTTPキャッシュ確認。実画像のHTTP取得は実機更新時に `[IMAGE-FETCH-START] reprint_cache_cards=...` が出る状態で確認する。
