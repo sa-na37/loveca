@@ -23,7 +23,7 @@ Runtime contract:
 """
 from __future__ import annotations
 
-BUILD_TAG = "fetch_card_images_reprint_folder_scan_20260715al"
+BUILD_TAG = "fetch_reprint_rarity_mismatch_expansion_20260721a"
 
 import argparse
 import datetime as dt
@@ -365,6 +365,18 @@ def reprint_folder_candidates(
             folder
             for folder in list(base_folders) + KNOWN_FOLDERS + registry_folders
             if folder
+        ]
+    )
+
+
+def _manifest_reprint_rarities(entries: Sequence[Dict[str, Any]]) -> List[str]:
+    return _uniq_keep_order(
+        [
+            rarity
+            for rarity in _sanitize_rarities(
+                [str(e.get("rarity_norm", "") or "") for e in entries if isinstance(e, dict)]
+            )
+            if rarity in REPRINT_FOLDER_SCAN_RARITIES
         ]
     )
 
@@ -868,10 +880,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
         per_card_results: List[TryResult] = []
         card_had_success = False
+        successful_rarities: set[str] = set()
+        manifest_reprint_rarities = _manifest_reprint_rarities(manifest_entries)
 
         # 1) exact manifest URLs
         if manifest_entries:
-            for entry in manifest_entries:
+            for entry_index, entry in enumerate(manifest_entries):
+                entry_rarity = _normalize_rarity_token(str(entry.get("rarity_norm", "") or ""))
                 tr = try_manifest_entry(
                     sess=sess,
                     cardno=cardno,
@@ -885,12 +900,25 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 per_card_results.append(tr)
                 if tr.ok:
                     card_had_success = True
+                    if tr.rarity:
+                        successful_rarities.add(_normalize_rarity_token(tr.rarity))
                     if tr.status == "SKIP_EXISTS":
                         skip_files += 1
                     else:
                         ok_files += 1
                     manifest_success += 1
-                    if (not args.all_rarities) and tr.status != "SKIP_EXISTS":
+                    remaining_reprints = {
+                        rarity
+                        for rarity in manifest_reprint_rarities
+                        if rarity not in successful_rarities
+                    }
+                    current_is_reprint = entry_rarity in REPRINT_FOLDER_SCAN_RARITIES
+                    if (
+                        (not args.all_rarities)
+                        and tr.status != "SKIP_EXISTS"
+                        and not current_is_reprint
+                        and not remaining_reprints
+                    ):
                         break
                 else:
                     fail_attempts += 1
@@ -948,16 +976,29 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             skipped_prerelease += 1
             _log(f"[SKIP_PRE_RELEASE] {cardno} product={product} release={release_date.isoformat()} no usable exact/preview image")
 
-        # 4) heuristic fallback only if manifest/preview absent or unsuccessful, and
-        # prerelease safety did not block guessed URL probing.
-        if (not card_had_success) and (not skip_heuristic_for_prerelease):
+        missing_manifest_reprint_rarities = [
+            rarity
+            for rarity in manifest_reprint_rarities
+            if rarity not in successful_rarities
+        ]
+
+        # 4) heuristic fallback if manifest/preview is absent or unsuccessful.
+        # Reprint/parallel rarities are different: a normal rarity image can
+        # succeed while the reprint image lives under a folder that does not
+        # match the card number's expansion token.  In that case, keep probing
+        # only the still-missing reprint rarities across known product folders.
+        probe_missing_reprints = bool(card_had_success and missing_manifest_reprint_rarities)
+        if ((not card_had_success) or missing_manifest_reprint_rarities) and (not skip_heuristic_for_prerelease):
             folders = []
             if manifest_entries:
                 folders.extend([str(e.get("folder", "") or "") for e in manifest_entries if str(e.get("folder", "") or "")])
             folders.extend(folder_candidates_for_cardno(cardno))
             folders = _uniq_keep_order([f for f in folders if f])
 
-            rarities = family_rarities(cardno, global_rarities, manifest_entries=manifest_entries)
+            if card_had_success and missing_manifest_reprint_rarities:
+                rarities = missing_manifest_reprint_rarities
+            else:
+                rarities = family_rarities(cardno, global_rarities, manifest_entries=manifest_entries)
             chosen_folder = None
 
             normal_folders = list(folders)
@@ -970,6 +1011,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
             for rarity in rarities:
                 rarity_norm = _normalize_rarity_token(rarity)
+                rarity_had_success = False
                 rarity_folders = (
                     reprint_folders
                     if rarity_norm in REPRINT_FOLDER_SCAN_RARITIES
@@ -993,6 +1035,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
                     if tr.ok:
                         card_had_success = True
+                        rarity_had_success = True
+                        if tr.rarity:
+                            successful_rarities.add(_normalize_rarity_token(tr.rarity))
                         successful_folder = successful_folder or folder
                         chosen_folder = chosen_folder or folder
                         if tr.status == "SKIP_EXISTS":
@@ -1008,7 +1053,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     if tr.status != "SKIP_EXISTS":
                         time.sleep(args.sleep + random.random() * args.jitter)
 
-                if card_had_success and not args.all_rarities:
+                if probe_missing_reprints:
+                    continue
+                if rarity_had_success and not args.all_rarities:
                     break
 
             if not card_had_success:

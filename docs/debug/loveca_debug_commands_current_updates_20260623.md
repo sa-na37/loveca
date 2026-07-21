@@ -63,6 +63,27 @@ git diff --check -- README.md _codex_outputs/github_release/loveca-release-notes
 - アプリ側 `no_image_path()` が `NoImage.PNG` を返すことを確認。
 - 公開用zip3種は画像0件、README内に `SHA256SUMS` 表記なし、RM修正BUILD_TAG入り。
 
+### 20260721 reprint rarity image fetch expansion mismatch hotfix
+
+※20260721内部確認: 再録/並行レアリティ画像の取得時に、画像URLのエキスパンションフォルダとカード番号内のエキスパンション部が一致しないことで `RM` / `SECL` / `L+` 相当画像を取り逃がす可能性を確認して修正。原因は、manifest処理が通常画像1枚の成功で打ち切られ、同一カード番号の再録系manifest entryを処理しない場合があること、およびmanifest entryが失敗した場合に「通常画像成功済み」のためフォルダ横断heuristicへ進まないこと。修正後は `L2` / `SECL` / `RM` / `SRL` を再録系として扱い、manifestに載っている再録系レアリティは通常画像成功後も処理する。再録系manifest entryが失敗した場合は、カード番号由来フォルダだけでなく既知フォルダ/商品registryフォルダを横断して不足レアリティだけ再探索する。manifest生成側も、更新対象が120枚以下のときカード番号検索で再録系画像を補完し、画像URL側の実フォルダを保存する。
+
+確認コマンド:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+python3 -m py_compile ./llocg_db_tool_v7.py ./llocg_fetch_all_card_images.py ./llocg_update_database.py
+```
+
+内部smoke結果:
+
+- `infer_rarity_from_filename('PL!N-bp1-001_RM.png') -> RM`
+- `infer_rarity_from_filename('PL!S-bp5-SECL.png') -> SECL`
+- `infer_rarity_from_filename('PL!SP-pb1-026-L+.png') -> L2`
+- synthetic official HTML から、カード番号側 `bp1` に対して画像URLフォルダ `BP09` の `RM` をmanifest entryとして抽出。
+- synthetic official HTML から、`PL!S-bp5-021` に対して画像URLフォルダ `BP07` の `SECL` をmanifest entryとして抽出。
+- synthetic official HTML から、`PL!SP-pb1-026` に対して画像URLフォルダ `PBSP02` の `L2` をmanifest entryとして抽出。
+- fetcherにて、`L` manifest取得成功後に `L2` manifestが失敗しても、registry由来の `BP09` フォルダ横断で `PL!N-bp1-001-L2.png` を取得できることを確認。
+
 ### 20260717 Phase 4 confirmed backlog implementation
 
 ※20260717内部確認: `CODEX_INSTRUCTION_loveca_phase4_confirmed_backlog_implementation_20260717.md` 対応。対象は `PL!HS-bp6-014#A01` と `PL!SP-bp1-003#A01` の2能力のみ。runtime 14件 PASS、実ブラウザで手札起動ボタン、発生源つき pending、公開カード MEMBER-only 候補、0枚送信、合計10送信、public reveal 表示を確認。証跡は `_codex_outputs/loveca_phase4_confirmed_backlog_implementation_20260717`。

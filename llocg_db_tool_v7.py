@@ -19,7 +19,7 @@ Deps:
 
 from __future__ import annotations
 
-BUILD_TAG = "rm_rarity_image_manifest_20260721a"
+BUILD_TAG = "reprint_image_manifest_cardno_enrichment_20260721a"
 
 import argparse
 import csv
@@ -551,6 +551,8 @@ OFFICIAL_RARITY_TOKENS = {
     "P", "P2", "SEC", "SEC2", "SECL", "SRL", "DUO", "AR",
     "RM", "RE", "PE", "PE2", "SECE", "LLE", "PP", "SR", "UR", "SP",
 }
+OFFICIAL_REPRINT_IMAGE_RARITIES = {"L2", "SECL", "RM", "SRL"}
+OFFICIAL_REPRINT_ENRICHMENT_TARGET_LIMIT = 120
 OFFICIAL_CARD_RARITY_TAIL_RE = re.compile(r"^(?P<base>.+?)[-_\s](?P<rarity>[A-Za-z0-9＋\+]{1,8})$")
 
 
@@ -637,7 +639,7 @@ def infer_cardnumber_from_official_filename(
     if wanted_cardnos:
         direct = [
             cn for cn in wanted_cardnos
-            if stem == cn or stem.startswith(cn + "-")
+            if stem == cn or any(stem.startswith(cn + sep) for sep in ("-", "_", " "))
         ]
         if direct:
             return max(direct, key=len)
@@ -649,7 +651,7 @@ def infer_cardnumber_from_official_filename(
                 if not re.search(rf"(?:^|-){re.escape(num)}(?:-|$)", cn):
                     continue
                 prefix = re.sub(rf"-{re.escape(num)}(?:-[A-Za-z0-9]+)?$", "", cn)
-                if prefix and stem.startswith(prefix + "-"):
+                if prefix and any(stem.startswith(prefix + sep) for sep in ("-", "_", " ")):
                     candidates.append(cn)
             if len(candidates) == 1:
                 return candidates[0]
@@ -834,6 +836,36 @@ def cmd_official_image_manifest(
         f"targets={len(wanted_cardnos)} expansions={len(sorted_expansions)} "
         f"per_card_fallback={per_card_fallback}"
     )
+
+    def fetch_cardno_items(cn: str, stage: str) -> int:
+        url = (
+            f"{OFFICIAL_CARDLIST_SEARCH_URL}?"
+            f"cardno={urllib.parse.quote(cn)}&view=image&sort=new"
+        )
+        try:
+            html = fetch(
+                url,
+                cache_dir,
+                delay=delay,
+                user_agent=user_agent,
+                timeout=timeout,
+                stage=stage,
+                fetch_state=fetch_state,
+            )
+        except FetchSafetyStop:
+            raise
+        except Exception:
+            return 0
+        items = parse_official_cardlist_items(
+            html,
+            official_expansion_from_cardno(cn) or "UNKNOWN",
+            wanted_cardnos={cn},
+        )
+        before = sum(len(x) for x in cards_map.values())
+        push_items(items)
+        after = sum(len(x) for x in cards_map.values())
+        return max(0, after - before)
+
     for expansion_index, expansion in enumerate(sorted_expansions, 1):
         wanted_for_expansion = expansion_to_cards[expansion]
         print(
@@ -916,31 +948,45 @@ def cmd_official_image_manifest(
                     f"per_card_fallback={fallback_index}/{len(missing_after_expansion)} "
                     f"card={cn}"
                 )
-            url = (
-                f"{OFFICIAL_CARDLIST_SEARCH_URL}?"
-                f"cardno={urllib.parse.quote(cn)}&view=image&sort=new"
-            )
-            try:
-                html = fetch(
-                    url,
-                    cache_dir,
-                    delay=delay,
-                    user_agent=user_agent,
-                    timeout=timeout,
-                    stage="official_per_card",
-                    fetch_state=fetch_state,
+            fetch_cardno_items(cn, "official_per_card")
+
+    reprint_enrichment_added = 0
+    reprint_enrichment_targets = 0
+    if per_card_fallback and len(wanted_cardnos) <= OFFICIAL_REPRINT_ENRICHMENT_TARGET_LIMIT:
+        print(
+            "[IMAGE-MANIFEST] "
+            f"reprint_per_card_enrichment_targets={len(wanted_cardnos)} "
+            f"limit={OFFICIAL_REPRINT_ENRICHMENT_TARGET_LIMIT}"
+        )
+        for enrich_index, cn in enumerate(wanted_cardnos, 1):
+            before_rarities = {
+                official_normalize_rarity_token(str(item.get("rarity_norm", "") or ""))
+                for item in cards_map.get(cn, [])
+                if isinstance(item, dict)
+            }
+            added = fetch_cardno_items(cn, "official_reprint_enrichment")
+            after_rarities = {
+                official_normalize_rarity_token(str(item.get("rarity_norm", "") or ""))
+                for item in cards_map.get(cn, [])
+                if isinstance(item, dict)
+            }
+            new_reprints = (after_rarities - before_rarities) & OFFICIAL_REPRINT_IMAGE_RARITIES
+            if added or new_reprints:
+                reprint_enrichment_targets += 1
+                reprint_enrichment_added += added
+            if enrich_index == 1 or enrich_index % 25 == 0 or enrich_index == len(wanted_cardnos):
+                print(
+                    "[IMAGE-MANIFEST] "
+                    f"reprint_enrichment={enrich_index}/{len(wanted_cardnos)} "
+                    f"cards_with_additions={reprint_enrichment_targets} "
+                    f"entries_added={reprint_enrichment_added}"
                 )
-            except FetchSafetyStop:
-                raise
-            except Exception:
-                continue
-            push_items(
-                parse_official_cardlist_items(
-                    html,
-                    official_expansion_from_cardno(cn) or "UNKNOWN",
-                    wanted_cardnos={cn},
-                )
-            )
+    elif per_card_fallback:
+        print(
+            "[IMAGE-MANIFEST] "
+            f"reprint_per_card_enrichment_skipped targets={len(wanted_cardnos)} "
+            f"limit={OFFICIAL_REPRINT_ENRICHMENT_TARGET_LIMIT}"
+        )
 
     manifest = {
         "version": 1,
@@ -955,6 +1001,13 @@ def cmd_official_image_manifest(
         "cards_missing_manifest": len(
             [cn for cn in wanted_cardnos if cn not in cards_map]
         ),
+        "reprint_enrichment": {
+            "enabled": bool(per_card_fallback and len(wanted_cardnos) <= OFFICIAL_REPRINT_ENRICHMENT_TARGET_LIMIT),
+            "target_limit": OFFICIAL_REPRINT_ENRICHMENT_TARGET_LIMIT,
+            "cards_with_additions": reprint_enrichment_targets,
+            "entries_added": reprint_enrichment_added,
+            "rarities": sorted(OFFICIAL_REPRINT_IMAGE_RARITIES),
+        },
         "expansions": expansions_summary,
         "cards": {
             cn: cards_map.get(cn, [])
