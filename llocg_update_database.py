@@ -21,7 +21,7 @@ BUILD_TAG is intentionally visible for delivery verification.
 
 from __future__ import annotations
 
-BUILD_TAG = "update_dependency_bootstrap_20260721a"
+BUILD_TAG = "update_cli_python_for_pythonw_20260721a"
 
 import argparse
 import csv
@@ -105,6 +105,15 @@ UPDATE_PYTHON_PACKAGES = [
 ]
 
 
+def console_python_executable() -> str:
+    exe = sys.executable or ""
+    if os.name == "nt" and os.path.basename(exe).lower() == "pythonw.exe":
+        candidate = os.path.join(os.path.dirname(exe), "python.exe")
+        if os.path.exists(candidate):
+            return candidate
+    return sys.executable or "python3"
+
+
 def run(cmd: Sequence[str], *, cwd: Path, env: Dict[str, str] | None = None) -> None:
     printable = " ".join(str(x) for x in cmd)
     print(f"\n[RUN] {printable}")
@@ -143,13 +152,13 @@ def install_update_python_packages(missing: Sequence[Tuple[str, str]]) -> None:
     print("[PY-DEPS] Installing required packages with pip. This may take a few minutes.")
 
     pip_check = subprocess.run(
-        [sys.executable, "-m", "pip", "--version"],
+        [console_python_executable(), "-m", "pip", "--version"],
         check=False,
     )
     if pip_check.returncode != 0:
         print("[PY-DEPS] pip is not available. Trying ensurepip...")
         ensurepip = subprocess.run(
-            [sys.executable, "-m", "ensurepip", "--upgrade"],
+            [console_python_executable(), "-m", "ensurepip", "--upgrade"],
             check=False,
         )
         if ensurepip.returncode != 0:
@@ -159,7 +168,7 @@ def install_update_python_packages(missing: Sequence[Tuple[str, str]]) -> None:
             )
 
     base_cmd = [
-        sys.executable,
+        console_python_executable(),
         "-m",
         "pip",
         "install",
@@ -169,7 +178,7 @@ def install_update_python_packages(missing: Sequence[Tuple[str, str]]) -> None:
     result = subprocess.run(base_cmd, check=False)
     if result.returncode != 0:
         user_cmd = [
-            sys.executable,
+            console_python_executable(),
             "-m",
             "pip",
             "install",
@@ -784,6 +793,7 @@ def main() -> int:
     ensure_update_python_dependencies(
         allow_install=not bool(args.skip_dependency_install)
     )
+    python_exe = console_python_executable()
 
     db_tool = project_root / "llocg_db_tool_v7.py"
     sim_tool = project_root / "llocg_sim_tool_v7.py"
@@ -830,7 +840,7 @@ def main() -> int:
     # is reused later in the same updater run.
     if not args.skip_preview_posts and x_builder.exists():
         prefetch_cmd = [
-            sys.executable,
+            python_exe,
             str(x_builder),
             "--root",
             str(dbdir),
@@ -858,7 +868,7 @@ def main() -> int:
     # and rebuild the release registry. Existing card pages are only rescanned
     # when --full-refresh is explicitly requested.
     scrape_cmd = [
-        sys.executable,
+        python_exe,
         str(db_tool),
         "scrape",
         "--outdir",
@@ -957,7 +967,7 @@ def main() -> int:
     # 3. Normalize / mine / audit.
     run(
         [
-            sys.executable,
+            python_exe,
             str(db_tool),
             "normalize",
             "--csv",
@@ -973,7 +983,7 @@ def main() -> int:
     )
     run(
         [
-            sys.executable,
+            python_exe,
             str(db_tool),
             "mine",
             "--csv",
@@ -987,7 +997,7 @@ def main() -> int:
     )
     run(
         [
-            sys.executable,
+            python_exe,
             str(db_tool),
             "audit",
             "--csv",
@@ -1048,7 +1058,7 @@ def main() -> int:
         )
         run(
             [
-                sys.executable,
+                python_exe,
                 str(db_tool),
                 "image-manifest",
                 "--json",
@@ -1075,7 +1085,7 @@ def main() -> int:
         pattern_dir = dbdir
     run(
         [
-            sys.executable,
+            python_exe,
             str(sim_tool),
             "compile",
             "--csv",
@@ -1091,7 +1101,7 @@ def main() -> int:
     # 6. Strict five-file generation audit before publication.
     run(
         [
-            sys.executable,
+            python_exe,
             str(db_tool),
             "db-generation-audit",
             "--dbdir",
@@ -1108,7 +1118,7 @@ def main() -> int:
 
     run(
         [
-            sys.executable,
+            python_exe,
             str(db_tool),
             "db-generation-audit",
             "--dbdir",
@@ -1129,7 +1139,7 @@ def main() -> int:
 
     if not args.skip_preview_posts and x_builder.exists() and not preview_prefetch_failed:
         x_cmd = [
-            sys.executable,
+            python_exe,
             str(x_builder),
             "--root",
             str(dbdir),
@@ -1175,7 +1185,7 @@ def main() -> int:
         )
         run(
             [
-                sys.executable,
+                python_exe,
                 str(image_fetcher),
                 "--root",
                 str(dbdir),
@@ -1202,7 +1212,7 @@ def main() -> int:
     # 10. Final strict generation audit.
     run(
         [
-            sys.executable,
+            python_exe,
             str(db_tool),
             "db-generation-audit",
             "--dbdir",

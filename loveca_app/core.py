@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# BUILD_TAG = "update_cancel_windows_exit_20260721a"
+# BUILD_TAG = "update_cli_python_for_pythonw_20260721a"
 """
 Loveca application launcher (phase 1).
 
@@ -49,7 +49,7 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 
 
-BUILD_TAG = "update_cancel_windows_exit_20260721a"
+BUILD_TAG = "update_cli_python_for_pythonw_20260721a"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8875
 SESSION_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -148,6 +148,16 @@ def reserve_free_local_port(host: str = DEFAULT_HOST) -> int:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind((host, 0))
         return int(sock.getsockname()[1])
+
+
+def console_python_executable() -> str:
+    """Return a console Python executable for subprocesses that must log output."""
+    exe = Path(sys.executable or "")
+    if platform.system() == "Windows" and exe.name.lower() == "pythonw.exe":
+        candidate = exe.with_name("python.exe")
+        if candidate.exists():
+            return str(candidate)
+    return sys.executable or "python3"
 
 
 @dataclass
@@ -2893,8 +2903,9 @@ class AppState:
             try:
                 update_env = os.environ.copy()
                 update_env["PYTHONUNBUFFERED"] = "1"
+                python_exe = console_python_executable()
                 update_args = [
-                    sys.executable,
+                    python_exe,
                     "-u",
                     str(script),
                     "--require-preview-posts",

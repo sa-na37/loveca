@@ -1728,6 +1728,39 @@ PY
 
 ※20260721内部確認: mac上の内部スモークでは更新中断APIの中核処理は正常。Windows固有の `pythonw` / `pyw` 起動と `taskkill /T /F` は配布zip反映後に実機確認対象。
 
+追記 20260721:
+
+- Windowsでアプリ本体を `pythonw.exe` から起動した場合、データ更新コマンドとその内部のcompile/audit/image処理まで `pythonw.exe` で実行され、失敗時の詳細ログが欠けることを確認。アプリ起動は `pythonw.exe` のまま許容しつつ、更新処理と更新スクリプト内の子コマンドは同じフォルダの `python.exe` へ切り替えるようにした。
+- ユーザー環境で出ていたcompile失敗は、ローカル現行DBに対する `llocg_sim_tool_v7.py compile` では再現しなかった。次回Windows実行時は `[APP-UPDATE] command=...python.exe ...` と表示され、もしcompileが再発しても詳細エラーがログに出る想定。
+
+確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/core.py ./llocg_update_database.py
+
+python3 - <<'PY'
+import os, sys, tempfile
+from pathlib import Path
+from unittest import mock
+from loveca_app.core import console_python_executable as app_py
+import llocg_update_database as updater
+with tempfile.TemporaryDirectory() as td:
+    d=Path(td)
+    (d/'pythonw.exe').write_text('', encoding='utf-8')
+    (d/'python.exe').write_text('', encoding='utf-8')
+    fake=str(d/'pythonw.exe')
+    with mock.patch.object(sys, 'executable', fake), mock.patch('loveca_app.core.platform.system', lambda: 'Windows'):
+        assert os.path.basename(app_py()).lower() == 'python.exe'
+    with mock.patch.object(sys, 'executable', fake), mock.patch('llocg_update_database.os.name', 'nt'):
+        assert os.path.basename(updater.console_python_executable()).lower() == 'python.exe'
+print('OK pythonw switches to python.exe for update commands')
+PY
+
+python3 ./llocg_sim_tool_v7.py compile --csv ./llocg_db_out_full/cards_min_tokv1.csv --out /private/tmp/loveca_compile_smoke.json --patterns-dir ./llocg_db_out_full
+```
+
 ### 2026-07-21 effect-debug residual policy cleanup
 
 ※20260721内部確認: 効果処理関連の残件を現行仕様に合わせて再分類した。2デッキ用UIでは秘匿不要のため、相手手札候補をactive側で表示することは不具合扱いしない。1デッキ版では相手個別カードstateを持たないため、相手成功ライブ置き場、相手ステージ、相手ライブカード置き場などの一部比較・反映は手入力/手動反映を正式経路とする。
