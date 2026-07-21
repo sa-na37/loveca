@@ -1761,6 +1761,35 @@ PY
 python3 ./llocg_sim_tool_v7.py compile --csv ./llocg_db_out_full/cards_min_tokv1.csv --out /private/tmp/loveca_compile_smoke.json --patterns-dir ./llocg_db_out_full
 ```
 
+追記2 20260721:
+
+- Windows実機ログで `llocg_sim_tool_v7.py compile` が `ModuleNotFoundError: No module named 'yaml'` により失敗することを確認。更新用依存チェックに `("yaml", "PyYAML")` が不足していたため、`PyYAML` を自動導入対象へ追加した。
+- 次回更新時、`yaml` が未導入の環境では `[PY-DEPS] Missing Python packages... PyYAML` の後にpip導入が走り、その後compileへ進む想定。
+
+確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./llocg_update_database.py ./llocg_sim_tool_v7.py
+
+python3 - <<'PY'
+import llocg_update_database as upd
+from unittest import mock
+real_find = upd.importlib.util.find_spec
+def fake_find(name):
+    if name == 'yaml':
+        return None
+    return real_find(name)
+with mock.patch('llocg_update_database.importlib.util.find_spec', fake_find):
+    missing = upd.missing_update_python_packages()
+assert ('yaml', 'PyYAML') in missing
+print('OK PyYAML dependency is detected when yaml is missing')
+PY
+
+python3 ./llocg_sim_tool_v7.py compile --csv ./llocg_db_out_full/cards_min_tokv1.csv --out /private/tmp/loveca_compile_smoke.json --patterns-dir ./llocg_db_out_full
+```
+
 ### 2026-07-21 effect-debug residual policy cleanup
 
 ※20260721内部確認: 効果処理関連の残件を現行仕様に合わせて再分類した。2デッキ用UIでは秘匿不要のため、相手手札候補をactive側で表示することは不具合扱いしない。1デッキ版では相手個別カードstateを持たないため、相手成功ライブ置き場、相手ステージ、相手ライブカード置き場などの一部比較・反映は手入力/手動反映を正式経路とする。

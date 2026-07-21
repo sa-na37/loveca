@@ -21,7 +21,7 @@ BUILD_TAG is intentionally visible for delivery verification.
 
 from __future__ import annotations
 
-BUILD_TAG = "update_cli_python_for_pythonw_20260721a"
+BUILD_TAG = "update_pyyaml_dependency_20260721a"
 
 import argparse
 import csv
@@ -102,6 +102,7 @@ UPDATE_PYTHON_PACKAGES = [
     ("bs4", "beautifulsoup4"),
     ("lxml", "lxml"),
     ("pandas", "pandas"),
+    ("yaml", "PyYAML"),
 ]
 
 
