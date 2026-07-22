@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: public_view_back_redaction_audit_20260720a
+# BUILD_TAG: public_view_hand_reveal_instance_exact_20260722a
 from __future__ import annotations
 
 """View-state helpers for Loveca UI.
@@ -20,7 +20,7 @@ import re
 from typing import Any, Dict, Iterable, Set
 
 
-PUBLIC_BUILD_TAG = "public_view_back_redaction_audit_20260720a"
+PUBLIC_BUILD_TAG = "public_view_hand_reveal_instance_exact_20260722a"
 
 
 def _as_list(value: Any) -> list:
@@ -124,17 +124,28 @@ def _public_cardnumbers(state: Dict[str, Any]) -> Set[str]:
     out.update(_public_pending_revealed_cardnumbers(state))
     out.update(_public_reveal_event_cardnumbers(state))
     # Turn-scoped cards that were revealed while being added to hand remain
-    # public even though the rest of the hand is masked.
-    for cn in _as_list(state.get("public_hand_revealed_cards")):
-        if cn:
-            out.add(str(cn))
-    events = state.get("public_hand_reveal_events")
-    if isinstance(events, list):
-        for ev in events:
-            if isinstance(ev, dict):
-                for cn in _as_list(ev.get("display_cards")):
-                    if cn:
-                        out.add(str(cn))
+    # public even though the rest of the hand is masked.  Prefer instance ids so
+    # duplicate card numbers do not expose every same-name hand copy.
+    public_hand_ids = set(str(x) for x in _as_list(state.get("public_hand_revealed_instance_ids")) if str(x or "").strip())
+    meta = state.get("card_instance_meta")
+    if public_hand_ids and isinstance(meta, dict):
+        for iid in public_hand_ids:
+            row = meta.get(iid)
+            if isinstance(row, dict):
+                cn = str(row.get("cardnumber") or "").strip()
+                if cn:
+                    out.add(cn)
+    else:
+        for cn in _as_list(state.get("public_hand_revealed_cards")):
+            if cn:
+                out.add(str(cn))
+        events = state.get("public_hand_reveal_events")
+        if isinstance(events, list):
+            for ev in events:
+                if isinstance(ev, dict):
+                    for cn in _as_list(ev.get("display_cards")):
+                        if cn:
+                            out.add(str(cn))
 
     # BUILD_TAG: refresh_notice_popup_20260630af
     # Refresh moves cards from the public waiting room to hidden deck.  The
@@ -454,8 +465,64 @@ def make_public_state(state: Dict[str, Any]) -> Dict[str, Any]:
     src["public_reveal_events"] = _public_reveal_event_summary(src.get("public_reveal_events"))
 
     # Card-number maps are useful for rendering but must not expose hand/deck.
-    for key in ["cn2name", "cn2label", "cn2type", "cn2is_live", "cn2yell_hearts", "cn2yell_draw_icons", "cn2yell_score_icons", "cn2group", "cn2unit", "cn2cost", "cn2score"]:
+    for key in ["cn2name", "cn2label", "cn2type", "cn2is_live", "cn2yell_hearts", "cn2yell_draw_icons", "cn2yell_score_icons", "cn2image_rarity", "cn2image_variant_id", "cn2group", "cn2unit", "cn2cost", "cn2score"]:
         src[key] = _filter_map_by_public_cards(src.get(key), public_cards)
+
+    inst = src.get("card_instances")
+    if isinstance(inst, dict):
+        safe_inst: Dict[str, Any] = {
+            "deck": [],
+            "hand": [],
+            "green_room": list(inst.get("green_room") or []),
+            "set_zone": list(inst.get("set_zone") or []) if live_set_public else [],
+            "resolve_zone": list(inst.get("resolve_zone") or []),
+            "success_zone": list(inst.get("success_zone") or []),
+            "stage": dict(inst.get("stage") or {}),
+        }
+        # Keep instance ids for public-in-hand cards only.  New state provides
+        # exact ids; old saves fall back to hand-order alignment by card number.
+        explicit_public_hand_ids = [str(x) for x in _as_list(src.get("public_hand_revealed_instance_ids")) if str(x or "").strip()]
+        private_hand = [str(x) for x in _as_list(state.get("hand"))]
+        private_hand_ids = _as_list(inst.get("hand"))
+        private_hand_id_set = set(str(x) for x in private_hand_ids if str(x or "").strip())
+        revealed_ids = [iid for iid in explicit_public_hand_ids if iid in private_hand_id_set]
+        if not revealed_ids:
+            public_hand_cards = [str(x) for x in _as_list(src.get("public_hand_revealed_cards"))]
+            used_hand_idx: Set[int] = set()
+            for cn in public_hand_cards:
+                for idx, hand_cn in enumerate(private_hand):
+                    if idx in used_hand_idx or hand_cn != cn:
+                        continue
+                    if idx < len(private_hand_ids):
+                        revealed_ids.append(private_hand_ids[idx])
+                        used_hand_idx.add(idx)
+                    break
+        safe_inst["public_hand_revealed"] = revealed_ids
+        src["public_hand_revealed_instance_ids"] = list(revealed_ids)
+        src["card_instances"] = safe_inst
+
+        public_instance_ids: Set[str] = set()
+        for value in safe_inst.values():
+            if isinstance(value, list):
+                public_instance_ids.update(str(x) for x in value if x)
+            elif isinstance(value, dict):
+                public_instance_ids.update(str(x) for x in value.values() if x)
+        meta = src.get("card_instance_meta")
+        if isinstance(meta, dict):
+            src["card_instance_meta"] = {str(k): v for k, v in meta.items() if str(k) in public_instance_ids}
+            public_hand_cards = []
+            for iid in revealed_ids:
+                row = src["card_instance_meta"].get(str(iid))
+                if isinstance(row, dict):
+                    cn = str(row.get("cardnumber") or "").strip()
+                    if cn:
+                        public_hand_cards.append(cn)
+            if public_hand_cards:
+                src["public_hand_revealed_cards"] = public_hand_cards
+    else:
+        src["card_instances"] = {}
+        src["card_instance_meta"] = {}
+        src["public_hand_revealed_instance_ids"] = []
 
     # Debug internals should not be part of share view.
     src["debug"] = False

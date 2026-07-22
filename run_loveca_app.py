@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# BUILD_TAG = "loveca_distribution_launcher_20260721a"
+# BUILD_TAG = "loveca_product_page_long_cache_20260721a"
 from loveca_app.main import main
 
 if __name__ == "__main__":

@@ -23,7 +23,7 @@ Runtime contract:
 """
 from __future__ import annotations
 
-BUILD_TAG = "cached_reprint_image_fetch_20260721a"
+BUILD_TAG = "official_pr_exact_image_fetch_20260722a"
 
 import argparse
 import datetime as dt
@@ -489,9 +489,10 @@ def remote_filename_variants(folder: str, cardno: str, rarity: str) -> List[str]
     folder_u = (folder or "").strip().upper()
     r = _normalize_rarity_token(rarity)
     stems = [cardno]
-    folder_cardno = _replace_cardno_product_token(cardno, folder_u)
-    if folder_cardno:
-        stems.append(folder_cardno)
+    if r not in {"PR", "PR2"}:
+        folder_cardno = _replace_cardno_product_token(cardno, folder_u)
+        if folder_cardno:
+            stems.append(folder_cardno)
 
     if r in REPRINT_FOLDER_SCAN_RARITIES:
         for stem in list(stems):
@@ -508,17 +509,8 @@ def remote_filename_variants(folder: str, cardno: str, rarity: str) -> List[str]
     if folder_u == "PR" and cardno.upper() == "PL!N-PR-022":
         out.append(f"SAMPLE{cardno}-{r}.png")
 
-    if folder_u == "PR":
-        cn2 = cardno
-        cn2_low = cn2.lower()
-        if "-pr-" in cn2_low:
-            parts = re.split("(?i)-pr-", cn2)
-            if len(parts) >= 2:
-                cn_drop = "-".join([parts[0]] + parts[1:])
-                out.append(f"{cn_drop}-{r}.png")
-
     cn_low = cardno.lower()
-    if folder_u == "BP03" and "-bp3-" in cn_low:
+    if r not in {"PR", "PR2"} and folder_u == "BP03" and "-bp3-" in cn_low:
         idx = cn_low.find("-bp3-")
         prefix = cardno[:idx]
         set_tok = cardno[idx + 1: idx + 4]
@@ -916,18 +908,24 @@ def try_heuristic(
 
 
 
-def load_cardnumber_filter(path: Optional[Path]) -> Optional[set[str]]:
+def load_cardnumber_requests(path: Optional[Path]) -> Tuple[Optional[set[str]], Dict[str, set[str]]]:
     if path is None:
-        return None
+        return None, {}
     if not path.exists():
         raise SystemExit(f"[ERR] cardnumber filter file not found: {path}")
     out: set[str] = set()
+    rarities_by_card: Dict[str, set[str]] = {}
     for raw in path.read_text(encoding="utf-8").splitlines():
         value = raw.strip()
         if not value or value.startswith("#"):
             continue
-        out.add(_norm_cardno_for_filename(value))
-    return out
+        cardno, rarity = _split_display_card_and_rarity(value)
+        cardno_norm = _norm_cardno_for_filename(cardno)
+        out.add(cardno_norm)
+        rarity_norm = _normalize_rarity_token(rarity)
+        if cardno_norm and rarity_norm:
+            rarities_by_card.setdefault(cardno_norm, set()).add(rarity_norm)
+    return out, rarities_by_card
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -987,7 +985,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     global_rarities = _uniq_keep_order(_sanitize_rarities(global_rarities)) or list(DEFAULT_RARITIES)
 
     target_records, tokv1_path, compiled_path = load_target_records(root, compiled_path)
-    cardnumber_filter = load_cardnumber_filter(
+    cardnumber_filter, requested_rarities_by_card = load_cardnumber_requests(
         args.cardnumber_file.resolve() if args.cardnumber_file else None
     )
     if cardnumber_filter is not None:
@@ -1031,7 +1029,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     sess = requests.Session() if requests is not None else None
     state: Dict[str, Any] = {
-        "headers": {"User-Agent": args.user_agent},
+        "headers": {
+            "User-Agent": args.user_agent,
+            "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+            "Referer": "https://llofficial-cardgame.com/cardlist/",
+        },
         "insecure": bool(args.insecure),
         "insecure_used": False,
     }
@@ -1066,6 +1068,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         card_had_success = False
         successful_rarities: set[str] = set()
         manifest_reprint_rarities = _manifest_reprint_rarities(manifest_entries)
+        requested_rarities = {
+            _normalize_rarity_token(rarity)
+            for rarity in requested_rarities_by_card.get(cardno, set())
+            if _normalize_rarity_token(rarity)
+        }
 
         # 1) exact manifest URLs
         if manifest_entries:
@@ -1165,6 +1172,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             for rarity in manifest_reprint_rarities
             if rarity not in successful_rarities
         ]
+        missing_requested_rarities = [
+            rarity
+            for rarity in sorted(requested_rarities)
+            if rarity not in successful_rarities
+        ]
 
         # 4) heuristic fallback if manifest/preview is absent or unsuccessful.
         # Reprint/parallel rarities are different: a normal rarity image can
@@ -1172,17 +1184,25 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         # match the card number's expansion token.  In that case, keep probing
         # only the still-missing reprint rarities across known product folders.
         probe_missing_reprints = bool(card_had_success and missing_manifest_reprint_rarities)
-        if ((not card_had_success) or missing_manifest_reprint_rarities) and (not skip_heuristic_for_prerelease):
+        probe_requested_rarities = bool(card_had_success and missing_requested_rarities)
+        if ((not card_had_success) or missing_manifest_reprint_rarities or missing_requested_rarities) and (not skip_heuristic_for_prerelease):
             folders = []
             if manifest_entries:
                 folders.extend([str(e.get("folder", "") or "") for e in manifest_entries if str(e.get("folder", "") or "")])
             folders.extend(folder_candidates_for_cardno(cardno))
+            if "PR" in requested_rarities:
+                folders.append("PR")
             folders = _uniq_keep_order([f for f in folders if f])
 
             if card_had_success and missing_manifest_reprint_rarities:
                 rarities = missing_manifest_reprint_rarities
+            elif card_had_success and missing_requested_rarities:
+                rarities = missing_requested_rarities
             else:
-                rarities = family_rarities(cardno, global_rarities, manifest_entries=manifest_entries)
+                rarities = _uniq_keep_order(
+                    list(requested_rarities)
+                    + family_rarities(cardno, global_rarities, manifest_entries=manifest_entries)
+                )
             chosen_folder = None
 
             normal_folders = list(folders)
@@ -1237,7 +1257,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     if tr.status != "SKIP_EXISTS":
                         time.sleep(args.sleep + random.random() * args.jitter)
 
-                if probe_missing_reprints:
+                if probe_missing_reprints or probe_requested_rarities:
                     continue
                 if rarity_had_success and not args.all_rarities:
                     break

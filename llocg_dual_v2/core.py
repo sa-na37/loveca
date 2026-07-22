@@ -10,7 +10,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-BUILD_TAG = "llocg_dual_v2_deck_center_energy_plain_fallback_20260720a"
+BUILD_TAG = "llocg_dual_v2_path_deck_app_launch_20260722a"
 ENERGY_DECK_SIZE = 12
 OPENING_HAND_SIZE = 6
 OPENING_ENERGY_SIZE = 3
@@ -167,6 +167,33 @@ def discover_data_root(project_root: Path, explicit: Optional[Path] = None) -> P
 
 
 def load_deck(data_root: Path, code: str) -> List[str]:
+    raw_code = str(code or "").strip()
+    if raw_code:
+        p_direct = Path(raw_code)
+        direct_candidates = [p_direct] if p_direct.is_absolute() else [data_root / p_direct]
+        for path in direct_candidates:
+            if not path.exists() or not path.is_file():
+                continue
+            if path.suffix.lower() == ".json":
+                obj = json.loads(path.read_text(encoding="utf-8"))
+                entries = obj.get("cards", []) if isinstance(obj, dict) else []
+                cards: List[str] = []
+                for ent in entries:
+                    if not isinstance(ent, dict):
+                        continue
+                    cn = _canon_cardno(ent.get("db_id") or ent.get("cardnumber") or ent.get("card_no") or ent.get("tsv_card_no"))
+                    try:
+                        count = int(ent.get("count", 0) or 0)
+                    except (TypeError, ValueError):
+                        count = 0
+                    if cn and count > 0:
+                        cards.extend([cn] * count)
+                if cards:
+                    return cards
+            else:
+                cards = _read_deck_tsv(path)
+                if cards:
+                    return cards
     candidates = [
         data_root / "sim_decks" / f"deck_{code}.json",
         data_root / "decklists" / f"{code}.tsv",

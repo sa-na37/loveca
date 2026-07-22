@@ -2180,3 +2180,717 @@ PY
 ```
 
 ※20260721内部確認: 修正前は日付付き `loveca-ui-assets-20260721.zip` を本体フォルダ直下へ置いても `source="" installed=0` となり、`NoImage.PNG` が配置されなかった。修正後は同じzipで `installed=13`、親フォルダ配置でも `installed=13` を確認した。
+
+### 2026-07-22 update image progress / public hand instance reveal / pb1 R 三船栞子 generic route
+
+実装内容:
+
+- 起動時DB更新のカード画像取得で `llocg_fetch_all_card_images.py` に `--progress-every 1` を渡すようにした。初回など画像確認対象が多い場合でも、1枚ごとにログが出て停止して見えにくくなる。
+- 公開して手札に加えたカードの公開情報を、カード番号ではなく手札内の `instance_id` で保持するようにした。同名カードが複数ある場合でも、実際に公開されて手札に加わった個体だけを公開表示対象にする。
+- pb1のR三船栞子相当 `PL!N-pb1-010` の登場時「以下から1つを選ぶ。」効果を、旧 `choose_enter_effect_mode` ではなく汎用 `choose_effects` ルートへ接続した。
+
+確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./llocg_update_database.py ./llocg_ui/server.py ./llocg_ui/views.py ./llocg_ui/engine.py
+
+python3 ./llocg_fetch_all_card_images.py --help | rg -n "progress-every"
+
+python3 - <<'PY'
+from pathlib import Path
+from llocg_ui.db import load_cards_db
+from llocg_ui.engine import GameState, handle_enter_auto
+root = Path('.')
+cards = load_cards_db(root)
+gs = GameState(root=str(root), code='TEST', seed=1, debug=True)
+gs.phase = 'MAIN'
+handle_enter_auto(gs, cards, 'C', 'PL!N-pb1-010')
+assert gs.pending and gs.pending[0]['kind'] == 'choose_effects'
+assert gs.pending[0].get('options') == [
+    'エネルギーを1枚アクティブにする。',
+    '自分の控え室にある『虹ヶ咲』のライブカードを2枚まで好きな順番でデッキの上に置く。',
+]
+print('OK PL!N-pb1-010 choose_effects route')
+PY
+
+python3 - <<'PY'
+from llocg_ui.views import make_public_state
+state = {
+  'view_mode':'private', 'turn':1, 'phase':'MAIN',
+  'hand':['PL!X-test-001','PL!X-test-001'], 'hand_count':2,
+  'deck':[], 'green_room':[], 'set_zone':[], 'resolve_zone':[], 'success_zone':[],
+  'stage':{'L':None,'C':None,'R':None}, 'stage_detail':{}, 'pending':[],
+  'public_reveal_events':[], 'public_hand_reveal_events':[],
+  'public_hand_revealed_cards':['PL!X-test-001'],
+  'public_hand_revealed_instance_ids':['iid2'],
+  'card_instances':{'deck':[], 'hand':['iid1','iid2'], 'green_room':[], 'set_zone':[], 'resolve_zone':[], 'success_zone':[], 'stage':{}},
+  'card_instance_meta':{'iid1':{'id':'iid1','cardnumber':'PL!X-test-001','rarity':'N'}, 'iid2':{'id':'iid2','cardnumber':'PL!X-test-001','rarity':'RM'}},
+  'cn2name':{'PL!X-test-001':'同名カード'}, 'cn2label':{}, 'cn2type':{}, 'cn2is_live':{},
+  'cn2yell_hearts':{}, 'cn2yell_draw_icons':{}, 'cn2yell_score_icons':{},
+  'cn2image_rarity':{}, 'cn2image_variant_id':{}, 'cn2group':{}, 'cn2unit':{}, 'cn2cost':{}, 'cn2score':{}
+}
+out = make_public_state(state)
+assert out['card_instances'].get('public_hand_revealed') == ['iid2']
+assert sorted(out['card_instance_meta'].keys()) == ['iid2']
+print('OK public hand reveal keeps exact duplicate instance only')
+PY
+
+git diff --check -- llocg_update_database.py llocg_ui/server.py llocg_ui/views.py llocg_ui/engine.py
+
+python3 - <<'PY'
+from llocg_ui.server import App
+from llocg_ui.engine import GameState
+app = App.__new__(App)
+app.gs = GameState(root='.', code='TEST', seed=1, debug=True)
+app.gs.phase = 'MAIN'
+app.gs.turn = 1
+app.gs.hand = ['PL!X-test-001', 'PL!X-test-001']
+app.gs.green_room = []
+app.gs.resolve_zone = []
+app.gs.success_zone = []
+app.gs.set_zone = []
+app.card_instance_zones = {'hand':['iid1','iid2'], 'deck':[], 'green_room':[], 'resolve_zone':[], 'success_zone':[], 'set_zone':[], 'stage:L':[], 'stage:C':[], 'stage:R':[]}
+app.card_instance_meta = {'iid1':{'id':'iid1','cardnumber':'PL!X-test-001'}, 'iid2':{'id':'iid2','cardnumber':'PL!X-test-001'}}
+app.card_instance_seq = 2
+app._public_hand_revealed_turn = 1
+app._public_hand_revealed_cards = []
+app._public_hand_revealed_instance_ids = []
+app._public_hand_reveal_events = []
+app._public_hand_reveal_seq = 0
+app._public_hand_before_source_counts = {}
+app._remember_public_hand_reveals_after_cmd(['PL!X-test-001'], ['PL!X-test-001'], 'unit-test', 0, ['iid1'])
+assert app._public_hand_revealed_cards == ['PL!X-test-001']
+assert app._public_hand_revealed_instance_ids == ['iid2']
+print('OK server remembers exact newly-added duplicate instance')
+PY
+
+python3 ./tools/build_loveca_distribution.py --target macos --output ./_codex_outputs/github_release/loveca-macos-20260721.zip
+python3 ./tools/build_loveca_distribution.py --target windows --output ./_codex_outputs/github_release/loveca-windows-20260721.zip
+python3 ./tools/build_loveca_distribution.py --target source --output ./_codex_outputs/github_release/loveca-source-20260721.zip
+gh release upload v2026.07.21 ./_codex_outputs/github_release/loveca-macos-20260721.zip ./_codex_outputs/github_release/loveca-windows-20260721.zip ./_codex_outputs/github_release/loveca-source-20260721.zip --clobber
+gh release view v2026.07.21 --json assets,url
+```
+
+※20260722内部確認: `py_compile` 通過。`llocg_fetch_all_card_images.py --help` に `--progress-every` が存在することを確認。`PL!N-pb1-010` は `choose_effects` へ入り、2つの選択肢が汎用ルートで出ることを確認。同名カード2枚の公開ビュー状態では、公開個体ID `iid2` のみが `public_hand_revealed` / `card_instance_meta` に残ることを確認。サーバー側の公開手札記録でも、元から手札にいた同名 `iid1` ではなく、増えた同名 `iid2` だけが公開対象になることを確認した。GitHub Release `v2026.07.21` の本体zip3種（macOS / Windows / source）を上書き済み。Release上のアセットは本体3種のみで、UIアセットzipはアップロードしていない。
+
+### 2026-07-22 DB update missing existing card images refetch
+
+実装内容:
+
+- 既存 `card_images` フォルダが空でない場合でも、DB内のリリース済みカード番号と実画像ファイルを照合し、欠落しているカードを画像取得対象に追加するようにした。
+- 更新ログの `[IMAGE-MANIFEST-MODE]` に `missing_existing=<件数>` を表示するようにした。
+- 画像取得後にもリリース済みカード画像の欠落が残っている場合、`[DONE] Loveca DB + image update completed` まで進めず、欠落件数と先頭サンプルを表示してエラー終了するようにした。
+- 前回追加した画像取得ログの `--progress-every 1` は維持。
+
+確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./llocg_update_database.py
+
+python3 - <<'PY'
+from datetime import date
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from llocg_update_database import missing_released_image_targets
+with TemporaryDirectory() as td:
+    root = Path(td) / 'card_images'
+    (root / 'BP1').mkdir(parents=True)
+    (root / 'BP1' / 'PL!N-bp1-001-N.png').write_bytes(b'x')
+    release_dates = {'BP01': date(2020,1,1), 'BP09': date(2099,1,1)}
+    missing = missing_released_image_targets(
+        cardnumbers=['PL!N-bp1-001', 'PL!N-bp1-002', 'PL!N-bp9-001'],
+        image_root=root,
+        release_dates=release_dates,
+        as_of=date(2026,7,22),
+    )
+    assert missing == {'PL!N-bp1-002'}, missing
+    print('OK missing released image target scan')
+PY
+
+python3 ./llocg_update_database.py --help | rg -n "full-image-refresh|image"
+
+git diff --check -- llocg_update_database.py
+
+python3 ./tools/build_loveca_distribution.py --target macos --output ./_codex_outputs/github_release/loveca-macos-20260721.zip
+python3 ./tools/build_loveca_distribution.py --target windows --output ./_codex_outputs/github_release/loveca-windows-20260721.zip
+python3 ./tools/build_loveca_distribution.py --target source --output ./_codex_outputs/github_release/loveca-source-20260721.zip
+gh release upload v2026.07.21 ./_codex_outputs/github_release/loveca-macos-20260721.zip ./_codex_outputs/github_release/loveca-windows-20260721.zip ./_codex_outputs/github_release/loveca-source-20260721.zip --clobber
+gh release view v2026.07.21 --json assets,url
+```
+
+※20260722内部確認: ユーザー提供ログでは `[IMAGE-FETCH-MODE] targets=0` で画像取得自体がスキップされていた。原因は `card_images` が空でない場合、既存カードの画像欠落を再取得対象に入れていなかったこと。修正後はリリース済みカードの欠落を `missing_existing` として検出し、画像取得対象へ追加する。小テストでは既存1枚・欠落1枚・未発売1枚のうち、欠落したリリース済み1枚だけを検出することを確認。GitHub Release `v2026.07.21` の本体zip3種を再上書き済み。
+
+### 2026-07-22 next release local changes: reset buttons, match result log, UI scale 200
+
+実装内容:
+
+- 初回リリース版 `v2026.07.21` 固定後のローカル更新として、次版向け変更メモ `docs/notes/loveca_next_release_changes_20260722.md` を作成。
+- 1デッキ用シミュレーターに通常リセットボタンを追加。
+- リモート対戦用の1デッキ画面では、勝ち/負け/No Gameを `user_data/logs/loveca_match_results.jsonl` へ記録してから新しい対戦へリセットするボタンを追加。
+- 2デッキ用シミュレーターでは、P1勝利/P2勝利/No Gameを同じ記録ファイルへ追記し、同じデッキ組み合わせで新しい対戦を開始するボタンを追加。
+- 簡易設定の画面表示サイズを最大200%まで選択できるようにした。
+- 起動時DB更新の画像不足検出ログに `[IMAGE-MISSING-EXISTING]` を追加し、最終画像取得対象ログにも `missing_existing` を出すようにした。
+
+確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/web.py ./llocg_ui/server.py ./llocg_dual_v2/server.py ./llocg_update_database.py
+
+git diff --check
+
+head -3 ./loveca_app/web.py
+head -3 ./llocg_ui/server.py
+head -35 ./llocg_dual_v2/server.py
+head -28 ./llocg_update_database.py
+```
+
+※20260722内部確認: `py_compile` と `git diff --check` は通過。`pytest` はローカルPython環境に `pytest` が無いため実行不可。GitHub Releaseは更新せず、次版候補としてローカル差分とメモのみ作成した。
+
+### 2026-07-22 deck detail popup / analysis title / PR suffix image request / texticon aliases
+
+実装内容:
+
+- デッキ内容確認ページのカード詳細ポップアップで、効果テキストを `effect_text_raw` / `effect_text_norm` 優先で渡すよう修正。
+- コストとスコアを `15.0` のような小数表記ではなく整数表記へ整形。
+- 詳細ポップアップにスコア行を追加し、ライブカードのスコアも確認できるようにした。
+- デッキ編集画面の詳細分析ツールタイトルを「デッキ内容確認」から「詳細分析ツール」へ修正。
+- ブレードハート内訳グラフで `blade_pink` / `b_heart01` など、公式カード検索UI由来のブレードハートtexticon名を優先して参照できるようにした。
+- アセットバンドル解凍許可リストへ、ブレードハート用texticon候補ファイル名を追加。
+- `PL!-bp3-012-PR` のような末尾レアリティ付き画像取得指定を、`PL!-bp3-012` + 希望レアリティ `PR` として扱うようにした。
+
+確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from pathlib import Path
+from tempfile import NamedTemporaryFile
+from llocg_fetch_all_card_images import load_cardnumber_requests, remote_filename_variants
+with NamedTemporaryFile('w+', encoding='utf-8', delete=False) as f:
+    f.write('PL!-bp3-012-PR\n')
+    name=f.name
+flt, req=load_cardnumber_requests(Path(name))
+assert flt == {'PL!-bp3-012'}, flt
+assert req == {'PL!-bp3-012': {'PR'}}, req
+files=remote_filename_variants('PR','PL!-bp3-012','PR')
+assert files == ['PL!-bp3-012-PR.png'], files
+print('OK rarity suffix request parsing and PR filename candidates')
+PY
+
+python3 - <<'PY'
+from pathlib import Path
+from loveca_app.core import AppState
+app=AppState(Path('.'))
+row={'count':'1','card_no':'PL!-bp3-012','rarity':'','name':'','variant_id':''}
+card=app.card_display_data(row)
+assert card['cost'] == '2', card
+assert 'ライブ開始時' in card['effect'], card['effect']
+row2={'count':'1','card_no':'PL!-bp4-022','rarity':'','name':'','variant_id':''}
+card2=app.card_display_data(row2)
+assert 'score' in card2
+print('OK deck display data formatting', card['cost'], bool(card2.get('score')))
+PY
+
+python3 -m py_compile ./loveca_app/core.py ./loveca_app/web.py ./loveca_app/assets.py ./llocg_fetch_all_card_images.py
+
+git diff --check -- loveca_app/core.py loveca_app/web.py loveca_app/assets.py llocg_fetch_all_card_images.py
+
+tmpfile=$(mktemp)
+printf 'PL!-bp3-012-PR\n' > "$tmpfile"
+python3 ./llocg_fetch_all_card_images.py \
+  --root ./llocg_db_out_full \
+  --compiled ./llocg_db_out_full/cards_compiled_v7h.json \
+  --cardnumber-file "$tmpfile" \
+  --outdir ./llocg_db_out_full/card_images \
+  --preview-outdir ./llocg_db_out_full/preview_card_images \
+  --timeout 2 --sleep 0 --jitter 0 --progress-every 1 \
+  --max-warn-total 10 --max-warn-per-card 10
+rm -f "$tmpfile"
+
+curl -I -L \
+  -A 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36' \
+  -H 'Referer: https://llofficial-cardgame.com/cardlist/searchresults/?expansion=PR&sort=new&view=image' \
+  'https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist/PR/PL!-bp3-012-PR.png'
+```
+
+※20260722内部確認訂正: 以前の「該当PR画像を確認できていない」判断は、公式画像URLへのアクセス条件確認不足による誤り。ブラウザ相当のUser-Agentと公式カードリストReferer付きで `PR/PL!-bp3-012-PR.png` がHTTP 200になることを確認。カード番号は完全一致で扱い、`PL!-PR-012` など別カード番号への読み替えは禁止。
+
+### 2026-07-22 PR folder card image resolution and Deck Log LLC texticons
+
+実装内容:
+
+- `PL!-bp3-012-PR` の画像取得について、URLフォルダが `PR` であるケースを正式候補として扱う。ただしファイル名側のカード番号は完全一致を維持し、`PL!-PR-012` 型の別カード番号候補は生成しない。
+- manifest生成側で公式PR一覧を全カード番号へ完全一致照合し、`PR/PL!-bp3-012-PR.png` のように「URLフォルダだけPR」の画像を補完できるようにした。
+- cached image scanの対象を再録系だけでなく `PR` / `PR2` まで広げた。
+- アプリ表示側で、manifest/実ファイルの完全一致により `PL!-bp3-012 + PR` から `llocg_db_out_full/card_images/PR/PL!-bp3-012-PR.png` を解決できるようにした。
+- Deck Log CSSからLLC用texticon `blade_heart01.png` から `blade_heart06.png`、各ON画像、`sp_all.png`、`sp_score.png`、`sp_draw.png` と各ON画像を取得し、`llocg_db_out_full/card_images/texticons/` に配置した。
+- デッキ編集画面のブレードハート検索チップと詳細分析ツールのブレードハート内訳が、追加texticonを参照できるようにした。
+- UIアセットバンドル許可リストを更新し、`loveca-ui-assets-20260722.zip` を生成した。
+
+確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+curl -L \
+  -A 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36' \
+  'https://llofficial-cardgame.com/cardlist/searchresults/?expansion=PR&sort=new&view=image' \
+  -o /tmp/loveca_official_pr_searchresults_ua.html
+
+python3 - <<'PY'
+from pathlib import Path
+import json
+from llocg_fetch_all_card_images import remote_filename_variants
+from llocg_db_tool_v7 import parse_official_cardlist_items
+
+assert remote_filename_variants('PR','PL!-bp3-012','PR') == ['PL!-bp3-012-PR.png']
+html=Path('/tmp/loveca_official_pr_searchresults_ua.html').read_text(encoding='utf-8')
+items=parse_official_cardlist_items(html, 'PR', {'PL!-bp3-012'})
+assert any(item['cardnumber']=='PL!-bp3-012' and item['rarity_norm']=='PR' and item['remote_filename']=='PL!-bp3-012-PR.png' for item in items), items
+manifest=json.loads(Path('llocg_db_out_full/official_image_manifest.json').read_text(encoding='utf-8'))
+entries=manifest.get('cards', {}).get('PL!-bp3-012', [])
+assert any(item.get('folder')=='PR' and item.get('remote_filename')=='PL!-bp3-012-PR.png' for item in entries), entries
+print('OK exact PR folder manifest parsing')
+PY
+
+python3 - <<'PY'
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import shutil, zipfile
+from loveca_app.core import AppState
+from loveca_app.assets import ensure_ui_assets_from_local_bundle
+
+app=AppState(Path('.'))
+app.dbdir = app.path('llocg_db_out_full')
+assert app.find_card_image('PL!-bp3-012', rarity='PR').name == 'PL!-bp3-012-PR.png'
+for token, expected in [
+    ('blade_pink','blade_heart01.png'), ('blade_red','blade_heart02.png'),
+    ('blade_yellow','blade_heart03.png'), ('blade_green','blade_heart04.png'),
+    ('blade_blue','blade_heart05.png'), ('blade_purple','blade_heart06.png'),
+    ('blade_all','sp_all.png'), ('blade_score','sp_score.png'), ('blade_draw','sp_draw.png')]:
+    path=app.resolve_texticon(token)
+    assert path and path.name == expected, (token, path)
+source=Path('_codex_outputs/github_release/loveca-ui-assets-20260722.zip').resolve()
+with TemporaryDirectory() as td:
+    root=Path(td)/'loveca'
+    root.mkdir()
+    shutil.copy2(source, root/source.name)
+    result=ensure_ui_assets_from_local_bundle(root)
+    assert not result.errors, result.errors
+    assert (root/'llocg_db_out_full/card_images/texticons/blade_heart01.png').exists()
+    assert (root/'llocg_db_out_full/card_images/texticons/sp_draw.png').exists()
+    print('OK PR image + texticons + ui bundle extraction', len(result.installed))
+with zipfile.ZipFile(source) as z:
+    names=z.namelist()
+    assert any(name.endswith('blade_heart01.png') for name in names)
+    print('zip entries', len(names))
+PY
+
+python3 -m py_compile ./llocg_fetch_all_card_images.py ./llocg_db_tool_v7.py ./loveca_app/core.py ./loveca_app/web.py ./loveca_app/assets.py
+git diff --check -- llocg_fetch_all_card_images.py llocg_db_tool_v7.py loveca_app/core.py loveca_app/web.py loveca_app/assets.py docs/notes/loveca_next_release_changes_20260722.md docs/debug/loveca_debug_commands_current_updates_20260623.md
+```
+
+※20260722内部確認訂正: `PL!-bp3-012 + PR` はローカル実画像 `PR/PL!-bp3-012-PR.png` へ解決するのが正しい。`PR/PL!-PR-012-PR.png` は別カードの画像であり参照候補に含めない。公式画像URLはブラウザ相当ヘッダー付きでHTTP 200を確認し、権限付きPython実行で `llocg_db_out_full/card_images/PR/PL!-bp3-012-PR.png` を取得済み。manifest再生成では `pr_exact_all_scan pages=15 added=43` を確認し、`official_image_manifest.json` の `cards.PL!-bp3-012` にPR entryが追加された。追加texticonは `blade_pink` などのアプリ内トークンから解決でき、生成した `loveca-ui-assets-20260722.zip` の仮展開でも31件配置、エラーなしを確認。`py_compile` と `git diff --check` は通過。
+
+### 2026-07-22 wiki printings image candidates / deck editor sticky save header / popup wheel scroll
+
+実装内容:
+
+- Wikiカードページの「収録状況」テーブルから、`収録セット`、収録状況上のカード番号、末尾レアリティを抽出し、DBレコードの `printings_json` に保存するようにした。
+- `image-manifest` 生成時に `printings_json` を読み、収録セット名を `product_catalog.json` / `product_release_registry.json` の商品コードへ照合して、`収録弾フォルダ + 収録状況カード番号 + レアリティ` の完全一致URL候補を追加するようにした。
+- デッキ編集画面で、アプリヘッダを固定表示し、デッキ名/タグ/保存/保存して開始/キャンセルを統合した固定ヘッダへ移動した。
+- デッキTSV/metadataに `&amp;` などのHTMLエンティティが混入している場合、読込・保存時に通常文字へ戻すようにした。
+- 1デッキ用シミュレーターのカード選択ポップアップで、上下ホイール操作を横スクロールへ変換する共通処理を追加した。
+
+確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from pathlib import Path
+from bs4 import BeautifulSoup
+import llocg_db_tool_v7 as db
+p=Path('llocg_db_out_full/_http_cache/24c5f9e05e4885c4a9bf881dc1e0a5ad.html')
+soup=BeautifulSoup(p.read_text(encoding='utf-8',errors='ignore'),'lxml')
+items=db.parse_printings_table(soup)
+assert items and items[0]['set_title']=='ブースターパック MELLOW MOMENT'
+assert items[0]['card_attr'].endswith('-P') and items[0]['rarity_norm']=='P'
+print('OK parse wiki printings table')
+PY
+
+python3 - <<'PY'
+from pathlib import Path
+import json
+from tempfile import TemporaryDirectory
+import llocg_db_tool_v7 as db
+with TemporaryDirectory() as td:
+    root=Path(td)
+    (root/'product_catalog.json').write_text(json.dumps({'products':{'BP05':{'name':'ブースターパック Anniversary 2026','title':'ブースターパック Anniversary 2026'}}}, ensure_ascii=False), encoding='utf-8')
+    data=[{'cardnumber':'PL!-bp3-012','printings_json':json.dumps([{'set_title':'ブースターパック Anniversary 2026','card_attr':'PL!-bp3-012-RM','rarity_norm':'RM'}], ensure_ascii=False)}]
+    j=root/'cards.json'; j.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
+    items=db.load_printing_manifest_items_from_db(j, None, root, {'PL!-bp3-012'})
+    assert items[0]['folder']=='BP05'
+    assert items[0]['remote_filename']=='PL!-bp3-012-RM.png'
+print('OK wiki printings manifest candidates')
+PY
+
+python3 - <<'PY'
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from loveca_app.core import AppState
+import json
+with TemporaryDirectory(dir='.') as td:
+    root=Path(td).resolve()
+    (root/'llocg_db_out_full/decklists').mkdir(parents=True)
+    deck=root/'llocg_db_out_full/decklists/deck_test.tsv'
+    deck.write_text('count\tcard_no\trarity\tname\tvariant_id\n1\tPL!-bp3-012\tPR\t渡辺 曜&amp;鬼塚夏美&amp;大沢瑠璃乃\t\n', encoding='utf-8')
+    meta=deck.with_suffix('.meta.json')
+    meta.write_text(json.dumps({'deck_name':'A&amp;B','tags':['x&amp;y']}, ensure_ascii=False), encoding='utf-8')
+    app=AppState(root)
+    metadata, rows=app.read_deck_rows('llocg_db_out_full/decklists/deck_test.tsv')
+    assert metadata['deck_name']=='A&B'
+    assert metadata['tags']==['x&y']
+    assert rows[0]['name']=='渡辺 曜&鬼塚夏美&大沢瑠璃乃'
+print('OK deck html entity unescape')
+PY
+
+python3 - <<'PY'
+from pathlib import Path
+from loveca_app.core import AppState
+from loveca_app.web import Handler
+class S:
+    app_state=AppState(Path('.'))
+handler=object.__new__(Handler)
+handler.server=S()
+body=handler.deck_edit_body('', True)
+assert 'class="deck-editor-toolbar"' in body
+assert body.count('id="visible_deck_name"') == 1
+assert body.count('id="visible_deck_tags"') == 1
+assert '保存して開始' in body
+print('OK deck edit html sticky toolbar')
+PY
+
+python3 -m py_compile ./llocg_db_tool_v7.py ./llocg_fetch_all_card_images.py ./loveca_app/core.py ./loveca_app/web.py ./llocg_ui/server.py
+git diff --check -- llocg_db_tool_v7.py loveca_app/core.py loveca_app/web.py llocg_ui/server.py
+```
+
+※20260722内部確認: 現行DBはまだ `printings_json` 生成前のため、既存 `cards_min_tokv1` からの `wiki_printings` 候補は0件。次回DB更新後に `printings_json` が入る。今回の確認ではキャッシュ済みWiki HTMLと合成DBで、収録状況テーブル解析および収録弾フォルダ候補生成が通ることを確認した。
+
+### 2026-07-22 simulator reset buttons top-right relocation
+
+対象:
+
+- `llocg_ui/server.py`
+- `llocg_dual_v2/server.py`
+
+実装:
+
+- 1デッキ用シミュレーターのリセット/勝敗記録リセットボタンを、エネルギー領域内の操作列から外し、画面右上部の独立した `RESET` パネルへ移動した。
+- 通常の1デッキ用シミュレーターでは `リセット` のみ表示し、リモート対戦モードでは `勝ち記録` / `負け記録` / `No Game` を表示する。
+- public view ではリセットパネルを非表示にした。
+- 2デッキ用シミュレーターでは、中央操作バー内の勝敗記録ボタンを外し、画面右上部の独立した `RESET` パネルへ移動した。
+- リセット/勝敗記録API本体は変更せず、配置と表示切替のみを変更した。
+
+確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./llocg_ui/server.py ./llocg_dual_v2/server.py
+
+rg -n "resetPanel|recordButtons|reset_panel_top_right|record_reset_top_right" \
+  ./llocg_ui/server.py ./llocg_dual_v2/server.py
+
+git diff --check -- ./llocg_ui/server.py ./llocg_dual_v2/server.py \
+  ./docs/debug/loveca_debug_commands_current_updates_20260623.md
+```
+
+※20260722内部確認: 構文チェックは通過。1デッキ側は `renderEnergy()` からリセット系ボタン生成を除去し、右上固定パネル側の既存 `apiCmd("reset")` / `apiCmd("record_reset")` 経由に統一した。2デッキ側は中央 `#controls` から `#recordButtons` を外し、同じIDのまま右上固定配置に変更したため、既存イベントリスナーは維持される。
+
+### 2026-07-22 card detail clamp / under-card inspect / PL!S-bp7-005 / refresh modal gating
+
+対象:
+
+- `llocg_ui/server.py`
+- `llocg_ui/engine.py`
+
+実装:
+
+- カード詳細ポップアップを、表示直後およびカード情報取得後の実サイズで画面内に再配置するようにした。手札など画面端のカードから開いても、上下左右が画面外へ見切れないように補正する。
+- ステージメンバーの下にメンバーカードがある場合、カード画像下部に `下部確認` ボタンを表示するようにした。押すと下に置かれているカードを小型リストポップアップで確認でき、リスト項目クリックでカード詳細も開ける。
+- `このメンバーと自分のステージにいるほかの『X』のメンバー1人を選ぶ。それらが持つ<登場>能力それぞれ1つ発動させる。` を汎用テンプレートとして追加した。PL!S-bp7-005 はこのルートで、コスト支払い後にほかのAqoursメンバーを選び、既存の登場能力処理を再利用して解決する。
+- 未確認のリフレッシュ通知が残っている間は、サーバ側で進行系コマンドを止めるようにした。`NEXT` はリフレッシュ確認のACKとして扱い、裏側のエール確認や次処理へは進めない。
+- クライアント側でも、リフレッシュ確認ポップアップ表示中に `NEXT` を押すとポップアップを閉じるだけにした。
+
+確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./llocg_ui/server.py ./llocg_ui/engine.py
+
+python3 - <<'PY'
+from llocg_ui.engine import _match_effect_template
+text='このメンバーと自分のステージにいるほかの『Aqours』のメンバー1人を選ぶ。それらが持つ<登場>能力それぞれ1つ発動させる。'
+assert _match_effect_template(text)[0]['op']=='replay_enter_ability_self_and_other_group_member'
+print('OK replay enter template match')
+PY
+
+python3 - <<'PY'
+from pathlib import Path
+import random
+from llocg_ui.db import load_cards_db
+from llocg_ui.engine import GameState, StageSlot, try_apply_effect_template
+root=Path('.')
+cards_db=load_cards_db(root, compiled_path=root/'llocg_db_out_full/cards_compiled_v7h.json', tokv1_path=root/'llocg_db_out_full/cards_min_tokv1.csv')
+gs=GameState(str(root), 'smoke', 1)
+gs.stage['C']=StageSlot(cardnumber='PL!S-bp7-005', active=True)
+gs.stage['L']=StageSlot(cardnumber='PL!S-bp7-006', active=True)
+text='このメンバーと自分のステージにいるほかの『Aqours』のメンバー1人を選ぶ。それらが持つ<登場>能力それぞれ1つ発動させる。'
+ok=try_apply_effect_template(gs,random.Random(1),cards_db,text,{'source_cn':'PL!S-bp7-005','pos':'C'})
+assert ok
+assert gs.pending and gs.pending[0]['kind']=='choose_stage_member_for_enter_ability_replay'
+assert 'L' in gs.pending[0]['candidates']
+print('OK replay enter pending')
+PY
+
+python3 - <<'PY'
+from types import SimpleNamespace
+from llocg_ui.server import App
+app=object.__new__(App)
+app.gs=SimpleNamespace(refresh_notices=[{'seq':1},{'seq':3}], refresh_notice_seq=3)
+app._refresh_notice_ack_seq=1
+assert app._latest_unacked_refresh_notice_seq()==3
+app._ack_refresh_notice(3)
+assert app._latest_unacked_refresh_notice_seq()==0
+print('OK refresh ack helper')
+PY
+
+git diff --check -- ./llocg_ui/server.py ./llocg_ui/engine.py
+```
+
+※20260722内部確認: 構文チェック、PL!S-bp7-005効果文のテンプレート一致、効果適用時の対象選択pending生成、リフレッシュACK helperの未確認seq判定は通過。カード詳細の画面外補正と下部確認ポップアップはDOM実装まで確認済みで、最終的な見た目はユーザー目視確認対象。
+
+### 2026-07-22 yell double colorless heart summary UI
+
+対象:
+
+- `llocg_ui/server.py`
+- `llocg_ui/engine.py`
+
+実装:
+
+- DB上のブレードハート表記 `<無色×2>` を、エール判定用の不特定ハート `any:2` として扱うようにした。
+- エール内容ポップアップの公開アイコン段に `ダブル無色` を追加し、ドロー / スコアUP / ダブル無色の3枠が横幅内に収まるように枠幅と余白を調整した。
+- ライブ成功確認ポップアップの所持ハート欄を `桃 赤 黄 緑 青 紫 ALL 不特定 総数` にし、総数に不特定ハートを含めるようにした。
+- 必要ハート欄にも `ALL` 列を追加し、所持ハート欄と列数を揃えた。
+
+確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./llocg_ui/server.py ./llocg_ui/engine.py
+
+python3 - <<'PY'
+from pathlib import Path
+from llocg_ui.db import load_cards_db
+from llocg_ui.engine import _parse_heart_icons, _normalize_icon_token_text
+root=Path('.')
+db=load_cards_db(root, compiled_path=root/'llocg_db_out_full/cards_compiled_v7h.json', tokv1_path=root/'llocg_db_out_full/cards_min_tokv1.csv')
+rows=[]
+for cn, ci in db.items():
+    raw=str(getattr(ci,'blade_heart_raw','') or '')
+    if '無色' in raw:
+        counts=_parse_heart_icons(_normalize_icon_token_text(raw))
+        rows.append((cn, counts))
+print(rows)
+assert rows and all(r[1].get('any')==2 for r in rows)
+PY
+
+python3 - <<'PY'
+from pathlib import Path
+from llocg_ui.db import load_cards_db
+from llocg_ui.engine import GameState, cheer_hearts_from_resolve, _build_live_attempt_summary_pending
+root=Path('.')
+db=load_cards_db(root, compiled_path=root/'llocg_db_out_full/cards_compiled_v7h.json', tokv1_path=root/'llocg_db_out_full/cards_min_tokv1.csv')
+gs=GameState(str(root),'smoke',1)
+gs.resolve_zone=['PL!S-bp7-022']
+cheer=cheer_hearts_from_resolve(gs, db)
+assert cheer.get('any') == 2
+p=_build_live_attempt_summary_pending(gs, db, lives=[], live_set_indices=[], ok_all=True, base_hearts={}, yell_hearts=cheer, owned_hearts=cheer, alloc_map={}, score_rows=[], card_score_total=0, stage_score_bonus=0, yell_score_icon_bonus=0, live_total_score=0)
+owned=p['live_attempt_summary']['owned_hearts']
+assert owned['total'].get('any') == 2
+assert owned['count_total'] == 2
+print('OK double colorless owned total')
+PY
+
+python3 - <<'PY'
+from pathlib import Path
+from llocg_ui.db import load_cards_db
+from llocg_ui.server import _ci_yell_heart_counts, _ci_yell_double_colorless_icon_count
+root=Path('.')
+db=load_cards_db(root, compiled_path=root/'llocg_db_out_full/cards_compiled_v7h.json', tokv1_path=root/'llocg_db_out_full/cards_min_tokv1.csv')
+ci=db['PL!S-bp7-022']
+assert _ci_yell_heart_counts(ci).get('any') == 2
+assert _ci_yell_double_colorless_icon_count(ci) == 1
+print('OK double colorless popup metadata')
+PY
+
+git diff --check -- ./llocg_ui/server.py ./llocg_ui/engine.py
+```
+
+※20260722内部確認: `<無色×2>` を持つ `PL!S-bp7-022` / `PL!SP-bp7-028` はどちらも `any:2` としてパースできることを確認。`cheer_hearts_from_resolve` とライブ成功確認payloadの `owned_hearts.count_total` に不特定ハート2個が反映されること、サーバ側表示メタでダブル無色1個として取れることを確認済み。ポップアップの最終レイアウトはユーザー目視確認対象。
+
+## 20260722 current update: success-zone storage blocked by BODY text
+
+目的: `このカードは成功ライブカード置き場に置くことができない。` の BODY 常時文を持つライブカードが、成功ライブカード置き場選択ポップアップで選択不可になり、直接選択しても engine 側で弾かれることを確認する。
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+unset LLOCG_START_STAGE LLOCG_START_STAGE_L LLOCG_START_STAGE_C LLOCG_START_STAGE_R \
+  LLOCG_START_HAND LLOCG_START_HAND_SIZE LLOCG_START_SHUFFLE \
+  LLOCG_START_GREEN LLOCG_START_SUCCESS LLOCG_START_RESOLVE \
+  LLOCG_START_DECK_TOP LLOCG_START_DECK_EXACT \
+  LLOCG_START_PHASE LLOCG_START_TURN \
+  LLOCG_START_ENERGY_ACTIVE LLOCG_START_ENERGY_WAIT \
+  LLOCG_DEBUG_PRESET LLOCG_DEBUG_EFFECT_CARD LLOCG_START_DEBUG \
+  LLOCG_DEBUG_LIVE_IN_HAND LLOCG_DEBUG_MEMBER_IN_HAND
+
+export LLOCG_DEBUG_PRESET=effect
+export LLOCG_START_PHASE=MAIN
+export LLOCG_START_TURN=1
+export LLOCG_START_HAND='PL!S-bp2-024'
+export LLOCG_START_HAND_SIZE=0
+export LLOCG_START_DECK_TOP='PL!N-bp1-001,PL!N-bp1-002,PL!N-bp1-003,PL!N-bp1-004,PL!N-bp1-005,PL!N-bp1-006'
+export LLOCG_START_ENERGY_ACTIVE=99
+export LLOCG_START_ENERGY_WAIT=0
+export LLOCG_DEBUG_LIVE_IN_HAND=0
+export LLOCG_DEBUG_MEMBER_IN_HAND=0
+export LLOCG_START_DEBUG=1
+
+python3 ./run_llocg_ui_web.py
+```
+
+※20260722内部確認: compiled DB の BODY/常時文から成功置き場不可を判定する汎用 helper を追加。成功置き場選択 pending に `disabled_options` を付与し、UI では選択不可表示、engine では直接選択も `[BLOCK] success_store` として拒否する。
+
+## 20260722 current update: YELL reveal no-blade-heart count / refresh undo order / PL!S-bp7-022 referenced condition popup
+
+目的: エール公開ポップアップでブレードハートを持たない公開カード枚数が表示されること、リフレッシュ発生時の確認順が `リフレッシュ -> エール内容 -> ハート内訳` になり undo で逆順に戻れること、`エールで/により公開されたカードの中に〜を含む場合` 系ライブ成功時効果が参照カード確認ポップアップを通ることを確認する。
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+unset LLOCG_START_STAGE LLOCG_START_STAGE_L LLOCG_START_STAGE_C LLOCG_START_STAGE_R \
+  LLOCG_START_HAND LLOCG_START_HAND_SIZE LLOCG_START_SHUFFLE \
+  LLOCG_START_GREEN LLOCG_START_SUCCESS LLOCG_START_RESOLVE \
+  LLOCG_START_DECK_TOP LLOCG_START_DECK_EXACT \
+  LLOCG_START_PHASE LLOCG_START_TURN \
+  LLOCG_START_ENERGY_ACTIVE LLOCG_START_ENERGY_WAIT \
+  LLOCG_DEBUG_PRESET LLOCG_DEBUG_EFFECT_CARD LLOCG_START_DEBUG \
+  LLOCG_DEBUG_LIVE_IN_HAND LLOCG_DEBUG_MEMBER_IN_HAND
+
+export LLOCG_DEBUG_PRESET=effect
+export LLOCG_START_PHASE=LIVE_SET
+export LLOCG_START_TURN=1
+export LLOCG_START_HAND='PL!S-bp7-022'
+export LLOCG_START_HAND_SIZE=0
+export LLOCG_START_STAGE_L='PL!S-PR-013'
+export LLOCG_START_STAGE_C='PL!S-PR-014'
+export LLOCG_START_STAGE_R='LL-bp6-001'
+export LLOCG_START_DECK_TOP='PL!S-PR-013,PL!S-PR-014,PL!S-PR-015,PL!S-PR-016,PL!S-PR-017,PL!S-PR-018,PL!N-bp1-001,PL!N-bp1-002,PL!N-bp1-003,PL!N-bp1-004'
+export LLOCG_START_ENERGY_ACTIVE=99
+export LLOCG_START_ENERGY_WAIT=0
+export LLOCG_DEBUG_LIVE_IN_HAND=0
+export LLOCG_DEBUG_MEMBER_IN_HAND=0
+export LLOCG_START_DEBUG=1
+
+python3 ./run_llocg_ui_web.py
+```
+
+内部確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from pathlib import Path
+from llocg_ui.db import load_cards_db
+from llocg_ui.engine import new_game, try_apply_effect_template, cmd_resolve_pending
+cards=load_cards_db(Path('.'))
+gs,rng=new_game(Path('llocg_db_out_full'),'test',seed=1,debug=True)
+gs._cards_db=cards
+gs._yell_revealed_this_live=['PL!S-PR-013']
+eff='エールにより公開された自分のカードの中に、<(赤)>、<(緑)>、<(青)>を持つ『Aqours』のメンバーカードがそれぞれあるなら、このカードのスコアを+1する。'
+assert try_apply_effect_template(gs,rng,cards,eff,{'source_cn':'PL!S-bp7-022'})
+p=gs.pending[0]
+assert p['kind']=='show_revealed_cards_ack'
+assert p['label']=='エール公開条件確認'
+assert p['condition_status']['state']=='met'
+assert p['display_cards']==['PL!S-PR-013']
+cmd_resolve_pending(gs,cards,0,'ok',rng)
+assert gs.pending and gs.pending[-1]['kind']=='message_ack'
+print('OK PL!S-bp7-022 referenced condition popup')
+PY
+
+python3 -m py_compile ./llocg_ui/server.py ./llocg_ui/engine.py ./loveca_app/core.py ./loveca_app/web.py ./llocg_dual_v2/core.py
+git diff --check -- ./llocg_ui/server.py ./llocg_ui/engine.py ./loveca_app/core.py ./loveca_app/web.py ./llocg_dual_v2/core.py
+```
+
+※20260722内部確認: `PL!S-bp7-022` と同型の「エールで/により公開されたカードの中に赤・緑・青を持つグループメンバーがそれぞれあるなら」文型は、条件達成時に参照カードリスト付き `show_revealed_cards_ack` を出し、OK後にスコア補正へ進むことを確認。エール公開ポップアップには「BHなし」枚数を公開アイコン段へ追加。リフレッシュ確認済みseqをundo履歴へ保存するようにし、リフレッシュ確認・エール確認・ハート内訳確認がundoで逆順に戻れる構造へ修正。2デッキ対戦はアプリメニュー `/dual` から起動できる導線を追加。
+
+## 20260722 DeckLog デッキコード読込 API 修正
+
+報告:
+
+- Windows配布環境でデッキコード読込が失敗。
+- エラー:
+  - `[ERR] No cards were parsed from the source.`
+  - `[WARN] Playwright not available: ModuleNotFoundError: No module named 'playwright'`
+
+原因:
+
+- DeckLog表示画面の現行実装は `POST /system/app/api/view/{code}` をブラウザ由来ヘッダ付きで呼ぶ。
+- 既存スクリプトはAPI取得がGET中心で、DeckLog側が返すJSONの `list` / `card_number` / `num` 形式も拾えていなかった。
+- そのため、Playwright未導入環境では最終フォールバックも使えず、カード0枚として失敗していた。
+
+修正:
+
+- `llocg_deckcode_to_decklist.py`
+  - `BUILD_TAG=decklog_api_post_card_number_parse_20260722a`
+  - DeckLog API取得にPOST + `Origin` / `Referer` / `X-Requested-With` / `_is_appli=2` を追加。
+  - JSON parserを `list` / `card_number` / `num` 形式対応に拡張。
+  - `id` 数値をカード番号として誤読しないようにし、`PL!` / `LL-` 系カード番号だけを採用。
+  - `PP` / `PE+` など、DeckLog返却に含まれる追加レアリティを受け付けるように拡張。
+
+確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./llocg_deckcode_to_decklist.py
+
+python3 ./llocg_deckcode_to_decklist.py \
+  --root /private/tmp/loveca_deck_import_smoke \
+  --code 1U4B5 \
+  --no-playwright \
+  --timeout 20
+```
+
+結果:
+
+- Codex通常環境ではPython外部通信がDNS制限に当たり失敗したが、外部通信許可付き実行でPlaywrightなしの読込に成功。
+- `1U4B5` は20種類のカードとしてTSV出力された。
+- 先頭出力例:
+  - `LL-bp2-001 / R2`
+  - `PL!-bp5-333 / P+`
+  - `PL!SP-pb2-005 / PP`

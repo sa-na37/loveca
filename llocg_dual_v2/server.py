@@ -9,11 +9,14 @@ import datetime as _dt
 import json
 import os
 import pickle
+import re
 import threading
+import time
 from collections import Counter
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
@@ -21,7 +24,7 @@ from llocg_ui.server import App, HTML as SINGLE_HTML
 from llocg_ui.views import make_view_state
 from .core import ENERGY_DECK_SIZE, DualMatchEngine, Phase, discover_data_root
 
-BUILD_TAG = "llocg_dual_v2_deck_center_energy_plain_fallback_20260720a"
+BUILD_TAG = "llocg_dual_v2_record_reset_top_right_20260722a"
 
 
 @dataclass
@@ -87,11 +90,33 @@ class LegacyUIAdapter:
         self.players: Dict[str, PlayerViewRuntime] = {"p1": p1, "p2": p2}
         self.lock = threading.RLock()
         self.history: list[Dict[str, Any]] = []
+        self.reset_config: Dict[str, Any] = {}
         # Canonical card-detail records are loaded lazily from the project DB.
         # The runtime cards_db can intentionally omit raw effect text.
         self._detail_db_cache: Optional[Dict[str, Any]] = None
         self._reset_runtimes_for_new_match()
         self._sync_core_to_views(include_zones=True)
+
+    def configure_reset(
+        self,
+        *,
+        project_root: Path,
+        data_root: Path,
+        deck1: str,
+        deck2: str,
+        seed: int,
+        debug: bool,
+        preserve_start_env: bool,
+    ) -> None:
+        self.reset_config = {
+            "project_root": Path(project_root),
+            "data_root": Path(data_root),
+            "deck1": str(deck1),
+            "deck2": str(deck2),
+            "seed": int(seed),
+            "debug": bool(debug),
+            "preserve_start_env": bool(preserve_start_env),
+        }
 
     def runtime(self, key: str) -> PlayerViewRuntime:
         if key not in self.players:
@@ -276,6 +301,103 @@ class LegacyUIAdapter:
             self._sync_metadata_to_views()
             return self.state()
 
+    @staticmethod
+    def _normalize_record_result(value: Any) -> str:
+        raw = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+        aliases = {
+            "p1": "p1_win",
+            "p1_win": "p1_win",
+            "player1": "p1_win",
+            "player1_win": "p1_win",
+            "win": "p1_win",
+            "p2": "p2_win",
+            "p2_win": "p2_win",
+            "player2": "p2_win",
+            "player2_win": "p2_win",
+            "lose": "p2_win",
+            "loss": "p2_win",
+            "no": "no_game",
+            "ng": "no_game",
+            "nogame": "no_game",
+            "no_game": "no_game",
+            "draw": "no_game",
+        }
+        if raw not in aliases:
+            raise ValueError("記録結果が不正です")
+        return aliases[raw]
+
+    def _append_match_result_record(self, result: str, state_before: Dict[str, Any]) -> Dict[str, Any]:
+        result = self._normalize_record_result(result)
+        data_root = Path((self.reset_config or {}).get("data_root") or self.players["p1"].app.root)
+        record = {
+            "schema_version": 1,
+            "recorded_at": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+            "simulator": "dual_v2",
+            "result": result,
+            "winner_player_id": 0 if result == "p1_win" else (1 if result == "p2_win" else None),
+            "turn": state_before.get("turn"),
+            "phase": state_before.get("phase"),
+            "game_result": state_before.get("game_result"),
+            "players": state_before.get("players_by_key"),
+            "build_tag": BUILD_TAG,
+        }
+        log_dir = data_root / "user_data" / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        with (log_dir / "loveca_match_results.jsonl").open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+        return record
+
+    def _fresh_reset_seed(self) -> int:
+        return int(time.time() * 1000) & 0x7FFFFFFF
+
+    def _reset_match_from_config(self) -> None:
+        if not self.reset_config:
+            raise RuntimeError("reset configuration is missing")
+        cfg = dict(self.reset_config)
+        project_root = Path(cfg["project_root"])
+        data_root = Path(cfg["data_root"])
+        deck1 = str(cfg["deck1"])
+        deck2 = str(cfg["deck2"])
+        debug = bool(cfg.get("debug", False))
+        preserve_start_env = bool(cfg.get("preserve_start_env", False))
+        new_seed = self._fresh_reset_seed()
+
+        saved_env: Dict[str, str] = {}
+        if not preserve_start_env:
+            for key in list(os.environ):
+                if key.startswith("LLOCG_START_") or key.startswith("LLOCG_DEBUG_"):
+                    saved_env[key] = os.environ.pop(key)
+        try:
+            engine = DualMatchEngine.from_codes(project_root, deck1, deck2, seed=new_seed, data_root=data_root)
+            p1_app = App(root=data_root, code="dual-v2-p1", deck_code=deck1, seed=new_seed, debug=debug)
+            p2_app = App(root=data_root, code="dual-v2-p2", deck_code=deck2, seed=new_seed + 1, debug=debug)
+        finally:
+            os.environ.update(saved_env)
+
+        self.engine = engine
+        self.players["p1"].app = p1_app
+        self.players["p2"].app = p2_app
+        self.history = []
+        try:
+            self.engine.history = []
+        except Exception:
+            pass
+        self._detail_db_cache = None
+        self._reset_runtimes_for_new_match()
+        self.engine.state.log.append(f"[RESET] new dual match seed={new_seed}")
+        self._sync_core_to_views(include_zones=True)
+
+    def record_result_and_reset(self, result: Any) -> Dict[str, Any]:
+        with self.lock:
+            state_before = self.state()
+            record = self._append_match_result_record(str(result or ""), state_before)
+            self._reset_match_from_config()
+            self.engine.state.log.append(
+                f"[MATCH-RECORD] result={record['result']} saved=user_data/logs/loveca_match_results.jsonl"
+            )
+            self._sync_metadata_to_views()
+            return {"ok": True, "record": record, "state": self.state()}
+
     def _append_match_log(self, rt: PlayerViewRuntime) -> None:
         cursor = int(getattr(rt, "_match_log_cursor", 0) or 0)
         items = list(self.engine.state.log)
@@ -288,6 +410,8 @@ class LegacyUIAdapter:
     def _sync_opponent_contexts(self) -> None:
         for rt in self.players.values():
             other = self.runtime("p2" if rt.key == "p1" else "p1")
+            rt.app.gs.opponent = self._make_opponent_context(other)
+            rt.app.gs.opp = rt.app.gs.opponent
             wait_count = 0
             for slot in dict(getattr(other.app.gs, "stage", {}) or {}).values():
                 if slot is not None and not bool(getattr(slot, "active", True)):
@@ -299,6 +423,60 @@ class LegacyUIAdapter:
             rt.app.gs.opponent_excess_heart_count = max(
                 0, min(9, int(getattr(other.app.gs, "last_excess_heart_count", 0) or 0))
             )
+
+    @staticmethod
+    def _stage_slot_context(slot: Any) -> Optional[SimpleNamespace]:
+        if slot is None:
+            return None
+        cn = getattr(slot, "cardnumber", None)
+        if cn is None and isinstance(slot, str):
+            cn = slot
+        cn = str(cn or "").strip()
+        if not cn:
+            return None
+        return SimpleNamespace(
+            cardnumber=cn,
+            active=bool(getattr(slot, "active", True)),
+            temp_blade=int(getattr(slot, "temp_blade", 0) or 0),
+            temp_hearts=dict(getattr(slot, "temp_hearts", {}) or {}),
+            temp_score=int(getattr(slot, "temp_score", 0) or 0),
+            temp_cost=int(getattr(slot, "temp_cost", 0) or 0),
+            temp_until=str(getattr(slot, "temp_until", "") or ""),
+            energy_under=int(getattr(slot, "energy_under", 0) or 0),
+            under_cards=list(getattr(slot, "under_cards", []) or []),
+            heart_replace_color=str(getattr(slot, "heart_replace_color", "") or ""),
+        )
+
+    def _make_opponent_context(self, other: PlayerViewRuntime) -> SimpleNamespace:
+        """Build a non-recursive opponent view for the shared one-player engine.
+
+        The legacy effect helpers already know how to read ``gs.opponent`` for
+        opponent comparisons.  Do not attach the real opponent GameState here:
+        that would create recursive snapshots and allow accidental cross-player
+        mutation from one-player resolvers.
+        """
+        gs = other.app.gs
+        stage = {
+            pos: self._stage_slot_context(dict(getattr(gs, "stage", {}) or {}).get(pos))
+            for pos in ("L", "C", "R")
+        }
+        return SimpleNamespace(
+            player_id=other.player_id,
+            key=other.key,
+            stage=stage,
+            deck=list(getattr(gs, "deck", []) or []),
+            deck_count=len(list(getattr(gs, "deck", []) or [])),
+            hand_count=len(list(getattr(gs, "hand", []) or [])),
+            green_room=list(getattr(gs, "green_room", []) or []),
+            set_zone=list(getattr(gs, "set_zone", []) or []),
+            success_zone=list(getattr(gs, "success_zone", []) or []),
+            energy_active=int(getattr(gs, "energy_active", 0) or 0),
+            energy_wait=int(getattr(gs, "energy_wait", 0) or 0),
+            energy_total=int(getattr(gs, "energy_total", ENERGY_DECK_SIZE) or ENERGY_DECK_SIZE),
+            live_score=int(getattr(gs, "last_attempt_final_score", 0) or 0),
+            current_score=int(getattr(gs, "last_attempt_final_score", 0) or 0),
+            last_excess_heart_count=int(getattr(gs, "last_excess_heart_count", 0) or 0),
+        )
 
     def _sync_metadata_to_views(self) -> None:
         active_id = self.engine.active_player_id()
@@ -1302,6 +1480,960 @@ class LegacyUIAdapter:
                 setattr(gs, name, own)
             setattr(gs, "opponent_has_live", bool(list(getattr(self.runtime("p2" if rt.key == "p1" else "p1").app.gs, "set_zone", []) or [])))
 
+    def _capture_opponent_wait_request(
+        self,
+        rt: PlayerViewRuntime,
+        cmd: str,
+        payload: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        if str(cmd or "") != "resolve_pending":
+            return None
+        try:
+            idx = int((payload or {}).get("idx", -1))
+        except Exception:
+            return None
+        pend = list(getattr(rt.app.gs, "pending", []) or [])
+        if idx < 0 or idx >= len(pend):
+            return None
+        item = pend[idx]
+        if not isinstance(item, dict) or str(item.get("kind", "") or "") != "opponent_wait_notify":
+            return None
+        try:
+            count = int(str((payload or {}).get("choice", "0") or "0").strip())
+        except Exception:
+            return None
+        max_delta = max(0, min(3, int(item.get("max_delta", 3) or 3)))
+        if count < 0 or count > max_delta:
+            return None
+        return {
+            "count": count,
+            "source_cn": str(item.get("source_cn", "") or ""),
+            "effect_text": str(item.get("effect_text", "") or item.get("text", "") or ""),
+            "text": str(item.get("text", "") or ""),
+            "max_delta": max_delta,
+        }
+
+    @staticmethod
+    def _opponent_wait_condition_text(request: Dict[str, Any]) -> str:
+        return (
+            str((request or {}).get("effect_text", "") or "")
+            + "\n"
+            + str((request or {}).get("text", "") or "")
+        )
+
+    def _card_numeric_field(self, rt: PlayerViewRuntime, cardnumber: str, *names: str) -> int:
+        payload = self.card_info_payload(rt.key, cardnumber) or {}
+        for name in names:
+            raw = payload.get(name)
+            if raw in (None, ""):
+                continue
+            try:
+                return int(float(str(raw).strip()))
+            except Exception:
+                continue
+        return 0
+
+    def _card_text_field(self, rt: PlayerViewRuntime, cardnumber: str, *names: str) -> str:
+        payload = self.card_info_payload(rt.key, cardnumber) or {}
+        for name in names:
+            raw = payload.get(name)
+            if raw not in (None, ""):
+                return str(raw)
+        return ""
+
+    def _opponent_wait_candidates(self, other: PlayerViewRuntime, request: Dict[str, Any]) -> List[str]:
+        body = self._opponent_wait_condition_text(request)
+        active_positions: List[str] = []
+        for pos in ("L", "C", "R"):
+            slot = dict(getattr(other.app.gs, "stage", {}) or {}).get(pos)
+            if slot is not None and bool(getattr(slot, "active", True)) and self._slot_cardnumber(slot):
+                active_positions.append(pos)
+
+        if "右サイド" in body or "左サイド" in body:
+            active_positions = [pos for pos in active_positions if pos in {"L", "R"}]
+
+        cost_le = None
+        cost_ge = None
+        m = re.search(r"コスト\s*(\d+)\s*以下", body)
+        if m:
+            cost_le = int(m.group(1))
+        m = re.search(r"コスト\s*(\d+)\s*以上", body)
+        if m:
+            cost_ge = int(m.group(1))
+
+        blade_le = None
+        blade_eq = None
+        m = re.search(r"元々持つ<\(ブレード\)>[^。\n]*ちょうど\s*(\d+)", body)
+        if m:
+            blade_eq = int(m.group(1))
+        m = re.search(r"元々持つ<\(ブレード\)>[^。\n]*(\d+)\s*(?:つ|個)?以下", body)
+        if m and blade_eq is None:
+            blade_le = int(m.group(1))
+
+        group_not = ""
+        m = re.search(r"『([^』]+)』以外", body)
+        if m:
+            group_not = m.group(1)
+
+        out: List[str] = []
+        for pos in active_positions:
+            slot = dict(getattr(other.app.gs, "stage", {}) or {}).get(pos)
+            cn = self._slot_cardnumber(slot)
+            if not cn:
+                continue
+            if cost_le is not None and self._card_numeric_field(other, cn, "cost") > cost_le:
+                continue
+            if cost_ge is not None and self._card_numeric_field(other, cn, "cost") < cost_ge:
+                continue
+            blade = self._card_numeric_field(other, cn, "blade")
+            if blade_eq is not None and blade != blade_eq:
+                continue
+            if blade_le is not None and blade > blade_le:
+                continue
+            if group_not:
+                group = self._card_text_field(other, cn, "group")
+                if group == group_not:
+                    continue
+            out.append(pos)
+        return out
+
+    def _apply_opponent_wait_request(self, rt: PlayerViewRuntime, request: Optional[Dict[str, Any]]) -> None:
+        if not request:
+            return
+        requested = max(0, min(3, int(request.get("count", 0) or 0)))
+        if requested <= 0:
+            return
+        other = self.runtime("p2" if rt.key == "p1" else "p1")
+        candidates = self._opponent_wait_candidates(other, request)
+        pick_n = min(requested, len(candidates))
+        picked = candidates[:pick_n]
+        for pos in picked:
+            slot = dict(getattr(other.app.gs, "stage", {}) or {}).get(pos)
+            if slot is not None:
+                setattr(slot, "active", False)
+        src = str(request.get("source_cn", "") or "?")
+        other.app.gs.log.append(
+            f"[DUAL EFFECT][OPPONENT WAIT] {src}: {picked if picked else 'none'} -> WAIT "
+            f"(requested={requested}, candidates={candidates})"
+        )
+        rt.app.gs.log.append(
+            f"[DUAL EFFECT][OPPONENT WAIT] {src}: opponent {other.key} {picked if picked else 'none'} -> WAIT "
+            f"(requested={requested}, applied={pick_n})"
+        )
+        self._sync_view_to_core(other)
+
+    def _pending_item_for_command(
+        self,
+        rt: PlayerViewRuntime,
+        cmd: str,
+        payload: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        pend = list(getattr(rt.app.gs, "pending", []) or [])
+        if not pend:
+            return None
+        if str(cmd or "") == "next":
+            item = pend[0]
+            return item if isinstance(item, dict) else None
+        if str(cmd or "") != "resolve_pending":
+            return None
+        try:
+            idx = int((payload or {}).get("idx", -1))
+        except Exception:
+            return None
+        if idx < 0 or idx >= len(pend):
+            return None
+        item = pend[idx]
+        return item if isinstance(item, dict) else None
+
+    @staticmethod
+    def _payload_choice_text(payload: Dict[str, Any]) -> str:
+        return str((payload or {}).get("choice", "") or "").strip().lower()
+
+    @classmethod
+    def _choice_applies_optional_effect(cls, payload: Dict[str, Any]) -> bool:
+        return cls._payload_choice_text(payload) in {
+            "apply", "yes", "y", "1", "true", "use", "do", "go", "ok",
+            "confirm", "使う", "はい",
+        }
+
+    def _capture_opponent_energy_wait_request(
+        self,
+        rt: PlayerViewRuntime,
+        cmd: str,
+        payload: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        item = self._pending_item_for_command(rt, cmd, payload)
+        if not item or str(item.get("kind", "") or "") != "message_ack":
+            return None
+        body = (
+            str(item.get("label", "") or "")
+            + "\n"
+            + str(item.get("text", "") or "")
+            + "\n"
+            + str(item.get("message", "") or "")
+        )
+        if "相手エネルギー確認" not in body:
+            return None
+        n = None
+        patterns = (
+            r"相手[もは、]*[^。\n]*エネルギー(?:カード)?を\s*(\d+)\s*枚ウェイト状態で置",
+            r"相手[もは、]*[^。\n]*エネルギーデッキから[^。\n]*(\d+)\s*枚ウェイト状態で置",
+        )
+        for pat in patterns:
+            m = re.search(pat, body)
+            if m:
+                n = int(m.group(1))
+                break
+        if n is None:
+            return None
+        return {
+            "n": max(0, n),
+            "source_cn": str(item.get("source_cn", "") or ""),
+            "text": body,
+        }
+
+    def _capture_opponent_draw_request(
+        self,
+        rt: PlayerViewRuntime,
+        cmd: str,
+        payload: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        if str(cmd or "") != "resolve_pending":
+            return None
+        item = self._pending_item_for_command(rt, cmd, payload)
+        if not item or str(item.get("kind", "") or "") != "confirm_effect":
+            return None
+        if not self._choice_applies_optional_effect(payload):
+            return None
+        body = (
+            str(item.get("text", "") or "")
+            + "\n"
+            + str(item.get("message", "") or "")
+            + "\n"
+            + str(item.get("effect_text", "") or "")
+        )
+        m = re.search(r"相手はカードを\s*(\d+)\s*枚引", body)
+        if not m:
+            return None
+        return {
+            "n": max(0, int(m.group(1))),
+            "source_cn": str(item.get("source_cn", "") or ""),
+            "text": body,
+        }
+
+    def _apply_opponent_energy_wait_request(
+        self,
+        rt: PlayerViewRuntime,
+        request: Optional[Dict[str, Any]],
+    ) -> None:
+        if not request:
+            return
+        n = max(0, int(request.get("n", 0) or 0))
+        if n <= 0:
+            return
+        other = self.runtime("p2" if rt.key == "p1" else "p1")
+        gs = other.app.gs
+        active = max(0, int(getattr(gs, "energy_active", 0) or 0))
+        wait = max(0, int(getattr(gs, "energy_wait", 0) or 0))
+        under = self._energy_under(gs)
+        remaining = max(0, ENERGY_DECK_SIZE - active - wait - under)
+        add = min(n, remaining)
+        if add > 0:
+            gs.energy_wait = wait + add
+            gs.energy_total = ENERGY_DECK_SIZE
+        src = str(request.get("source_cn", "") or "?")
+        suffix = " (clipped)" if add < n else ""
+        other.app.gs.log.append(
+            f"[DUAL EFFECT][OPPONENT ENERGY WAIT] {src}: +{add}/{n}{suffix} "
+            f"(active={active}, wait={int(getattr(gs, 'energy_wait', 0) or 0)}, under={under})"
+        )
+        rt.app.gs.log.append(
+            f"[DUAL EFFECT][OPPONENT ENERGY WAIT] {src}: opponent {other.key} +{add}/{n}{suffix}"
+        )
+        self._sync_view_to_core(other)
+
+    def _apply_opponent_draw_request(
+        self,
+        rt: PlayerViewRuntime,
+        request: Optional[Dict[str, Any]],
+    ) -> None:
+        if not request:
+            return
+        n = max(0, int(request.get("n", 0) or 0))
+        if n <= 0:
+            return
+        other = self.runtime("p2" if rt.key == "p1" else "p1")
+        gs = other.app.gs
+        hand_before = len(list(getattr(gs, "hand", []) or []))
+        try:
+            from llocg_ui.engine import draw as shared_draw
+            draw_n = int(shared_draw(gs, n, getattr(other.app, "rng", None)) or 0)
+        except Exception as exc:
+            deck = list(getattr(gs, "deck", []) or [])
+            draw_n = min(n, len(deck))
+            drawn = deck[:draw_n]
+            gs.hand = list(getattr(gs, "hand", []) or []) + drawn
+            gs.deck = deck[draw_n:]
+            gs.log.append(f"[WARN] shared opponent draw failed; fallback without refresh: {exc}")
+        hand_after = len(list(getattr(gs, "hand", []) or []))
+        src = str(request.get("source_cn", "") or "?")
+        refreshed = bool(getattr(gs, "deck_refreshed_this_turn", False))
+        suffix = " (refreshed)" if refreshed else ""
+        other.app.gs.log.append(
+            f"[DUAL EFFECT][OPPONENT DRAW] {src}: draw {draw_n}/{n}{suffix} "
+            f"(hand {hand_before}->{hand_after})"
+        )
+        rt.app.gs.log.append(
+            f"[DUAL EFFECT][OPPONENT DRAW] {src}: opponent {other.key} draw {draw_n}/{n}{suffix}"
+        )
+        self._sync_view_to_core(other)
+
+    def _card_kind_matches(self, rt: PlayerViewRuntime, cardnumber: str, kind: str) -> bool:
+        want = str(kind or "ANY").upper()
+        if want in ("", "ANY", "CARD"):
+            return True
+        payload = self.card_info_payload(rt.key, cardnumber) or {}
+        card_type = (
+            str(payload.get("card_type", "") or "")
+            + " "
+            + str(payload.get("type", "") or "")
+            + " "
+            + str(payload.get("kind", "") or "")
+        ).upper()
+        if want == "LIVE":
+            return "LIVE" in card_type or "ライブ" in card_type
+        if want == "MEMBER":
+            return "MEMBER" in card_type or "メンバー" in card_type
+        return True
+
+    def _green_candidates_for_runtime(self, rt: PlayerViewRuntime, kind: str) -> List[str]:
+        out: List[str] = []
+        for cn in list(getattr(rt.app.gs, "green_room", []) or []):
+            cn_s = str(cn or "").strip()
+            if cn_s and self._card_kind_matches(rt, cn_s, kind):
+                out.append(cn_s)
+        return out
+
+    def _capture_choose_opponent_green_bottom_request(
+        self,
+        rt: PlayerViewRuntime,
+        cmd: str,
+        payload: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        if str(cmd or "") != "resolve_pending":
+            return None
+        item = self._pending_item_for_command(rt, cmd, payload)
+        if not item or str(item.get("kind", "") or "") != "choose_player_for_green_bottom":
+            return None
+        if self._payload_choice_text(payload) not in {"opponent", "opp", "other", "相手"}:
+            return None
+        return {
+            "kind": str(item.get("want_kind", "ANY") or "ANY"),
+            "n": max(0, int(item.get("remaining", 0) or 0)),
+            "allow_less": bool(item.get("allow_less", False) or item.get("allow_skip", False)),
+            "source_cn": str(item.get("source_cn", "") or ""),
+        }
+
+    def _capture_opponent_mass_green_bottom_request(
+        self,
+        rt: PlayerViewRuntime,
+        cmd: str,
+        payload: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        if str(cmd or "") != "resolve_pending":
+            return None
+        item = self._pending_item_for_command(rt, cmd, payload)
+        if not item or str(item.get("kind", "") or "") != "manual_opponent_mass_bottom_threshold":
+            return None
+        return {
+            "kind": "MEMBER",
+            "n": 999,
+            "allow_less": True,
+            "shuffle": True,
+            "source_cn": str(item.get("source_cn", "") or ""),
+        }
+
+    def _apply_opponent_green_bottom_request(
+        self,
+        rt: PlayerViewRuntime,
+        request: Optional[Dict[str, Any]],
+    ) -> None:
+        if not request:
+            return
+        other = self.runtime("p2" if rt.key == "p1" else "p1")
+        kind = str(request.get("kind", "ANY") or "ANY").upper()
+        n = max(0, int(request.get("n", 0) or 0))
+        if n <= 0:
+            return
+        candidates = self._green_candidates_for_runtime(other, kind)
+        if not request.get("allow_less") and len(candidates) < n:
+            src0 = str(request.get("source_cn", "") or "?")
+            other.app.gs.log.append(
+                f"[DUAL EFFECT][OPPONENT GREEN BOTTOM][ERR] {src0}: not enough {kind} candidates "
+                f"(need={n}, have={len(candidates)})"
+            )
+            rt.app.gs.log.append(
+                f"[DUAL EFFECT][OPPONENT GREEN BOTTOM][ERR] {src0}: opponent {other.key} not enough candidates"
+            )
+            return
+        moved = list(candidates[: min(n, len(candidates))])
+        if request.get("shuffle"):
+            try:
+                other.app.rng.shuffle(moved)
+            except Exception:
+                pass
+        remaining_green = list(getattr(other.app.gs, "green_room", []) or [])
+        for cn in moved:
+            try:
+                remaining_green.remove(cn)
+            except ValueError:
+                pass
+        other.app.gs.green_room = remaining_green
+        other.app.gs.deck = list(getattr(other.app.gs, "deck", []) or []) + moved
+        src = str(request.get("source_cn", "") or "?")
+        other.app.gs.log.append(
+            f"[DUAL EFFECT][OPPONENT GREEN BOTTOM] {src}: {kind} {len(moved)}/{n} -> deck bottom"
+        )
+        rt.app.gs.log.append(
+            f"[DUAL EFFECT][OPPONENT GREEN BOTTOM] {src}: opponent {other.key} {kind} {len(moved)}/{n}"
+        )
+        self._sync_view_to_core(other)
+
+    def _capture_choose_opponent_deck_top_request(
+        self,
+        rt: PlayerViewRuntime,
+        cmd: str,
+        payload: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        if str(cmd or "") != "resolve_pending":
+            return None
+        item = self._pending_item_for_command(rt, cmd, payload)
+        if not item or str(item.get("kind", "") or "") != "choose_player_for_deck_top_action":
+            return None
+        if self._payload_choice_text(payload) not in {"opponent", "opp", "other", "相手"}:
+            return None
+        return {
+            "action": str(item.get("action", "") or ""),
+            "k": max(1, int(item.get("k", 1) or 1)),
+            "source_cn": str(item.get("source_cn", "") or ""),
+        }
+
+    def _refresh_opponent_for_top_access(self, other: PlayerViewRuntime, need: int, source: str) -> None:
+        try:
+            from llocg_ui.engine import _rule_refresh_for_top_access
+            _rule_refresh_for_top_access(
+                other.app.gs,
+                getattr(other.app, "rng", None),
+                max(1, int(need or 1)),
+                reason=f"dual_opponent_deck_top:{source or '?'}",
+            )
+        except Exception as exc:
+            other.app.gs.log.append(f"[WARN] shared opponent top-access refresh failed: {exc}")
+
+    def _install_opponent_deck_top_pending(
+        self,
+        rt: PlayerViewRuntime,
+        request: Optional[Dict[str, Any]],
+    ) -> None:
+        if not request:
+            return
+        other = self.runtime("p2" if rt.key == "p1" else "p1")
+        action = str(request.get("action", "") or "")
+        k = max(1, int(request.get("k", 1) or 1))
+        src = str(request.get("source_cn", "") or "")
+        self._refresh_opponent_for_top_access(other, k, src)
+        deck = list(getattr(other.app.gs, "deck", []) or [])
+        revealed = deck[: min(k, len(deck))]
+        pending = list(getattr(rt.app.gs, "pending", []) or [])
+        replacement: Optional[Dict[str, Any]] = None
+        if action == "top1_optional_green":
+            if revealed:
+                replacement = {
+                    "kind": "dual_opponent_top1_to_green_or_keep",
+                    "text": "相手のデッキの一番上のカードを確認。控え室に置くか、デッキ上に残すか選んでください。",
+                    "options": ["green", "keep"],
+                    "top_cn": revealed[0],
+                    "display_cards": list(revealed),
+                    "source_cn": src,
+                }
+            else:
+                replacement = {
+                    "kind": "message_ack",
+                    "label": "相手デッキ確認",
+                    "text": "相手のデッキに確認できるカードがありません。",
+                    "options": ["ok"],
+                    "source_cn": src,
+                }
+        elif action == "topk_reorder_keep_any":
+            replacement = {
+                "kind": "dual_opponent_topk_reorder_keep_any",
+                "text": f"相手のデッキ上から{len(revealed)}枚を確認。デッキ上に残すカードを上から順に選び、残りを控え室に置きます。",
+                "options": list(revealed),
+                "display_cards": list(revealed),
+                "pool": list(revealed),
+                "source_cn": src,
+            }
+        if replacement is None:
+            return
+        for i in range(len(pending) - 1, -1, -1):
+            item = pending[i]
+            if isinstance(item, dict) and str(item.get("kind", "") or "") == "manual_opponent_deck_top_action_notify":
+                pending[i] = replacement
+                rt.app.gs.pending = pending
+                rt.app.gs.log.append(
+                    f"[DUAL EFFECT][OPPONENT DECK TOP] {src or '?'}: prepared action={action} revealed={revealed}"
+                )
+                other.app.gs.log.append(
+                    f"[DUAL EFFECT][OPPONENT DECK TOP] {src or '?'}: revealed top {len(revealed)}/{k}"
+                )
+                self._sync_view_to_core(other)
+                return
+        pending.append(replacement)
+        rt.app.gs.pending = pending
+        rt.app.gs.log.append(
+            f"[DUAL EFFECT][OPPONENT DECK TOP] {src or '?'}: prepared action={action} revealed={revealed}"
+        )
+        other.app.gs.log.append(
+            f"[DUAL EFFECT][OPPONENT DECK TOP] {src or '?'}: revealed top {len(revealed)}/{k}"
+        )
+        self._sync_view_to_core(other)
+
+    def _handle_dual_opponent_deck_pending(
+        self,
+        rt: PlayerViewRuntime,
+        cmd: str,
+        payload: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        if str(cmd or "") != "resolve_pending":
+            return None
+        item = self._pending_item_for_command(rt, cmd, payload)
+        if not item:
+            return None
+        kind = str(item.get("kind", "") or "")
+        if kind not in {"dual_opponent_top1_to_green_or_keep", "dual_opponent_topk_reorder_keep_any"}:
+            return None
+        other = self.runtime("p2" if rt.key == "p1" else "p1")
+        self._push_history()
+        try:
+            idx = int((payload or {}).get("idx", -1))
+            pending = list(getattr(rt.app.gs, "pending", []) or [])
+            if idx < 0 or idx >= len(pending):
+                return self._full_state_with_error(rt, "対象の確認項目が見つかりません")
+            pending.pop(idx)
+            rt.app.gs.pending = pending
+            low = self._payload_choice_text(payload)
+            src = str(item.get("source_cn", "") or "?")
+            if kind == "dual_opponent_top1_to_green_or_keep":
+                if not list(getattr(other.app.gs, "deck", []) or []):
+                    other.app.gs.log.append(f"[DUAL EFFECT][OPPONENT DECK TOP][ERR] {src}: opponent deck empty")
+                elif low in {"green", "waiting", "wait", "控え室"}:
+                    moved = other.app.gs.deck.pop(0)
+                    other.app.gs.green_room.append(moved)
+                    other.app.gs.log.append(f"[DUAL EFFECT][OPPONENT DECK TOP] {src}: top {moved} -> waiting room")
+                    rt.app.gs.log.append(f"[DUAL EFFECT][OPPONENT DECK TOP] {src}: opponent top -> waiting room")
+                elif low in {"keep", "top", "deck", "残す", "デッキ上"}:
+                    kept = other.app.gs.deck[0]
+                    other.app.gs.log.append(f"[DUAL EFFECT][OPPONENT DECK TOP] {src}: top {kept} kept")
+                    rt.app.gs.log.append(f"[DUAL EFFECT][OPPONENT DECK TOP] {src}: opponent top kept")
+                else:
+                    rt.app.gs.pending.insert(idx, item)
+                    rt.app.gs.log.append(f"[ERR] dual_opponent_top1_to_green_or_keep: invalid choice {low}")
+                    self._discard_failed_history()
+                    return self._full_state_with_error(rt, "選択が不正です")
+            else:
+                pool = [str(x or "") for x in list(item.get("pool", []) or []) if str(x or "").strip()]
+                raw_choice = (payload or {}).get("choice", "")
+                if isinstance(raw_choice, list):
+                    keep = [str(x or "").strip() for x in raw_choice if str(x or "").strip()]
+                else:
+                    keep = [x.strip() for x in re.split(r"[,\\s]+", str(raw_choice or "").strip()) if x.strip()]
+                keep = [cn for cn in keep if cn in pool]
+                seen: List[str] = []
+                for cn in keep:
+                    if cn not in seen:
+                        seen.append(cn)
+                keep = seen
+                rest = [cn for cn in pool if cn not in keep]
+                deck = list(getattr(other.app.gs, "deck", []) or [])
+                other.app.gs.deck = keep + deck[len(pool):]
+                other.app.gs.green_room = list(getattr(other.app.gs, "green_room", []) or []) + rest
+                other.app.gs.log.append(
+                    f"[DUAL EFFECT][OPPONENT DECK TOP] {src}: keep={keep}; rest_to_waiting={rest}"
+                )
+                rt.app.gs.log.append(
+                    f"[DUAL EFFECT][OPPONENT DECK TOP] {src}: opponent keep={len(keep)} rest={len(rest)}"
+                )
+            self._sync_view_to_core(other)
+            self._sync_metadata_to_views()
+            raw = rt.app.state_json()
+            out = self._decorate_player_state(rt, raw if isinstance(raw, dict) else {})
+            out["dual_transaction_committed"] = True
+            return out
+        except Exception:
+            self._discard_failed_history()
+            raise
+
+    def _opponent_hand_discard_pending(self, other: PlayerViewRuntime, *, n: int, kind: str = "ANY", source_cn: str = "") -> Dict[str, Any]:
+        hand = [str(x or "") for x in list(getattr(other.app.gs, "hand", []) or []) if str(x or "").strip()]
+        kind_u = str(kind or "ANY").upper()
+        options = [cn for cn in hand if self._card_kind_matches(other, cn, kind_u)]
+        return {
+            "kind": "dual_opponent_discard_from_hand",
+            "text": f"相手の手札から{kind_u if kind_u != 'ANY' else 'カード'}を{int(n or 0)}枚控え室に置きます。相手が置くカードを選んでください。",
+            "options": list(options),
+            "display_cards": list(options),
+            "remaining": max(0, int(n or 0)),
+            "want_kind": kind_u,
+            "source_cn": str(source_cn or ""),
+        }
+
+    def _install_opponent_hand_discard_pending(
+        self,
+        rt: PlayerViewRuntime,
+        *,
+        n: int,
+        kind: str = "ANY",
+        source_cn: str = "",
+    ) -> None:
+        if int(n or 0) <= 0:
+            return
+        other = self.runtime("p2" if rt.key == "p1" else "p1")
+        pending = list(getattr(rt.app.gs, "pending", []) or [])
+        pending.append(self._opponent_hand_discard_pending(other, n=n, kind=kind, source_cn=source_cn))
+        rt.app.gs.pending = pending
+        rt.app.gs.log.append(
+            f"[DUAL EFFECT][OPPONENT HAND DISCARD] {source_cn or '?'}: choose opponent {other.key} {kind} x{int(n or 0)}"
+        )
+
+    def _capture_opponent_hand_discard_request(
+        self,
+        rt: PlayerViewRuntime,
+        cmd: str,
+        payload: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        if str(cmd or "") != "resolve_pending":
+            return None
+        item = self._pending_item_for_command(rt, cmd, payload)
+        if not item:
+            return None
+        kind = str(item.get("kind", "") or "")
+        low = self._payload_choice_text(payload)
+        if kind == "opponent_optional_discard_hand_else_self_gain_icons":
+            if low in {"opponent_discard", "discard", "yes", "y", "1", "true", "捨てる", "置く", "はい"}:
+                return {
+                    "n": max(0, int(item.get("discard_n", 1) or 1)),
+                    "kind": "ANY",
+                    "source_cn": str(item.get("source_cn", "") or ""),
+                }
+        if kind == "confirm_effect":
+            body = str(item.get("text", "") or "")
+            if "相手がライブカードを控え室に置かなかった場合" in body and low in {"skip", "__skip__", "no", "n", "0", "false", "置いた", "スキップ"}:
+                m = re.search(r"相手は手札からライブカードを\s*(\d+)\s*枚", body)
+                return {
+                    "n": max(0, int(m.group(1)) if m else 1),
+                    "kind": "LIVE",
+                    "source_cn": str(item.get("source_cn", "") or ""),
+                }
+        if kind == "favorite_icecream_answer":
+            raw = str((payload or {}).get("choice", "") or "").strip()
+            if raw == "チョコミント/ストロベリー/クッキー":
+                return {"n": 1, "kind": "ANY", "source_cn": str(item.get("source_cn", "") or "")}
+        return None
+
+    def _capture_favorite_answer_side_effect(
+        self,
+        rt: PlayerViewRuntime,
+        cmd: str,
+        payload: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        if str(cmd or "") != "resolve_pending":
+            return None
+        item = self._pending_item_for_command(rt, cmd, payload)
+        if not item or str(item.get("kind", "") or "") != "favorite_icecream_answer":
+            return None
+        raw = str((payload or {}).get("choice", "") or "").strip()
+        if raw == "あなた":
+            return {"kind": "draw", "n": 1, "source_cn": str(item.get("source_cn", "") or "")}
+        if raw == "それ以外":
+            return {"kind": "stage_blade", "n": 1, "source_cn": str(item.get("source_cn", "") or "")}
+        return None
+
+    def _apply_favorite_answer_side_effect(self, rt: PlayerViewRuntime, request: Optional[Dict[str, Any]]) -> None:
+        if not request:
+            return
+        if request.get("kind") == "draw":
+            self._apply_opponent_draw_request(rt, request)
+            return
+        if request.get("kind") == "stage_blade":
+            other = self.runtime("p2" if rt.key == "p1" else "p1")
+            blade_n = max(0, int(request.get("n", 0) or 0))
+            applied: List[str] = []
+            for pos, slot in dict(getattr(other.app.gs, "stage", {}) or {}).items():
+                if pos in {"L", "C", "R"} and slot is not None and self._slot_cardnumber(slot):
+                    setattr(slot, "temp_blade", int(getattr(slot, "temp_blade", 0) or 0) + blade_n)
+                    setattr(slot, "temp_until", "end_of_live")
+                    applied.append(pos)
+            src = str(request.get("source_cn", "") or "?")
+            other.app.gs.log.append(f"[DUAL EFFECT][OPPONENT STAGE BLADE] {src}: positions={applied} blade+{blade_n}")
+            rt.app.gs.log.append(f"[DUAL EFFECT][OPPONENT STAGE BLADE] {src}: opponent {other.key} positions={applied} blade+{blade_n}")
+            self._sync_view_to_core(other)
+
+    def _handle_dual_opponent_hand_pending(
+        self,
+        rt: PlayerViewRuntime,
+        cmd: str,
+        payload: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        if str(cmd or "") != "resolve_pending":
+            return None
+        item = self._pending_item_for_command(rt, cmd, payload)
+        if not item or str(item.get("kind", "") or "") != "dual_opponent_discard_from_hand":
+            return None
+        other = self.runtime("p2" if rt.key == "p1" else "p1")
+        self._push_history()
+        try:
+            idx = int((payload or {}).get("idx", -1))
+            pending = list(getattr(rt.app.gs, "pending", []) or [])
+            if idx < 0 or idx >= len(pending):
+                return self._full_state_with_error(rt, "対象の確認項目が見つかりません")
+            pending.pop(idx)
+            rt.app.gs.pending = pending
+            cn = str((payload or {}).get("choice", "") or "").strip()
+            opts = [str(x or "") for x in list(item.get("options", []) or [])]
+            if cn not in opts:
+                rt.app.gs.pending.insert(idx, item)
+                self._discard_failed_history()
+                return self._full_state_with_error(rt, "相手手札の選択が不正です")
+            hand = list(getattr(other.app.gs, "hand", []) or [])
+            try:
+                hand.remove(cn)
+            except ValueError:
+                rt.app.gs.pending.insert(idx, item)
+                self._discard_failed_history()
+                return self._full_state_with_error(rt, "選んだカードが相手手札にありません")
+            other.app.gs.hand = hand
+            other.app.gs.green_room = list(getattr(other.app.gs, "green_room", []) or []) + [cn]
+            src = str(item.get("source_cn", "") or "?")
+            other.app.gs.log.append(f"[DUAL EFFECT][OPPONENT HAND DISCARD] {src}: {cn} -> waiting room")
+            rt.app.gs.log.append(f"[DUAL EFFECT][OPPONENT HAND DISCARD] {src}: opponent {other.key} discarded 1")
+            try:
+                from llocg_ui.engine import _enqueue_hand_discard_auto_triggers
+                _enqueue_hand_discard_auto_triggers(other.app.gs, other.app.cards_db, [cn])
+            except Exception as exc:
+                other.app.gs.log.append(f"[WARN] opponent hand-discard auto trigger enqueue failed: {exc}")
+            rem = max(0, int(item.get("remaining", 0) or 0) - 1)
+            if rem > 0:
+                rt.app.gs.pending.insert(
+                    idx,
+                    self._opponent_hand_discard_pending(
+                        other,
+                        n=rem,
+                        kind=str(item.get("want_kind", "ANY") or "ANY"),
+                        source_cn=src,
+                    ),
+                )
+            self._sync_view_to_core(other)
+            self._sync_metadata_to_views()
+            raw = rt.app.state_json()
+            out = self._decorate_player_state(rt, raw if isinstance(raw, dict) else {})
+            out["dual_transaction_committed"] = True
+            return out
+        except Exception:
+            self._discard_failed_history()
+            raise
+
+    def _handle_dual_opponent_random_reveal_pending(
+        self,
+        rt: PlayerViewRuntime,
+        cmd: str,
+        payload: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        if str(cmd or "") != "resolve_pending":
+            return None
+        item = self._pending_item_for_command(rt, cmd, payload)
+        if not item or str(item.get("kind", "") or "") != "confirm_effect":
+            return None
+        body = str(item.get("text", "") or "")
+        m = re.search(r"相手の手札を見ないで\s*(\d+)\s*枚公開", body)
+        m_draw = re.search(r"カードを\s*(\d+)\s*枚引", body)
+        if not m or "ライブカードがない場合" not in body:
+            return None
+        if self._payload_choice_text(payload) in {"skip", "__skip__", "no", "n", "0", "false", "スキップ"}:
+            return None
+        other = self.runtime("p2" if rt.key == "p1" else "p1")
+        self._push_history()
+        try:
+            idx = int((payload or {}).get("idx", -1))
+            pending = list(getattr(rt.app.gs, "pending", []) or [])
+            if idx < 0 or idx >= len(pending):
+                return self._full_state_with_error(rt, "対象の確認項目が見つかりません")
+            pending.pop(idx)
+            rt.app.gs.pending = pending
+            count = max(0, int(m.group(1)))
+            draw_n = max(0, int(m_draw.group(1)) if m_draw else 0)
+            hand = list(getattr(other.app.gs, "hand", []) or [])
+            indices = list(range(len(hand)))
+            try:
+                other.app.rng.shuffle(indices)
+            except Exception:
+                pass
+            picked_indices = sorted(indices[: min(count, len(indices))])
+            revealed = [str(hand[i] or "") for i in picked_indices]
+            has_live = any(self._card_kind_matches(other, cn, "LIVE") for cn in revealed)
+            drew = 0
+            if not has_live and draw_n > 0:
+                try:
+                    from llocg_ui.engine import draw as shared_draw
+                    drew = int(shared_draw(rt.app.gs, draw_n, getattr(rt.app, "rng", None)) or 0)
+                except Exception as exc:
+                    rt.app.gs.log.append(f"[WARN] shared random-reveal draw failed: {exc}")
+            src = str(item.get("source_cn", "") or "?")
+            rt.app.gs.pending.append({
+                "kind": "show_revealed_cards_ack",
+                "label": "相手手札ランダム公開",
+                "text": f"{src}: 相手手札から{len(revealed)}/{count}枚をランダム公開しました。ライブカード{'あり' if has_live else 'なし'}、ドロー{drew}/{draw_n}。",
+                "display_cards": list(revealed),
+                "options": ["ok"],
+                "source_cn": src,
+            })
+            rt.app.gs.log.append(
+                f"[DUAL EFFECT][OPPONENT HAND REVEAL] {src}: revealed={revealed}; has_live={has_live}; draw={drew}/{draw_n}"
+            )
+            other.app.gs.log.append(
+                f"[DUAL EFFECT][OPPONENT HAND REVEAL] {src}: hand cards revealed count={len(revealed)}"
+            )
+            self._sync_view_to_core(rt)
+            self._sync_metadata_to_views()
+            raw = rt.app.state_json()
+            out = self._decorate_player_state(rt, raw if isinstance(raw, dict) else {})
+            out["dual_transaction_committed"] = True
+            return out
+        except Exception:
+            self._discard_failed_history()
+            raise
+
+    @staticmethod
+    def _front_slot_for_opponent(source_pos: str) -> str:
+        return {"L": "R", "C": "C", "R": "L"}.get(str(source_pos or "").upper(), "C")
+
+    def _source_position_for_card(self, rt: PlayerViewRuntime, source_cn: str) -> str:
+        want = str(source_cn or "").strip()
+        for pos, slot in dict(getattr(rt.app.gs, "stage", {}) or {}).items():
+            if pos in {"L", "C", "R"} and self._slot_cardnumber(slot) == want:
+                return pos
+        return ""
+
+    def _capture_opponent_position_request(
+        self,
+        rt: PlayerViewRuntime,
+        cmd: str,
+        payload: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        if str(cmd or "") != "resolve_pending":
+            return None
+        item = self._pending_item_for_command(rt, cmd, payload)
+        if not item:
+            return None
+        kind0 = str(item.get("kind", "") or "")
+        if kind0 not in {"effect_notice", "choose_stage_member_to_position_change_source"}:
+            return None
+        text = str(item.get("text", "") or "")
+        src = str(item.get("source_cn", "") or "")
+        if "相手ステージのメンバー1人をこのメンバーの正面" in text:
+            src_pos = self._source_position_for_card(rt, src)
+            return {
+                "mode": "front",
+                "source_cn": src,
+                "dest": self._front_slot_for_opponent(src_pos),
+            }
+        if "相手も同じ移動" in text:
+            return {"mode": "rotate", "source_cn": src}
+        if "相手のセンター" in text:
+            return {"mode": "center", "source_cn": src}
+        return None
+
+    def _install_opponent_position_pending(self, rt: PlayerViewRuntime, request: Optional[Dict[str, Any]]) -> None:
+        if not request:
+            return
+        other = self.runtime("p2" if rt.key == "p1" else "p1")
+        stage = dict(getattr(other.app.gs, "stage", {}) or {})
+        src = str(request.get("source_cn", "") or "")
+        if request.get("mode") == "rotate":
+            old = {pos: stage.get(pos) for pos in ("L", "C", "R")}
+            other.app.gs.stage["L"] = old.get("C")
+            other.app.gs.stage["R"] = old.get("L")
+            other.app.gs.stage["C"] = old.get("R")
+            other.app.gs.log.append(f"[DUAL EFFECT][OPPONENT POSITION] {src or '?'}: rotate C->L L->R R->C")
+            rt.app.gs.log.append(f"[DUAL EFFECT][OPPONENT POSITION] {src or '?'}: opponent {other.key} rotate")
+            self._sync_view_to_core(other)
+            return
+        if request.get("mode") == "front":
+            options = [pos for pos in ("L", "C", "R") if stage.get(pos) is not None]
+            pending = {
+                "kind": "dual_opponent_position_change",
+                "text": f"相手ステージのメンバー1人を正面エリア（{request.get('dest')}）へポジションチェンジします。移動元を選んでください。",
+                "options": options,
+                "dest": str(request.get("dest", "C") or "C"),
+                "source_cn": src,
+            }
+        else:
+            options = [pos for pos in ("L", "R") if stage.get(pos) is not None]
+            pending = {
+                "kind": "dual_opponent_position_change",
+                "text": "相手のセンターにいるメンバーをポジションチェンジします。移動先を選んでください。",
+                "options": options,
+                "src_pos": "C",
+                "source_cn": src,
+            }
+        rt.app.gs.pending = list(getattr(rt.app.gs, "pending", []) or []) + [pending]
+        rt.app.gs.log.append(f"[DUAL EFFECT][OPPONENT POSITION] {src or '?'}: prepared {request}")
+
+    def _handle_dual_opponent_position_pending(
+        self,
+        rt: PlayerViewRuntime,
+        cmd: str,
+        payload: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        if str(cmd or "") != "resolve_pending":
+            return None
+        item = self._pending_item_for_command(rt, cmd, payload)
+        if not item or str(item.get("kind", "") or "") != "dual_opponent_position_change":
+            return None
+        other = self.runtime("p2" if rt.key == "p1" else "p1")
+        self._push_history()
+        try:
+            idx = int((payload or {}).get("idx", -1))
+            pending = list(getattr(rt.app.gs, "pending", []) or [])
+            if idx < 0 or idx >= len(pending):
+                return self._full_state_with_error(rt, "対象の確認項目が見つかりません")
+            pending.pop(idx)
+            rt.app.gs.pending = pending
+            choice = str((payload or {}).get("choice", "") or "").strip().upper()
+            stage = getattr(other.app.gs, "stage", {}) or {}
+            if "src_pos" in item:
+                src_pos = str(item.get("src_pos", "") or "").upper()
+                dest = choice
+            else:
+                src_pos = choice
+                dest = str(item.get("dest", "") or "").upper()
+            if src_pos not in {"L", "C", "R"} or dest not in {"L", "C", "R"} or src_pos == dest:
+                rt.app.gs.pending.insert(idx, item)
+                self._discard_failed_history()
+                return self._full_state_with_error(rt, "ポジション選択が不正です")
+            stage[src_pos], stage[dest] = stage.get(dest), stage.get(src_pos)
+            src = str(item.get("source_cn", "") or "?")
+            other.app.gs.log.append(f"[DUAL EFFECT][OPPONENT POSITION] {src}: swap {src_pos}<->{dest}")
+            rt.app.gs.log.append(f"[DUAL EFFECT][OPPONENT POSITION] {src}: opponent {other.key} swap {src_pos}<->{dest}")
+            self._sync_view_to_core(other)
+            self._sync_metadata_to_views()
+            raw = rt.app.state_json()
+            out = self._decorate_player_state(rt, raw if isinstance(raw, dict) else {})
+            out["dual_transaction_committed"] = True
+            return out
+        except Exception:
+            self._discard_failed_history()
+            raise
+
     @staticmethod
     def _clean_hand_indices(payload: Dict[str, Any]) -> list[int]:
         raw = payload.get("indices", []) if isinstance(payload, dict) else []
@@ -1415,12 +2547,14 @@ class LegacyUIAdapter:
     def _is_no_live_after_confirm_transition(
         self, rt: PlayerViewRuntime, before: Dict[str, Any]
     ) -> bool:
-        """Detect LIVE_CONFIRM filtering that leaves no live cards to perform."""
+        """Detect LIVE_CONFIRM ending with no live cards to perform.
+
+        This includes both a filtered-out non-LIVE set and a legal zero-card
+        live set.  In either case no LIVE_ATTEMPT result is exported by the
+        one-player runtime, so dual v2 must record a failed/no-live result.
+        """
         phase_before = str(before.get("phase", "") or "").strip().upper()
         if phase_before != "LIVE_CONFIRM":
-            return False
-        live_before = list(before.get("live", []) or [])
-        if not live_before:
             return False
         gs = rt.app.gs
         phase_after = str(getattr(gs, "phase", "") or "").strip().upper()
@@ -1430,6 +2564,9 @@ class LegacyUIAdapter:
             return False
         if list(getattr(gs, "success_zone", []) or []) != list(before.get("success", []) or []):
             return False
+        live_before = list(before.get("live", []) or [])
+        if not live_before:
+            return True
         return self._counter_added_contains(
             list(before.get("green", []) or []),
             list(getattr(gs, "green_room", []) or []),
@@ -1852,9 +2989,12 @@ class LegacyUIAdapter:
             self._sync_view_to_core(rt)
 
     def _game_result_after_success_moves(self) -> Tuple[Optional[int], str]:
+        # MatchState is the authoritative source for duel-level victory.  The
+        # embedded one-player Apps are synchronized views and can be temporarily
+        # behind during judgment/cleanup boundaries.
         counts = [
-            len(list(getattr(self.runtime("p1").app.gs, "success_zone", []) or [])),
-            len(list(getattr(self.runtime("p2").app.gs, "success_zone", []) or [])),
+            len(list(getattr(self.engine.state.players[0], "success_zone", []) or [])),
+            len(list(getattr(self.engine.state.players[1], "success_zone", []) or [])),
         ]
         if counts[0] >= 3 and counts[1] >= 3:
             return None, "DRAW"
@@ -2278,12 +3418,49 @@ class LegacyUIAdapter:
                     rt, "フェイズ終了は中央のボタンで行います"
                 )
 
+            dual_deck_top_out = self._handle_dual_opponent_deck_pending(rt, cmd, payload)
+            if dual_deck_top_out is not None:
+                return dual_deck_top_out
+            dual_hand_out = self._handle_dual_opponent_hand_pending(rt, cmd, payload)
+            if dual_hand_out is not None:
+                return dual_hand_out
+            dual_random_reveal_out = self._handle_dual_opponent_random_reveal_pending(rt, cmd, payload)
+            if dual_random_reveal_out is not None:
+                return dual_random_reveal_out
+            dual_position_out = self._handle_dual_opponent_position_pending(rt, cmd, payload)
+            if dual_position_out is not None:
+                return dual_position_out
+
             self._push_history()
             try:
                 boundary_before = self._capture_live_boundary(rt)
                 setattr(rt.app, "_dual_last_boundary_snapshot", copy.deepcopy(boundary_before))
                 yell_notice_before = self._active_yell_notice_names(rt)
+                opponent_wait_request = self._capture_opponent_wait_request(rt, cmd, payload)
+                opponent_energy_wait_request = self._capture_opponent_energy_wait_request(rt, cmd, payload)
+                opponent_draw_request = self._capture_opponent_draw_request(rt, cmd, payload)
+                opponent_green_bottom_request = (
+                    self._capture_choose_opponent_green_bottom_request(rt, cmd, payload)
+                    or self._capture_opponent_mass_green_bottom_request(rt, cmd, payload)
+                )
+                opponent_deck_top_request = self._capture_choose_opponent_deck_top_request(rt, cmd, payload)
+                opponent_hand_discard_request = self._capture_opponent_hand_discard_request(rt, cmd, payload)
+                favorite_side_effect = self._capture_favorite_answer_side_effect(rt, cmd, payload)
+                opponent_position_request = self._capture_opponent_position_request(rt, cmd, payload)
                 out = rt.app.cmd(cmd, payload)
+                self._apply_opponent_wait_request(rt, opponent_wait_request)
+                self._apply_opponent_energy_wait_request(rt, opponent_energy_wait_request)
+                self._apply_opponent_draw_request(rt, opponent_draw_request)
+                self._apply_opponent_green_bottom_request(rt, opponent_green_bottom_request)
+                self._install_opponent_deck_top_pending(rt, opponent_deck_top_request)
+                self._install_opponent_hand_discard_pending(
+                    rt,
+                    n=int((opponent_hand_discard_request or {}).get("n", 0) or 0),
+                    kind=str((opponent_hand_discard_request or {}).get("kind", "ANY") or "ANY"),
+                    source_cn=str((opponent_hand_discard_request or {}).get("source_cn", "") or ""),
+                )
+                self._apply_favorite_answer_side_effect(rt, favorite_side_effect)
+                self._install_opponent_position_pending(rt, opponent_position_request)
                 if yell_ack_command or (cmd == "next" and yell_notice_before):
                     self._acknowledge_yell_notice(
                         rt,
@@ -2669,7 +3846,7 @@ html,body{{height:100%;margin:0;background:#080a0e;color:#fff;font-family:system
 #phaseSub{{display:block;min-width:0;font-size:12px;font-weight:750;line-height:1.15;letter-spacing:0;margin-top:3px;opacity:.82;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
 button{{border:1px solid rgba(255,255,255,.25);border-radius:8px;background:#2a3140;color:#fff;padding:7px 11px;font-weight:900;cursor:pointer;font-size:13px;line-height:1.15;white-space:nowrap}}button:hover{{background:#384258}}button:disabled{{opacity:.45;cursor:wait}}
 #tag{{position:fixed;right:8px;top:4px;z-index:20;font-size:10px;color:#9aa4b5}}#controls{{grid-column:3;grid-row:1;justify-self:end;display:flex;align-items:center;gap:6px;min-width:0}}#controls form{{display:flex;margin:0}}
-#next{{background:#276fca;min-width:108px}}#undo{{background:#555}}#save{{background:#2f7658}}#loadBtn{{background:#6a537c}}#error{{color:#ff8d8d}}#requestStatus{{grid-column:1;grid-row:1;justify-self:start;min-width:0;max-width:100%;font-size:11px;color:#aeb8ca;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+#next{{background:#276fca;min-width:108px}}#undo{{background:#555}}#save{{background:#2f7658}}#loadBtn{{background:#6a537c}}#recordButtons{{position:fixed;right:14px;top:24px;z-index:65000;display:flex;align-items:center;gap:6px;padding:8px 9px;border-radius:13px;background:rgba(15,18,24,.84);border:1px solid rgba(255,255,255,.22);box-shadow:0 8px 26px rgba(0,0,0,.48);backdrop-filter:blur(6px)}}#recordButtons::before{{content:'RESET';font-size:10px;font-weight:900;letter-spacing:.06em;color:#d6deea;opacity:.88}}#recordButtons button{{padding-left:9px;padding-right:9px;background:#784358}}#recordButtons button:hover{{background:#934c64}}#error{{color:#ff8d8d}}#requestStatus{{grid-column:1;grid-row:1;justify-self:start;min-width:0;max-width:100%;font-size:11px;color:#aeb8ca;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
 @media (max-width: 980px){{#divider{{grid-template-columns:minmax(80px,.6fr) minmax(160px,1fr) minmax(300px,max-content);gap:8px;padding:0 8px}}#phaseBanner{{font-size:20px}}button{{padding:6px 8px;font-size:12px}}#next{{min-width:92px}}}}
 #gameOverNotice{{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:70000;display:none;min-width:min(620px,86vw);padding:22px 28px;border-radius:18px;background:rgba(22,27,38,.97);border:3px solid #ffd76b;box-shadow:0 18px 80px rgba(0,0,0,.78);text-align:center;font-weight:950}}
 #gameOverTitle{{font-size:28px;margin-bottom:8px}}#gameOverBody{{font-size:18px;color:#f4ecd0}}
@@ -2680,7 +3857,7 @@ button{{border:1px solid rgba(255,255,255,.25);border-radius:8px;background:#2a3
 .judgmentCard:hover{{background:#303b50}}.judgmentCard.selected{{border-color:#56a4ff;background:#213f69;box-shadow:0 0 0 3px rgba(86,164,255,.2)}}.judgmentCard img{{width:126px;height:176px;object-fit:contain;border-radius:8px;background:#080a0e}}.judgmentCard div{{font-size:12px;font-weight:850;word-break:break-all;margin-top:7px}}
 #judgmentHint{{text-align:center;margin-top:16px;color:#ffdd84;font-weight:850}}
 #judgmentNotice{{position:fixed;left:50%;top:50%;transform:translate(-50%,-112%);z-index:45000;display:none;max-width:min(920px,82vw);padding:12px 20px;border-radius:14px;background:rgba(21,28,42,.96);border:2px solid #6684b3;box-shadow:0 10px 40px rgba(0,0,0,.72);font-size:15px;font-weight:850;text-align:center;pointer-events:none}}
-</style></head><body><div id="tag">{BUILD_TAG}</div><div id="shell"><iframe id="p2frame" class="playerFrame" src="/p2/ui?upper=1"></iframe><div id="divider"><div id="phaseBanner">読み込み中</div><div id="requestStatus"></div><div id="controls"><form id="undoForm" method="post" action="/match_action_form"><input type="hidden" name="action" value="UNDO"><button id="undo" type="submit">UNDO</button></form><button id="save" type="button">中断保存</button><button id="loadBtn" type="button">再開読込</button><input id="loadFile" type="file" accept="application/json,.json" hidden><form id="nextForm" method="post" action="/match_action_form"><input type="hidden" name="action" value="NEXT"><button id="next" type="submit">NEXT</button></form></div></div><iframe id="p1frame" class="playerFrame" src="/p1/ui"></iframe></div>
+</style></head><body><div id="tag">{BUILD_TAG}</div><div id="recordButtons"><button id="recordP1" type="button">P1勝利</button><button id="recordP2" type="button">P2勝利</button><button id="recordNG" type="button">NG</button></div><div id="shell"><iframe id="p2frame" class="playerFrame" src="/p2/ui?upper=1"></iframe><div id="divider"><div id="phaseBanner">読み込み中</div><div id="requestStatus"></div><div id="controls"><form id="undoForm" method="post" action="/match_action_form"><input type="hidden" name="action" value="UNDO"><button id="undo" type="submit">UNDO</button></form><button id="save" type="button">中断保存</button><button id="loadBtn" type="button">再開読込</button><input id="loadFile" type="file" accept="application/json,.json" hidden><form id="nextForm" method="post" action="/match_action_form"><input type="hidden" name="action" value="NEXT"><button id="next" type="submit">NEXT</button></form></div></div><iframe id="p1frame" class="playerFrame" src="/p1/ui"></iframe></div>
 <div id="judgmentNotice"></div>
 <div id="gameOverNotice"><div id="gameOverTitle">対戦終了</div><div id="gameOverBody"></div></div>
 <div id="judgmentOverlay"><div id="judgmentPanel"><div id="judgmentTitle">成功ライブカードを選択</div><div id="judgmentMessage"></div><div id="judgmentCards"></div><div id="judgmentHint">カードを1枚選択して、中央の「成功ライブを決定」を押してください</div></div></div>
@@ -2730,6 +3907,9 @@ function updateButtons(){{
   document.getElementById('undo').disabled=busy||!S||S.history_depth===0;
   document.getElementById('save').disabled=busy||!S;
   document.getElementById('loadBtn').disabled=busy;
+  document.getElementById('recordP1').disabled=busy||!S;
+  document.getElementById('recordP2').disabled=busy||!S;
+  document.getElementById('recordNG').disabled=busy||!S;
 }}
 async function refresh(prefetched=null){{
   S=prefetched||await(await fetch('/match_state',{{cache:'no-store'}})).json();
@@ -2782,10 +3962,24 @@ async function act(action){{
   }}catch(e){{lastError=String(e.message||e);status('失敗 #'+seq);await refresh();await refreshBoards();return false}}
   finally{{busy=false;updateButtons()}}
 }}
+async function recordAndReset(result,label){{
+  if(busy||!S)return;const msg=label+'として記録し、新しい対戦を開始します。よろしいですか？';
+  if(!window.confirm(msg))return;busy=true;lastError='';status('勝敗を記録中…');updateButtons();
+  try{{
+    const r=await fetch('/match_record_reset',{{method:'POST',cache:'no-store',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{result}})}});
+    const j=await r.json();
+    if(!r.ok||!j.ok)throw new Error(j.error||'記録に失敗しました');
+    await refresh(j.state);await refreshBoards();status('記録してリセットしました');
+  }}catch(e){{lastError=String(e.message||e);status('記録リセットに失敗');await refresh();await refreshBoards()}}
+  finally{{busy=false;updateButtons()}}
+}}
 document.getElementById('nextForm').addEventListener('submit',e=>{{e.preventDefault();act('NEXT')}});document.getElementById('undoForm').addEventListener('submit',e=>{{e.preventDefault();act('UNDO')}});refresh();setInterval(()=>{{if(!busy&&!document.hidden)refresh()}},1000);
 document.getElementById('save').addEventListener('click',saveSuspend);
 document.getElementById('loadBtn').addEventListener('click',()=>document.getElementById('loadFile').click());
 document.getElementById('loadFile').addEventListener('change',e=>loadSuspendFile(e.target.files&&e.target.files[0]));
+document.getElementById('recordP1').addEventListener('click',()=>recordAndReset('p1_win','P1勝利'));
+document.getElementById('recordP2').addEventListener('click',()=>recordAndReset('p2_win','P2勝利'));
+document.getElementById('recordNG').addEventListener('click',()=>recordAndReset('no_game','No Game'));
 </script></body></html>'''
 
 
@@ -2970,6 +4164,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, json.dumps(out, ensure_ascii=False).encode(), 'application/json; charset=utf-8')
             except Exception as exc:
                 return self._send(400, json.dumps({'ok':False,'error':f'{type(exc).__name__}: {exc}'}, ensure_ascii=False).encode(), 'application/json; charset=utf-8')
+        if u.path == '/match_record_reset':
+            try:
+                out = self.adapter.record_result_and_reset(str(obj.get('result', '') or ''))
+                return self._send(200, json.dumps(out, ensure_ascii=False).encode(), 'application/json; charset=utf-8')
+            except Exception as exc:
+                return self._send(400, json.dumps({'ok':False,'error':f'{type(exc).__name__}: {exc}'}, ensure_ascii=False).encode(), 'application/json; charset=utf-8')
         rt, sub = self._route_player(u.path)
         if rt is not None and sub == '/cmd':
             cmd = str(obj.get('cmd', '') or '').strip()
@@ -2996,6 +4196,15 @@ def serve(*, host: str, port: int, project_root: Path, data_root: Path, deck1: s
     finally:
         os.environ.update(saved_env)
     adapter = LegacyUIAdapter(engine, PlayerViewRuntime('p1',0,'プレイヤー1','#2578d4',p1_app), PlayerViewRuntime('p2',1,'プレイヤー2','#d96a22',p2_app))
+    adapter.configure_reset(
+        project_root=project_root,
+        data_root=data_root,
+        deck1=deck1,
+        deck2=deck2,
+        seed=seed,
+        debug=debug,
+        preserve_start_env=preserve_start_env,
+    )
     Handler.adapter = adapter
     Handler.verbose_http = bool(verbose_http)
     httpd = ThreadingHTTPServer((host, int(port)), Handler)

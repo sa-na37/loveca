@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# BUILD_TAG = "reprint_deck_view_image_lookup_20260721a"
+# BUILD_TAG = "dual_launch_menu_yell_undo_20260722a"
 """
 Loveca application launcher (phase 1).
 
@@ -49,12 +49,13 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 
 
-BUILD_TAG = "reprint_deck_view_image_lookup_20260721a"
+BUILD_TAG = "dual_launch_menu_yell_undo_20260722a"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8875
 SESSION_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 SESSION_DIR = "user_data/remote_sessions"
 SETTINGS_PATH = "user_data/settings.json"
+STARTUP_UPDATE_PROMPT_INTERVAL_DAYS = 7
 APP_LOG_DIR = "user_data/logs"
 RUNTIME_DECK_BRIDGE = "user_data/runtime/selected_deck.json"
 DECK_IMPORT_STAGING_DIR = "user_data/runtime/deck_imports"
@@ -66,6 +67,8 @@ CARD_IMAGE_DIRS = (
 PREVIEW_CARD_IMAGE_DIR = "llocg_db_out_full/preview_card_images"
 
 MANUAL_SCRIPT = "run_llocg_ui_web.py"
+DUAL_SCRIPT = "run_llocg_dual_v2.py"
+DUAL_RUNTIME_DIR = "user_data/runtime/dual_decks"
 
 # Debug/start overrides must never leak from the shell into a normal match.
 NORMAL_MATCH_UNSET_ENV = (
@@ -180,6 +183,7 @@ class JobState:
     stage: str = ""
     progress_percent: int = 0
     message: str = ""
+    result_counts: dict[str, int] = field(default_factory=dict)
 
     def reset(self, name: str) -> None:
         now = time.monotonic()
@@ -194,6 +198,7 @@ class JobState:
         self.stage = "更新準備"
         self.progress_percent = 2
         self.message = "更新処理を準備しています。"
+        self.result_counts = {}
 
     def append(self, line: str) -> None:
         clean = line.rstrip("\n")
@@ -202,6 +207,35 @@ class JobState:
         if len(self.lines) > 500:
             del self.lines[:100]
         self._update_stage_from_line(clean)
+        self._update_counts_from_line(clean)
+
+    def _update_counts_from_line(self, line: str) -> None:
+        counts = dict(self.result_counts or {})
+
+        def put(key: str, value: int) -> None:
+            counts[key] = max(0, int(value or 0))
+
+        m = re.search(r"\[MERGE\].*?\bfresh_only=(\d+)", line)
+        if m:
+            put("card_data_new", int(m.group(1)))
+        m = re.search(r"\[IMAGE-FETCH-(?:MODE|START)\].*?\btargets=(\d+)", line)
+        if m:
+            put("card_image_targets", int(m.group(1)))
+        m = re.search(r"^\s*ok_files\s*:\s*(\d+)", line)
+        if m:
+            put("card_image_ok_files", int(m.group(1)))
+        m = re.search(r"^\s*skipped\s*:\s*(\d+)", line)
+        if m:
+            put("card_image_skipped", int(m.group(1)))
+        m = re.search(r"^\s*failed\s*:\s*(\d+)", line)
+        if m:
+            put("card_image_failed", int(m.group(1)))
+        if "card_image_ok_files" in counts:
+            put(
+                "card_image_new_saved",
+                max(0, counts.get("card_image_ok_files", 0) - counts.get("card_image_skipped", 0)),
+            )
+        self.result_counts = counts
 
     def _update_stage_from_line(self, line: str) -> None:
         upper = line.upper()
@@ -262,6 +296,7 @@ class JobState:
             "seconds_since_output": silence,
             "stale": stale,
             "line_count": len(self.lines),
+            "result_counts": dict(self.result_counts or {}),
         }
 
 
@@ -304,6 +339,21 @@ class AppState:
             "remote_label": "",
             "output": [],
         }
+        self.dual_process: subprocess.Popen[str] | None = None
+        self.dual_launch_state: dict[str, Any] = {
+            "status": "idle",
+            "url": "",
+            "message": "",
+            "pid": None,
+            "deck1_path": "",
+            "deck2_path": "",
+            "deck1_name": "",
+            "deck2_name": "",
+            "started_at": "",
+            "simulator_host": "",
+            "simulator_port": None,
+            "output": [],
+        }
         self._card_index_cache: dict[str, dict[str, Any]] | None = None
         self._image_index_cache: dict[str, Path] | None = None
         self._rarity_meta_cache: dict[str, dict[str, Any]] | None = None
@@ -336,6 +386,9 @@ class AppState:
             "ui_scale_percent": 100,
             "control_size": "standard",
             "auto_update_on_startup": True,
+            "startup_update_prompt_last_choice_at": "",
+            "startup_update_prompt_last_choice": "",
+            "startup_update_prompt_interval_days": STARTUP_UPDATE_PROMPT_INTERVAL_DAYS,
         }
         if not path.exists():
             return defaults
@@ -356,6 +409,39 @@ class AppState:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
         return current
+
+    def should_show_startup_update_prompt(self) -> tuple[bool, str]:
+        settings = self.load_settings()
+        if not bool(settings.get("auto_update_on_startup", True)):
+            return False, "設定で起動時更新確認が無効です。"
+        try:
+            interval_days = int(settings.get("startup_update_prompt_interval_days") or STARTUP_UPDATE_PROMPT_INTERVAL_DAYS)
+        except Exception:
+            interval_days = STARTUP_UPDATE_PROMPT_INTERVAL_DAYS
+        interval_days = max(1, interval_days)
+        last_raw = str(settings.get("startup_update_prompt_last_choice_at") or "").strip()
+        if not last_raw:
+            return True, "初回起動のため更新確認を表示します。"
+        try:
+            last_dt = datetime.fromisoformat(last_raw)
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.astimezone()
+            now_dt = datetime.now().astimezone()
+            elapsed = max(0.0, (now_dt - last_dt).total_seconds())
+        except Exception:
+            return True, "前回確認日時を読めないため更新確認を表示します。"
+        if elapsed >= interval_days * 86400:
+            return True, f"前回の確認から{interval_days}日以上経過したため更新確認を表示します。"
+        remaining = int(interval_days * 86400 - elapsed)
+        remaining_days = max(1, (remaining + 86399) // 86400)
+        return False, f"前回の選択から{interval_days}日以内のため更新確認を省略します（残り約{remaining_days}日）。"
+
+    def mark_startup_update_prompt_choice(self, choice: str) -> dict[str, Any]:
+        normalized = str(choice or "").strip()[:32] or "unknown"
+        return self.save_settings({
+            "startup_update_prompt_last_choice": normalized,
+            "startup_update_prompt_last_choice_at": utc_now_iso(),
+        })
 
     def select_deck(self, relative_path: str) -> dict[str, Any]:
         candidate = (self.root / relative_path).resolve()
@@ -410,6 +496,13 @@ class AppState:
             try:
                 raw = json.loads(meta_path.read_text(encoding="utf-8"))
                 if isinstance(raw, dict):
+                    if "deck_name" in raw:
+                        raw["deck_name"] = html.unescape(str(raw.get("deck_name") or ""))
+                    if "tags" in raw:
+                        raw["tags"] = [
+                            html.unescape(str(tag))
+                            for tag in self._normalize_deck_tags(raw.get("tags"))
+                        ]
                     return raw
             except Exception:
                 continue
@@ -438,7 +531,7 @@ class AppState:
                     card_no = str(row.get(card_key, "") or "").strip()
                     if not count and not card_no:
                         continue
-                    rows.append({"count": count or "1", "card_no": card_no, "rarity": str(row.get(rarity_key, "") or "").strip() if rarity_key else "", "name": str(row.get(name_key, "") or "").strip() if name_key else "", "variant_id": str(row.get(variant_key, "") or "").strip() if variant_key else ""})
+                    rows.append({"count": count or "1", "card_no": card_no, "rarity": str(row.get(rarity_key, "") or "").strip() if rarity_key else "", "name": html.unescape(str(row.get(name_key, "") or "")).strip() if name_key else "", "variant_id": str(row.get(variant_key, "") or "").strip() if variant_key else ""})
         except (ValueError, OSError) as exc:
             return {"valid": False, "error": str(exc), "composition": {"member": 0, "live": 0, "other": 0, "total": 0, "valid": False}, "copy_violations": {}, "card_types": 0, "metadata": {}}
         copy_totals: dict[str, int] = {}
@@ -525,7 +618,7 @@ class AppState:
             stat = path.stat()
             metadata = self._read_deck_metadata(path)
             deck_code = str(metadata.get("deck_code") or path.stem.removeprefix("deck_"))
-            deck_name = str(metadata.get("deck_name") or path.stem)
+            deck_name = html.unescape(str(metadata.get("deck_name") or path.stem))
             relative_path = str(path.relative_to(self.root))
             validation = self.deck_validation(relative_path)
             decks.append({
@@ -687,8 +780,9 @@ class AppState:
             "card_type": first("card_type", "type", "cardtype"),
             "group": first("group", "group_name", "groupname"),
             "unit": first("unit", "unit_name", "unitname"),
-            "cost": first("cost"),
-            "effect": first("effect", "effect_text", "text", "cardtext"),
+            "cost": self._numeric_text(first("cost")),
+            "score": self._numeric_text(first("score")),
+            "effect": first("effect_text_raw", "effect_text_norm", "effect", "effect_text", "text", "cardtext"),
         }
 
     @staticmethod
@@ -706,10 +800,19 @@ class AppState:
         if value in (None, "", [], {}):
             return ""
         if isinstance(value, (int, float)):
+            if float(value).is_integer():
+                return str(int(value))
             return str(value)
         if isinstance(value, list):
             return str(len(value))
-        return str(value)
+        text = str(value).strip()
+        try:
+            numeric = float(text)
+            if numeric.is_integer():
+                return str(int(numeric))
+        except Exception:
+            pass
+        return text
 
     @staticmethod
     def _flatten_values(value: Any) -> list[str]:
@@ -1386,6 +1489,18 @@ class AppState:
             "blue": ("blue", "青"),
             "purple": ("purple", "紫"),
             "all": ("all", "ALL", "オール"),
+            "any": ("any", "任意", "無色"),
+            "blade": ("blade", "ブレード"),
+            "blade_pink": ("blade_heart01", "blade_pink", "blade-heart-pink", "b_heart01", "bh_heart01", "桃"),
+            "blade_red": ("blade_heart02", "blade_red", "blade-heart-red", "b_heart02", "bh_heart02", "赤"),
+            "blade_yellow": ("blade_heart03", "blade_yellow", "blade-heart-yellow", "b_heart03", "bh_heart03", "黄"),
+            "blade_green": ("blade_heart04", "blade_green", "blade-heart-green", "b_heart04", "bh_heart04", "緑"),
+            "blade_blue": ("blade_heart05", "blade_blue", "blade-heart-blue", "b_heart05", "bh_heart05", "青"),
+            "blade_purple": ("blade_heart06", "blade_purple", "blade-heart-purple", "b_heart06", "bh_heart06", "紫"),
+            "blade_all": ("sp_all", "blade_all", "blade-heart-all", "b_all", "bh_all", "ALL"),
+            "blade_any": ("sp_all", "blade_any", "blade-heart-any", "b_any", "bh_any", "任意", "無色"),
+            "blade_score": ("sp_score", "blade_score", "blade-heart-score", "score"),
+            "blade_draw": ("sp_draw", "blade_draw", "blade-heart-draw", "draw"),
         }
         needles = aliases.get(normalized, (normalized,))
         candidates = [
@@ -1934,7 +2049,7 @@ class AppState:
                     "count": count or "1",
                     "card_no": card_no,
                     "rarity": str(row.get(rarity_key, "") or "").strip() if rarity_key else "",
-                    "name": str(row.get(name_key, "") or "").strip() if name_key else "",
+                    "name": html.unescape(str(row.get(name_key, "") or "")).strip() if name_key else "",
                     "variant_id": str(row.get(variant_key, "") or "").strip() if variant_key else "",
                 })
         return metadata, rows
@@ -2341,7 +2456,7 @@ class AppState:
         existing_path: str = "",
         tags: Any = "",
     ) -> dict[str, Any]:
-        name = deck_name.strip()
+        name = html.unescape(str(deck_name or "")).strip()
         if not name:
             raise ValueError("デッキ名を入力してください。")
 
@@ -2357,7 +2472,7 @@ class AppState:
             count_text = str(row.get("count", "") or "").strip()
             card_no = str(row.get("card_no", "") or "").strip()
             rarity = str(row.get("rarity", "") or "").strip()
-            card_name = str(row.get("name", "") or "").strip()
+            card_name = html.unescape(str(row.get("name", "") or "")).strip()
             variant_id = str(row.get("variant_id", "") or "").strip()
 
             if not any([count_text, card_no, rarity, card_name, variant_id]):
@@ -2805,6 +2920,65 @@ class AppState:
                 self.manual_launch_state.update(state)
             return state
 
+    def dual_window_status(self) -> dict[str, Any]:
+        with self.lock:
+            process = self.dual_process
+            state = dict(self.dual_launch_state)
+            running = bool(process and process.poll() is None)
+            state["running"] = running
+            if not running and state.get("status") in ("starting", "ready"):
+                state["status"] = "stopped"
+                state["message"] = "2デッキシミュレータは終了しています。"
+                self.dual_launch_state.update(state)
+            return state
+
+    def _read_dual_output(self, process: subprocess.Popen[str]) -> None:
+        stream = process.stdout
+        if stream is None:
+            return
+        for line in stream:
+            clean = line.rstrip("\r\n")
+            print(clean, flush=True)
+            urls = re.findall(r"https?://(?:127\.0\.0\.1|localhost):\d+[^\s'\"<>]*", clean)
+            with self.lock:
+                output = self.dual_launch_state.setdefault("output", [])
+                output.append(clean)
+                if len(output) > 100:
+                    del output[:20]
+                if urls and not self.dual_launch_state.get("url"):
+                    self.dual_launch_state["url"] = urls[0].rstrip(".,)")
+
+    def _runtime_dual_deck(self, relative_path: str, player_key: str) -> dict[str, str]:
+        validation = self.deck_validation(relative_path)
+        if not validation["valid"]:
+            raise ValueError("デッキ構成が不正なため起動できません：" + (validation["error"] or "検証失敗"))
+        deck_name = ""
+        for deck in self.list_decks():
+            if str(deck.get("path") or "") == str(relative_path or ""):
+                deck_name = str(deck.get("name") or "")
+                break
+        if not deck_name:
+            deck_name = Path(relative_path).stem
+        out_dir = self.path(DUAL_RUNTIME_DIR)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        safe_key = "p2" if str(player_key).lower() == "p2" else "p1"
+        target = out_dir / f"deck_{safe_key}.tsv"
+        rows = ["count\tcard_no\trarity\tname\tvariant_id"]
+        for row in validation["rows"]:
+            rows.append("\t".join([
+                str(int(row.get("count", 0) or 0)),
+                str(row.get("card_no", "") or ""),
+                str(row.get("rarity", "") or "").replace("\t", " "),
+                str(row.get("name", "") or "").replace("\t", " "),
+                str(row.get("variant_id", "") or "").replace("\t", " "),
+            ]))
+        target.write_text("\n".join(rows) + "\n", encoding="utf-8")
+        return {
+            "path": str(target.relative_to(self.root)),
+            "name": deck_name,
+            "source_path": relative_path,
+        }
+
     def stop_update(self, *, reason: str = "user") -> tuple[bool, str]:
         with self.lock:
             process = self.update_process
@@ -2860,9 +3034,10 @@ class AppState:
     def stop_all_child_processes(self) -> tuple[bool, str]:
         update_ok, update_message = self.stop_update(reason="shutdown")
         manual_ok, manual_message = self.stop_manual()
+        dual_ok, dual_message = self.stop_dual()
         return (
-            update_ok and manual_ok,
-            "{} / {}".format(manual_message, update_message),
+            update_ok and manual_ok and dual_ok,
+            "{} / {} / {}".format(manual_message, dual_message, update_message),
         )
 
     def stop_manual(self) -> tuple[bool, str]:
@@ -2912,6 +3087,127 @@ class AppState:
                 "simulator_port": None,
             })
         return True, "シミュレータを終了しました。"
+
+    def stop_dual(self) -> tuple[bool, str]:
+        with self.lock:
+            process = self.dual_process
+            if process is None or process.poll() is not None:
+                self.dual_process = None
+                self.dual_launch_state.update({
+                    "status": "idle",
+                    "url": "",
+                    "message": "2デッキシミュレータは起動していません。",
+                    "pid": None,
+                    "simulator_host": "",
+                    "simulator_port": None,
+                })
+                return True, "2デッキシミュレータはすでに終了しています。"
+            pid = int(process.pid)
+        try:
+            if platform.system() == "Windows":
+                subprocess.run(
+                    ["taskkill", "/PID", str(pid), "/T", "/F"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=6.0,
+                    check=False,
+                )
+            elif hasattr(os, "killpg"):
+                os.killpg(pid, signal.SIGTERM)
+            else:
+                process.terminate()
+            try:
+                process.wait(timeout=4.0)
+            except subprocess.TimeoutExpired:
+                if hasattr(os, "killpg"):
+                    os.killpg(pid, signal.SIGKILL)
+                else:
+                    process.kill()
+                process.wait(timeout=2.0)
+        except ProcessLookupError:
+            pass
+        except Exception as exc:
+            return False, "2デッキ終了に失敗しました: {}: {}".format(type(exc).__name__, exc)
+        with self.lock:
+            self.dual_process = None
+            self.dual_launch_state.update({
+                "status": "idle",
+                "url": "",
+                "message": "2デッキシミュレータを終了しました。",
+                "pid": None,
+                "simulator_host": "",
+                "simulator_port": None,
+            })
+        return True, "2デッキシミュレータを終了しました。"
+
+    def start_dual(self, deck1_path: str, deck2_path: str) -> tuple[bool, str]:
+        script = self.path(DUAL_SCRIPT)
+        if not script.exists():
+            return False, "{} が見つかりません。".format(DUAL_SCRIPT)
+        if not deck1_path or not deck2_path:
+            return False, "プレイヤー1とプレイヤー2のデッキを選択してください。"
+        try:
+            deck1 = self._runtime_dual_deck(deck1_path, "p1")
+            deck2 = self._runtime_dual_deck(deck2_path, "p2")
+        except ValueError as exc:
+            return False, str(exc)
+        with self.lock:
+            if self.dual_process and self.dual_process.poll() is None:
+                state = self.dual_window_status()
+                if state.get("url"):
+                    return False, "2デッキシミュレータはすでに起動しています。2デッキ画面の「対戦へ戻る」を使用してください。"
+                return False, "2デッキシミュレータはすでに起動しています。終了してから再起動してください。"
+            try:
+                env = os.environ.copy()
+                for key in NORMAL_MATCH_UNSET_ENV:
+                    env.pop(key, None)
+                simulator_host = DEFAULT_HOST
+                simulator_port = reserve_free_local_port(simulator_host)
+                simulator_url = "http://{}:{}/dual".format(simulator_host, simulator_port)
+                launch_command = [
+                    sys.executable,
+                    str(script),
+                    "--root",
+                    str(self.root),
+                    "--data-root",
+                    str(self.root),
+                    "--deck1",
+                    deck1["path"],
+                    "--deck2",
+                    deck2["path"],
+                    "--host",
+                    simulator_host,
+                    "--port",
+                    str(simulator_port),
+                ]
+                self.dual_process = subprocess.Popen(
+                    launch_command,
+                    cwd=str(self.root),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                    env=env,
+                    start_new_session=True,
+                )
+                self.dual_launch_state = {
+                    "status": "ready",
+                    "url": simulator_url,
+                    "message": "2デッキシミュレータを起動しました。",
+                    "pid": self.dual_process.pid,
+                    "deck1_path": deck1.get("source_path", ""),
+                    "deck2_path": deck2.get("source_path", ""),
+                    "deck1_name": deck1.get("name", ""),
+                    "deck2_name": deck2.get("name", ""),
+                    "started_at": utc_now_iso(),
+                    "simulator_host": simulator_host,
+                    "simulator_port": simulator_port,
+                    "output": [],
+                }
+                threading.Thread(target=self._read_dual_output, args=(self.dual_process,), daemon=True).start()
+            except Exception as exc:
+                return False, "起動に失敗しました: {}: {}".format(type(exc).__name__, exc)
+        return True, "2デッキシミュレータを起動しました：{} vs {}".format(deck1.get("name", ""), deck2.get("name", ""))
 
     def start_manual(
         self,
@@ -3186,6 +3482,7 @@ class AppState:
         settings = self.load_settings()
         if not bool(settings.get("auto_update_on_startup", True)):
             return False, "起動時更新確認は設定で無効です。"
+        self.mark_startup_update_prompt_choice("accepted")
         return self.start_update(source="startup")
 
     def create_remote_session(

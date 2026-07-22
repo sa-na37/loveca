@@ -1,4 +1,4 @@
-# BUILD_TAG = "loveca_ui_asset_bundle_install_20260721a"
+# BUILD_TAG = "startup_update_prompt_interval_20260722a"
 """Loveca application command-line entrypoint."""
 from __future__ import annotations
 
@@ -53,13 +53,14 @@ def main() -> int:
             file=sys.stderr,
         )
         return 3
-    startup_update_enabled = (
-        not args.skip_startup_update
-        and bool(app_state.load_settings().get("auto_update_on_startup", True))
-    )
+    if args.skip_startup_update:
+        startup_update_enabled = False
+        startup_update_reason = "--skip-startup-update"
+    else:
+        startup_update_enabled, startup_update_reason = app_state.should_show_startup_update_prompt()
     url = f"http://{args.host}:{args.port}/"
     open_url = f"http://{args.host}:{args.port}/update?startup=1" if startup_update_enabled else url
-    print("[LOVECА APP] BUILD_TAG=loveca_ui_asset_bundle_install_20260721a")
+    print("[LOVECА APP] BUILD_TAG=startup_update_prompt_interval_20260722a")
     print(f"[LOVECА APP] root={root}")
     print(f"[LOVECА APP] open={open_url}")
     print("[LOVECА APP] stop with Ctrl+C")
@@ -72,11 +73,11 @@ def main() -> int:
         delay=0.5,
     )
     if startup_update_enabled:
-        print("[LOVECА APP] startup_update=waiting-for-user-confirmation")
+        print(f"[LOVECА APP] startup_update=waiting-for-user-confirmation: {startup_update_reason}")
     elif args.skip_startup_update:
         print("[LOVECА APP] startup_update=skipped: --skip-startup-update")
     else:
-        print("[LOVECА APP] startup_update=skipped: disabled by settings")
+        print(f"[LOVECА APP] startup_update=skipped: {startup_update_reason}")
 
     try:
         server.serve_forever()

@@ -1,4 +1,4 @@
-# BUILD_TAG = "deck_copy_button_20260721a"
+# BUILD_TAG = "dual_launch_menu_yell_undo_20260722a"
 """Loveca local web UI and HTTP routing."""
 from __future__ import annotations
 
@@ -65,6 +65,11 @@ header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 900;
+  background: rgba(15, 17, 21, .96);
+  backdrop-filter: blur(10px);
 }
 header h1 { font-size: 21px; margin: 0; }
 header .tag { color: var(--muted); font-size: 14px; }
@@ -417,7 +422,7 @@ def page(title: str, body: str) -> bytes:
   <h1>Loveca Application</h1>
   <div>
     <span class="tag">{html.escape(BUILD_TAG)}</span>
-    <nav><a href="/">メニュー</a><a href="/remote">リモート対戦</a><a href="/decks">デッキ</a><a href="/update">更新</a><a href="/logs">ログ</a><button type="button" class="secondary" style="margin-left:14px" onclick="openQuickSettings()">簡易設定</button><a href="/diagnostics">診断</a><button type="button" style="background:var(--bad);color:white;margin-left:8px" onclick="shutdownLovecaApp()">アプリ終了</button></nav>
+    <nav><a href="/">メニュー</a><a href="/remote">リモート対戦</a><a href="/dual">2デッキ</a><a href="/decks">デッキ</a><a href="/update">更新</a><a href="/logs">ログ</a><button type="button" class="secondary" style="margin-left:14px" onclick="openQuickSettings()">簡易設定</button><a href="/diagnostics">診断</a><button type="button" style="background:var(--bad);color:white;margin-left:8px" onclick="shutdownLovecaApp()">アプリ終了</button></nav>
   </div>
 </header>
 <main>{body}</main>
@@ -425,7 +430,7 @@ def page(title: str, body: str) -> bytes:
 <div id="quickSettingsOverlay" class="quick-settings-overlay" hidden onclick="if(event.target===this)closeQuickSettings()">
   <section class="quick-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="quickSettingsTitle">
     <h2 id="quickSettingsTitle">簡易設定</h2>
-    <div class="quick-settings-row"><label for="quick_ui_scale">画面表示サイズ</label><select id="quick_ui_scale"><option value="100">100%</option><option value="110">110%</option><option value="120">120%</option></select></div>
+    <div class="quick-settings-row"><label for="quick_ui_scale">画面表示サイズ</label><select id="quick_ui_scale"><option value="100">100%</option><option value="110">110%</option><option value="120">120%</option><option value="130">130%</option><option value="150">150%</option><option value="175">175%</option><option value="200">200%</option></select></div>
     <div class="quick-settings-row"><label for="quick_control_size">枠・ボタン・数値入力の操作サイズ</label><select id="quick_control_size"><option value="compact">小さめ</option><option value="standard">標準</option><option value="large">大きめ</option></select></div>
     <div id="quickSettingsStatus" class="status"></div>
     <div class="quick-settings-actions"><a class="button secondary" href="/settings">詳細設定</a><button type="button" class="secondary" onclick="closeQuickSettings()">閉じる</button></div>
@@ -437,14 +442,14 @@ const LOVECA_DESIGN_HEIGHT = 1200;
 const LOVECA_MIN_SUPPORTED_WIDTH = 1440;
 const LOVECA_MIN_SUPPORTED_HEIGHT = 900;
 const LOVECA_MIN_SCALE = 0.55;
-const LOVECA_MAX_SCALE = 1.15;
+const LOVECA_MAX_SCALE = 2.0;
 
 function updateLovecaViewportScale() {{
   const viewportWidth=Math.max(320,Number(window.innerWidth)||LOVECA_DESIGN_WIDTH);
   const viewportHeight=Math.max(320,Number(window.innerHeight)||LOVECA_DESIGN_HEIGHT);
   const widthScale=viewportWidth/LOVECA_DESIGN_WIDTH;
   const heightScale=viewportHeight/LOVECA_DESIGN_HEIGHT;
-  const userScale=Math.max(.8,Math.min(1.25,Number(document.documentElement.dataset.userScale||1)));
+  const userScale=Math.max(.8,Math.min(2.0,Number(document.documentElement.dataset.userScale||1)));
   const scale=Math.min(
     LOVECA_MAX_SCALE*userScale,
     Math.max(LOVECA_MIN_SCALE,Math.min(widthScale,heightScale)*userScale)
@@ -512,7 +517,7 @@ window.addEventListener('pagehide',()=>{{
 }},{{capture:true}});
 
 function applyQuickSettings(settings) {{
-  const percent=Math.max(100,Math.min(120,Number(settings.ui_scale_percent)||100));
+  const percent=Math.max(100,Math.min(200,Number(settings.ui_scale_percent)||100));
   const control=["compact","standard","large"].includes(settings.control_size)?settings.control_size:"standard";
   document.documentElement.dataset.userScale=String(percent/100);
   document.body.dataset.controlSize=control;
@@ -744,13 +749,19 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: Any) -> None:
         print(f"[HTTP] {self.address_string()} - {format % args}")
 
+    def _safe_write(self, payload: bytes) -> None:
+        try:
+            self.wfile.write(payload)
+        except (BrokenPipeError, ConnectionResetError):
+            return
+
     def send_html(self, payload: bytes, status: int = HTTPStatus.OK) -> None:
         self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
         if not getattr(self, "_head_only", False):
-            self.wfile.write(payload)
+            self._safe_write(payload)
 
     def send_file(self, path: Path) -> None:
         try:
@@ -765,7 +776,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
         if not getattr(self, "_head_only", False):
-            self.wfile.write(payload)
+            self._safe_write(payload)
 
     def send_card_placeholder_svg(self, card_no: str = "") -> None:
         label = html.escape(str(card_no or "No Image"))
@@ -781,7 +792,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
         if not getattr(self, "_head_only", False):
-            self.wfile.write(payload)
+            self._safe_write(payload)
 
     def send_json(self, data: Any, status: int = HTTPStatus.OK) -> None:
         payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -791,7 +802,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
         if not getattr(self, "_head_only", False):
-            self.wfile.write(payload)
+            self._safe_write(payload)
 
     def read_form(self) -> dict[str, str]:
         length = int(self.headers.get("Content-Length", "0"))
@@ -907,8 +918,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_html(page("手動シミュレータ", self.manual_body()))
         elif path == "/remote":
             self.send_html(page("リモート対戦", self.remote_body()))
+        elif path == "/dual":
+            self.send_html(page("2デッキ対戦", self.dual_body()))
         elif path == "/simulator":
             self.send_html(self.simulator_page())
+        elif path == "/dual/simulator":
+            self.send_html(self.dual_simulator_page())
         elif path == "/decks":
             self.send_html(page("デッキ管理", self.decks_body()))
         elif path == "/decks/new":
@@ -933,6 +948,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_html(page("診断", self.diagnostics_body()))
         elif path == "/api/manual/window-status":
             self.send_json(self.app.manual_window_status())
+        elif path == "/api/dual/window-status":
+            self.send_json(self.app.dual_window_status())
         elif path == "/api/update/status":
             with self.app.lock:
                 self.send_json(self.app.update_job.snapshot())
@@ -954,7 +971,7 @@ class Handler(BaseHTTPRequestHandler):
                 raw = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
                 percent = int(raw.get("ui_scale_percent", 100))
                 control = str(raw.get("control_size", "standard"))
-                if percent not in (100, 110, 120): raise ValueError("画面表示サイズが不正です。")
+                if percent not in (100, 110, 120, 130, 150, 175, 200): raise ValueError("画面表示サイズが不正です。")
                 if control not in ("compact", "standard", "large"): raise ValueError("操作サイズが不正です。")
                 self.app.save_settings({"ui_scale_percent": percent, "control_size": control})
                 self.send_json({"ui_scale_percent": percent, "control_size": control})
@@ -969,6 +986,13 @@ class Handler(BaseHTTPRequestHandler):
             form = self.read_form()
             try:
                 ok, message = self.app.start_manual(form.get("deck_path", ""))
+                self.send_json({"ok": ok, "message": message}, HTTPStatus.OK if ok else HTTPStatus.CONFLICT)
+            except ValueError as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+        elif path == "/api/dual/start":
+            form = self.read_form()
+            try:
+                ok, message = self.app.start_dual(form.get("deck1_path", ""), form.get("deck2_path", ""))
                 self.send_json({"ok": ok, "message": message}, HTTPStatus.OK if ok else HTTPStatus.CONFLICT)
             except ValueError as exc:
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
@@ -1034,6 +1058,12 @@ class Handler(BaseHTTPRequestHandler):
             )
             if ok:
                 close_browser_tabs_for_urls_later(urls_to_close)
+        elif path == "/api/dual/stop":
+            ok, message = self.app.stop_dual()
+            self.send_json(
+                {"ok": ok, "message": message},
+                HTTPStatus.OK if ok else HTTPStatus.INTERNAL_SERVER_ERROR,
+            )
         elif path == "/api/app/shutdown":
             ok, detail = self.app.stop_all_child_processes()
             server_port = int(self.server.server_address[1])
@@ -1052,6 +1082,9 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/update/startup-confirmed":
             ok, message = self.app.maybe_start_startup_update()
             self.send_json({"ok": ok, "message": message}, HTTPStatus.OK if ok else HTTPStatus.CONFLICT)
+        elif path == "/api/update/startup-dismissed":
+            self.app.mark_startup_update_prompt_choice("dismissed")
+            self.send_json({"ok": True, "message": "起動時更新確認を後回しにしました。約1週間は起動時に表示しません。"})
         elif path == "/api/update/stop":
             ok, message = self.app.stop_update(reason="user")
             self.send_json(
@@ -1368,7 +1401,7 @@ async function shutdownLovecaApp() {{
 <div class="grid menu-grid">
 <section class="card"><h2>手動シミュレータ</h2><p>起動時に使用デッキを選択します。</p><a class="button" href="/manual">デッキを選んで起動</a></section>
 <section class="card"><h2>リモート対戦</h2><p>対戦コードを発行し、シミュレータ本体とパブリック画面を起動します。</p><a class="button" href="/remote">開く</a></section>
-<section class="card"><h2>自動シミュレータ</h2><p>コンピューター同士の対戦や候補手の確認に対応予定です。</p><button disabled>準備中</button></section>
+<section class="card"><h2>2デッキ対戦</h2><p>2つのデッキを一人で交互に操作して対戦を進めます。</p><a class="button" href="/dual">開く</a></section>
 <section class="card"><h2>デッキ管理</h2><p>デッキの作成、読込、編集、整理を行います。</p><a class="button" href="/decks">開く</a></section>
 <section class="card"><h2>データ更新</h2><p>新しいカード情報やカード画像を取得します。</p><a class="button" href="/update">開く</a></section>
 <section class="card"><h2>ログ管理</h2><p>対戦や更新処理の履歴を確認します。</p><a class="button" href="/logs">開く</a></section>
@@ -1377,6 +1410,145 @@ async function shutdownLovecaApp() {{
 </div>
 """
         return body.replace("{active_deck}", active_deck)
+
+    def dual_simulator_page(self) -> bytes:
+        state = self.app.dual_window_status()
+        running = bool(state.get("running"))
+        url = html.escape(str(state.get("url") or ""), quote=True)
+        deck1 = html.escape(str(state.get("deck1_name") or "プレイヤー1"))
+        deck2 = html.escape(str(state.get("deck2_name") or "プレイヤー2"))
+        if not running or not url:
+            return page("2デッキ対戦", """
+<section class="panel">
+<h2>2デッキシミュレータは起動していません</h2>
+<a class="button" href="/dual">起動画面へ戻る</a>
+</section>
+""")
+        doc = """<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Loveca 2デッキ対戦</title>
+<style>{css}</style>
+</head>
+<body>
+<div class="simulator-shell">
+  <div class="simulator-toolbar">
+    <strong>{deck1} vs {deck2}</strong>
+    <span class="spacer"></span>
+    <a class="button secondary" href="/dual">起動設定へ戻る</a>
+    <button type="button" style="background:var(--bad);color:white" onclick="stopDualSimulator()">2デッキを終了</button>
+    <button type="button" style="background:var(--bad);color:white" onclick="shutdownLovecaApp()">アプリ終了</button>
+  </div>
+  <iframe class="simulator-frame" src="{url}" title="Loveca dual simulator"></iframe>
+</div>
+<script>
+async function stopDualSimulator() {{
+  if(!confirm('2デッキシミュレータを終了しますか？')) return;
+  const res=await fetch('/api/dual/stop',{{method:'POST'}});
+  const data=await res.json();
+  if(data.ok) location.replace('/dual');
+  else alert(data.message||'終了に失敗しました。');
+}}
+async function shutdownLovecaApp() {{
+  if(!confirm('Loveca Applicationを終了しますか？')) return;
+  try {{ await fetch('/api/app/shutdown',{{method:'POST'}}); }} finally {{ window.close(); }}
+}}
+</script>
+</body>
+</html>""".format(css=CSS, deck1=deck1, deck2=deck2, url=url)
+        return doc.encode("utf-8")
+
+    def dual_body(self) -> str:
+        decks = [deck for deck in self.app.list_decks() if bool(deck.get("valid"))]
+        state = self.app.dual_window_status()
+        running_panel = ""
+        if state.get("running") and state.get("url"):
+            running_panel = """
+<section class="panel">
+<h2>2デッキシミュレータ起動中</h2>
+<p>{deck1} vs {deck2}</p>
+<p class="status">{message}</p>
+<div style="display:flex;gap:10px;flex-wrap:wrap">
+  <a class="button" href="/dual/simulator">対戦へ戻る</a>
+  <button type="button" style="background:var(--bad);color:white" onclick="stopDualOnPage()">2デッキを終了</button>
+</div>
+<div id="dualStopStatus" class="status"></div>
+</section>
+""".format(
+                deck1=html.escape(str(state.get("deck1_name") or "プレイヤー1")),
+                deck2=html.escape(str(state.get("deck2_name") or "プレイヤー2")),
+                message=html.escape(str(state.get("message") or "")),
+            )
+        options = "".join(
+            "<option value='{path}'>{name} ({member}/48・{live}/12)</option>".format(
+                path=html.escape(str(deck.get("path") or ""), quote=True),
+                name=html.escape(str(deck.get("name") or "")),
+                member=int((deck.get("composition") or {}).get("member", 0) or 0),
+                live=int((deck.get("composition") or {}).get("live", 0) or 0),
+            )
+            for deck in decks
+        )
+        if not options:
+            options = "<option value=''>使用可能なデッキがありません</option>"
+        disabled = "disabled" if not decks else ""
+        return running_panel + """
+<section class="panel">
+<h2>2デッキ対戦を起動</h2>
+<p class="status">2つの60枚デッキを選び、一人で交互に操作する対戦画面を起動します。</p>
+<div class="row">
+  <label>プレイヤー1
+    <select id="dualDeck1" {disabled}>{options}</select>
+  </label>
+  <label>プレイヤー2
+    <select id="dualDeck2" {disabled}>{options}</select>
+  </label>
+</div>
+<div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
+  <button type="button" {disabled} onclick="startDual()">2デッキ対戦を起動</button>
+  <a class="button secondary" href="/decks">デッキ管理へ</a>
+</div>
+<div id="dualStatus" class="status"></div>
+</section>
+<script>
+async function startDual() {{
+  const box=document.getElementById('dualStatus');
+  const deck1=document.getElementById('dualDeck1').value;
+  const deck2=document.getElementById('dualDeck2').value;
+  if(!deck1||!deck2) {{ box.className='status bad'; box.textContent='デッキを2つ選択してください。'; return; }}
+  box.className='status'; box.textContent='2デッキシミュレータを起動しています...';
+  const body=new URLSearchParams({{deck1_path:deck1,deck2_path:deck2}});
+  try {{
+    const res=await fetch('/api/dual/start',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},body}});
+    const data=await res.json();
+    if(!data.ok) {{ box.className='status bad'; box.textContent=data.message; return; }}
+    for(let i=0;i<80;i++) {{
+      const r=await fetch('/api/dual/window-status',{{cache:'no-store'}});
+      const state=await r.json();
+      if(state.running && state.url) {{ markLovecaInternalNavigation(); location.replace('/dual/simulator'); return; }}
+      if(state.status==='failed'||state.status==='timeout'||state.status==='stopped') {{
+        box.className='status bad'; box.textContent=state.message||'起動できませんでした。'; return;
+      }}
+      await new Promise(resolve=>setTimeout(resolve,300));
+    }}
+    box.className='status bad'; box.textContent='起動確認がタイムアウトしました。';
+  }} catch(e) {{
+    box.className='status bad'; box.textContent=String(e);
+  }}
+}}
+async function stopDualOnPage() {{
+  const box=document.getElementById('dualStopStatus');
+  if(!confirm('起動中の2デッキシミュレータを終了しますか？')) return;
+  box.textContent='終了しています...';
+  const res=await fetch('/api/dual/stop',{{method:'POST'}});
+  const data=await res.json();
+  box.className='status '+(data.ok?'ok':'bad');
+  box.textContent=data.message;
+  if(data.ok) setTimeout(()=>location.reload(),500);
+}}
+</script>
+""".format(options=options, disabled=disabled)
 
     def simulator_session_panel(self, remote_screen: bool) -> str:
         state = self.app.manual_window_status()
@@ -2103,6 +2275,7 @@ async function startDeck(deckPath) {{
                 "group": card["group"],
                 "unit": card["unit"],
                 "cost": card["cost"],
+                "score": card.get("score", ""),
                 "effect": card["effect"],
                 "image_url": image_url,
             }
@@ -2151,6 +2324,7 @@ async function startDeck(deckPath) {{
           <tr><th>グループ</th><td id="modalGroup"></td></tr>
           <tr><th>ユニット</th><td id="modalUnit"></td></tr>
           <tr><th>コスト</th><td id="modalCost"></td></tr>
+          <tr><th>スコア</th><td id="modalScore"></td></tr>
         </table>
         <h3>カードテキスト</h3>
         <div id="modalEffect" class="card-effect"></div>
@@ -2170,6 +2344,7 @@ function openCard(element) {{
   document.getElementById('modalGroup').textContent = valueOrDash(card.group);
   document.getElementById('modalUnit').textContent = valueOrDash(card.unit);
   document.getElementById('modalCost').textContent = valueOrDash(card.cost);
+  document.getElementById('modalScore').textContent = valueOrDash(card.score);
   document.getElementById('modalEffect').textContent = valueOrDash(card.effect);
   const image = document.getElementById('modalCardImage');
   image.src = card.image_url;
@@ -2270,27 +2445,27 @@ document.addEventListener('keydown', event => {{ if (event.key === 'Escape') clo
             )
 
         blade_defs = [
-            ("none", "なし", "blade-special"),
-            ("pink", "桃", "heart-pink"),
-            ("red", "赤", "heart-red"),
-            ("yellow", "黄", "heart-yellow"),
-            ("green", "緑", "heart-green"),
-            ("blue", "青", "heart-blue"),
-            ("purple", "紫", "heart-purple"),
-            ("all", "ALL", "heart-all"),
-            ("draw", "ドロー", "blade-special"),
-            ("score", "スコア+", "blade-special"),
-            ("double_any", "ダブル無色", "heart-any"),
+            ("none", "なし", "blade-special", ""),
+            ("pink", "桃", "heart-pink", "blade_pink"),
+            ("red", "赤", "heart-red", "blade_red"),
+            ("yellow", "黄", "heart-yellow", "blade_yellow"),
+            ("green", "緑", "heart-green", "blade_green"),
+            ("blue", "青", "heart-blue", "blade_blue"),
+            ("purple", "紫", "heart-purple", "blade_purple"),
+            ("all", "ALL", "heart-all", "blade_all"),
+            ("draw", "ドロー", "blade-special", "blade_draw"),
+            ("score", "スコア+", "blade-special", "blade_score"),
+            ("double_any", "ダブル無色", "heart-any", "blade_any"),
         ]
         blade_chips = "".join(
             f"""
             <label class="token-chip">
               <input type="checkbox" name="blade_heart_token" value="{token}">
-              <span class="heart-icon {css_class}">{'♥' if token not in ('draw','score') else '◆'}</span>
+              <span class="heart-icon {css_class}">{"<img src='/texticon?token=" + icon_token + "' alt='' class='chip-icon'>" if icon_token else "−"}</span>
               {label}
             </label>
             """
-            for token, label, css_class in blade_defs
+            for token, label, css_class, icon_token in blade_defs
         )
 
         initial_json = json.dumps(initial_cards, ensure_ascii=False).replace("</", "<\\/")
@@ -2303,7 +2478,45 @@ main {{
   width:100%;
   max-width:none;
   margin:0;
-  padding:20px 595px 20px 20px;
+  padding:12px 595px 20px 20px;
+}}
+.deck-editor-toolbar {{
+  position:sticky;
+  top:72px;
+  z-index:80;
+  display:grid;
+  grid-template-columns:auto minmax(220px,1fr) minmax(180px,.7fr) auto;
+  gap:10px;
+  align-items:end;
+  margin:0 0 14px;
+  padding:10px 12px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:rgba(23,27,35,.96);
+  box-shadow:0 8px 24px rgba(0,0,0,.25);
+  backdrop-filter:blur(10px);
+}}
+.deck-editor-toolbar h2 {{
+  margin:0;
+  font-size:20px;
+  white-space:nowrap;
+}}
+.deck-editor-toolbar label {{
+  margin:0 0 4px;
+}}
+.deck-editor-toolbar input {{
+  margin:0;
+}}
+.deck-editor-actions {{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+  align-items:center;
+}}
+.deck-editor-actions button,
+.deck-editor-actions .button {{
+  white-space:nowrap;
 }}
 .deck-editor-layout {{
   display:block;
@@ -2373,6 +2586,12 @@ main {{
 .heart-all {{color:white;background:conic-gradient(#ff79b4,#ff5353,#ffd84d,#60d47f,#65a7ff,#b985ff,#ff79b4)}}
 .heart-any {{color:#d7dce6;border:1px dashed #d7dce6}}
 .blade-special {{color:#fff;background:#5f6878}}
+.heart-icon .chip-icon {{
+  width:24px;
+  height:24px;
+  object-fit:contain;
+  display:block;
+}}
 .mode-row {{display:flex;gap:14px;align-items:center;margin:8px 0}}
 .token-grid {{display:flex;flex-wrap:wrap;gap:8px}}
 .token-chip {{
@@ -2419,9 +2638,9 @@ main {{
 .deck-side {{
   position:fixed;
   right:20px;
-  top:86px;
+  top:158px;
   width:555px;
-  max-height:calc(var(--loveca-layout-height) - 106px);
+  max-height:calc(var(--loveca-layout-height) - 178px);
   overflow:auto;
   z-index:20;
 }}
@@ -2530,6 +2749,21 @@ details.subfilter summary {{
 .card-detail-actions {{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}}
 .search-card img {{cursor:zoom-in}}
 @media(max-width:760px) {{.card-detail-dialog {{grid-template-columns:1fr}}}}
+@media(max-width:1100px) {{
+  main {{padding-right:20px}}
+  .deck-side {{
+    position:static;
+    width:auto;
+    max-height:none;
+    margin-top:16px;
+  }}
+  .deck-editor-toolbar {{
+    top:70px;
+    grid-template-columns:1fr;
+    align-items:stretch;
+  }}
+  .deck-editor-actions {{justify-content:flex-start}}
+}}
 
 .deck-analysis-overlay[hidden] {{display:none}}
 .deck-analysis-overlay {{
@@ -2718,11 +2952,27 @@ body.deck-analysis-open {{overflow:hidden}}
 }}
 </style>
 
-<section class="panel">
-<h2>{title}</h2>
-<label for="deck_name">デッキ名</label>
-<input id="deck_name" value="{html.escape(name, quote=True)}" required placeholder="デッキ名を入力">
-</section>
+<form id="saveForm" class="deck-editor-toolbar" method="post" action="/decks/save">
+  <h2>{title}</h2>
+  <div>
+    <label for="visible_deck_name">デッキ名</label>
+    <input id="visible_deck_name" value="{html.escape(name, quote=True)}" required placeholder="デッキ名を入力">
+  </div>
+  <div>
+    <label for="visible_deck_tags">タグ（任意・カンマ区切り）</label>
+    <input id="visible_deck_tags" value="{html.escape(tags_text, quote=True)}" placeholder="例：大会用, お気に入り">
+  </div>
+  <div class="deck-editor-actions">
+    <button type="submit" onclick="return prepareSave(false)">保存</button>
+    <button type="submit" onclick="return prepareSave(true)">保存して開始</button>
+    <a class="button secondary" href="/decks">キャンセル</a>
+  </div>
+  <input type="hidden" name="existing_path" value="{html.escape(existing, quote=True)}">
+  <input type="hidden" name="deck_name" id="save_deck_name">
+  <input type="hidden" name="tags" id="save_deck_tags">
+  <textarea name="tsv_text" id="save_tsv" hidden></textarea>
+  <input type="hidden" name="start_after_save" id="start_after_save" value="0">
+</form>
 
 <div class="deck-editor-layout" style="margin-top:16px">
 <section class="panel">
@@ -2867,10 +3117,6 @@ body.deck-analysis-open {{overflow:hidden}}
 
 <section class="panel deck-side">
 <h2>現在のデッキ</h2>
-<label for="visible_deck_name">デッキ名</label>
-<input id="visible_deck_name" value="{html.escape(name, quote=True)}">
-<label for="visible_deck_tags">タグ（任意・カンマ区切り）</label>
-<input id="visible_deck_tags" value="{html.escape(tags_text, quote=True)}" placeholder="例：大会用, お気に入り">
 <div class="composition">
   <div>メンバー<br><strong id="memberCount">0</strong> / 48</div>
   <div>ライブ<br><strong id="liveCount">0</strong> / 12</div>
@@ -2881,17 +3127,6 @@ body.deck-analysis-open {{overflow:hidden}}
 <button type="button" class="secondary" style="width:100%;margin:8px 0 12px"
         onclick="openDeckAnalysis()">詳細分析ツール</button>
 <div id="deckRows"></div>
-<hr style="border-color:var(--line);margin:16px 0">
-<form id="saveForm" method="post" action="/decks/save">
-<input type="hidden" name="existing_path" value="{html.escape(existing, quote=True)}">
-<input type="hidden" name="deck_name" id="save_deck_name">
-<input type="hidden" name="tags" id="save_deck_tags">
-<textarea name="tsv_text" id="save_tsv" hidden></textarea>
-<input type="hidden" name="start_after_save" id="start_after_save" value="0">
-<button type="submit" onclick="return prepareSave(false)">保存</button>
-<button type="submit" onclick="return prepareSave(true)">保存してこのデッキで開始</button>
-<a class="button secondary" href="/decks">キャンセル</a>
-</form>
 </section>
 </div>
 
@@ -2906,7 +3141,7 @@ body.deck-analysis-open {{overflow:hidden}}
      role="dialog" aria-modal="true" aria-labelledby="deckAnalysisTitle">
   <div class="deck-analysis-shell">
     <div class="deck-analysis-header">
-      <h1 id="deckAnalysisTitle">デッキ内容確認</h1>
+      <h1 id="deckAnalysisTitle">詳細分析ツール</h1>
       <span id="deckAnalysisDeckName" class="status"></span>
       <span class="spacer"></span>
       <button type="button" class="secondary" onclick="closeDeckAnalysis()">編集画面へ戻る</button>
@@ -3045,16 +3280,16 @@ function renderDeck() {{
 }}
 
 const bladeAnalysisDefinitions = [
-  ["pink","桃"],
-  ["red","赤"],
-  ["yellow","黄"],
-  ["green","緑"],
-  ["blue","青"],
-  ["purple","紫"],
-  ["all","ALL"],
+  ["pink","桃","blade_pink"],
+  ["red","赤","blade_red"],
+  ["yellow","黄","blade_yellow"],
+  ["green","緑","blade_green"],
+  ["blue","青","blade_blue"],
+  ["purple","紫","blade_purple"],
+  ["all","ALL","blade_all"],
   ["draw","ドロー"],
   ["score","スコア＋"],
-  ["double_any","ダブル無色"],
+  ["double_any","ダブル無色","blade_any"],
   ["none","ブレードハートなし"],
 ];
 
@@ -3090,9 +3325,10 @@ function histogramHtml(title, entries, options={{}}) {{
           const label=String(entry[0]);
           const numeric=Number(entry[1])||0;
           const token=String(entry[2]||"");
+          const iconToken=String(entry[3]||token);
           const height=numeric===0 ? 0 : Math.max(8,(numeric/maximum)*100);
-          const iconHtml=showIcons && ["pink","red","yellow","green","blue","purple","all"].includes(token)
-            ? `<img class="histogram-heart-icon" src="${{textIconUrl(token)}}" alt="" onerror="this.style.display='none'">`
+          const iconHtml=showIcons && iconToken
+            ? `<img class="histogram-heart-icon" src="${{textIconUrl(iconToken)}}" alt="" onerror="this.style.display='none'">`
             : "";
           return `
             <div class="histogram-column" title="${{esc(label)}}：${{numeric}}">
@@ -3189,7 +3425,7 @@ function buildDeckAnalysis() {{
     ),
     histogramHtml(
       "ブレードハートの内訳",
-      bladeAnalysisDefinitions.map(([token,label])=>[label,bladeCounts[token],token]),
+      bladeAnalysisDefinitions.map(([token,label,iconToken])=>[label,bladeCounts[token],token,iconToken||""]),
       {{kind:"blade",showIcons:true}}
     ),
   ].join("");
@@ -3442,7 +3678,7 @@ document.addEventListener("click",event=>{{
 
 function resetSearch() {{
   for(const element of document.querySelectorAll('input[type="text"],input[type="number"],select')) {{
-    if(element.id==="deck_name") continue;
+    if(element.id==="visible_deck_name" || element.id==="visible_deck_tags") continue;
     element.value="";
   }}
   for(const checkbox of document.querySelectorAll('input[name="blade_heart_token"]')) checkbox.checked=false;
@@ -3726,7 +3962,7 @@ function clearControls(container) {{
 
 for (const field of document.querySelectorAll(".search-field")) {{
   const control = field.querySelector("input,select");
-  if (!control || control.id === "deck_name") continue;
+  if (!control || control.id === "visible_deck_name" || control.id === "visible_deck_tags") continue;
   const button = document.createElement("button");
   button.type = "button";
   button.className = "field-clear";
@@ -3893,6 +4129,10 @@ if(document.readyState==="loading") {{
     <div class="update-stat"><span>経過時間</span><strong id="jobElapsed">0:00</strong></div>
     <div class="update-stat"><span>最終ログ</span><strong id="jobSilence">-</strong></div>
     <div class="update-stat"><span>ログ行数</span><strong id="jobLineCount">0</strong></div>
+    <div class="update-stat"><span>新規カードデータ</span><strong id="jobCardDataNew">0件</strong></div>
+    <div class="update-stat"><span>画像取得対象</span><strong id="jobImageTargets">0件</strong></div>
+    <div class="update-stat"><span>新規保存画像</span><strong id="jobImageNew">0件</strong></div>
+    <div class="update-stat"><span>画像エラー</span><strong id="jobImageFailed">0件</strong></div>
   </div>
 </div>
 
@@ -3964,9 +4204,16 @@ async function confirmStartupUpdate() {
   await poll();
 }
 
-function dismissStartupUpdate() {
+async function dismissStartupUpdate() {
   setStartupDialog(false);
-  document.getElementById("jobMessage").textContent="起動時更新確認はキャンセルされました。必要なときは「更新開始」を押してください。";
+  document.getElementById("jobMessage").textContent="起動時更新確認を後回しにしています...";
+  try {
+    const res=await fetch("/api/update/startup-dismissed",{method:"POST"});
+    const data=await res.json();
+    document.getElementById("jobMessage").textContent=data.message || "起動時更新確認はキャンセルされました。必要なときは「更新開始」を押してください。";
+  } catch(e) {
+    document.getElementById("jobMessage").textContent="起動時更新確認はキャンセルされました。必要なときは「更新開始」を押してください。";
+  }
   history.replaceState(null,"",location.pathname);
 }
 
@@ -3986,6 +4233,11 @@ async function poll() {
     document.getElementById("jobSilence").textContent=
       data.status==="running" ? `${data.seconds_since_output||0}秒前` : "-";
     document.getElementById("jobLineCount").textContent=String(data.line_count||0);
+    const counts=data.result_counts || {};
+    document.getElementById("jobCardDataNew").textContent=`${Number(counts.card_data_new||0)}件`;
+    document.getElementById("jobImageTargets").textContent=`${Number(counts.card_image_targets||0)}件`;
+    document.getElementById("jobImageNew").textContent=`${Number(counts.card_image_new_saved||0)}件`;
+    document.getElementById("jobImageFailed").textContent=`${Number(counts.card_image_failed||0)}件`;
 
     bar.style.width=`${percent}%`;
     bar.classList.toggle("running",running);

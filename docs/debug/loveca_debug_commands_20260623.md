@@ -11,6 +11,8 @@
 
 ※対応済み：実装前・デバッグ対応前・完了前に確認する補助ルールとして `docs/notes/loveca_runtime_implementation_rules_20260708.md` を作成した。複数コスト選択、自動効果の無言処理、効果発生源表示、カード番号だけの表示、公開/見る/エール表示、state の寿命と snapshot/restore まで必須チェック化した。
 
+※20260721再整理: 旧コメントに残る効果処理関連の指摘を現行実装と照合した。`発生源なし` / `自動効果の無言処理` / `対象なし無言終了` の代表経路は、現在は `source_cn`、実行中効果本文、`message_ack` / `confirm_effect` / `auto_order` を通す方針で対応済み。相手個別情報に関する旧指摘は、1デッキ版では手入力・手動確認を正式仕様、2デッキ版では相手context/action bridgeで実状態へ寄せる方針に再分類した。2デッキ用UIでは情報秘匿不要のため、相手手札候補がactive側に見えることは残件扱いしない。秘匿が必要なのは1デッキ用かつパブリックウィンドウを用いるリモート起動のみ。UI目視・操作感に残るものは `docs/handoffs/loveca_handoff_20260721_visual_confirmation_checklist_ja.md` へ分離し、この旧文書内の該当コメントは「実処理は対応済み、必要なら目視確認」扱いとする。
+
 ## Common commands
 
 ```bash

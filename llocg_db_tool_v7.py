@@ -19,7 +19,7 @@ Deps:
 
 from __future__ import annotations
 
-BUILD_TAG = "cached_reprint_image_manifest_enrichment_20260721a"
+BUILD_TAG = "wiki_printings_image_manifest_20260722a"
 
 import argparse
 import csv
@@ -28,12 +28,13 @@ import json
 import random
 import re
 import time
+import unicodedata
 import urllib.parse
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 from collections import Counter
 
 import pandas as pd
@@ -552,6 +553,7 @@ OFFICIAL_RARITY_TOKENS = {
     "RM", "RE", "PE", "PE2", "SECE", "LLE", "PP", "SR", "UR", "SP",
 }
 OFFICIAL_REPRINT_IMAGE_RARITIES = {"L2", "SECL", "RM", "SRL"}
+OFFICIAL_CACHED_IMAGE_SCAN_RARITIES = OFFICIAL_REPRINT_IMAGE_RARITIES | {"PR", "PR2"}
 OFFICIAL_REPRINT_ENRICHMENT_TARGET_LIMIT = 120
 OFFICIAL_CARD_RARITY_TAIL_RE = re.compile(r"^(?P<base>.+?)[-_\s](?P<rarity>[A-Za-z0-9＋\+]{1,8})$")
 
@@ -598,6 +600,8 @@ def official_expansion_from_cardno(cardno: str) -> Optional[str]:
         if not base:
             return None
         return re.sub(r"\d{2}$", f"{n:02d}", base)
+    if re.search(r"(?:^|-)PR-[0-9]{3}(?:-|$)", c, re.IGNORECASE):
+        return "PR"
     return None
 
 
@@ -736,6 +740,151 @@ def parse_official_cardlist_items(
     return items
 
 
+def _normalize_product_title_key(value: str) -> str:
+    text = unicodedata.normalize("NFKC", str(value or ""))
+    text = re.sub(r"\s+", " ", text).strip().casefold()
+    return text
+
+
+def _product_title_aliases(value: str) -> Set[str]:
+    text = unicodedata.normalize("NFKC", str(value or "")).strip()
+    if not text:
+        return set()
+    aliases = {text}
+    aliases.add(re.sub(r"\s+", " ", text))
+    aliases.add(text.replace("\n", " "))
+    aliases.add(re.sub(r"\s+", "", text))
+    return {_normalize_product_title_key(alias) for alias in aliases if alias}
+
+
+def load_product_title_code_map(root: Path) -> Dict[str, str]:
+    out: Dict[str, str] = {}
+
+    def add_aliases(code: str, *values: str) -> None:
+        code = str(code or "").strip().upper()
+        if not code:
+            return
+        for value in values:
+            for alias in _product_title_aliases(value):
+                out.setdefault(alias, code)
+
+    for filename in ("product_catalog.json", PRODUCT_RELEASE_REGISTRY_FILENAME):
+        path = root / filename
+        if not path.exists():
+            continue
+        try:
+            obj = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        products = obj.get("products", {}) if isinstance(obj, dict) else {}
+        if not isinstance(products, dict):
+            continue
+        for code, raw in products.items():
+            if not isinstance(raw, dict):
+                continue
+            source_url = str(raw.get("source_url") or "")
+            url_title = ""
+            if source_url:
+                try:
+                    url_title = urllib.parse.unquote(source_url.rstrip("/").split("/")[-1])
+                except Exception:
+                    url_title = ""
+            add_aliases(
+                str(code),
+                str(raw.get("name") or ""),
+                str(raw.get("title") or ""),
+                url_title,
+            )
+
+    add_aliases("PR", "PRカード", "PR", "プロモーションカード")
+    return out
+
+
+def product_code_for_printing_title(title: str, title_code_map: Dict[str, str]) -> str:
+    for alias in _product_title_aliases(title):
+        if alias in title_code_map:
+            return title_code_map[alias]
+    return ""
+
+
+def load_printing_manifest_items_from_db(
+    db_json: Optional[Path],
+    db_csv: Optional[Path],
+    outdir: Path,
+    wanted_cardnos: Set[str],
+) -> List[Dict[str, Any]]:
+    records: List[Dict[str, Any]] = []
+    if db_json and db_json.exists():
+        try:
+            data = json.loads(db_json.read_text(encoding="utf-8"))
+            if isinstance(data, list):
+                records.extend([r for r in data if isinstance(r, dict)])
+        except Exception:
+            pass
+    if not records and db_csv and db_csv.exists():
+        try:
+            records.extend(pd.read_csv(db_csv).to_dict(orient="records"))
+        except Exception:
+            pass
+
+    title_code_map = load_product_title_code_map(outdir)
+    items: List[Dict[str, Any]] = []
+    seen: Set[Tuple[str, str, str, str]] = set()
+    for rec in records:
+        raw = rec.get("printings_json", "")
+        if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+            continue
+        try:
+            printings = json.loads(str(raw or "[]"))
+        except Exception:
+            continue
+        if not isinstance(printings, list):
+            continue
+        for printing in printings:
+            if not isinstance(printing, dict):
+                continue
+            card_attr = str(printing.get("card_attr") or printing.get("printed_cardnumber") or "").strip()
+            base_cardno, rarity_display = split_display_card_and_rarity(card_attr)
+            if not base_cardno:
+                base_cardno = str(printing.get("cardnumber") or rec.get("cardnumber") or "").strip()
+            if base_cardno not in wanted_cardnos:
+                continue
+            rarity_norm = official_normalize_rarity_token(
+                str(printing.get("rarity_norm") or rarity_display or "")
+            )
+            if rarity_norm not in OFFICIAL_RARITY_TOKENS:
+                continue
+            folder = str(printing.get("product_code") or "").strip().upper()
+            if not folder:
+                folder = product_code_for_printing_title(
+                    str(printing.get("set_title") or ""),
+                    title_code_map,
+                )
+            if not folder:
+                continue
+            remote_filename = f"{card_attr}-{rarity_norm}.png" if not card_attr.upper().endswith(f"-{rarity_norm}") else f"{card_attr}.png"
+            exact_url = (
+                f"{OFFICIAL_BASE_URL}/wordpress/wp-content/images/cardlist/"
+                f"{folder}/{remote_filename}"
+            )
+            key = (base_cardno, rarity_norm, folder, remote_filename)
+            if key in seen:
+                continue
+            seen.add(key)
+            items.append({
+                "cardnumber": base_cardno,
+                "card_attr": card_attr,
+                "rarity_display": str(printing.get("rarity_display") or rarity_display or rarity_norm),
+                "rarity_norm": rarity_norm,
+                "folder": folder,
+                "remote_filename": remote_filename,
+                "exact_url": exact_url,
+                "source": "wiki_printings_table",
+                "set_title": str(printing.get("set_title") or ""),
+            })
+    return items
+
+
 def parse_cached_official_reprint_items(
     cache_dir: Path,
     wanted_cardnos: Set[str],
@@ -743,7 +892,7 @@ def parse_cached_official_reprint_items(
     items: List[Dict[str, Any]] = []
     if not cache_dir.is_dir():
         return items
-    needles = tuple(f"-{rarity}.png" for rarity in OFFICIAL_REPRINT_IMAGE_RARITIES)
+    needles = tuple(f"-{rarity}.png" for rarity in OFFICIAL_CACHED_IMAGE_SCAN_RARITIES)
     seen: Set[Tuple[str, str, str]] = set()
     for path in sorted(cache_dir.glob("*.html")):
         try:
@@ -758,7 +907,7 @@ def parse_cached_official_reprint_items(
             wanted_cardnos=wanted_cardnos,
         ):
             rarity = official_normalize_rarity_token(str(item.get("rarity_norm", "") or ""))
-            if rarity not in OFFICIAL_REPRINT_IMAGE_RARITIES:
+            if rarity not in OFFICIAL_CACHED_IMAGE_SCAN_RARITIES:
                 continue
             key = (
                 str(item.get("cardnumber", "")),
@@ -768,7 +917,7 @@ def parse_cached_official_reprint_items(
             if key in seen:
                 continue
             seen.add(key)
-            item["source"] = "official_cached_reprint_scan"
+            item["source"] = "official_cached_image_scan"
             items.append(item)
     return items
 
@@ -972,6 +1121,95 @@ def cmd_official_image_manifest(
             "variants": variants,
         }
 
+    wiki_printing_items = load_printing_manifest_items_from_db(
+        db_json,
+        db_csv,
+        outdir,
+        wanted_set,
+    )
+    wiki_printing_before = sum(len(x) for x in cards_map.values())
+    push_items(wiki_printing_items)
+    wiki_printing_added = max(
+        0,
+        sum(len(x) for x in cards_map.values()) - wiki_printing_before,
+    )
+    print(
+        "[IMAGE-MANIFEST] "
+        f"wiki_printings candidates={len(wiki_printing_items)} "
+        f"added={wiki_printing_added}"
+    )
+
+    # Some PR/reprint images live under the official PR image folder while the
+    # card number itself keeps its original product token, e.g.
+    # PL!-bp3-012-PR -> card_images/PR/PL!-bp3-012-PR.png.  Scan the PR list
+    # against the full wanted card-number set, but keep exact card-number
+    # matching; do not synthesize PL!-PR-012 aliases.
+    pr_scan_variants: List[str] = []
+    pr_scan_pages_done = 0
+    pr_scan_max_page = 1
+    pr_scan_before = sum(len(x) for x in cards_map.values())
+    for query_key in ("expansion",):
+        first_url = (
+            f"{OFFICIAL_CARDLIST_SEARCH_URL}?"
+            f"{query_key}=PR&view=image&sort=new"
+        )
+        html = fetch(
+            first_url,
+            cache_dir,
+            delay=delay,
+            user_agent=user_agent,
+            timeout=timeout,
+            stage="official_manifest_pr_exact",
+            fetch_state=fetch_state,
+        )
+        page_items = parse_official_cardlist_items(
+            html,
+            "PR",
+            wanted_cardnos=wanted_set,
+        )
+        push_items(page_items)
+        max_page = extract_official_max_page(html)
+        pr_scan_max_page = max(pr_scan_max_page, max_page)
+        pr_scan_pages_done += 1
+        pr_scan_variants.append(
+            f"{first_url} :: items={len(page_items)} max_page={max_page}"
+        )
+
+        for page in range(2, max_page + 1):
+            more_url = (
+                f"{OFFICIAL_CARDLIST_MORE_URL}?"
+                f"{query_key}=PR&view=image&page={page}"
+            )
+            more_html = fetch(
+                more_url,
+                cache_dir,
+                delay=delay,
+                user_agent=user_agent,
+                timeout=timeout,
+                stage="official_manifest_pr_exact",
+                fetch_state=fetch_state,
+            )
+            more_items = parse_official_cardlist_items(
+                more_html,
+                "PR",
+                wanted_cardnos=wanted_set,
+            )
+            push_items(more_items)
+            pr_scan_pages_done += 1
+            pr_scan_variants.append(f"{more_url} :: items={len(more_items)}")
+    pr_scan_added = max(0, sum(len(x) for x in cards_map.values()) - pr_scan_before)
+    expansions_summary["PR_EXACT_ALL"] = {
+        "cards_wanted": len(wanted_set),
+        "pages_fetched": pr_scan_pages_done,
+        "max_page": pr_scan_max_page,
+        "variants": pr_scan_variants,
+        "entries_added": pr_scan_added,
+    }
+    print(
+        "[IMAGE-MANIFEST] "
+        f"pr_exact_all_scan pages={pr_scan_pages_done} added={pr_scan_added}"
+    )
+
     cached_reprint_items = parse_cached_official_reprint_items(cache_dir, wanted_set)
     cached_reprint_before = sum(len(x) for x in cards_map.values())
     push_items(cached_reprint_items)
@@ -1059,6 +1297,8 @@ def cmd_official_image_manifest(
             "rarities": sorted(OFFICIAL_REPRINT_IMAGE_RARITIES),
             "cached_scan_candidates": len(cached_reprint_items),
             "cached_scan_added": cached_reprint_added,
+            "wiki_printing_candidates": len(wiki_printing_items),
+            "wiki_printing_added": wiki_printing_added,
         },
         "expansions": expansions_summary,
         "cards": {
@@ -1431,6 +1671,75 @@ def parse_info_table(soup: BeautifulSoup, key_set: Set[str]) -> Dict[str, str]:
     # guard
     if out.get("blade_heart", "") == "効果テキスト":
         out["blade_heart"] = ""
+    return out
+
+
+def _table_headers(table: Tag) -> List[str]:
+    first = table.find("tr")
+    if not first:
+        return []
+    return [cell_text(cell) for cell in first.find_all(["th", "td"], recursive=False)]
+
+
+def _find_column(headers: List[str], needles: Sequence[str]) -> int:
+    normalized = [normalize_key(h) for h in headers]
+    for needle in needles:
+        needle_norm = normalize_key(needle)
+        for idx, header in enumerate(normalized):
+            if needle_norm and needle_norm in header:
+                return idx
+    return -1
+
+
+def parse_printings_table(soup: BeautifulSoup) -> List[Dict[str, str]]:
+    out: List[Dict[str, str]] = []
+    seen: Set[Tuple[str, str, str]] = set()
+    for heading in soup.find_all(["h2", "h3", "h4"]):
+        if "収録状況" not in heading.get_text(" ", strip=True):
+            continue
+        node = heading
+        while True:
+            node = node.find_next_sibling()
+            if node is None or node.name in {"h2", "h3", "h4"}:
+                break
+            tables = node.find_all("table") if isinstance(node, Tag) else []
+            if getattr(node, "name", "") == "table":
+                tables = [node] + tables
+            for table in tables:
+                headers = _table_headers(table)
+                if not headers:
+                    continue
+                set_idx = _find_column(headers, ["収録セット", "商品", "収録弾", "セット"])
+                card_idx = _find_column(headers, ["カード番号"])
+                if set_idx < 0 or card_idx < 0:
+                    continue
+                for tr in table.find_all("tr")[1:]:
+                    cells = tr.find_all(["th", "td"], recursive=False)
+                    if len(cells) <= max(set_idx, card_idx):
+                        continue
+                    set_cell = cells[set_idx]
+                    card_attr = cell_text(cells[card_idx]).strip()
+                    if not card_attr:
+                        continue
+                    base_cardno, rarity_display = split_display_card_and_rarity(card_attr)
+                    rarity_norm = official_normalize_rarity_token(rarity_display)
+                    if rarity_norm not in OFFICIAL_RARITY_TOKENS:
+                        continue
+                    link = set_cell.find("a", href=True)
+                    set_title = cell_text(set_cell).strip()
+                    set_url = norm_url(link["href"]) if link else ""
+                    key = (set_title, card_attr, rarity_norm)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    out.append({
+                        "set_title": set_title,
+                        "set_url": set_url,
+                        "card_attr": card_attr,
+                        "cardnumber": base_cardno,
+                        "rarity_display": rarity_display,
+                        "rarity_norm": rarity_norm,
+                    })
     return out
 
 
@@ -2120,6 +2429,7 @@ def parse_card_page(url: str, html: str, key_set: Set[str], do_normalize: bool) 
     cardno_u, name_u = cardno_name_from_url(url)
 
     info = parse_info_table(soup, key_set)
+    printings = parse_printings_table(soup)
     main_text = soup_main_text(soup)
     effect_text = extract_effect_text(main_text)
 
@@ -2143,6 +2453,7 @@ def parse_card_page(url: str, html: str, key_set: Set[str], do_normalize: bool) 
         "required_hearts_raw": req_raw,
         "score": info.get("score", ""),
         "effect_text_raw": effect_text,
+        "printings_json": json.dumps(printings, ensure_ascii=False),
         "source_url": url,
     }
 

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: public_view_back_redaction_audit_20260720a
+# BUILD_TAG: yell_no_bh_dual_menu_refresh_undo_20260722a
 from __future__ import annotations
 
 """llocg_ui.server
@@ -71,7 +71,7 @@ from .engine import (
     _rule_refresh_main_deck,
 )
 
-APP_VERSION = "public_view_back_redaction_audit_20260720a"
+APP_VERSION = "match_record_reset_buttons_20260722a"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -82,7 +82,7 @@ def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
 
 _YELL_HEART_TOKEN_TO_COLOR = {
     '桃': 'pink', '赤': 'red', '黄': 'yellow', '緑': 'green', '青': 'blue', '紫': 'purple',
-    '任意': 'any', 'ALL': 'all', '虹': 'all', 'すべて': 'all',
+    '任意': 'any', '無色': 'any', 'ALL': 'all', '虹': 'all', 'すべて': 'all',
 }
 
 
@@ -94,11 +94,37 @@ def _parse_yell_heart_counts_from_raw(raw_text: str) -> Dict[str, int]:
     for m in re.finditer(r'<(?:\(([^)]+)\)|([^<>]+))>', txt):
         inner = str((m.group(1) or m.group(2) or '')).strip()
         key = inner.replace('＋', '+').replace(' ', '')
+        m_colorless = re.match(r'^(?:無色|任意)[×xX](\d+)$', key)
+        if m_colorless:
+            try:
+                counts['any'] = int(counts.get('any', 0) or 0) + max(0, int(m_colorless.group(1) or 0))
+            except Exception:
+                pass
+            continue
         color = _YELL_HEART_TOKEN_TO_COLOR.get(key)
         if not color:
             continue
         counts[color] = int(counts.get(color, 0) or 0) + 1
     return _ordered_heart_counts(counts)
+
+
+def _ci_yell_double_colorless_icon_count(ci: Optional[Any]) -> int:
+    if not ci:
+        return 0
+    txt = str(getattr(ci, 'blade_heart_raw', '') or '')
+    total = 0
+    for m in re.finditer(r'<(?:\(([^)]+)\)|([^<>]+))>', txt):
+        inner = str((m.group(1) or m.group(2) or '')).strip()
+        key = inner.replace('＋', '+').replace(' ', '')
+        mm = re.match(r'^(?:無色|任意)[×xX](\d+)$', key)
+        if not mm:
+            continue
+        try:
+            if int(mm.group(1) or 0) >= 2:
+                total += 1
+        except Exception:
+            pass
+    return int(total)
 
 
 def _sum_named_icon_bonus_from_raw(raw_text: str, label: str) -> int:
@@ -145,6 +171,22 @@ def _ci_yell_score_icon_count(ci: Optional[Any]) -> int:
     return _sum_named_icon_bonus_from_raw(getattr(ci, 'blade_heart_raw', '') or '', 'スコア')
 
 
+def _ci_has_yell_blade_heart_payload(ci: Optional[Any]) -> bool:
+    if not ci:
+        return False
+    if _ci_yell_heart_counts(ci):
+        return True
+    if _ci_yell_draw_icon_count(ci) or _ci_yell_score_icon_count(ci) or _ci_yell_double_colorless_icon_count(ci):
+        return True
+    txt = " ".join([
+        str(getattr(ci, 'blade_heart_raw', '') or ''),
+        str(getattr(ci, 'blade_heart_tags_json', '') or ''),
+    ]).strip()
+    if not txt or txt in {'なし', '-', '0', '[]'}:
+        return False
+    return bool(re.search(r'<(?:\([^)]+\)|[^<>]+)>', txt))
+
+
 class App:
     def __init__(
         self,
@@ -160,8 +202,12 @@ class App:
         self.outdir = self.root / "sim_out"
         self.cards_db = load_cards_db(self.root, compiled_path=compiled, tokv1_path=tokv1)
         self.img = ImageLocator(self.root)
+        self.deck_image_prefs = self._load_deck_image_prefs_from_env()
         self.ui_code = str(code)
         self.deck_code = str(deck_code)
+        self.remote_mode = str(os.environ.get("LLOCG_APP_REMOTE_MODE", "") or "").strip().lower() not in ("", "0", "false", "no")
+        self.remote_session_key = str(os.environ.get("LLOCG_APP_REMOTE_SESSION_KEY", "") or "")
+        self.remote_session_uid = str(os.environ.get("LLOCG_APP_REMOTE_SESSION_UID", "") or "")
         self.gs, self.rng = new_game(self.root, self.deck_code, seed=seed, debug=debug)
         # BUILD_TAG: refresh_notice_popup_20260630af
         # Engine refresh notices need DB metadata for no-bladeheart/live summaries.
@@ -171,6 +217,10 @@ class App:
             pass
         self._force_mulligan_start()
         self._apply_start_overrides_from_env()
+        self.card_instance_zones: Dict[str, List[str]] = {}
+        self.card_instance_meta: Dict[str, Dict[str, str]] = {}
+        self.card_instance_seq: int = 0
+        self._init_card_instance_tracking()
         # Public-window reveal ledger.  This is intentionally independent from
         # gs.pending because owner-side acknowledgement can clear a reveal popup
         # before the public window's next poll sees it.
@@ -183,10 +233,358 @@ class App:
         # independent of transient owner-side popups.
         self._public_hand_revealed_turn: int = int(getattr(self.gs, "turn", 0) or 0)
         self._public_hand_revealed_cards: List[str] = []
+        self._public_hand_revealed_instance_ids: List[str] = []
         self._public_hand_reveal_events: List[Dict[str, Any]] = []
         self._public_hand_reveal_seq: int = 0
         self._apply_optional_extensions()
         self.save_trace()
+
+    def _fresh_reset_seed(self) -> int:
+        return int(time.time() * 1000) & 0x7FFFFFFF
+
+    def reset_match(self) -> None:
+        debug = bool(getattr(self.gs, "debug", False))
+        new_seed = self._fresh_reset_seed()
+        self.gs, self.rng = new_game(self.root, self.deck_code, seed=new_seed, debug=debug)
+        try:
+            setattr(self.gs, "_cards_db", self.cards_db)
+        except Exception:
+            pass
+        self._force_mulligan_start()
+        self._apply_start_overrides_from_env()
+        self.card_instance_zones = {}
+        self.card_instance_meta = {}
+        self.card_instance_seq = 0
+        self._init_card_instance_tracking()
+        self._public_reveal_events = []
+        self._public_reveal_seq = 0
+        self._public_reveal_seen = {}
+        self._public_hand_revealed_turn = int(getattr(self.gs, "turn", 0) or 0)
+        self._public_hand_revealed_cards = []
+        self._public_hand_revealed_instance_ids = []
+        self._public_hand_reveal_events = []
+        self._public_hand_reveal_seq = 0
+        self._refresh_notice_ack_seq = 0
+        self._apply_optional_extensions()
+        try:
+            self.gs.log.append(f"[RESET] new match seed={new_seed}")
+        except Exception:
+            pass
+        self.save_trace()
+
+    def _normalize_record_result(self, value: Any) -> str:
+        raw = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+        aliases = {
+            "win": "win",
+            "lose": "lose",
+            "loss": "lose",
+            "no": "no_game",
+            "ng": "no_game",
+            "nogame": "no_game",
+            "no_game": "no_game",
+            "draw": "no_game",
+        }
+        if raw not in aliases:
+            raise ValueError("記録結果が不正です。")
+        return aliases[raw]
+
+    def _append_match_result_record(self, result: str) -> Dict[str, Any]:
+        result = self._normalize_record_result(result)
+        record = {
+            "schema_version": 1,
+            "recorded_at": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+            "simulator": "remote" if self.remote_mode else "single",
+            "result": result,
+            "deck_code": self.deck_code,
+            "seed": int(getattr(self.gs, "seed", 0) or 0),
+            "turn": int(getattr(self.gs, "turn", 0) or 0),
+            "phase": str(getattr(self.gs, "phase", "") or ""),
+            "remote_session_key": self.remote_session_key,
+            "remote_session_uid": self.remote_session_uid,
+            "build_tag": "match_record_reset_buttons_20260722a",
+        }
+        log_dir = self.root / "user_data" / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        with (log_dir / "loveca_match_results.jsonl").open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+        return record
+
+    def record_result_and_reset(self, result: Any) -> Dict[str, Any]:
+        record = self._append_match_result_record(str(result or ""))
+        self.reset_match()
+        try:
+            self.gs.log.append(f"[MATCH-RECORD] result={record['result']} saved=user_data/logs/loveca_match_results.jsonl")
+        except Exception:
+            pass
+        self.save_trace()
+        return record
+
+    def _normalize_image_rarity(self, value: Any) -> str:
+        text = str(value or "").strip().upper()
+        return text.replace("＋", "+").replace("+", "2")
+
+    def _rarity_from_variant_id(self, variant_id: Any) -> str:
+        parts = str(variant_id or "").split("|")
+        if len(parts) >= 2:
+            return parts[1]
+        return ""
+
+    def _load_deck_image_prefs_from_env(self) -> Dict[str, Dict[str, str]]:
+        raw = os.environ.get("LLOCG_APP_DECK_VARIANTS_JSON", "")
+        if not raw:
+            return {}
+        try:
+            rows = json.loads(raw)
+        except Exception:
+            return {}
+        if not isinstance(rows, list):
+            return {}
+        prefs: Dict[str, Dict[str, str]] = {}
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            cn = str(row.get("card_no") or row.get("cardnumber") or "").strip()
+            if not cn:
+                continue
+            variant_id = str(row.get("variant_id") or "").strip()
+            rarity = str(row.get("rarity") or "").strip() or self._rarity_from_variant_id(variant_id)
+            if not variant_id and not rarity:
+                continue
+            current = prefs.get(cn)
+            # Prefer a row with an explicit variant id; otherwise keep the
+            # first deck-list rarity for this card number.  Game state currently
+            # stores card numbers, not per-copy variant ids.
+            if current and (current.get("variant_id") or not variant_id):
+                continue
+            prefs[cn] = {
+                "variant_id": variant_id,
+                "rarity": self._normalize_image_rarity(rarity),
+            }
+        return prefs
+
+    def _cn2image_rarity(self) -> Dict[str, str]:
+        out: Dict[str, str] = {}
+        for cn in self._all_cardnumbers_in_state():
+            pref = self.deck_image_prefs.get(cn, {})
+            rarity = str(pref.get("rarity") or "").strip()
+            if rarity:
+                out[cn] = rarity
+        return out
+
+    def _cn2image_variant_id(self) -> Dict[str, str]:
+        out: Dict[str, str] = {}
+        for cn in self._all_cardnumbers_in_state():
+            pref = self.deck_image_prefs.get(cn, {})
+            variant_id = str(pref.get("variant_id") or "").strip()
+            if variant_id:
+                out[cn] = variant_id
+        return out
+
+    def _normalize_instance_entry(self, row: Any, fallback_cn: str = "") -> Dict[str, str]:
+        data = row if isinstance(row, dict) else {}
+        cn = str(
+            data.get("cardnumber")
+            or data.get("card_no")
+            or data.get("cn")
+            or fallback_cn
+            or ""
+        ).strip()
+        variant_id = str(data.get("variant_id") or "").strip()
+        rarity = str(data.get("rarity") or "").strip() or self._rarity_from_variant_id(variant_id)
+        return {
+            "instance_id": str(data.get("instance_id") or "").strip(),
+            "cardnumber": cn,
+            "rarity": self._normalize_image_rarity(rarity),
+            "variant_id": variant_id,
+        }
+
+    def _next_card_instance_id(self) -> str:
+        self.card_instance_seq = int(getattr(self, "card_instance_seq", 0) or 0) + 1
+        return f"ci{self.card_instance_seq:05d}"
+
+    def _register_card_instance(self, row: Any, fallback_cn: str = "") -> str:
+        item = self._normalize_instance_entry(row, fallback_cn=fallback_cn)
+        cn = item.get("cardnumber", "")
+        iid = item.get("instance_id", "") or self._next_card_instance_id()
+        if iid in self.card_instance_meta:
+            iid = self._next_card_instance_id()
+        if not cn:
+            cn = str(fallback_cn or "").strip()
+        pref = self.deck_image_prefs.get(cn, {})
+        rarity = item.get("rarity", "") or str(pref.get("rarity") or "")
+        variant_id = item.get("variant_id", "") or str(pref.get("variant_id") or "")
+        self.card_instance_meta[iid] = {
+            "id": iid,
+            "cardnumber": cn,
+            "rarity": self._normalize_image_rarity(rarity),
+            "variant_id": variant_id,
+        }
+        return iid
+
+    def _load_initial_instance_rows(self) -> Dict[str, List[Dict[str, str]]]:
+        raw = os.environ.get("LLOCG_APP_INITIAL_INSTANCES_JSON", "")
+        if not raw:
+            return {}
+        try:
+            data = json.loads(raw)
+        except Exception:
+            return {}
+        if not isinstance(data, dict):
+            return {}
+        out: Dict[str, List[Dict[str, str]]] = {}
+        for zone in ("hand", "deck"):
+            rows = data.get(zone)
+            if not isinstance(rows, list):
+                continue
+            out[zone] = [self._normalize_instance_entry(row) for row in rows if isinstance(row, dict)]
+        return out
+
+    def _fallback_instance_rows_by_cardnumber(self) -> Dict[str, List[Dict[str, str]]]:
+        rows: Dict[str, List[Dict[str, str]]] = {}
+        raw = os.environ.get("LLOCG_APP_DECK_VARIANTS_JSON", "")
+        try:
+            data = json.loads(raw) if raw else []
+        except Exception:
+            data = []
+        if isinstance(data, list):
+            for row in data:
+                if not isinstance(row, dict):
+                    continue
+                cn = str(row.get("card_no") or row.get("cardnumber") or "").strip()
+                if not cn:
+                    continue
+                try:
+                    count = max(0, int(row.get("count", 0) or 0))
+                except Exception:
+                    count = 0
+                item = self._normalize_instance_entry(row, fallback_cn=cn)
+                for _ in range(count):
+                    rows.setdefault(cn, []).append(dict(item))
+        return rows
+
+    def _zone_cardnumbers_for_instance_tracking(self) -> Dict[str, List[str]]:
+        gs = self.gs
+        zones: Dict[str, List[str]] = {
+            "deck": [str(cn) for cn in list(getattr(gs, "deck", []) or [])],
+            "hand": [str(cn) for cn in list(getattr(gs, "hand", []) or [])],
+            "green_room": [str(cn) for cn in list(getattr(gs, "green_room", []) or [])],
+            "set_zone": [str(cn) for cn in list(getattr(gs, "set_zone", []) or [])],
+            "resolve_zone": [str(cn) for cn in list(getattr(gs, "resolve_zone", []) or [])],
+            "success_zone": [str(cn) for cn in list(getattr(gs, "success_zone", []) or [])],
+        }
+        stage = getattr(gs, "stage", {}) or {}
+        if isinstance(stage, dict):
+            for pos in ("L", "C", "R"):
+                slot = stage.get(pos)
+                cn = ""
+                if slot is not None:
+                    cn = str(slot.get("cardnumber") if isinstance(slot, dict) else getattr(slot, "cardnumber", "") or "").strip()
+                zones[f"stage:{pos}"] = [cn] if cn else []
+        return zones
+
+    def _make_unknown_card_instance(self, cn: str) -> str:
+        return self._register_card_instance({"cardnumber": str(cn or "")}, fallback_cn=str(cn or ""))
+
+    def _init_card_instance_tracking(self) -> None:
+        self.card_instance_zones = {}
+        self.card_instance_meta = {}
+        self.card_instance_seq = 0
+        current = self._zone_cardnumbers_for_instance_tracking()
+        initial = self._load_initial_instance_rows()
+        fallback_by_cn = self._fallback_instance_rows_by_cardnumber()
+
+        for zone, cards in current.items():
+            ids: List[str] = []
+            explicit_rows = list(initial.get(zone, []) or [])
+            for idx, cn in enumerate(cards):
+                row = explicit_rows[idx] if idx < len(explicit_rows) else None
+                if not row:
+                    pool = fallback_by_cn.get(str(cn), [])
+                    row = pool.pop(0) if pool else {"cardnumber": cn}
+                ids.append(self._register_card_instance(row, fallback_cn=str(cn)))
+            self.card_instance_zones[zone] = ids
+
+    def _remove_instance_from_pool(self, pool: List[str], iid: str) -> None:
+        try:
+            pool.remove(iid)
+        except ValueError:
+            pass
+
+    def _pop_matching_instance(self, pool: List[str], cn: str, used: set[str]) -> str:
+        for iid in list(pool):
+            if iid in used:
+                continue
+            meta = self.card_instance_meta.get(iid, {})
+            if str(meta.get("cardnumber") or "") == str(cn):
+                pool.remove(iid)
+                return iid
+        return ""
+
+    def _sync_card_instances_from_state(self) -> None:
+        if not isinstance(getattr(self, "card_instance_zones", None), dict):
+            self._init_card_instance_tracking()
+            return
+        current = self._zone_cardnumbers_for_instance_tracking()
+        old_zones = {zone: list(ids or []) for zone, ids in self.card_instance_zones.items()}
+        global_pool: Dict[str, List[str]] = {}
+        for ids in old_zones.values():
+            for iid in ids:
+                meta = self.card_instance_meta.get(iid, {})
+                cn = str(meta.get("cardnumber") or "")
+                if cn:
+                    global_pool.setdefault(cn, []).append(iid)
+
+        new_zones: Dict[str, List[str]] = {}
+        used: set[str] = set()
+        for zone, cards in current.items():
+            same_pool = list(old_zones.get(zone, []) or [])
+            ids: List[str] = []
+            for cn in cards:
+                cn_s = str(cn or "")
+                iid = self._pop_matching_instance(same_pool, cn_s, used)
+                if iid:
+                    self._remove_instance_from_pool(global_pool.get(cn_s, []), iid)
+                else:
+                    pool = global_pool.get(cn_s, [])
+                    iid = ""
+                    while pool:
+                        cand = pool.pop(0)
+                        if cand not in used:
+                            iid = cand
+                            break
+                if not iid:
+                    iid = self._make_unknown_card_instance(cn_s)
+                used.add(iid)
+                ids.append(iid)
+            new_zones[zone] = ids
+        self.card_instance_zones = new_zones
+
+    def _zone_instance_state_for_ui(self) -> Dict[str, Any]:
+        self._sync_card_instances_from_state()
+        stage = {
+            pos: (list(self.card_instance_zones.get(f"stage:{pos}", []) or [None])[0])
+            if self.card_instance_zones.get(f"stage:{pos}") else None
+            for pos in ("L", "C", "R")
+        }
+        return {
+            "deck": list(self.card_instance_zones.get("deck", []) or []),
+            "hand": list(self.card_instance_zones.get("hand", []) or []),
+            "green_room": list(self.card_instance_zones.get("green_room", []) or []),
+            "set_zone": list(self.card_instance_zones.get("set_zone", []) or []),
+            "resolve_zone": list(self.card_instance_zones.get("resolve_zone", []) or []),
+            "success_zone": list(self.card_instance_zones.get("success_zone", []) or []),
+            "stage": stage,
+        }
+
+    def _instance_meta_state_for_ui(self) -> Dict[str, Dict[str, str]]:
+        self._sync_card_instances_from_state()
+        active_ids: set[str] = set()
+        for value in self._zone_instance_state_for_ui().values():
+            if isinstance(value, list):
+                active_ids.update(str(x) for x in value if x)
+            elif isinstance(value, dict):
+                active_ids.update(str(x) for x in value.values() if x)
+        return {iid: dict(meta) for iid, meta in self.card_instance_meta.items() if iid in active_ids}
 
     def _apply_optional_extensions(self) -> None:
         """Load optional out-of-tree extensions.
@@ -302,6 +700,7 @@ class App:
         if turn_changed or phase_closed:
             self._public_hand_revealed_turn = cur_turn
             self._public_hand_revealed_cards = []
+            self._public_hand_revealed_instance_ids = []
             self._public_hand_reveal_events = []
 
     def _live_set_cards_are_public_for_public_source(self) -> bool:
@@ -470,7 +869,14 @@ class App:
 
         return out
 
-    def _remember_public_hand_reveals_after_cmd(self, before_hand: List[str], reveal_candidates: List[str], reason: str = "", before_refresh_seq: int = 0) -> None:
+    def _remember_public_hand_reveals_after_cmd(
+        self,
+        before_hand: List[str],
+        reveal_candidates: List[str],
+        reason: str = "",
+        before_refresh_seq: int = 0,
+        before_hand_instance_ids: Optional[List[str]] = None,
+    ) -> None:
         """Keep known cards that reached hand public until MAIN ends.
 
         Cases covered:
@@ -496,15 +902,43 @@ class App:
         for cn in before_hand or []:
             before_counts[str(cn)] = before_counts.get(str(cn), 0) + 1
         added: List[str] = []
+        added_ids: List[str] = []
+        before_iids = set(str(x) for x in list(before_hand_instance_ids or []) if str(x or "").strip())
+        try:
+            self._sync_card_instances_from_state()
+            after_hand_iids = [str(x or "") for x in list(self.card_instance_zones.get("hand", []) or [])]
+        except Exception:
+            after_hand_iids = []
+        used_iids = set(str(x) for x in list(getattr(self, "_public_hand_revealed_instance_ids", []) or []) if str(x or "").strip())
+
+        def find_added_instance_id(cn: str) -> str:
+            for idx, hand_cn in enumerate(after_hand):
+                if hand_cn != cn or idx >= len(after_hand_iids):
+                    continue
+                iid = str(after_hand_iids[idx] or "")
+                if iid and iid not in before_iids and iid not in used_iids:
+                    return iid
+            for idx, hand_cn in enumerate(after_hand):
+                if hand_cn != cn or idx >= len(after_hand_iids):
+                    continue
+                iid = str(after_hand_iids[idx] or "")
+                if iid and iid not in used_iids:
+                    return iid
+            return ""
 
         def add_if_hand_increased(cn0: Any) -> None:
             cn = str(cn0 or "").strip()
-            if not cn or cn == "__BACK__" or cn in added:
+            if not cn or cn == "__BACK__":
                 return
             after_n = sum(1 for x in after_hand if x == cn)
             before_n = int(before_counts.get(cn, 0) or 0)
-            if after_n > before_n:
+            already_added_n = sum(1 for x in added if x == cn)
+            if after_n > before_n + already_added_n:
                 added.append(cn)
+                iid = find_added_instance_id(cn)
+                if iid:
+                    added_ids.append(iid)
+                    used_iids.add(iid)
 
         for cn in reveal_candidates or []:
             # Mark only cards that are in hand after resolution and whose count
@@ -543,15 +977,21 @@ class App:
             return
         cards = list(getattr(self, "_public_hand_revealed_cards", []) or [])
         for cn in added:
-            if cn not in cards:
-                cards.append(cn)
+            cards.append(cn)
         self._public_hand_revealed_cards = cards
+        if added_ids:
+            ids = list(getattr(self, "_public_hand_revealed_instance_ids", []) or [])
+            for iid in added_ids:
+                if iid not in ids:
+                    ids.append(iid)
+            self._public_hand_revealed_instance_ids = ids
         self._public_hand_reveal_seq += 1
         ev = {
             "kind": "public_hand_reveal",
             "title": "公開して手札に加えたカード",
             "text": "公開情報として手札に加わったカードです。メインフェイズ終了まで公開情報として扱います。",
             "display_cards": added,
+            "display_instance_ids": added_ids,
             "display_card_count": len(added),
             "turn": self._current_turn_int(),
             "seq": self._public_hand_reveal_seq,
@@ -569,13 +1009,38 @@ class App:
 
     def _public_hand_revealed_cards_snapshot(self) -> List[str]:
         self._sync_public_hand_reveals_turn()
-        hand = set(str(cn) for cn in list(getattr(self.gs, "hand", []) or []))
+        ids = self._public_hand_revealed_instance_ids_snapshot()
+        if ids:
+            cards: List[str] = []
+            for iid in ids:
+                meta = self.card_instance_meta.get(str(iid), {}) if isinstance(getattr(self, "card_instance_meta", None), dict) else {}
+                cn = str(meta.get("cardnumber") or "")
+                if cn:
+                    cards.append(cn)
+            self._public_hand_revealed_cards = cards
+            return list(cards)
+        hand = [str(cn) for cn in list(getattr(self.gs, "hand", []) or [])]
         cards: List[str] = []
         for cn in list(getattr(self, "_public_hand_revealed_cards", []) or []):
-            if cn in hand and cn not in cards:
+            if cn in hand:
                 cards.append(cn)
         self._public_hand_revealed_cards = cards
         return list(cards)
+
+    def _public_hand_revealed_instance_ids_snapshot(self) -> List[str]:
+        self._sync_public_hand_reveals_turn()
+        try:
+            self._sync_card_instances_from_state()
+            hand_ids = set(str(x) for x in list(self.card_instance_zones.get("hand", []) or []) if str(x or "").strip())
+        except Exception:
+            hand_ids = set()
+        ids: List[str] = []
+        for iid0 in list(getattr(self, "_public_hand_revealed_instance_ids", []) or []):
+            iid = str(iid0 or "").strip()
+            if iid and iid in hand_ids and iid not in ids:
+                ids.append(iid)
+        self._public_hand_revealed_instance_ids = ids
+        return list(ids)
 
     def _card_intrinsic_orient_for_public(self, cn: str) -> str:
         """Return UI intrinsic orientation for a known public hand card.
@@ -634,6 +1099,23 @@ class App:
         # The owner/public UI suppresses acknowledged notices via ack seq.  Keeping
         # the ledger intact lets undo restore and replay the same notice correctly.
 
+    def _latest_unacked_refresh_notice_seq(self) -> int:
+        try:
+            notices = [x for x in (getattr(self.gs, "refresh_notices", []) or []) if isinstance(x, dict)]
+        except Exception:
+            notices = []
+        latest = 0
+        for ev in notices:
+            try:
+                latest = max(latest, int(ev.get("seq", 0) or 0))
+            except Exception:
+                pass
+        try:
+            ack = int(getattr(self, "_refresh_notice_ack_seq", 0) or 0)
+        except Exception:
+            ack = 0
+        return latest if latest > ack else 0
+
     def _auto_refresh_if_deck_empty_after_cmd(self, reason: str = "post_cmd") -> None:
         """Apply the rule refresh immediately when command resolution empties the deck."""
         # BUILD_TAG: refresh_notice_owner_public_ack_and_deck_empty_check_20260701ap
@@ -667,9 +1149,13 @@ class App:
                 "public_reveal_seen": copy.deepcopy(self._public_reveal_seen),
                 "public_hand_revealed_turn": int(self._public_hand_revealed_turn or 0),
                 "public_hand_revealed_cards": copy.deepcopy(self._public_hand_revealed_cards),
+                "public_hand_revealed_instance_ids": copy.deepcopy(getattr(self, "_public_hand_revealed_instance_ids", []) or []),
                 "public_hand_reveal_events": copy.deepcopy(self._public_hand_reveal_events),
                 "public_hand_reveal_seq": int(self._public_hand_reveal_seq or 0),
                 "refresh_notice_ack_seq": int(getattr(self, "_refresh_notice_ack_seq", 0) or 0),
+                "card_instance_zones": copy.deepcopy(getattr(self, "card_instance_zones", {}) or {}),
+                "card_instance_meta": copy.deepcopy(getattr(self, "card_instance_meta", {}) or {}),
+                "card_instance_seq": int(getattr(self, "card_instance_seq", 0) or 0),
             },
         }
 
@@ -686,9 +1172,15 @@ class App:
         self._public_reveal_seen = dict(app_state.get("public_reveal_seen", {}) or {})
         self._public_hand_revealed_turn = int(app_state.get("public_hand_revealed_turn", 0) or 0)
         self._public_hand_revealed_cards = list(app_state.get("public_hand_revealed_cards", []) or [])
+        self._public_hand_revealed_instance_ids = list(app_state.get("public_hand_revealed_instance_ids", []) or [])
         self._public_hand_reveal_events = list(app_state.get("public_hand_reveal_events", []) or [])
         self._public_hand_reveal_seq = int(app_state.get("public_hand_reveal_seq", 0) or 0)
         self._refresh_notice_ack_seq = int(app_state.get("refresh_notice_ack_seq", 0) or 0)
+        self.card_instance_zones = copy.deepcopy(app_state.get("card_instance_zones", {}) or {})
+        self.card_instance_meta = copy.deepcopy(app_state.get("card_instance_meta", {}) or {})
+        self.card_instance_seq = int(app_state.get("card_instance_seq", 0) or 0)
+        if not self.card_instance_zones:
+            self._init_card_instance_tracking()
 
     def export_suspend_data(self, label: str = "") -> Dict[str, Any]:
         state = self.state_json()
@@ -698,7 +1190,7 @@ class App:
         return {
             "format": "llocg_ui_suspend_state",
             "format_version": 1,
-                "build_tag": "deck_center_energy_plain_fallback_20260720a",
+                "build_tag": "match_record_reset_buttons_20260722a",
             "created_at": _dt.datetime.now(_dt.timezone.utc).isoformat(),
             "label": str(label or ""),
             "summary": {
@@ -752,6 +1244,37 @@ class App:
         try:
             if str(getattr(gs, 'phase', '')).upper() == 'MULLIGAN':
                 return
+        except Exception:
+            pass
+
+    def _push_undo_with_app_state(self) -> None:
+        push_undo(self.gs, self.rng)
+        try:
+            if self.gs.undo_stack:
+                self.gs.undo_stack[-1]["app_state"] = {
+                    "refresh_notice_ack_seq": int(getattr(self, "_refresh_notice_ack_seq", 0) or 0),
+                }
+        except Exception:
+            pass
+
+    def _do_undo_with_app_state(self) -> None:
+        app_state: Dict[str, Any] = {}
+        try:
+            if self.gs.undo_stack:
+                app_state = dict(self.gs.undo_stack[-1].get("app_state") or {})
+        except Exception:
+            app_state = {}
+        do_undo(self.gs, self.rng)
+        if "refresh_notice_ack_seq" in app_state:
+            try:
+                self._refresh_notice_ack_seq = int(app_state.get("refresh_notice_ack_seq", 0) or 0)
+                return
+            except Exception:
+                pass
+        try:
+            cur_seq = int(getattr(self.gs, "refresh_notice_seq", 0) or 0)
+            cur_ack = int(getattr(self, "_refresh_notice_ack_seq", 0) or 0)
+            self._refresh_notice_ack_seq = max(0, min(cur_ack, cur_seq))
         except Exception:
             pass
 
@@ -1722,6 +2245,40 @@ class App:
                 out[cn] = n
         return out
 
+    def _cn2yell_double_colorless_icons(self) -> Dict[str, int]:
+        out: Dict[str, int] = {}
+        for cn in self._all_cardnumbers_in_state():
+            ci = _get_card(self.cards_db, cn)
+            if ci is None:
+                continue
+            n = int(_ci_yell_double_colorless_icon_count(ci) or 0)
+            if n:
+                out[cn] = n
+        return out
+
+    def _cn2yell_has_blade_heart(self) -> Dict[str, bool]:
+        out: Dict[str, bool] = {}
+        for cn in self._all_cardnumbers_in_state():
+            ci = _get_card(self.cards_db, cn)
+            if ci is None:
+                continue
+            out[cn] = bool(_ci_has_yell_blade_heart_payload(ci))
+        return out
+
+    def _cn2blade(self) -> Dict[str, int]:
+        out: Dict[str, int] = {}
+        for cn in self._all_cardnumbers_in_state():
+            ci = _get_card(self.cards_db, cn)
+            if ci is None:
+                continue
+            try:
+                n = int(getattr(ci, "blade", 0) or 0)
+            except Exception:
+                n = 0
+            if n:
+                out[cn] = n
+        return out
+
     def _cn2name(self) -> Dict[str, str]:
         out: Dict[str, str] = {}
         for cn in self._all_cardnumbers_in_state():
@@ -1836,6 +2393,8 @@ class App:
             now - getattr(self.gs, "banner_ts", 0.0) <= getattr(self.gs, "banner_ttl", 0.0)
         ):
             banner = {"text": self.gs.banner_text}
+        card_instances = self._zone_instance_state_for_ui()
+        card_instance_meta = self._instance_meta_state_for_ui()
 
         return {
             "root": str(self.gs.root),
@@ -1843,6 +2402,7 @@ class App:
             "deck_code": self.deck_code,
             "seed": self.gs.seed,
             "debug": self.gs.debug,
+            "remote_mode": bool(getattr(self, "remote_mode", False)),
             "turn": self.gs.turn,
             "phase": self.gs.phase,
             "live_start_prompted": bool(getattr(self.gs, "live_start_prompted", False)),
@@ -1876,6 +2436,7 @@ class App:
             "effect_events": [dict(x) for x in (getattr(self.gs, "effect_events", []) or []) if isinstance(x, dict)][-80:],
             "public_reveal_events": self._public_reveal_events_snapshot(),
             "public_hand_revealed_cards": self._public_hand_revealed_cards_snapshot(),
+            "public_hand_revealed_instance_ids": self._public_hand_revealed_instance_ids_snapshot(),
             "public_hand_revealed_orient": self._public_hand_revealed_orient_snapshot(),
             "public_hand_reveal_events": self._public_hand_reveal_events_snapshot(),
             "cn2name": self._cn2name(),
@@ -1885,10 +2446,17 @@ class App:
             "cn2yell_hearts": self._cn2yell_hearts(),
             "cn2yell_draw_icons": self._cn2yell_draw_icons(),
             "cn2yell_score_icons": self._cn2yell_score_icons(),
+            "cn2yell_double_colorless_icons": self._cn2yell_double_colorless_icons(),
+            "cn2yell_has_blade_heart": self._cn2yell_has_blade_heart(),
+            "cn2image_rarity": self._cn2image_rarity(),
+            "cn2image_variant_id": self._cn2image_variant_id(),
+            "card_instances": card_instances,
+            "card_instance_meta": card_instance_meta,
             "cn2group": self._cn2group(),
             "cn2unit": self._cn2unit(),
             "cn2cost": self._cn2cost(),
             "cn2score": self._cn2score(),
+            "cn2blade": self._cn2blade(),
             "stage_detail": {
                 k: (
                     {
@@ -2102,8 +2670,27 @@ class App:
             "opponent_success_delta",
             "turn_order_set",
             "ack_yell_reveal",
+            "ack_refresh_notice",
         }
+        unacked_refresh_seq = self._latest_unacked_refresh_notice_seq()
+        if mutating and unacked_refresh_seq and name not in {"ack_refresh_notice", "undo", "reset", "record_reset", "toggle_debug"}:
+            if name == "next":
+                self._push_undo_with_app_state()
+                self._ack_refresh_notice(unacked_refresh_seq)
+                try:
+                    self.gs.log.append(f"[ACK] refresh notice seq={unacked_refresh_seq} acknowledged by NEXT")
+                except Exception:
+                    pass
+            else:
+                try:
+                    self.gs.log.append(f"[BLOCK] {name}: refresh notice seq={unacked_refresh_seq} requires confirmation first")
+                except Exception:
+                    pass
+            self.save_trace()
+            return self.state_json()
+
         before_hand_for_public_reveal: List[str] = []
+        before_hand_instance_ids_for_public_reveal: List[str] = []
         reveal_candidates_for_public_hand: List[str] = []
         before_refresh_notice_seq_for_public_hand: int = 0
         if mutating and name != "toggle_debug":
@@ -2114,13 +2701,17 @@ class App:
                 before_hand_for_public_reveal = [str(cn) for cn in list(getattr(self.gs, "hand", []) or [])]
             except Exception:
                 before_hand_for_public_reveal = []
+            try:
+                before_hand_instance_ids_for_public_reveal = [str(x) for x in list((self._zone_instance_state_for_ui().get("hand") or []))]
+            except Exception:
+                before_hand_instance_ids_for_public_reveal = []
             reveal_candidates_for_public_hand = self._reveal_candidate_cards_from_pending()
             self._public_hand_before_source_counts = self._public_source_counts_for_hand_reveal()
             try:
                 before_refresh_notice_seq_for_public_hand = int(getattr(self.gs, "refresh_notice_seq", 0) or 0)
             except Exception:
                 before_refresh_notice_seq_for_public_hand = 0
-            push_undo(self.gs, self.rng)
+            self._push_undo_with_app_state()
 
         if name == "play":
             cmd_play(self.gs, self.cards_db, int(payload.get("hand_idx", -1)), str(payload.get("pos", "")))
@@ -2140,7 +2731,7 @@ class App:
         elif name == "activate_from_hand":
             cmd_activate_from_hand(self.gs, self.cards_db, int(payload.get("hand_idx", -1)), self.rng)
         elif name == "toggle_stage_active":
-            push_undo(self.gs, self.rng)
+            self._push_undo_with_app_state()
             cmd_toggle_stage_active(self.gs, self.cards_db, str(payload.get("pos", "")))
         elif name == "opponent_wait_delta":
             try:
@@ -2172,6 +2763,12 @@ class App:
                 self.gs.log.append('[ACK] yell reveal fallback acknowledged')
             except Exception:
                 pass
+        elif name == "reset":
+            self.reset_match()
+            return self.state_json()
+        elif name == "record_reset":
+            self.record_result_and_reset(payload.get("result", ""))
+            return self.state_json()
         elif name == "turn_order_set":
             raw = str(payload.get("value", "") or "").strip().lower()
             val = "second" if raw in ("second", "gote", "後手", "2") else "first"
@@ -2226,7 +2823,7 @@ class App:
                         self.gs.log.append('[BLOCK] next: choose_enter_effect_mode requires a choice')
                         post_process(self.gs)
                         self._auto_refresh_if_deck_empty_after_cmd(f"post_cmd:{name}")
-                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}", before_refresh_notice_seq_for_public_hand)
+                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}", before_refresh_notice_seq_for_public_hand, before_hand_instance_ids_for_public_reveal)
                         self.save_trace()
                         return self.state_json()
                     if k0 in ack_kinds:
@@ -2234,7 +2831,7 @@ class App:
                         post_process(self.gs)
                         self._auto_advance_live_attempt_after_yell_flow(f'next_ack:{k0}')
                         self._auto_refresh_if_deck_empty_after_cmd(f"post_cmd:{name}")
-                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}", before_refresh_notice_seq_for_public_hand)
+                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}", before_refresh_notice_seq_for_public_hand, before_hand_instance_ids_for_public_reveal)
                         self.save_trace()
                         return self.state_json()
                     if k0 == 'set_opponent_excess_for_live_success':
@@ -2242,7 +2839,7 @@ class App:
                         cmd_resolve_pending(self.gs, self.cards_db, 0, cur_ex)
                         post_process(self.gs)
                         self._auto_refresh_if_deck_empty_after_cmd(f"post_cmd:{name}")
-                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}", before_refresh_notice_seq_for_public_hand)
+                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}", before_refresh_notice_seq_for_public_hand, before_hand_instance_ids_for_public_reveal)
                         self.save_trace()
                         return self.state_json()
                     if k0 == 'set_opponent_success_score_for_live_attempt':
@@ -2252,21 +2849,30 @@ class App:
                         cmd_resolve_pending(self.gs, self.cards_db, 0, str(max(0, min(20, cur_oss_i))), self.rng)
                         post_process(self.gs)
                         self._auto_refresh_if_deck_empty_after_cmd(f"post_cmd:{name}")
-                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}", before_refresh_notice_seq_for_public_hand)
+                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}", before_refresh_notice_seq_for_public_hand, before_hand_instance_ids_for_public_reveal)
                         self.save_trace()
                         return self.state_json()
+                    if k0 == 'auto_order':
+                        auto_opts = [str(x) for x in list(p0.get('options', []) or []) if str(x).strip()]
+                        if auto_opts:
+                            cmd_resolve_pending(self.gs, self.cards_db, 0, auto_opts[0], self.rng)
+                            post_process(self.gs)
+                            self._auto_refresh_if_deck_empty_after_cmd(f"post_cmd:{name}")
+                            self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}", before_refresh_notice_seq_for_public_hand, before_hand_instance_ids_for_public_reveal)
+                            self.save_trace()
+                            return self.state_json()
                     if k0 == 'pick_success_to_store':
                         cmd_resolve_pending(self.gs, self.cards_db, 0, 'skip')
                         post_process(self.gs)
                         self._auto_refresh_if_deck_empty_after_cmd(f"post_cmd:{name}")
-                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}", before_refresh_notice_seq_for_public_hand)
+                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}", before_refresh_notice_seq_for_public_hand, before_hand_instance_ids_for_public_reveal)
                         self.save_trace()
                         return self.state_json()
                     if ('skip' in opts or '__skip__' in opts) and (bool(p0.get('optional', False)) or bool(p0.get('allow_skip', False)) or k0 in ('pay_or_skip', 'confirm_effect', 'discard_from_hand')):
                         cmd_resolve_pending(self.gs, self.cards_db, 0, 'skip')
                         post_process(self.gs)
                         self._auto_refresh_if_deck_empty_after_cmd(f"post_cmd:{name}")
-                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}", before_refresh_notice_seq_for_public_hand)
+                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}", before_refresh_notice_seq_for_public_hand, before_hand_instance_ids_for_public_reveal)
                         self.save_trace()
                         return self.state_json()
                 if opts:
@@ -2281,7 +2887,7 @@ class App:
                         cmd_resolve_pending(self.gs, self.cards_db, 0, choice)
                         post_process(self.gs)
                         self._auto_refresh_if_deck_empty_after_cmd(f"post_cmd:{name}")
-                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}", before_refresh_notice_seq_for_public_hand)
+                        self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, f"next:{k0}", before_refresh_notice_seq_for_public_hand, before_hand_instance_ids_for_public_reveal)
                         self.save_trace()
                         return self.state_json()
 
@@ -2297,17 +2903,7 @@ class App:
         elif name == "end_turn":
             cmd_end_turn(self.gs, self.rng)
         elif name == "undo":
-            do_undo(self.gs, self.rng)
-            # BUILD_TAG: refresh_notice_undo_owner_resync_20260701aq
-            # Server-side public ack must also follow the restored game timeline.
-            # State JSON clamps it, but clamping here prevents stale owner ACKs
-            # from suppressing notices across subsequent polling/commands.
-            try:
-                cur_seq = int(getattr(self.gs, "refresh_notice_seq", 0) or 0)
-                cur_ack = int(getattr(self, "_refresh_notice_ack_seq", 0) or 0)
-                self._refresh_notice_ack_seq = max(0, min(cur_ack, cur_seq))
-            except Exception:
-                pass
+            self._do_undo_with_app_state()
         elif name == "ack_refresh_notice":
             try:
                 self._ack_refresh_notice(int(payload.get("seq", 0) or 0))
@@ -2326,7 +2922,7 @@ class App:
         if mutating and name not in {"toggle_debug", "undo", "ack_refresh_notice"}:
             self._auto_refresh_if_deck_empty_after_cmd(f"post_cmd:{name}")
         if mutating and name != "toggle_debug":
-            self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, name, before_refresh_notice_seq_for_public_hand)
+            self._remember_public_hand_reveals_after_cmd(before_hand_for_public_reveal, reveal_candidates_for_public_hand, name, before_refresh_notice_seq_for_public_hand, before_hand_instance_ids_for_public_reveal)
 
         self.save_trace()
         return self.state_json()
@@ -2347,20 +2943,26 @@ class Handler(BaseHTTPRequestHandler):
         print(f"[UI] {msg}")
 
     def _send(self, code: int, content: bytes, ctype: str) -> None:
-        self.send_response(code)
-        self.send_header("Content-Type", ctype)
-        self.send_header("Content-Length", str(len(content)))
-        # BUILD_TAG: public_refresh_notice_reload_nocache_20260701ar
-        # The public window is often kept open while code is patched.  Do not let
-        # the browser reuse an old HTML/JS bundle; stale public JS can render the
-        # legacy refresh popup and miss owner-OK acknowledgement handling.
-        if "text/html" in str(ctype).lower() or "application/json" in str(ctype).lower():
-            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
-            self.send_header("Pragma", "no-cache")
-            self.send_header("Expires", "0")
-        self.end_headers()
-        if not self._head_only and content:
-            self.wfile.write(content)
+        try:
+            self.send_response(code)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(content)))
+            # BUILD_TAG: public_refresh_notice_reload_nocache_20260701ar
+            # The public window is often kept open while code is patched.  Do not let
+            # the browser reuse an old HTML/JS bundle; stale public JS can render the
+            # legacy refresh popup and miss owner-OK acknowledgement handling.
+            if "text/html" in str(ctype).lower() or "application/json" in str(ctype).lower():
+                self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+                self.send_header("Pragma", "no-cache")
+                self.send_header("Expires", "0")
+            self.end_headers()
+            if not self._head_only and content:
+                self.wfile.write(content)
+        except (BrokenPipeError, ConnectionResetError):
+            # Browsers often cancel image requests when cards are re-rendered.
+            # Treat that as a completed client-side cancellation, not a server
+            # error worth flooding the app log with.
+            return
 
     def do_HEAD(self) -> None:
         # Reuse GET routing; just suppress body.
@@ -2559,7 +3161,11 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, bytes.fromhex('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c6360000002000154a24f5d0000000049454e44ae426082'), "image/png")
                 return
             # BUILD_TAG: image_preview_fallback_canonical_priority_20260708a
-            p = self.app.img.find(cn)
+            rarity = unquote((qs.get("rarity", [""])[0] or "").strip())
+            variant_id = unquote((qs.get("variant_id", [""])[0] or "").strip())
+            if not rarity and variant_id:
+                rarity = self.app._rarity_from_variant_id(variant_id)
+            p = self.app.img.find(cn, rarity=rarity)
             if p and p.exists():
                 ctype = "image/png"
                 p_lower = str(p).lower()
@@ -2713,6 +3319,13 @@ HTML = r'''<!doctype html>
   #topBar .turnOrderBtn{min-width:42px;}
   #topBar .oppWaitBtn:hover{background:rgba(255,255,255,.20);}
   #topBar .oppWaitBtn.orderSelected{background:#ffd84d;color:#111;border-color:#ffd84d;box-shadow:0 0 0 2px rgba(0,0,0,.35),0 0 12px rgba(255,216,77,.55);}
+  #resetPanel{position:absolute;right:calc(var(--sideW) + calc(12px * var(--uiScale)));top:calc(10px * var(--uiScale));z-index:7600;display:none;align-items:center;gap:calc(6px * var(--uiScale));padding:calc(7px * var(--uiScale)) calc(8px * var(--uiScale));border-radius:calc(13px * var(--uiScale));background:rgba(15,18,24,.82);border:1px solid rgba(255,255,255,.20);box-shadow:0 calc(8px * var(--uiScale)) calc(26px * var(--uiScale)) rgba(0,0,0,.48);backdrop-filter:blur(6px);}
+  #resetPanel.visible{display:flex;}
+  #resetPanel .resetPanelTitle{font-size:calc(10px * var(--uiScale));font-weight:900;color:#d6deea;letter-spacing:.06em;white-space:nowrap;opacity:.88;}
+  #resetPanel button{border:1px solid rgba(255,255,255,.20);border-radius:calc(9px * var(--uiScale));padding:calc(6px * var(--uiScale)) calc(9px * var(--uiScale));background:#7a3f52;color:#fff;font-size:calc(12px * var(--uiScale));font-weight:900;line-height:1.1;cursor:pointer;white-space:nowrap;}
+  #resetPanel button:hover{background:#934c64;}
+  #resetPanel button:disabled{opacity:.45;cursor:wait;}
+  body.publicView #resetPanel{display:none !important;}
 
   /* banner */
   #banner{position:absolute;left:50%;top:calc(54px * var(--uiScale));transform:translateX(-50%);padding:calc(10px * var(--uiScale)) calc(16px * var(--uiScale));border-radius:999px;background:rgba(0,0,0,.72);border:1px solid rgba(255,255,255,.22);z-index:9900;display:none;font-size:calc(18px * var(--uiScale));font-weight:800;letter-spacing:.5px;pointer-events:none;max-width:85%;text-align:center;}
@@ -2745,9 +3358,15 @@ HTML = r'''<!doctype html>
   .actBtn{position:absolute;left:calc(6px * var(--uiScale));right:calc(6px * var(--uiScale));bottom:calc(6px * var(--uiScale));padding:calc(6px * var(--uiScale)) calc(6px * var(--uiScale));border-radius:calc(10px * var(--uiScale));border:1px solid rgba(255,255,255,.18);
           background:rgba(0,0,0,.6);color:#fff;font-size:calc(12px * var(--uiScale));cursor:pointer;}
   .actBtn:hover{background:rgba(0,0,0,.74);}
-  .toggleActiveBtn{position:absolute;top:calc(4px * var(--uiScale));left:calc(4px * var(--uiScale));width:calc(24px * var(--uiScale));height:calc(24px * var(--uiScale));border-radius:50%;border:1px solid rgba(255,255,255,.4);
+  .toggleActiveBtn{position:absolute;top:calc(4px * var(--uiScale));left:calc(34px * var(--uiScale));width:calc(24px * var(--uiScale));height:calc(24px * var(--uiScale));border-radius:50%;border:1px solid rgba(255,255,255,.4);
                    background:rgba(0,0,0,.55);color:#fff;font-size:calc(14px * var(--uiScale));line-height:calc(22px * var(--uiScale));text-align:center;cursor:pointer;padding:0;z-index:10;}
   .toggleActiveBtn:hover{background:rgba(80,180,255,.7);}
+  .stageStatsBadge{position:absolute;left:50%;top:calc(-18px * var(--uiScale));transform:translateX(-50%);z-index:25;display:none;min-width:calc(48px * var(--uiScale));padding:calc(3px * var(--uiScale)) calc(8px * var(--uiScale));border-radius:999px;background:rgba(0,0,0,.74);border:1px solid rgba(255,255,255,.34);box-shadow:0 4px 12px rgba(0,0,0,.45);font-size:calc(13px * var(--uiScale));font-weight:900;color:#fff;text-align:center;pointer-events:none;}
+  body.showStats .stageStatsBadge{display:block;}
+  .statsPanel{position:absolute;left:calc(275px * var(--uiScale));top:calc(585px * var(--uiScale));width:calc(112px * var(--uiScale));z-index:7200;display:flex;flex-direction:column;gap:calc(6px * var(--uiScale));align-items:stretch;}
+  .statsTotal{border-radius:calc(8px * var(--uiScale));border:1px solid rgba(255,255,255,.18);background:rgba(0,0,0,.58);padding:calc(5px * var(--uiScale));font-size:calc(12px * var(--uiScale));font-weight:900;text-align:center;color:#fff;}
+  .statsToggleBtn{border-radius:calc(8px * var(--uiScale));border:1px solid rgba(255,255,255,.22);background:rgba(33,43,54,.84);color:#fff;padding:calc(6px * var(--uiScale));font-size:calc(12px * var(--uiScale));font-weight:800;cursor:pointer;}
+  .statsToggleBtn.active{background:rgba(86,154,255,.78);}
 
   /* popups */
   #mask{position:absolute;left:0;top:0;bottom:0;right:var(--sideW);background:rgba(0,0,0,.55);display:none;z-index:9000;}
@@ -2775,17 +3394,17 @@ HTML = r'''<!doctype html>
   .yellRevealSummary{display:flex;flex-direction:column;gap:calc(8px * var(--uiScale));padding:calc(2px * var(--uiScale)) 0 calc(6px * var(--uiScale)) 0;}
   .yellRevealSection{display:flex;flex-direction:column;gap:calc(6px * var(--uiScale));padding:calc(7px * var(--uiScale)) calc(10px * var(--uiScale));border-radius:calc(12px * var(--uiScale));background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);}
   .yellRevealSectionTitle{font-size:calc(13px * var(--uiScale));font-weight:900;letter-spacing:.04em;color:#f1f1f1;}
-  .yellRevealHeartGrid{display:grid;grid-template-columns:repeat(7,minmax(calc(74px * var(--uiScale)),1fr));gap:calc(8px * var(--uiScale));}
-  .yellRevealHeartGrid.withAny{grid-template-columns:repeat(4,minmax(calc(88px * var(--uiScale)),1fr));}
+  .yellRevealHeartGrid{display:grid;grid-template-columns:repeat(8,minmax(calc(58px * var(--uiScale)),1fr));gap:calc(6px * var(--uiScale));}
+  .yellRevealHeartGrid.withAny{grid-template-columns:repeat(8,minmax(calc(58px * var(--uiScale)),1fr));}
   .yellRevealMetric{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:calc(3px * var(--uiScale));min-height:calc(88px * var(--uiScale));padding:calc(8px * var(--uiScale)) calc(6px * var(--uiScale));border-radius:calc(12px * var(--uiScale));background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.12);text-align:center;}
   .yellRevealMetricLabel{display:inline-flex;align-items:center;justify-content:center;gap:calc(6px * var(--uiScale));font-size:calc(15px * var(--uiScale));font-weight:800;color:#eee;line-height:1.1;min-width:0;}
   .yellRevealMetricLabel img{width:1.45em !important;height:1.45em !important;}
   .yellRevealMetricCount{font-size:calc(34px * var(--uiScale));font-weight:900;line-height:1;color:#fff;}
   .yellRevealMetricSub{font-size:calc(11px * var(--uiScale));color:#bbb;line-height:1.15;}
-  .yellRevealIconGrid{display:grid;grid-template-columns:repeat(2,minmax(calc(180px * var(--uiScale)),1fr));gap:calc(8px * var(--uiScale));align-items:stretch;width:100%;padding:0;box-sizing:border-box;}
-  .yellRevealIconMetric{display:grid;grid-template-columns:max-content max-content;justify-content:center;column-gap:calc(18px * var(--uiScale));align-items:center;min-height:calc(52px * var(--uiScale));padding:calc(5px * var(--uiScale)) calc(24px * var(--uiScale));border-radius:calc(12px * var(--uiScale));background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.12);box-sizing:border-box;}
-  .yellRevealIconMetricLabel{display:flex;align-items:center;justify-content:flex-start;text-align:left;min-width:0;font-size:calc(18px * var(--uiScale));font-weight:800;color:#f2f2f2;line-height:1.2;white-space:nowrap;}
-  .yellRevealIconMetricValue{display:flex;align-items:center;justify-content:center;text-align:center;min-width:calc(38px * var(--uiScale));font-size:calc(34px * var(--uiScale));font-weight:900;color:#fff;line-height:1;font-family:inherit;font-variant-numeric:tabular-nums;}
+  .yellRevealIconGrid{display:grid;grid-template-columns:repeat(4,minmax(calc(92px * var(--uiScale)),1fr));gap:calc(6px * var(--uiScale));align-items:stretch;width:100%;padding:0;box-sizing:border-box;}
+  .yellRevealIconMetric{display:grid;grid-template-columns:minmax(0,max-content) max-content;justify-content:center;column-gap:calc(7px * var(--uiScale));align-items:center;min-height:calc(50px * var(--uiScale));padding:calc(5px * var(--uiScale)) calc(8px * var(--uiScale));border-radius:calc(12px * var(--uiScale));background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.12);box-sizing:border-box;}
+  .yellRevealIconMetricLabel{display:flex;align-items:center;justify-content:flex-start;text-align:left;min-width:0;font-size:calc(14px * var(--uiScale));font-weight:800;color:#f2f2f2;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .yellRevealIconMetricValue{display:flex;align-items:center;justify-content:center;text-align:center;min-width:calc(30px * var(--uiScale));font-size:calc(28px * var(--uiScale));font-weight:900;color:#fff;line-height:1;font-family:inherit;font-variant-numeric:tabular-nums;}
   .yellRevealCardRow{display:flex;flex-wrap:nowrap;gap:calc(10px * var(--uiScale));align-items:flex-start;justify-content:flex-start;min-height:calc(228px * var(--uiScale));overflow-x:auto;overflow-y:hidden;padding-bottom:calc(4px * var(--uiScale));}
   .yellRevealCardRow::-webkit-scrollbar{height:calc(10px * var(--uiScale));}
   .yellRevealCardRow::-webkit-scrollbar-thumb{background:rgba(255,255,255,.16);border-radius:999px;}
@@ -2799,7 +3418,7 @@ HTML = r'''<!doctype html>
   .liveAttemptNote{font-size:calc(12px * var(--uiScale));color:#bbb;line-height:1.35;}
   .liveAttemptSection{display:flex;flex-direction:column;gap:calc(6px * var(--uiScale));padding:calc(7px * var(--uiScale)) calc(10px * var(--uiScale));border-radius:calc(12px * var(--uiScale));background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);}
   .liveAttemptSectionTitle{font-size:calc(13px * var(--uiScale));font-weight:900;letter-spacing:.04em;color:#f1f1f1;}
-  .liveAttemptHeartGrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr)) minmax(calc(92px * var(--uiScale)),.82fr);gap:calc(7px * var(--uiScale));width:100%;align-items:stretch;}
+  .liveAttemptHeartGrid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr)) minmax(calc(92px * var(--uiScale)),.82fr);gap:calc(7px * var(--uiScale));width:100%;align-items:stretch;}
   .liveAttemptSummary .yellRevealMetric{min-width:0;min-height:calc(76px * var(--uiScale));padding-left:calc(5px * var(--uiScale));padding-right:calc(5px * var(--uiScale));}
   .liveAttemptSummary .yellRevealMetricLabel{font-size:calc(15px * var(--uiScale));}
   .liveAttemptSummary .yellRevealMetricCount{font-size:calc(28px * var(--uiScale));font-variant-numeric:tabular-nums;}
@@ -2811,8 +3430,10 @@ HTML = r'''<!doctype html>
   .liveAttemptHeartTotalSub{font-size:calc(10px * var(--uiScale));font-weight:800;color:#d8c98d;line-height:1;white-space:nowrap;}
   .yellRevealCardRow .cardWrap{position:relative !important;left:auto !important;top:auto !important;flex:0 0 auto;}
   .heartChoiceGrid{display:grid;gap:calc(10px * var(--uiScale));align-items:stretch;justify-content:center;margin:0 auto;max-width:min(78vw, calc(980px * var(--uiScale)));width:100%;}
-  #modalCards{margin-top:calc(10px * var(--uiScale));overflow-x:auto;overflow-y:auto;padding-bottom:calc(6px * var(--uiScale));flex:1 1 auto;min-height:0;} 
+  #modalCards{margin-top:calc(10px * var(--uiScale));overflow-x:auto;overflow-y:auto;padding-bottom:calc(6px * var(--uiScale));flex:1 1 auto;min-height:0;overscroll-behavior:contain;}
   #modalCards .surf{position:relative;height:1px;}
+  #modalCards .broadCardListSurf,
+  #viewerCards .broadCardListSurf{position:relative;height:1px;min-height:calc(92px * var(--uiScale));}
   #modalActions{display:flex;gap:calc(8px * var(--uiScale));justify-content:flex-end;margin-top:calc(10px * var(--uiScale));flex-wrap:wrap;flex:0 0 auto;}
   #modalActions .miniBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:calc(6px * var(--uiScale)) calc(10px * var(--uiScale));border-radius:calc(10px * var(--uiScale));font-size:calc(13px * var(--uiScale));cursor:pointer;}
   #popupPeekBtn{position:absolute;right:calc(6px * var(--uiScale));top:calc(6px * var(--uiScale));z-index:9800;display:none;align-items:center;gap:calc(6px * var(--uiScale));padding:calc(7px * var(--uiScale)) calc(10px * var(--uiScale));border-radius:999px;border:1px solid rgba(255,255,255,.20);background:rgba(0,0,0,.68);color:#eee;font-size:calc(12px * var(--uiScale));font-weight:700;cursor:pointer;box-shadow:0 calc(6px * var(--uiScale)) calc(20px * var(--uiScale)) rgba(0,0,0,.35);}
@@ -2827,7 +3448,7 @@ HTML = r'''<!doctype html>
   #viewerTitle{font-weight:700;min-width:0;}
   #viewerClose{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:6px 10px;border-radius:10px;cursor:pointer;}
   #viewerText{white-space:pre-wrap;line-height:1.45;color:#ddd;font-size:calc(13px * var(--uiScale));margin-top:calc(10px * var(--uiScale));flex:0 0 auto;}
-  #viewerCards{margin-top:10px;overflow-x:auto;overflow-y:auto;padding-bottom:6px;flex:1 1 auto;min-height:0;}
+  #viewerCards{margin-top:10px;overflow-x:auto;overflow-y:auto;padding-bottom:6px;flex:1 1 auto;min-height:0;overscroll-behavior:contain;}
   #viewerCards .surf{position:relative;height:1px;}
   #viewerActions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap;flex:0 0 auto;}
   #viewerActions .miniBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:calc(6px * var(--uiScale)) calc(10px * var(--uiScale));border-radius:calc(10px * var(--uiScale));font-size:calc(13px * var(--uiScale));cursor:pointer;}
@@ -2943,7 +3564,7 @@ HTML = r'''<!doctype html>
   }
   #viewerCards{margin-top:calc(10px * var(--uiScale)) !important;padding-bottom:calc(6px * var(--uiScale)) !important;}
   #viewerActions{gap:calc(8px * var(--uiScale)) !important;margin-top:calc(10px * var(--uiScale)) !important;}
-  #modal button, #viewerModal button, #topBar button, .energyUI button, #popupPeekBtn{
+  #modal button, #viewerModal button, #topBar button, #resetPanel button, .energyUI button, #popupPeekBtn{
     font-size:calc(13px * var(--uiScale)) !important;
   }
   #modalActions .miniBtn, .miniBtn, .energyUI .btn{
@@ -3017,6 +3638,8 @@ HTML = r'''<!doctype html>
     border-radius:calc(14px * var(--uiScale)) !important;
     box-shadow:0 calc(16px * var(--uiScale)) calc(60px * var(--uiScale)) rgba(0,0,0,.75) !important;
   }
+  .underInspectBtn{position:absolute;left:calc(8px * var(--uiScale));right:calc(8px * var(--uiScale));bottom:calc(8px * var(--uiScale));z-index:95;border:1px solid rgba(255,255,255,.24);border-radius:calc(10px * var(--uiScale));background:rgba(18,24,34,.82);color:#fff;padding:calc(5px * var(--uiScale)) calc(7px * var(--uiScale));font-size:calc(11px * var(--uiScale));font-weight:900;line-height:1.1;cursor:pointer;box-shadow:0 calc(3px * var(--uiScale)) calc(10px * var(--uiScale)) rgba(0,0,0,.42);}
+  .underInspectBtn:hover{background:rgba(42,58,82,.94);}
   #cdImg{width:calc(140px * var(--uiScale)) !important;min-width:calc(140px * var(--uiScale)) !important;}
   #cdImg img{border-radius:calc(14px * var(--uiScale)) 0 0 calc(14px * var(--uiScale)) !important;}
   #cdBody{padding:calc(12px * var(--uiScale)) calc(14px * var(--uiScale)) !important;gap:calc(8px * var(--uiScale)) !important;}
@@ -3025,6 +3648,29 @@ HTML = r'''<!doctype html>
   #cdMeta span{padding:calc(2px * var(--uiScale)) calc(7px * var(--uiScale)) !important;border-radius:calc(6px * var(--uiScale)) !important;font-size:calc(11px * var(--uiScale)) !important;}
   #cdAbilities{font-size:calc(11px * var(--uiScale)) !important;line-height:1.55 !important;}
   #cdClose{top:calc(6px * var(--uiScale)) !important;right:calc(8px * var(--uiScale)) !important;width:calc(22px * var(--uiScale)) !important;height:calc(22px * var(--uiScale)) !important;font-size:calc(13px * var(--uiScale)) !important;}
+
+  @media (max-aspect-ratio: 4/3), (max-width: 900px) {
+    #modal{
+      width:min(96%, calc(var(--pmW) - calc(28px * var(--uiScale)))) !important;
+      max-height:min(88%, calc(var(--pmH) - calc(42px * var(--uiScale)))) !important;
+    }
+    #modalMain{gap:calc(10px * var(--uiScale)) !important;}
+    #modalLead.visible{
+      flex-basis:calc(118px * var(--uiScale)) !important;
+      min-width:calc(118px * var(--uiScale)) !important;
+      max-width:calc(118px * var(--uiScale)) !important;
+    }
+    #modalSourceCard,
+    #modalSourceName,
+    #modalSourceMeta{width:calc(112px * var(--uiScale)) !important;min-width:calc(112px * var(--uiScale)) !important;}
+    #modalSourceCard img{width:calc(112px * var(--uiScale)) !important;max-height:calc(166px * var(--uiScale)) !important;}
+    #viewerModal{
+      right:calc(10px * var(--uiScale)) !important;
+      top:calc(64px * var(--uiScale)) !important;
+      width:min(62%, calc(620px * var(--uiScale))) !important;
+      max-height:min(78%, calc(var(--pmH) - calc(94px * var(--uiScale)))) !important;
+    }
+  }
 
 
 </style>
@@ -3045,6 +3691,14 @@ HTML = r'''<!doctype html>
       <button class="miniBtn" id="btnSuspendLoad">再開読込</button>
       <input id="suspendFileInput" type="file" accept="application/json,.json" hidden>
       <button class="miniBtn" id="btnDbg">枠表示</button>
+    </div>
+
+    <div id="resetPanel" aria-label="リセット操作">
+      <span class="resetPanelTitle">RESET</span>
+      <button id="btnSingleReset" type="button">リセット</button>
+      <button id="btnRecordWin" type="button">勝ち記録</button>
+      <button id="btnRecordLose" type="button">負け記録</button>
+      <button id="btnRecordNoGame" type="button">No Game</button>
     </div>
 
     <div id="banner"></div>
@@ -3109,7 +3763,7 @@ HTML = r'''<!doctype html>
   // running stale JS.  Compare the state ui_version and reload once when the
   // server-side bundle changes, so public refresh notices use the current modal
   // layout and owner-OK synchronization.
-  const CLIENT_UI_VERSION = 'public_view_back_redaction_audit_20260720a';
+  const CLIENT_UI_VERSION = 'broad_ui_layout_resize_popup_cards_20260721a';
   let clientReloadingForVersion = false;
   const urlParams = new URLSearchParams(window.location.search || '');
   const VIEW_MODE = String(urlParams.get('view') || (window.location.pathname === '/public' ? 'public' : 'private')).toLowerCase();
@@ -3131,8 +3785,8 @@ HTML = r'''<!doctype html>
       stageC:  {x:  683, y: 280, w: 180, h: 251, kind:"stage",   orient:"portrait",  label:"C", slot:"C"},
       stageR:  {x:  995, y: 280, w: 180, h: 251, kind:"stage",   orient:"portrait",  label:"R", slot:"R"},
 
-      hand:    {x:  420, y: 600, w: 805, h: 235, kind:"hand",    orient:"portrait",  label:"HAND"},
-      log:     {x:   40, y: 585, w: 360, h: 235, kind:"log",     orient:"portrait",  label:"LOG"},
+      hand:    {x:  390, y: 600, w: 835, h: 235, kind:"hand",    orient:"portrait",  label:"HAND"},
+      log:     {x:    8, y: 585, w: 240, h: 235, kind:"log",     orient:"portrait",  label:"LOG"},
     }
   };
 
@@ -3151,6 +3805,11 @@ HTML = r'''<!doctype html>
   const btnOrderSecond = document.getElementById('btnOrderSecond');
   const elSelected = document.getElementById('selected');
   const elBanner = document.getElementById('banner');
+  const elResetPanel = document.getElementById('resetPanel');
+  const btnSingleReset = document.getElementById('btnSingleReset');
+  const btnRecordWin = document.getElementById('btnRecordWin');
+  const btnRecordLose = document.getElementById('btnRecordLose');
+  const btnRecordNoGame = document.getElementById('btnRecordNoGame');
 
   async function adjustOpponentWait(delta){
     st = await apiCmd('opponent_wait_delta', {delta});
@@ -3208,6 +3867,39 @@ HTML = r'''<!doctype html>
     });
   }
 
+  async function handleResetPanelCommand(cmd, payload, message){
+    if(IS_PUBLIC_VIEW) return;
+    if(message && !window.confirm(message)) return;
+    st = await apiCmd(cmd, payload || {});
+    selHand = [];
+    updateTop();
+    render();
+  }
+  if(btnSingleReset){
+    btnSingleReset.addEventListener('click', ev=>{
+      ev.stopPropagation();
+      handleResetPanelCommand('reset', {}, '現在の対戦をリセットします。よろしいですか？');
+    });
+  }
+  if(btnRecordWin){
+    btnRecordWin.addEventListener('click', ev=>{
+      ev.stopPropagation();
+      handleResetPanelCommand('record_reset', {result:'win'}, '勝利として記録し、対戦をリセットします。よろしいですか？');
+    });
+  }
+  if(btnRecordLose){
+    btnRecordLose.addEventListener('click', ev=>{
+      ev.stopPropagation();
+      handleResetPanelCommand('record_reset', {result:'lose'}, '敗北として記録し、対戦をリセットします。よろしいですか？');
+    });
+  }
+  if(btnRecordNoGame){
+    btnRecordNoGame.addEventListener('click', ev=>{
+      ev.stopPropagation();
+      handleResetPanelCommand('record_reset', {result:'no_game'}, 'No Gameとして記録し、対戦をリセットします。よろしいですか？');
+    });
+  }
+
   const elMask = document.getElementById('mask');
   const elModal = document.getElementById('modal');
   const elModalTitle = document.getElementById('modalTitle');
@@ -3224,6 +3916,20 @@ HTML = r'''<!doctype html>
   const elModalActions = document.getElementById('modalActions');
   const btnPopupPeek = document.getElementById('popupPeekBtn');
 
+  function installHorizontalWheelScroll(element){
+    if(!element) return;
+    element.addEventListener('wheel', (ev)=>{
+      const target = ev.target && ev.target.closest ? ev.target.closest('.choiceRow, #modalCards, #viewerCards') : element;
+      const scroller = (target && target.scrollWidth > target.clientWidth) ? target : element;
+      if(!scroller || scroller.scrollWidth <= scroller.clientWidth) return;
+      const vertical = Math.abs(ev.deltaY || 0) >= Math.abs(ev.deltaX || 0);
+      if(!vertical || !ev.deltaY) return;
+      scroller.scrollLeft += ev.deltaY;
+      ev.preventDefault();
+    }, {passive:false});
+  }
+  installHorizontalWheelScroll(elModalCards);
+
   const elViewerLayer = document.getElementById('viewerLayer');
   const elViewerModal = document.getElementById('viewerModal');
   const elViewerTitle = document.getElementById('viewerTitle');
@@ -3231,6 +3937,7 @@ HTML = r'''<!doctype html>
   const elViewerCards = document.getElementById('viewerCards');
   const elViewerActions = document.getElementById('viewerActions');
   const elViewerClose = document.getElementById('viewerClose');
+  installHorizontalWheelScroll(elViewerCards);
 
   const btnDbg = document.getElementById('btnDbg');
   const btnSuspendSave = document.getElementById('btnSuspendSave');
@@ -3240,6 +3947,7 @@ HTML = r'''<!doctype html>
   let debug = false;
   let st = null;
   let selHand = []; // indices
+  let statsVisible = false;
   let popup = {type:null};
   let viewerPopup = {type:null};
   let popupsHiddenForInspect = false;
@@ -3306,20 +4014,25 @@ HTML = r'''<!doctype html>
     elCardDetail.classList.add('visible');
     applyPopupPeekState();
 
-    // Position near the anchor element.  Use actual scaled panel dimensions, not fixed px.
-    // BUILD_TAG: card_detail_responsive_scale_20260701ap
-    if(anchorEl){
+    function clampCardDetailToViewport(anchor){
       elCardDetail.style.transform = '';
-      const rect = anchorEl.getBoundingClientRect();
+      const rect = anchor ? anchor.getBoundingClientRect() : {left:window.innerWidth/2, right:window.innerWidth/2, top:window.innerHeight/2};
       const w = Math.max(1, elCardDetail.offsetWidth || 340);
       const h = Math.max(1, elCardDetail.offsetHeight || 400);
       const gap = Math.max(4, Number(getComputedStyle(document.documentElement).getPropertyValue('--uiScale') || 1) * 8);
-      let left = rect.right + gap;
-      let top  = rect.top;
+      let left = anchor ? (rect.right + gap) : ((window.innerWidth - w) / 2);
+      let top  = anchor ? rect.top : ((window.innerHeight - h) / 2);
       if(left + w > window.innerWidth - gap) left = rect.left - w - gap;
+      if(left < gap) left = Math.max(gap, window.innerWidth - w - gap);
       if(top + h > window.innerHeight - gap) top = window.innerHeight - h - gap;
       elCardDetail.style.left = Math.max(gap, left) + 'px';
       elCardDetail.style.top  = Math.max(gap, top)  + 'px';
+    }
+
+    // Position near the anchor element.  Use actual scaled panel dimensions, not fixed px.
+    // BUILD_TAG: card_detail_responsive_scale_20260701ap
+    if(anchorEl){
+      clampCardDetailToViewport(anchorEl);
     } else {
       elCardDetail.style.left = '50%';
       elCardDetail.style.top  = '50%';
@@ -3358,8 +4071,10 @@ HTML = r'''<!doctype html>
       } else {
         elCdAbilities.textContent = '（効果なし）';
       }
+      requestAnimationFrame(()=>clampCardDetailToViewport(anchorEl || null));
     } catch(e) {
       elCdAbilities.textContent = '（取得失敗）';
+      requestAnimationFrame(()=>clampCardDetailToViewport(anchorEl || null));
     }
   }
 
@@ -3390,16 +4105,57 @@ HTML = r'''<!doctype html>
   }
   function px(v){ return v * scale(); }
 
-  window.addEventListener('resize', ()=>{ cssScale(); render(); });
+  let resizeRenderFrame = 0;
+  function scheduleResizeRender(){
+    if(resizeRenderFrame) cancelAnimationFrame(resizeRenderFrame);
+    resizeRenderFrame = requestAnimationFrame(()=>{
+      resizeRenderFrame = 0;
+      cssScale();
+      render();
+    });
+  }
+  window.addEventListener('resize', scheduleResizeRender, {passive:true});
+  if(window.visualViewport){
+    window.visualViewport.addEventListener('resize', scheduleResizeRender, {passive:true});
+  }
+
+  function requestJson(url, options={}){
+    const opts = options || {};
+    return fetch(url, opts).catch(()=>{
+      return new Promise((resolve, reject)=>{
+        try{
+          const xhr = new XMLHttpRequest();
+          const method = String(opts.method || 'GET').toUpperCase();
+          xhr.open(method, url, true);
+          const headers = opts.headers || {};
+          Object.keys(headers).forEach(k=>xhr.setRequestHeader(k, headers[k]));
+          xhr.onload = ()=>{
+            const body = xhr.responseText || '';
+            const responseLike = {
+              ok: xhr.status >= 200 && xhr.status < 300,
+              status: xhr.status,
+              text: async ()=>body,
+              json: async ()=>JSON.parse(body)
+            };
+            resolve(responseLike);
+          };
+          xhr.onerror = ()=>reject(new Error('request failed'));
+          xhr.send(opts.body || null);
+        }catch(err){
+          reject(err);
+        }
+      });
+    });
+  }
 
   async function apiState(){
     const url = IS_PUBLIC_VIEW ? '/state?view=public' : '/state';
-    const r = await fetch(url, {cache:'no-store'});
+    const r = await requestJson(url, {cache:'no-store'});
     const data = await r.json();
     // BUILD_TAG: public_refresh_notice_client_version_reload_20260701ar
     try{
       const serverVer = String((data && data.ui_version) || '');
-      if(serverVer && serverVer !== CLIENT_UI_VERSION && !clientReloadingForVersion){
+      if(IS_PUBLIC_VIEW && serverVer && serverVer !== CLIENT_UI_VERSION && !clientReloadingForVersion){
         clientReloadingForVersion = true;
         window.location.reload();
       }
@@ -3412,7 +4168,7 @@ HTML = r'''<!doctype html>
     if(IS_PUBLIC_VIEW){
       return await apiState();
     }
-    const r = await fetch('/cmd', {
+    const r = await requestJson('/cmd', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({cmd, payload})
@@ -3427,7 +4183,7 @@ HTML = r'''<!doctype html>
   async function saveSuspendData(){
     if(IS_PUBLIC_VIEW) return;
     try{
-      const r = await fetch('/suspend_state', {cache:'no-store'});
+      const r = await requestJson('/suspend_state', {cache:'no-store'});
       if(!r.ok) throw new Error(await r.text());
       const data = await r.json();
       const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
@@ -3451,7 +4207,7 @@ HTML = r'''<!doctype html>
     try{
       const text = await file.text();
       const data = JSON.parse(text);
-      const r = await fetch('/resume_state', {
+      const r = await requestJson('/resume_state', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify(data)
@@ -3509,8 +4265,45 @@ HTML = r'''<!doctype html>
     if(cardLooksLive(cn)) return 'landscape';
     return 'portrait';
   }
-  function imgUrl(cn){
-    return `/img?cn=${encodeURIComponent(cn)}`;
+  function instanceMeta(instanceId){
+    const id = String(instanceId || '').trim();
+    if(!id || !st || !st.card_instance_meta) return null;
+    const meta = st.card_instance_meta[id];
+    return (meta && typeof meta === 'object') ? meta : null;
+  }
+  function zoneInstanceId(zone, index){
+    try{
+      const ci = st && st.card_instances ? st.card_instances : null;
+      const arr = ci && Array.isArray(ci[zone]) ? ci[zone] : [];
+      return (index >= 0 && index < arr.length) ? String(arr[index] || '') : '';
+    }catch(e){ return ''; }
+  }
+  function stageInstanceId(pos){
+    try{
+      const stage = st && st.card_instances && st.card_instances.stage ? st.card_instances.stage : null;
+      return stage ? String(stage[String(pos || '').toUpperCase()] || '') : '';
+    }catch(e){ return ''; }
+  }
+  function imgUrl(cn, instanceId=''){
+    const params = new URLSearchParams({cn:String(cn || '')});
+    try{
+      const meta = instanceMeta(instanceId);
+      if(meta){
+        const variantId0 = String(meta.variant_id || '');
+        const rarity0 = String(meta.rarity || '');
+        if(variantId0) params.set('variant_id', variantId0);
+        if(rarity0) params.set('rarity', rarity0);
+        return `/img?${params.toString()}`;
+      }
+      const variantMap = (st && st.cn2image_variant_id) ? st.cn2image_variant_id : null;
+      const rarityMap = (st && st.cn2image_rarity) ? st.cn2image_rarity : null;
+      const key = String(cn || '');
+      const variantId = variantMap && variantMap[key] ? String(variantMap[key]) : '';
+      const rarity = rarityMap && rarityMap[key] ? String(rarityMap[key]) : '';
+      if(variantId) params.set('variant_id', variantId);
+      if(rarity) params.set('rarity', rarity);
+    }catch(e){}
+    return `/img?${params.toString()}`;
   }
   function labelFor(cn){
     const m = (st && st.cn2label) ? st.cn2label : null;
@@ -3725,18 +4518,31 @@ HTML = r'''<!doctype html>
     const v = m && cn ? Number(m[cn] || 0) : 0;
     return Number.isFinite(v) ? v : 0;
   }
+  function yellDoubleColorlessIconsForCard(cn){
+    const m = (st && st.cn2yell_double_colorless_icons) ? st.cn2yell_double_colorless_icons : null;
+    const v = m && cn ? Number(m[cn] || 0) : 0;
+    return Number.isFinite(v) ? v : 0;
+  }
+  function yellHasBladeHeartForCard(cn){
+    const m = (st && st.cn2yell_has_blade_heart) ? st.cn2yell_has_blade_heart : null;
+    if(!m || !cn) return false;
+    return Boolean(m[String(cn || '')]);
+  }
   function computeYellRevealSummary(cards, p){
-    const out = {heartCounts:{pink:0, red:0, yellow:0, green:0, blue:0, purple:0, all:0, any:0}, drawIcons:0, scoreIcons:0, drewCount:0};
+    const out = {heartCounts:{pink:0, red:0, yellow:0, green:0, blue:0, purple:0, all:0, any:0}, drawIcons:0, scoreIcons:0, doubleColorlessIcons:0, noBladeHeartCards:0, drewCount:0};
     (Array.isArray(cards) ? cards : []).forEach(cn=>{
-      const hm = yellHeartCountsForCard(String(cn || ''));
+      const cnText = String(cn || '');
+      const hm = yellHeartCountsForCard(cnText);
       Object.entries(hm || {}).forEach(([k,v])=>{
         const kk = String(k || '').toLowerCase();
         const n = Number(v || 0);
         if(!Number.isFinite(n)) return;
         out.heartCounts[kk] = Number(out.heartCounts[kk] || 0) + n;
       });
-      out.drawIcons += yellDrawIconsForCard(String(cn || ''));
-      out.scoreIcons += yellScoreIconsForCard(String(cn || ''));
+      out.drawIcons += yellDrawIconsForCard(cnText);
+      out.scoreIcons += yellScoreIconsForCard(cnText);
+      out.doubleColorlessIcons += yellDoubleColorlessIconsForCard(cnText);
+      if(!yellHasBladeHeartForCard(cnText)) out.noBladeHeartCards += 1;
     });
     const metaDraw = Number(p && p.yell_draw_icon_count || 0);
     const metaDrew = Number(p && p.yell_draw_drew_count || 0);
@@ -3900,6 +4706,7 @@ HTML = r'''<!doctype html>
   function cardGroupFor(cn){ try{ return String((st && st.cn2group && st.cn2group[cn]) || ''); }catch(e){ return ''; } }
   function cardUnitFor(cn){ try{ return String((st && st.cn2unit && st.cn2unit[cn]) || ''); }catch(e){ return ''; } }
   function cardCostFor(cn){ try{ return Number((st && st.cn2cost && st.cn2cost[cn]) || 0); }catch(e){ return 0; } }
+  function cardBladeFor(cn){ try{ return Number((st && st.cn2blade && st.cn2blade[cn]) || 0); }catch(e){ return 0; } }
   function cardGroupKeysFor(cn){
     const vals = [cardGroupFor(cn), cardUnitFor(cn)];
     const out = [];
@@ -3956,6 +4763,32 @@ HTML = r'''<!doctype html>
     }catch(e){}
   }
   function cardScoreFor(cn){ try{ return Number((st && st.cn2score && st.cn2score[cn]) || 0); }catch(e){ return 0; } }
+  function sumNumericMap(map){
+    try{
+      return Object.values(map || {}).reduce((acc,v)=>{
+        const n = Number(v || 0);
+        return acc + (Number.isFinite(n) ? n : 0);
+      }, 0);
+    }catch(e){ return 0; }
+  }
+  function stageStatsFor(slotKey, slotObj){
+    if(!slotObj || !slotObj.cardnumber) return 0;
+    const cn = String(slotObj.cardnumber || '');
+    const sd = (st && st.stage_detail) ? st.stage_detail : null;
+    const det = sd ? (sd[slotKey] || {}) : {};
+    const baseBlade = cardBladeFor(cn);
+    const baseHearts = sumNumericMap(yellHeartCountsForCard(cn));
+    const bonusBlade = Number(det.temp_blade || 0) + Number(det.always_blade_bonus || 0);
+    const bonusHearts =
+      sumNumericMap(det.temp_hearts || {}) +
+      sumNumericMap(det.success_zone_hearts_bonus || {}) +
+      sumNumericMap(det.always_hearts_bonus || {});
+    return Math.max(0, Math.round(baseBlade + baseHearts + bonusBlade + bonusHearts));
+  }
+  function totalStageStats(){
+    const stage = (st && st.stage) ? st.stage : {};
+    return ['L','C','R'].reduce((acc,pos)=>acc + stageStatsFor(pos, stage[pos]), 0);
+  }
   function groupOrUnitMatch(cn, name){
     const target = String(name||'').trim();
     if(!target) return false;
@@ -4289,7 +5122,7 @@ ${text}`;
     if(orient==='landscape') return {w: ch, h: cw};
     return {w: cw, h: ch};
   }
-  function makeCard(cn, wantOrient, x, y, w, h, capText, onClick, isSelected=false, z=100, noHover=false, forceIntrinsicOrient=null, normalizeNatural=false){
+  function makeCard(cn, wantOrient, x, y, w, h, capText, onClick, isSelected=false, z=100, noHover=false, forceIntrinsicOrient=null, normalizeNatural=false, instanceId=''){
     const wrap = document.createElement('div');
     wrap.className = 'cardWrap';
     wrap.style.left = x + 'px';
@@ -4299,6 +5132,7 @@ ${text}`;
     wrap.style.zIndex = String(z);
     wrap.dataset.baseZ = String(z);
     wrap.dataset.cn = String(cn || '');
+    if(instanceId) wrap.dataset.instanceId = String(instanceId);
     if(isSelected){ wrap.classList.add('selected'); wrap.style.zIndex='18000'; wrap.dataset.baseZ='18000'; }
 
     const intr = forceIntrinsicOrient || intrinsicOrient(cn);
@@ -4306,7 +5140,7 @@ ${text}`;
 
     const appendPlainImg = ()=>{
       const img = document.createElement('img');
-      img.src = imgUrl(cn);
+      img.src = imgUrl(cn, instanceId);
       img.alt = cn;
       img.style.objectFit = 'contain';
       wrap.appendChild(img);
@@ -4322,7 +5156,7 @@ ${text}`;
       inner.style.top = '50%';
 
       const img = document.createElement('img');
-      img.src = imgUrl(cn);
+      img.src = imgUrl(cn, instanceId);
       img.alt = cn;
       img.style.position = 'absolute';
       img.style.left = '0';
@@ -4512,12 +5346,37 @@ ${text}`;
     const box = document.createElement('div');
     box.id = 'logBox';
     renderEffectEvents(box, events || []);
-    const raw = document.createElement('div');
-    raw.id = 'rawLogText';
-    const tailN = (events && events.length) ? 20 : 28;
-    raw.textContent = (lines||[]).slice(-tailN).join('\n');
-    box.appendChild(raw);
+    if(debug || (st && st.debug)){
+      const raw = document.createElement('div');
+      raw.id = 'rawLogText';
+      const tailN = (events && events.length) ? 20 : 28;
+      raw.textContent = (lines||[]).slice(-tailN).join('\n');
+      box.appendChild(raw);
+    }
     inner.appendChild(box);
+  }
+
+  function renderStatsPanel(){
+    if(IS_PUBLIC_VIEW) return;
+    document.body.classList.toggle('showStats', !!statsVisible);
+    const panel = document.createElement('div');
+    panel.className = 'statsPanel';
+    const total = document.createElement('div');
+    total.className = 'statsTotal';
+    total.textContent = `total stats ${totalStageStats()}`;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'statsToggleBtn' + (statsVisible ? ' active' : '');
+    btn.textContent = statsVisible ? 'stats ON' : 'stats OFF';
+    btn.title = 'ステージ上メンバーごとのstats表示を切り替え';
+    btn.addEventListener('click', ev=>{
+      ev.stopPropagation();
+      statsVisible = !statsVisible;
+      render();
+    });
+    panel.appendChild(total);
+    panel.appendChild(btn);
+    elZones.appendChild(panel);
   }
 
   // 空ゾーン：カードなし・バッジだけ表示（クリックがあれば登録）
@@ -4564,7 +5423,8 @@ ${text}`;
     const x = (zoneW - sz.w)/2;
     const y = Math.max(padTop, padTop + (availH - sz.h)/2);
 
-    const card = makeCard(cn, wantOrient, x, y, sz.w, sz.h, '', (onClick?()=>onClick():null), false, 200);
+    const instanceId = opts && opts.instanceId ? String(opts.instanceId) : '';
+    const card = makeCard(cn, wantOrient, x, y, sz.w, sz.h, '', (onClick?()=>onClick():null), false, 200, false, null, false, instanceId);
     inner.appendChild(card);
 
     const badge = document.createElement('div');
@@ -4573,7 +5433,7 @@ ${text}`;
     zoneEl.appendChild(badge);
   }
 
-  function renderVertStack(zoneEl, cards, wantOrient, countText, onClick, {overlap=0.70, maxShow=4, forceIntrinsicOrient=null} = {}){
+  function renderVertStack(zoneEl, cards, wantOrient, countText, onClick, {overlap=0.70, maxShow=4, forceIntrinsicOrient=null, instanceIds=[]} = {}){
     // Stack cards vertically with overlap (e.g., 70% overlap => step=30% height).
     const inner = zoneEl.querySelector('.zoneInner');
     inner.style.cursor = onClick ? 'pointer' : 'default';
@@ -4587,6 +5447,8 @@ ${text}`;
     const nAll = list.length;
     const nShow = Math.min(nAll, maxShow);
     const show = (nShow>0) ? list.slice(-nShow) : [];
+    const allInstanceIds = Array.isArray(instanceIds) ? instanceIds.map(x=>String(x||'')) : [];
+    const showInstanceIds = (nShow>0) ? allInstanceIds.slice(Math.max(0, allInstanceIds.length - nShow)) : [];
 
     const zoneW = zoneEl.clientWidth;
     const zoneH = zoneEl.clientHeight;
@@ -4611,7 +5473,8 @@ ${text}`;
 
     show.forEach((cn, i)=>{
       const y = y0 + stepY*i;
-      const card = makeCard(String(cn), wantOrient, x, y, sz.w, sz.h, '', null, false, 200+i, false, forceIntrinsicOrient);
+      const instanceId = (i < showInstanceIds.length) ? showInstanceIds[i] : '';
+      const card = makeCard(String(cn), wantOrient, x, y, sz.w, sz.h, '', null, false, 200+i, false, forceIntrinsicOrient, false, instanceId);
       inner.appendChild(card);
     });
 
@@ -4724,8 +5587,14 @@ ${text}`;
       const y = baseY;
       const cap = labelFor(cn);
       const isSel = selHand.includes(i);
-      const card = makeCard(cn, 'portrait', x, y, sz.w, sz.h, cap, ()=>toggleSel(i), isSel, 100+i);
-      if(publicHandRevealedCards().includes(String(cn))){ card.classList.add('publicKnownHandCard'); }
+      const instanceId = zoneInstanceId('hand', i);
+      const card = makeCard(cn, 'portrait', x, y, sz.w, sz.h, cap, ()=>toggleSel(i), isSel, 100+i, false, null, false, instanceId);
+      const publicIds = publicHandRevealedIds();
+      const instanceTrackingReady = !!(st && st.card_instances);
+      const publicCardsFallback = (publicIds.length || instanceTrackingReady) ? [] : publicHandRevealedCards();
+      if((instanceId && publicIds.includes(String(instanceId))) || (!instanceId && publicCardsFallback.includes(String(cn)))){
+        card.classList.add('publicKnownHandCard');
+      }
       try{
         const hd = Array.isArray(st && st.hand_detail) ? st.hand_detail[i] : null;
         const baseCost = Number((hd && hd.base_cost) || cardCostFor(cn) || 0);
@@ -4992,9 +5861,33 @@ ${text}`;
   }
 
   function publicHandRevealedCards(){
+    const ids = publicHandRevealedIds();
+    if(ids.length){
+      return ids.map(iid=>{
+        const meta = instanceMeta(iid);
+        return String((meta && meta.cardnumber) || '');
+      }).filter(Boolean);
+    }
     if(!st || !Array.isArray(st.public_hand_revealed_cards)) return [];
+    return st.public_hand_revealed_cards.map(x=>String(x||'')).filter(Boolean);
+  }
+
+  function publicHandRevealedIds(){
+    const out = [];
     const seen = new Set();
-    return st.public_hand_revealed_cards.map(x=>String(x||'')).filter(cn=>cn && !seen.has(cn) && (seen.add(cn) || true));
+    function addMany(list){
+      if(!Array.isArray(list)) return;
+      list.forEach(x=>{
+        const iid = String(x || '').trim();
+        if(iid && !seen.has(iid)){
+          seen.add(iid);
+          out.push(iid);
+        }
+      });
+    }
+    addMany(st && st.public_hand_revealed_instance_ids);
+    addMany(st && st.card_instances && st.card_instances.public_hand_revealed);
+    return out;
   }
 
   function renderPublicKnownHandPanel(){
@@ -5019,6 +5912,23 @@ ${text}`;
         setTimeout(()=>{ try{ el.classList.remove('publicRevealFlash'); }catch(e){} }, 2600);
       }
     });
+  }
+
+  function flashCardsByInstanceOrNumber(instanceIds, cardNumbers){
+    const ids = new Set((instanceIds||[]).map(x=>String(x||'')).filter(Boolean));
+    if(ids.size){
+      document.querySelectorAll('.cardWrap').forEach(el=>{
+        const iid = String(el.dataset.instanceId || '');
+        if(ids.has(iid)){
+          el.classList.remove('publicRevealFlash');
+          void el.offsetWidth;
+          el.classList.add('publicRevealFlash');
+          setTimeout(()=>{ try{ el.classList.remove('publicRevealFlash'); }catch(e){} }, 2600);
+        }
+      });
+      return;
+    }
+    flashCardsByNumber(cardNumbers || []);
   }
 
   function showPublicRevealFloat(ev){
@@ -5051,7 +5961,7 @@ ${text}`;
       const seq = Number(ev && ev.seq || 0);
       if(seq > lastPublicHandRevealSeq){
         showPublicRevealFloat(ev);
-        flashCardsByNumber((ev && ev.display_cards) || []);
+        flashCardsByInstanceOrNumber((ev && ev.display_instance_ids) || [], []);
         if(seq > maxSeq) maxSeq = seq;
       }
     });
@@ -5154,7 +6064,8 @@ ${text}`;
       const x = padX + slotsX[i] + (slotW - sz.w)/2;
       const y = padTop + Math.max(0, (availH - sz.h)/2);
       const isBack = (cn === '__BACK__');
-      const card = makeCard(cn, 'landscape', x, y, sz.w, sz.h, '', null, false, 100+i, isBack, isBack ? 'portrait' : null);
+      const instanceId = zoneInstanceId('set_zone', i);
+      const card = makeCard(cn, 'landscape', x, y, sz.w, sz.h, '', null, false, 100+i, isBack, isBack ? 'portrait' : null, false, instanceId);
       try{
         const row = (i < scoreRows.length) ? scoreRows[i] : null;
         const delta = Number(row && row.delta || 0);
@@ -5339,7 +6250,29 @@ inner.appendChild(card);
         });
       }
     }catch(e){}
-    const card = makeCard(cn, dispOrient, x, y, sz.w, sz.h, labelFor(cn), ()=>doPlayHere(), false, 400);
+    const instanceId = stageInstanceId(slotKey);
+    const card = makeCard(cn, dispOrient, x, y, sz.w, sz.h, labelFor(cn), ()=>doPlayHere(), false, 400, false, null, false, instanceId);
+    try{
+      const sb = document.createElement('div');
+      sb.className = 'stageStatsBadge';
+      sb.textContent = `ST ${stageStatsFor(slotKey, slotObj)}`;
+      card.appendChild(sb);
+    }catch(e){}
+    try{
+      const underCardsForButton = Array.isArray(slotObj.under_cards) ? slotObj.under_cards.map(x=>String(x||'')).filter(Boolean) : [];
+      if(underCardsForButton.length > 0){
+        const ub = document.createElement('button');
+        ub.className = 'underInspectBtn';
+        ub.type = 'button';
+        ub.textContent = `下部確認 ${underCardsForButton.length}`;
+        ub.title = 'このメンバーの下に置かれているメンバーカードを確認';
+        ub.addEventListener('click', ev=>{
+          ev.stopPropagation();
+          openUnderCardsPopup(`${slotKey} 下部カード`, underCardsForButton, 'このメンバーの下に置かれているメンバーカードです。');
+        });
+        card.appendChild(ub);
+      }
+    }catch(e){}
 
     // activation button (if possible)
     try{
@@ -5360,7 +6293,7 @@ inner.appendChild(card);
       }
     }catch(e){}
 
-    // manual active/wait toggle button (top-left ↻)
+    // manual active/wait toggle button (beside L/C/R area label)
     try{
       const isActive = slotObj && slotObj.active;
       const tb = document.createElement('button');
@@ -5373,7 +6306,7 @@ inner.appendChild(card);
         updateTop();
         render();
       });
-      card.appendChild(tb);
+      zoneEl.appendChild(tb);
     }catch(e){}
 
     inner.appendChild(card);
@@ -5538,23 +6471,13 @@ inner.appendChild(card);
     btnUndo.addEventListener('click', async (ev)=>{
       ev.stopPropagation();
       st = await apiCmd('undo', {});
-      // BUILD_TAG: refresh_notice_undo_owner_resync_20260701aq
-      // Undo may restore a snapshot where the same refresh notice seq is present
-      // again.  If so, lower the local acknowledgement below that notice, not
-      // merely to the state seq, so the popup is shown again.
+      // BUILD_TAG: yell_no_bh_dual_menu_refresh_undo_20260722a
+      // Server undo restores the app-side refresh acknowledgement captured with
+      // that snapshot, so the browser mirrors it instead of forcing every undo
+      // back to the refresh notice.
       try{
-        const notices = Array.isArray(st && st.refresh_notices) ? st.refresh_notices : [];
-        let restoredNoticeSeq = 0;
-        notices.forEach((ev)=>{
-          const seq = Number(ev && ev.seq || 0);
-          if(isFinite(seq) && seq > restoredNoticeSeq) restoredNoticeSeq = seq;
-        });
-        if(restoredNoticeSeq > 0){
-          setLastRefreshNoticeSeq(Math.min(lastRefreshNoticeSeq, Math.max(0, restoredNoticeSeq - 1)));
-        }else{
-          const stateSeq = Number(st && st.refresh_notice_seq || 0);
-          if(isFinite(stateSeq)) setLastRefreshNoticeSeq(Math.min(lastRefreshNoticeSeq, stateSeq));
-        }
+        const ackSeq = Number(st && st.refresh_notice_ack_seq || 0);
+        setLastRefreshNoticeSeq(Number.isFinite(ackSeq) ? ackSeq : 0);
       }catch(e){}
       selHand = [];
       updateTop();
@@ -5567,6 +6490,19 @@ inner.appendChild(card);
     btnNext.textContent = (ph==='MULLIGAN') ? 'マリガン決定' : 'NEXT';
     btnNext.addEventListener('click', async (ev)=>{
       ev.stopPropagation();
+      if(popup && popup.type === 'refresh_notice'){
+        const seq = Number(popup.seq || 0);
+        setLastRefreshNoticeSeq(Math.max(lastRefreshNoticeSeq, seq));
+        if(!IS_PUBLIC_VIEW){
+          try{
+            st = await apiCmd('ack_refresh_notice', {seq});
+            updateTop();
+          }catch(e){ console.warn(e); }
+        }
+        closePopup();
+        render();
+        return;
+      }
       const ph2 = String(st && st.phase ? st.phase : '').toUpperCase();
       if(ph2==='MULLIGAN') st = await apiCmd('mulligan_next', {indices: selHand.slice()});
       else st = await apiCmd('next', {indices: selHand.slice()});
@@ -5688,6 +6624,8 @@ inner.appendChild(card);
       };
       appendIconPair('ドロー', Number(summary.drawIcons || 0));
       appendIconPair('スコアUP', Number(summary.scoreIcons || 0));
+      appendIconPair('ダブル無色', Number(summary.doubleColorlessIcons || 0));
+      appendIconPair('BHなし', Number(summary.noBladeHeartCards || 0));
       iconSec.appendChild(iconTitle);
       iconSec.appendChild(iconBar);
       wrap.appendChild(iconSec);
@@ -5758,8 +6696,8 @@ inner.appendChild(card);
     top.appendChild(note);
     wrap.appendChild(top);
 
-    const colorsOwned = ['pink','red','yellow','green','blue','purple','all'];
-    const colorsRequired = ['pink','red','yellow','green','blue','purple','any'];
+    const colorsOwned = ['pink','red','yellow','green','blue','purple','all','any'];
+    const colorsRequired = ['pink','red','yellow','green','blue','purple','all','any'];
     const mkCounts = (x)=> x && typeof x === 'object' ? x : {};
     const addCounts = (rows, key)=>{
       const out = {};
@@ -5837,14 +6775,14 @@ inner.appendChild(card);
     ownedTitle.className = 'liveAttemptSectionTitle';
     ownedTitle.textContent = '所持ハート合計（盤面＋エール）';
     const ownedGrid = document.createElement('div');
-    // Owned hearts are the six colors plus ALL; required hearts are the six
-    // colors plus unspecified/any.  Both rows therefore always have 7 slots.
+    // Owned and required rows both show six colors, ALL, and unspecified/any
+    // so the rules-facing columns line up even when one side is zero.
     ownedGrid.className = 'liveAttemptHeartGrid';
     colorsOwned.forEach(col=>{
       const st = Number(stage[col] || 0);
       const ye = Number(yell[col] || 0);
       const tt = Number(total[col] || 0);
-      ownedGrid.appendChild(makeLiveMetric({col, countText:`${st}+${ye}`, sub:`合計 ${tt}`}));
+      ownedGrid.appendChild(makeLiveMetric({col, label: col === 'any' ? '不特定' : '', countText:`${st}+${ye}`, sub:`合計 ${tt}`}));
     });
     ownedGrid.appendChild(makeHeartTotalMetric({countText:String(ownedCountTotal), sub:'所持ハート'}));
     ownedSec.appendChild(ownedTitle);
@@ -5864,7 +6802,7 @@ inner.appendChild(card);
       const eff = Number(reqEffective[col] || 0);
       const orig = Number(reqOriginal[col] || 0);
       const sub = (orig !== eff) ? `元 ${orig}` : '';
-      reqGrid.appendChild(makeLiveMetric({col, countText:String(eff), sub}));
+      reqGrid.appendChild(makeLiveMetric({col, label: col === 'any' ? '不特定' : '', countText:String(eff), sub}));
     });
     reqGrid.appendChild(makeHeartTotalMetric({countText:String(requiredCountTotal), sub:'必要ハート'}));
     reqSec.appendChild(reqTitle);
@@ -5888,6 +6826,50 @@ inner.appendChild(card);
     elModalActions.appendChild(btnOk);
     elMask.style.display = 'block';
     applyPopupPeekState();
+  }
+
+  function popupCardSurfaceMetrics(targetCards, cardsList){
+    const dimsP0 = standardSize('portrait');
+    const dimsL0 = standardSize('landscape');
+    const maxW0 = Math.max(dimsP0.w, dimsL0.w);
+    const maxH0 = Math.max(dimsP0.h, dimsL0.h);
+    const viewportH = (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
+    const compactRatio = (targetCards && targetCards.id === 'viewerCards') ? 0.24 : 0.31;
+    const maxAllowedH = Math.max(px(92), Math.min(maxH0, viewportH * compactRatio));
+    const fit = (maxH0 > 0) ? Math.min(1.0, maxAllowedH / maxH0) : 1.0;
+    const dimsP = {w:dimsP0.w * fit, h:dimsP0.h * fit};
+    const dimsL = {w:dimsL0.w * fit, h:dimsL0.h * fit};
+    const maxW = Math.max(dimsP.w, dimsL.w);
+    const maxH = Math.max(dimsP.h, dimsL.h);
+    const n = Array.isArray(cardsList) ? cardsList.length : 0;
+    const availW = Math.max(0, Number(targetCards && targetCards.clientWidth || 0) - px(28));
+    let step = maxW * 0.45;
+    if(n > 1 && availW > maxW){
+      const fitStep = (availW - maxW) / (n - 1);
+      step = Math.max(maxW * 0.38, Math.min(maxW * 0.72, fitStep));
+    }
+    return {dimsP, dimsL, maxW, maxH, step};
+  }
+
+  function renderPopupCardSurface(targetCards, cardsList, {forcePortrait=false, forceLandscape=false, normalizeNatural=false, onCardClick=null} = {}){
+    const list = Array.isArray(cardsList) ? cardsList.slice() : [];
+    const {dimsP, dimsL, maxW, maxH, step} = popupCardSurfaceMetrics(targetCards, list);
+    const surf = document.createElement('div');
+    surf.className = 'surf broadCardListSurf';
+    surf.style.height = uiCalc((maxH / (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--uiScale')) || 1)) + 12);
+    const minW = (list.length<=1) ? (maxW + px(24)) : (maxW + step*(list.length-1) + px(24));
+    surf.style.minWidth = `${Math.ceil(minW)}px`;
+
+    list.forEach((cn, i)=>{
+      const s = String(cn);
+      const orient = forceLandscape ? 'landscape' : (forcePortrait ? 'portrait' : intrinsicOrient(s));
+      const d = (orient==='landscape') ? dimsL : dimsP;
+      const x = px(12) + step*i + (maxW - d.w)/2;
+      const y = px(6) + (maxH - d.h)/2;
+      const card = makeCard(s, orient, x, y, d.w, d.h, '', onCardClick ? ()=>onCardClick(s, i) : null, false, 100+i, false, null, normalizeNatural);
+      surf.appendChild(card);
+    });
+    return surf;
   }
 
   function openCardListPopup(title, cards, {closable=true, helperText='', forcePortrait=false, forceLandscape=false, confirmClose=false, normalizeNatural=false } = {}){
@@ -5926,30 +6908,15 @@ inner.appendChild(card);
 
     const targetCards = useViewer ? elViewerCards : elModalCards;
     const targetActions = useViewer ? elViewerActions : elModalActions;
+    targetCards.style.display = '';
+    targetCards.style.flexDirection = '';
+    targetCards.style.gap = '';
 
-    // layout card list with overlap + horizontal scroll
-    const dimsP = standardSize('portrait');
-    const dimsL = standardSize('landscape');
-    const maxW = Math.max(dimsP.w, dimsL.w);
-    const maxH = Math.max(dimsP.h, dimsL.h);
-
-    const surf = document.createElement('div');
-    surf.className = 'surf';
-    surf.style.height = (maxH + 12) + 'px';
-    const step = maxW * 0.45;
-    const minW = (cardsList.length<=1) ? (maxW + 24) : (maxW + step*(cardsList.length-1) + 24);
-    surf.style.minWidth = minW + 'px';
-
-    cardsList.forEach((cn, i)=>{
-      const orient = forceLandscape ? 'landscape' : (forcePortrait ? 'portrait' : intrinsicOrient(cn));
-      const d = (orient==='landscape') ? dimsL : dimsP;
-      const x = 12 + step*i + (maxW - d.w)/2;
-      const y = 6 + (maxH - d.h)/2;
-      const c = makeCard(cn, orient, x, y, d.w, d.h, '', null, false, 100+i, false, null, normalizeNatural);
-      surf.appendChild(c);
-    });
-
-    targetCards.appendChild(surf);
+    targetCards.appendChild(renderPopupCardSurface(targetCards, cardsList, {
+      forcePortrait,
+      forceLandscape,
+      normalizeNatural,
+    }));
 
     if(useViewer){
       const close = document.createElement('button');
@@ -5979,6 +6946,63 @@ inner.appendChild(card);
     }
   }
 
+  function openUnderCardsPopup(title, cards, helperText=''){
+    const cardsList = (Array.isArray(cards) ? cards : []).map(x=>String(x||'')).filter(Boolean);
+    viewerPopup = {type:'under_cards', title, cards: cardsList.slice(), closable:true, helperText};
+    elViewerTitle.textContent = title;
+    setRichText(elViewerText, helperText || '');
+    elViewerActions.innerHTML = '';
+    elViewerCards.innerHTML = '';
+    elViewerCards.style.display = 'flex';
+    elViewerCards.style.flexDirection = 'column';
+    elViewerCards.style.gap = uiCalc(7);
+    cardsList.forEach((cn, idx)=>{
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.style.cssText = [
+        'display:grid',
+        `grid-template-columns:${uiCalc(44)} minmax(0,1fr)`,
+        `gap:${uiCalc(8)}`,
+        'align-items:center',
+        `padding:${uiCalc(6)} ${uiCalc(7)}`,
+        `border-radius:${uiCalc(9)}`,
+        'border:1px solid rgba(255,255,255,.16)',
+        'background:rgba(255,255,255,.06)',
+        'color:#eee',
+        'text-align:left',
+        'cursor:pointer',
+      ].join(';');
+      const img = document.createElement('img');
+      img.src = imgUrl(cn);
+      img.alt = cn;
+      img.style.cssText = `width:${uiCalc(44)};height:${uiCalc(62)};object-fit:contain;border-radius:${uiCalc(5)};background:rgba(0,0,0,.35);`;
+      const body = document.createElement('div');
+      body.style.cssText = 'min-width:0;display:flex;flex-direction:column;gap:2px;';
+      const name = document.createElement('div');
+      name.textContent = `${idx + 1}. ${cardDisplayText(cn)}`;
+      name.style.cssText = `font-size:${uiCalc(13)};font-weight:850;line-height:1.25;white-space:normal;word-break:break-word;`;
+      const code = document.createElement('div');
+      code.textContent = cn;
+      code.style.cssText = `font-size:${uiCalc(10)};color:rgba(255,255,255,.56);line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;`;
+      body.appendChild(name);
+      body.appendChild(code);
+      row.appendChild(img);
+      row.appendChild(body);
+      row.addEventListener('click', ev=>{
+        ev.stopPropagation();
+        showCardDetail(cn, row);
+      });
+      elViewerCards.appendChild(row);
+    });
+    const close = document.createElement('button');
+    close.className = 'miniBtn';
+    close.textContent = 'Close';
+    close.addEventListener('click', ()=>{ closeViewerPopup(); });
+    elViewerActions.appendChild(close);
+    elViewerLayer.style.display = 'block';
+    applyPopupPeekState();
+  }
+
   function openCardPickPopup(title, cards, {helperText='', forcePortrait=false, forceLandscape=false, allowSkip=true } = {}){
     // Like openCardListPopup, but each card is clickable to resolve pending (idx=0).
     let cardsList = (Array.isArray(cards) ? cards.slice() : []).filter(c=>!!c);
@@ -5989,31 +7013,15 @@ inner.appendChild(card);
     elModalActions.innerHTML = '';
     elModalCards.innerHTML = '';
 
-    const dimsP = standardSize('portrait');
-    const dimsL = standardSize('landscape');
-    const maxW = Math.max(dimsP.w, dimsL.w);
-    const maxH = Math.max(dimsP.h, dimsL.h);
-
-    const surf = document.createElement('div');
-    surf.className = 'surf';
-    surf.style.height = (maxH + 12) + 'px';
-    const step = maxW * 0.45; // overlap ~55%
-    const minW = (cardsList.length<=1) ? (maxW + 24) : (maxW + step*(cardsList.length-1) + 24);
-    surf.style.minWidth = minW + 'px';
-
-    cardsList.forEach((cn, i)=>{
-      const s = String(cn);
-      const orient = forceLandscape ? 'landscape' : (forcePortrait ? 'portrait' : intrinsicOrient(s));
-      const d = (orient==='landscape') ? dimsL : dimsP;
-      const x = 12 + step*i + (maxW - d.w)/2;
-      const y = 6 + (maxH - d.h)/2;
-      const c = makeCard(s, orient, x, y, d.w, d.h, '', async ()=>{
+    const surf = renderPopupCardSurface(elModalCards, cardsList, {
+      forcePortrait,
+      forceLandscape,
+      onCardClick: async (s)=>{
         st = await apiCmd('resolve_pending', {idx:0, choice: s});
         selHand = [];
         updateTop();
         render();
-      }, false, 100+i);
-      surf.appendChild(c);
+      },
     });
 
     elModalCards.appendChild(surf);
@@ -7601,20 +8609,33 @@ inner.appendChild(card);
       const row = document.createElement('div');
       row.className = 'choiceRow';
       const dimsL = standardSize('landscape');
+      const disabledOptions = (p && p.disabled_options && typeof p.disabled_options === 'object') ? p.disabled_options : {};
 
       cards.forEach((cn)=>{
+        const disabledReason = String(disabledOptions[String(cn)] || '').trim();
         const b = document.createElement('button');
         b.className = 'choiceBtn';
         b.style.width = dimsL.w + 'px';
         b.style.height = dimsL.h + 'px';
+        if(disabledReason){
+          b.disabled = true;
+          b.style.opacity = '0.48';
+          b.style.cursor = 'not-allowed';
+          b.title = disabledReason;
+        }
 
         const img = document.createElement('img');
         img.src = imgUrl(cn);
         img.alt = cn;
         b.appendChild(img);
+        const cap = document.createElement('div');
+        cap.className = 'choiceCap';
+        cap.textContent = disabledReason ? `選択不可：${disabledReason}` : cardChoiceCaption(cn, 1, 1);
+        b.appendChild(cap);
 
         const applyChoice = async (ev)=>{
           if(ev) ev.stopPropagation();
+          if(disabledReason) return;
           st = await apiCmd('resolve_pending', {idx:0, choice: cn});
           selHand = [];
           updateTop();
@@ -8648,6 +9669,16 @@ inner.appendChild(card);
       btnOrderSecond.classList.toggle('orderSelected', !!st && ord === 'second');
     }
     elSelected.textContent = String(selHand.length);
+    if(elResetPanel){
+      const show = !!st && !IS_PUBLIC_VIEW;
+      const remote = !!(st && st.remote_mode);
+      elResetPanel.classList.toggle('visible', show);
+      if(btnSingleReset) btnSingleReset.style.display = (show && !remote) ? '' : 'none';
+      if(btnRecordWin) btnRecordWin.style.display = (show && remote) ? '' : 'none';
+      if(btnRecordLose) btnRecordLose.style.display = (show && remote) ? '' : 'none';
+      if(btnRecordNoGame) btnRecordNoGame.style.display = (show && remote) ? '' : 'none';
+      [btnSingleReset, btnRecordWin, btnRecordLose, btnRecordNoGame].forEach(btn=>{ if(btn) btn.disabled = !show; });
+    }
     setBanner(st && st.banner && st.banner.text ? String(st.banner.text) : '');
   }
 
@@ -8663,6 +9694,7 @@ inner.appendChild(card);
       elZones.appendChild(zd);
       if(z.kind==='log') renderLog(zd, st.log || [], st.effect_events || []);
     }
+    renderStatsPanel();
 
     // DECK: public view receives only deck_count, so keep the back-card mask visible.
     const deckCount = IS_PUBLIC_VIEW ? publicCount('deck_count', st.deck||[]) : ((st.deck||[]).length);
@@ -8677,7 +9709,7 @@ inner.appendChild(card);
     if(gr.length){
       renderTopCard(zels.green, String(gr[gr.length-1]), 'portrait', gr.length, ()=>{
         openCardListPopup('控え室', gr, {closable:true, helperText:''});
-      });
+      }, {instanceId: zoneInstanceId('green_room', gr.length - 1)});
     }else{
       renderEmptyZone(zels.green, 0, null);
     }
@@ -8687,7 +9719,7 @@ inner.appendChild(card);
     if(sz.length){
       renderVertStack(zels.success, sz, 'landscape', sz.length, ()=>{
         openCardListPopup('成功ライブ', sz, {closable:true, helperText:'', forceLandscape:true});
-      }, {overlap:0.70, maxShow:4, forceIntrinsicOrient:'landscape'});
+      }, {overlap:0.70, maxShow:4, forceIntrinsicOrient:'landscape', instanceIds: st.card_instances && st.card_instances.success_zone});
     }else{
       renderEmptyZone(zels.success, null, null);
     }

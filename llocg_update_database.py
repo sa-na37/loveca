@@ -21,7 +21,7 @@ BUILD_TAG is intentionally visible for delivery verification.
 
 from __future__ import annotations
 
-BUILD_TAG = "reprint_image_targets_in_update_20260721a"
+BUILD_TAG = "missing_existing_images_refetch_log_20260722b"
 
 import argparse
 import csv
@@ -594,6 +594,26 @@ def scan_image_rarity_pairs(root: Path) -> set[Tuple[str, str]]:
     return out
 
 
+def missing_released_image_targets(
+    *,
+    cardnumbers: Iterable[str],
+    image_root: Path,
+    release_dates: Dict[str, date],
+    as_of: date,
+) -> set[str]:
+    existing = scan_image_cardnumbers(image_root)
+    out: set[str] = set()
+    for cardno0 in cardnumbers:
+        cardno = str(cardno0 or "").strip()
+        if not cardno:
+            continue
+        if is_prerelease_card(cardno, release_dates=release_dates, as_of=as_of):
+            continue
+        if cardno not in existing:
+            out.add(cardno)
+    return out
+
+
 def cached_reprint_image_targets(
     *,
     cache_dir: Path,
@@ -1145,6 +1165,12 @@ def main() -> int:
     canonical_image_cards_at_start = scan_image_cardnumbers(canonical_image_dir)
     canonical_image_rarity_pairs_at_start = scan_image_rarity_pairs(canonical_image_dir)
     initial_image_fetch_needed = not canonical_image_cards_at_start
+    missing_existing_image_targets = missing_released_image_targets(
+        cardnumbers=all_cardnumbers,
+        image_root=canonical_image_dir,
+        release_dates=release_dates,
+        as_of=today,
+    )
     reprint_image_targets = cached_reprint_image_targets(
         cache_dir=cache_dir,
         wanted_cardnumbers=[
@@ -1176,12 +1202,14 @@ def main() -> int:
             if cardno in preview_image_cards and cardno not in canonical_image_cards:
                 image_manifest_targets.add(cardno)
         image_manifest_mode = "incremental"
+    image_manifest_targets.update(missing_existing_image_targets)
     image_manifest_targets.update(reprint_image_targets)
 
     print(
         "[IMAGE-MANIFEST-MODE] "
         f"mode={image_manifest_mode} targets={len(image_manifest_targets)} "
         f"new_cards={len(new_cardnumbers)} "
+        f"missing_existing={len(missing_existing_image_targets)} "
         f"reprint_missing={len(reprint_image_targets)} "
         f"base_manifest={base_image_manifest.exists()}"
     )
@@ -1189,6 +1217,13 @@ def main() -> int:
         print(
             "[IMAGE-FETCH-INIT] canonical card image folder is missing or empty; "
             "first update will fetch card images using the bundled manifest"
+        )
+    if missing_existing_image_targets:
+        sample = ", ".join(sorted(missing_existing_image_targets)[:30])
+        print(
+            "[IMAGE-MISSING-EXISTING] "
+            f"released_cards_without_local_image={len(missing_existing_image_targets)} "
+            f"sample={sample}"
         )
 
     image_manifest_delta_dir = work_root / "image_manifest_delta"
@@ -1313,6 +1348,7 @@ def main() -> int:
         | set(image_manifest_targets)
         | set(preview_changed_cards)
         | set(reprint_image_targets)
+        | set(missing_existing_image_targets)
     )
     if initial_image_fetch_needed:
         image_fetch_targets.update(all_cardnumbers)
@@ -1323,7 +1359,8 @@ def main() -> int:
         "[IMAGE-FETCH-MODE] "
         f"targets={len(image_fetch_targets)} new_cards={len(new_cardnumbers)} "
         f"official_manifest_targets={len(image_manifest_targets)} "
-        f"preview_changed={len(preview_changed_cards)}"
+        f"preview_changed={len(preview_changed_cards)} "
+        f"missing_existing={len(missing_existing_image_targets)}"
     )
     if image_fetch_targets:
         image_target_file = write_cardnumber_file(
@@ -1350,11 +1387,30 @@ def main() -> int:
                 str(args.image_sleep),
                 "--jitter",
                 str(args.image_jitter),
+                "--progress-every",
+                "1",
             ],
             cwd=project_root,
         )
     else:
         print("[IMAGE-FETCH] no changed card targets; skipped")
+
+    missing_after_image_fetch = missing_released_image_targets(
+        cardnumbers=all_cardnumbers,
+        image_root=dbdir / "card_images",
+        release_dates=release_dates,
+        as_of=today,
+    )
+    if missing_after_image_fetch:
+        sample = ", ".join(sorted(missing_after_image_fetch)[:30])
+        print(
+            "[IMAGE-FETCH-ERROR] "
+            f"missing released card images after fetch: {len(missing_after_image_fetch)}"
+        )
+        print(f"[IMAGE-FETCH-ERROR] sample={sample}")
+        raise SystemExit(
+            "[ERROR] card image update incomplete; retry the update after confirming network access"
+        )
 
     # 10. Final strict generation audit.
     run(

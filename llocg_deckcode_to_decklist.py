@@ -24,6 +24,8 @@ Usage:
 
 from __future__ import annotations
 
+BUILD_TAG = "decklog_api_post_card_number_parse_20260722a"
+
 import argparse
 import csv
 import datetime
@@ -128,7 +130,8 @@ def _norm_plus(s: str) -> str:
 
 _CARDNO_SUFFIX_RE = re.compile(r"^(?P<base>.*-\d{3})(?:-(?P<suf>[A-Za-z0-9+＋]+))?$")
 _ACCEPTED_RARITIES = {
-    "N", "R", "R2", "L", "L2", "SD", "PR", "P", "P+", "P2", "SEC", "SEC2", "SECL", "AR", "RM"
+    "N", "R", "R2", "L", "L+", "L2", "SD", "PR", "PR+", "P", "P+", "P2",
+    "SEC", "SEC2", "SECL", "SR", "SRL", "AR", "RM", "PP", "PE", "PE+",
 }
 
 
@@ -259,10 +262,43 @@ def fetch_url_bytes_requests(url: str, *, ua: str, timeout: float, verify_ssl: b
     r.raise_for_status()
     return r.content
 
-def fetch_url_bytes_urllib(url: str, *, ua: str, timeout: float, verify_ssl: bool) -> bytes:
+def fetch_url_bytes_requests_method(
+    url: str,
+    *,
+    ua: str,
+    timeout: float,
+    verify_ssl: bool,
+    method: str = "GET",
+    data: Optional[bytes] = None,
+    extra_headers: Optional[Dict[str, str]] = None,
+) -> bytes:
+    import requests
+    headers = {"User-Agent": ua, "Accept-Language": "ja,en-US;q=0.9,en;q=0.8"}
+    if extra_headers:
+        headers.update(extra_headers)
+    if method.upper() == "POST":
+        r = requests.post(url, headers=headers, data=data, timeout=timeout, verify=verify_ssl)
+    else:
+        r = requests.get(url, headers=headers, timeout=timeout, verify=verify_ssl)
+    r.raise_for_status()
+    return r.content
+
+def fetch_url_bytes_urllib(
+    url: str,
+    *,
+    ua: str,
+    timeout: float,
+    verify_ssl: bool,
+    method: str = "GET",
+    data: Optional[bytes] = None,
+    extra_headers: Optional[Dict[str, str]] = None,
+) -> bytes:
     import ssl
     import urllib.request
-    req = urllib.request.Request(url, headers={"User-Agent": ua, "Accept-Language": "ja,en-US;q=0.9,en;q=0.8"})
+    headers = {"User-Agent": ua, "Accept-Language": "ja,en-US;q=0.9,en;q=0.8"}
+    if extra_headers:
+        headers.update(extra_headers)
+    req = urllib.request.Request(url, data=data if method.upper() == "POST" else None, headers=headers, method=method.upper())
     if verify_ssl:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return resp.read()
@@ -272,9 +308,27 @@ def fetch_url_bytes_urllib(url: str, *, ua: str, timeout: float, verify_ssl: boo
     with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
         return resp.read()
 
-def fetch_url_bytes(url: str, *, ua: str, timeout: float, insecure_fallback: bool, log: List[str]) -> bytes:
+def fetch_url_bytes(
+    url: str,
+    *,
+    ua: str,
+    timeout: float,
+    insecure_fallback: bool,
+    log: List[str],
+    method: str = "GET",
+    data: Optional[bytes] = None,
+    extra_headers: Optional[Dict[str, str]] = None,
+) -> bytes:
     try:
-        return fetch_url_bytes_requests(url, ua=ua, timeout=timeout, verify_ssl=True)
+        return fetch_url_bytes_requests_method(
+            url,
+            ua=ua,
+            timeout=timeout,
+            verify_ssl=True,
+            method=method,
+            data=data,
+            extra_headers=extra_headers,
+        )
     except Exception as e:
         msg = f"{type(e).__name__}: {e}"
         if "SSL" in msg or "CERTIFICATE" in msg.upper():
@@ -282,11 +336,35 @@ def fetch_url_bytes(url: str, *, ua: str, timeout: float, insecure_fallback: boo
             if not insecure_fallback:
                 raise
             try:
-                return fetch_url_bytes_requests(url, ua=ua, timeout=timeout, verify_ssl=False)
+                return fetch_url_bytes_requests_method(
+                    url,
+                    ua=ua,
+                    timeout=timeout,
+                    verify_ssl=False,
+                    method=method,
+                    data=data,
+                    extra_headers=extra_headers,
+                )
             except Exception:
-                return fetch_url_bytes_urllib(url, ua=ua, timeout=timeout, verify_ssl=False)
+                return fetch_url_bytes_urllib(
+                    url,
+                    ua=ua,
+                    timeout=timeout,
+                    verify_ssl=False,
+                    method=method,
+                    data=data,
+                    extra_headers=extra_headers,
+                )
         try:
-            return fetch_url_bytes_urllib(url, ua=ua, timeout=timeout, verify_ssl=True)
+            return fetch_url_bytes_urllib(
+                url,
+                ua=ua,
+                timeout=timeout,
+                verify_ssl=True,
+                method=method,
+                data=data,
+                extra_headers=extra_headers,
+            )
         except Exception:
             raise
 
@@ -300,18 +378,78 @@ def _json_loads_best_effort(text: str) -> Optional[Any]:
     except Exception:
         return None
 
+def _looks_like_deck_card_number(value: str) -> bool:
+    v = _norm_plus(str(value or "")).strip()
+    if not v or v.isdigit():
+        return False
+    if not (v.startswith("PL!") or v.startswith("LL-")):
+        return False
+    card_no, _rarity = split_card_no_and_rarity(v)
+    return bool(card_no and "-" in card_no and not card_no.isdigit())
+
+def _first_card_identifier(item: Dict[str, Any]) -> str:
+    for key in ("card_number", "cardNumber", "card_no", "cardNo", "cardId", "card_id"):
+        value = item.get(key)
+        if isinstance(value, str) and _looks_like_deck_card_number(value):
+            return value.strip()
+    card = item.get("card")
+    if isinstance(card, dict):
+        for key in ("card_number", "cardNumber", "card_no", "cardNo", "cardId", "card_id"):
+            value = card.get(key)
+            if isinstance(value, str) and _looks_like_deck_card_number(value):
+                return value.strip()
+    return ""
+
+def _first_card_count(item: Dict[str, Any]) -> Optional[int]:
+    for key in ("num", "_num", "count", "quantity", "amount"):
+        if key not in item:
+            continue
+        try:
+            count = int(item.get(key))
+        except Exception:
+            continue
+        if count > 0:
+            return count
+    return None
+
+def _first_card_name(item: Dict[str, Any]) -> str:
+    for key in ("name", "cardName", "card_name"):
+        value = item.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    card = item.get("card")
+    if isinstance(card, dict):
+        for key in ("name", "cardName", "card_name"):
+            value = card.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return ""
+
+def _first_rarity(item: Dict[str, Any]) -> str:
+    for key in ("rare", "rarity", "card_rarity"):
+        value = item.get(key)
+        if isinstance(value, str) and value.strip():
+            return _normalize_rarity_token(value)
+    card = item.get("card")
+    if isinstance(card, dict):
+        for key in ("rare", "rarity", "card_rarity"):
+            value = card.get(key)
+            if isinstance(value, str) and value.strip():
+                return _normalize_rarity_token(value)
+    return ""
+
 def parse_cards_from_json(obj: Any) -> List[DeckEntry]:
     if not isinstance(obj, dict):
         return []
     candidates = []
-    for k in ("mainDeck", "main_deck", "main", "deck", "cards"):
+    for k in ("list", "mainDeck", "main_deck", "main", "deck", "cards"):
         v = obj.get(k)
         if isinstance(v, list):
             candidates.append(v)
     for k in ("data", "result"):
         v = obj.get(k)
         if isinstance(v, dict):
-            for kk in ("mainDeck", "main", "cards"):
+            for kk in ("list", "mainDeck", "main", "cards"):
                 vv = v.get(kk)
                 if isinstance(vv, list):
                     candidates.append(vv)
@@ -322,16 +460,16 @@ def parse_cards_from_json(obj: Any) -> List[DeckEntry]:
         for it in arr:
             if not isinstance(it, dict):
                 continue
-            cid = str(it.get("cardId") or it.get("card_id") or it.get("id") or "").strip()
+            cid = _first_card_identifier(it)
             if not cid:
                 continue
-            cnt = it.get("num") if "num" in it else it.get("count")
-            try:
-                cnt = int(cnt)
-            except Exception:
+            cnt = _first_card_count(it)
+            if cnt is None:
                 continue
-            name = str(it.get("name") or it.get("cardName") or it.get("card_name") or "").strip()
+            name = _first_card_name(it)
             card_no, rarity = split_card_no_and_rarity(cid)
+            if not rarity:
+                rarity = _first_rarity(it)
             if not card_no:
                 continue
             key = (card_no, rarity)
@@ -344,23 +482,42 @@ def parse_cards_from_json(obj: Any) -> List[DeckEntry]:
 
 def try_fetch_and_parse_by_api(code: str, *, ua: str, timeout: float, insecure_fallback: bool, log: List[str]) -> List[DeckEntry]:
     urls = [
-        f"https://decklog.bushiroad.com/system/app/api/view/{code}",
-        f"https://decklog.bushiroad.com/system/app/api/view/{code}/",
-        f"https://decklog.bushiroad.com/system/app/api/view/{code}?_={int(datetime.datetime.now().timestamp()) % 100000}",
+        ("POST", f"https://decklog.bushiroad.com/system/app/api/view/{code}", b"{}"),
+        ("POST", f"https://decklog.bushiroad.com/system/app/api/view/{code}/", b"{}"),
+        ("POST", f"https://decklog.bushiroad.com/system/app/api/view/{code}?_={int(datetime.datetime.now().timestamp()) % 100000}", b"{}"),
+        ("GET", f"https://decklog.bushiroad.com/system/app/api/view/{code}", None),
+        ("GET", f"https://decklog.bushiroad.com/system/app/api/view/{code}/", None),
     ]
-    for url in urls:
+    api_headers = {
+        "Accept": "application/json, text/plain, */*",
+        "Content-Type": "application/json",
+        "Origin": "https://decklog.bushiroad.com",
+        "Referer": f"https://decklog.bushiroad.com/view/{code}",
+        "X-Requested-With": "XMLHttpRequest",
+        "Cookie": "_is_appli=2",
+    }
+    for method, url, body in urls:
         try:
-            data = fetch_url_bytes(url, ua=ua, timeout=timeout, insecure_fallback=insecure_fallback, log=log)
+            data = fetch_url_bytes(
+                url,
+                ua=ua,
+                timeout=timeout,
+                insecure_fallback=insecure_fallback,
+                log=log,
+                method=method,
+                data=body,
+                extra_headers=api_headers,
+            )
             text = data.decode("utf-8", errors="replace")
             obj = _json_loads_best_effort(text)
             if obj is None:
                 continue
             cards = parse_cards_from_json(obj)
             if cards:
-                log.append(f"[INFO] Parsed {len(cards)} unique cards from API source: {url}")
+                log.append(f"[INFO] Parsed {len(cards)} unique cards from API source: {method} {url}")
                 return cards
         except Exception as e:
-            log.append(f"[WARN] API fetch failed for {url}: {type(e).__name__}: {e}")
+            log.append(f"[WARN] API fetch failed for {method} {url}: {type(e).__name__}: {e}")
     return []
 
 def try_fetch_and_parse_by_html(code: str, *, ua: str, timeout: float, insecure_fallback: bool, log: List[str]) -> Tuple[List[DeckEntry], str]:

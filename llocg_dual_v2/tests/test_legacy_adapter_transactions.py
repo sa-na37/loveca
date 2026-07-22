@@ -38,7 +38,7 @@ from llocg_dual_v2.server import (
     _transparent_png_bytes,
 )
 
-BUILD_TAG = "llocg_dual_v2_deck_center_energy_plain_fallback_20260720a"
+BUILD_TAG = "llocg_dual_v2_opponent_hand_position_bridge_tests_20260721a"
 
 
 def deck(prefix: str):
@@ -611,6 +611,352 @@ class LegacyAdapterTransactionTests(unittest.TestCase):
         self.assertIn("set=", source)
         self.assertIn("per_card_add=", source)
 
+    def test_opponent_wait_notify_updates_real_opponent_stage_and_undo(self):
+        a = self.make_adapter()
+        self.enter_first_main(a)
+        p1 = a.runtime("p1").app
+        p2 = a.runtime("p2").app
+        p2.cards_db["B-001"]["cost"] = 2
+        p2.cards_db["B-002"]["cost"] = 9
+        p2.gs.stage["C"] = FakeSlot("B-001", active=True)
+        p2.gs.stage["R"] = FakeSlot("B-002", active=True)
+        p1.gs.pending.append({
+            "kind": "opponent_wait_notify",
+            "source_cn": "A-SRC",
+            "effect_text": "コスト4以下のメンバーを1人までウェイトにする",
+            "options": ["0", "1"],
+            "max_delta": 1,
+        })
+        out = a.player_command("p1", "resolve_pending", {"idx": 0, "choice": "1"})
+        self.assertTrue(out.get("dual_transaction_committed"))
+        self.assertFalse(p2.gs.stage["C"].active)
+        self.assertTrue(p2.gs.stage["R"].active)
+        self.assertEqual(a.engine.state.players[1].stage["C"], "B-001")
+        a.action("UNDO", {})
+        self.assertTrue(p2.gs.stage["C"].active)
+        self.assertTrue(p2.gs.stage["R"].active)
+
+    def test_opponent_energy_ack_updates_real_opponent_energy_and_undo(self):
+        a = self.make_adapter()
+        self.enter_first_main(a)
+        p1 = a.runtime("p1").app
+        p2 = a.runtime("p2").app
+        p2.gs.energy_active = 3
+        p2.gs.energy_wait = 0
+        p1.gs.pending.append({
+            "kind": "message_ack",
+            "label": "相手エネルギー確認",
+            "text": "相手はエネルギーデッキからエネルギーカードを2枚ウェイト状態で置きます。",
+            "options": ["ok"],
+            "source_cn": "A-SRC",
+        })
+        out = a.player_command("p1", "resolve_pending", {"idx": 0, "choice": "ok"})
+        self.assertTrue(out.get("dual_transaction_committed"))
+        self.assertEqual(p2.gs.energy_wait, 2)
+        self.assertEqual(a.engine.state.players[1].energy_wait, 2)
+        self.assertIn("[DUAL EFFECT][OPPONENT ENERGY WAIT]", "\n".join(p1.gs.log))
+        a.action("UNDO", {})
+        self.assertEqual(p2.gs.energy_wait, 0)
+        self.assertEqual(a.engine.state.players[1].energy_wait, 0)
+
+    def test_optional_opponent_draw_apply_updates_real_opponent_hand_and_undo(self):
+        a = self.make_adapter()
+        self.enter_first_main(a)
+        p1 = a.runtime("p1").app
+        p2 = a.runtime("p2").app
+        p2.gs.deck = ["B-010", "B-011", "B-012"]
+        p2.gs.hand = []
+        p1.gs.pending.append({
+            "kind": "confirm_effect",
+            "text": "A-SRC[ライブ成功時] エネルギーカードを1枚ウェイト状態で置いてもよいです。置いた場合、相手はカードを2枚引きます。",
+            "options": ["apply", "skip"],
+            "after_effect_template": "",
+            "ctx": {"source_cn": "A-SRC"},
+            "source_cn": "A-SRC",
+        })
+        out = a.player_command("p1", "resolve_pending", {"idx": 0, "choice": "apply"})
+        self.assertTrue(out.get("dual_transaction_committed"))
+        self.assertEqual(p2.gs.hand, ["B-010", "B-011"])
+        self.assertEqual(p2.gs.deck, ["B-012"])
+        self.assertEqual(a.engine.state.players[1].hand, ["B-010", "B-011"])
+        self.assertIn("[DUAL EFFECT][OPPONENT DRAW]", "\n".join(p1.gs.log))
+        a.action("UNDO", {})
+        self.assertEqual(p2.gs.hand, [])
+        self.assertEqual(p2.gs.deck, ["B-010", "B-011", "B-012"])
+
+    def test_optional_opponent_draw_refreshes_when_opponent_deck_runs_empty(self):
+        a = self.make_adapter()
+        self.enter_first_main(a)
+        p1 = a.runtime("p1").app
+        p2 = a.runtime("p2").app
+        p2.gs.deck = ["B-010"]
+        p2.gs.green_room = ["B-020", "B-021", "B-022"]
+        p2.gs.hand = []
+        p1.gs.pending.append({
+            "kind": "confirm_effect",
+            "text": "A-SRC[ライブ成功時] 置いた場合、相手はカードを2枚引きます。",
+            "options": ["apply", "skip"],
+            "after_effect_template": "",
+            "ctx": {"source_cn": "A-SRC"},
+            "source_cn": "A-SRC",
+        })
+        out = a.player_command("p1", "resolve_pending", {"idx": 0, "choice": "apply"})
+        self.assertTrue(out.get("dual_transaction_committed"))
+        self.assertEqual(len(p2.gs.hand), 2)
+        self.assertEqual(p2.gs.hand[0], "B-010")
+        self.assertTrue(getattr(p2.gs, "deck_refreshed_this_turn", False))
+        self.assertEqual(p2.gs.green_room, [])
+        self.assertEqual(len(p2.gs.deck), 2)
+        self.assertIn("[REFRESH]", "\n".join(p2.gs.log))
+        a.action("UNDO", {})
+        self.assertEqual(p2.gs.hand, [])
+        self.assertEqual(p2.gs.deck, ["B-010"])
+        self.assertEqual(p2.gs.green_room, ["B-020", "B-021", "B-022"])
+
+    def test_choose_opponent_green_live_bottom_updates_real_opponent_zones_and_undo(self):
+        a = self.make_adapter()
+        self.enter_first_main(a)
+        p1 = a.runtime("p1").app
+        p2 = a.runtime("p2").app
+        p2.cards_db["B-010"]["card_type"] = "LIVE"
+        p2.cards_db["B-011"]["card_type"] = "MEMBER"
+        p2.cards_db["B-012"]["card_type"] = "LIVE"
+        p2.gs.green_room = ["B-010", "B-011", "B-012"]
+        p2.gs.deck = ["B-020"]
+        p1.gs.pending.append({
+            "kind": "choose_player_for_green_bottom",
+            "text": "自分か相手を選ぶ。",
+            "options": ["self", "opponent"],
+            "want_kind": "LIVE",
+            "remaining": 2,
+            "allow_less": False,
+            "source_cn": "A-SRC",
+        })
+        out = a.player_command("p1", "resolve_pending", {"idx": 0, "choice": "opponent"})
+        self.assertTrue(out.get("dual_transaction_committed"))
+        self.assertEqual(p2.gs.green_room, ["B-011"])
+        self.assertEqual(p2.gs.deck, ["B-020", "B-010", "B-012"])
+        self.assertEqual(a.engine.state.players[1].waiting_room, ["B-011"])
+        self.assertIn("[DUAL EFFECT][OPPONENT GREEN BOTTOM]", "\n".join(p1.gs.log))
+        a.action("UNDO", {})
+        self.assertEqual(p2.gs.green_room, ["B-010", "B-011", "B-012"])
+        self.assertEqual(p2.gs.deck, ["B-020"])
+
+    def test_manual_opponent_mass_member_bottom_updates_real_opponent_zones_and_undo(self):
+        a = self.make_adapter()
+        self.enter_first_main(a)
+        p1 = a.runtime("p1").app
+        p2 = a.runtime("p2").app
+        p2.cards_db["B-010"]["card_type"] = "MEMBER"
+        p2.cards_db["B-011"]["card_type"] = "LIVE"
+        p2.cards_db["B-012"]["card_type"] = "MEMBER"
+        p2.gs.green_room = ["B-010", "B-011", "B-012"]
+        p2.gs.deck = []
+        p1.gs.pending.append({
+            "kind": "manual_opponent_mass_bottom_threshold",
+            "text": "相手も自身の控え室にあるすべてのメンバーカードをシャッフルし、相手のデッキの下に置きます。",
+            "options": ["threshold_met", "threshold_not_met"],
+            "source_cn": "A-SRC",
+        })
+        out = a.player_command("p1", "resolve_pending", {"idx": 0, "choice": "threshold_met"})
+        self.assertTrue(out.get("dual_transaction_committed"))
+        self.assertEqual(p2.gs.green_room, ["B-011"])
+        self.assertCountEqual(p2.gs.deck, ["B-010", "B-012"])
+        a.action("UNDO", {})
+        self.assertEqual(p2.gs.green_room, ["B-010", "B-011", "B-012"])
+        self.assertEqual(p2.gs.deck, [])
+
+    def test_choose_opponent_top1_can_move_real_top_to_waiting_room_and_undo(self):
+        a = self.make_adapter()
+        self.enter_first_main(a)
+        p1 = a.runtime("p1").app
+        p2 = a.runtime("p2").app
+        p2.gs.deck = ["B-010", "B-011"]
+        p2.gs.green_room = []
+        p1.gs.pending.append({
+            "kind": "choose_player_for_deck_top_action",
+            "text": "自分か相手を選ぶ。",
+            "options": ["self", "opponent"],
+            "action": "top1_optional_green",
+            "k": 1,
+            "source_cn": "A-SRC",
+        })
+        out = a.player_command("p1", "resolve_pending", {"idx": 0, "choice": "opponent"})
+        self.assertTrue(out.get("dual_transaction_committed"))
+        self.assertEqual(p1.gs.pending[0]["kind"], "dual_opponent_top1_to_green_or_keep")
+        self.assertEqual(p1.gs.pending[0]["display_cards"], ["B-010"])
+        out = a.player_command("p1", "resolve_pending", {"idx": 0, "choice": "green"})
+        self.assertTrue(out.get("dual_transaction_committed"))
+        self.assertEqual(p2.gs.deck, ["B-011"])
+        self.assertEqual(p2.gs.green_room, ["B-010"])
+        a.action("UNDO", {})
+        self.assertEqual(p2.gs.deck, ["B-010", "B-011"])
+        self.assertEqual(p2.gs.green_room, [])
+
+    def test_choose_opponent_topk_reorders_real_top_and_moves_rest_to_waiting_room(self):
+        a = self.make_adapter()
+        self.enter_first_main(a)
+        p1 = a.runtime("p1").app
+        p2 = a.runtime("p2").app
+        p2.gs.deck = ["B-010", "B-011", "B-012", "B-013"]
+        p2.gs.green_room = []
+        p1.gs.pending.append({
+            "kind": "choose_player_for_deck_top_action",
+            "text": "自分か相手を選ぶ。",
+            "options": ["self", "opponent"],
+            "action": "topk_reorder_keep_any",
+            "k": 3,
+            "source_cn": "A-SRC",
+        })
+        a.player_command("p1", "resolve_pending", {"idx": 0, "choice": "opponent"})
+        self.assertEqual(p1.gs.pending[0]["kind"], "dual_opponent_topk_reorder_keep_any")
+        self.assertEqual(p1.gs.pending[0]["display_cards"], ["B-010", "B-011", "B-012"])
+        a.player_command("p1", "resolve_pending", {"idx": 0, "choice": "B-012,B-010"})
+        self.assertEqual(p2.gs.deck, ["B-012", "B-010", "B-013"])
+        self.assertEqual(p2.gs.green_room, ["B-011"])
+
+    def test_opponent_optional_discard_creates_real_opponent_hand_choice_and_undo(self):
+        a = self.make_adapter()
+        self.enter_first_main(a)
+        p1 = a.runtime("p1").app
+        p2 = a.runtime("p2").app
+        p2.gs.hand = ["B-010", "B-011"]
+        p1.gs.pending.append({
+            "kind": "opponent_optional_discard_hand_else_self_gain_icons",
+            "text": "相手は手札を1枚控え室に置いてもよい。",
+            "options": ["opponent_discard", "not_discard"],
+            "source_cn": "A-SRC",
+            "source_pos": "C",
+            "discard_n": 1,
+            "icons": "<(ブレード)>",
+        })
+        a.player_command("p1", "resolve_pending", {"idx": 0, "choice": "opponent_discard"})
+        self.assertEqual(p1.gs.pending[0]["kind"], "dual_opponent_discard_from_hand")
+        out = a.player_command("p1", "resolve_pending", {"idx": 0, "choice": "B-011"})
+        self.assertTrue(out.get("dual_transaction_committed"))
+        self.assertEqual(p2.gs.hand, ["B-010"])
+        self.assertEqual(p2.gs.green_room, ["B-011"])
+        a.action("UNDO", {})
+        self.assertEqual(p2.gs.hand, ["B-010", "B-011"])
+        self.assertEqual(p2.gs.green_room, [])
+
+    def test_opponent_live_discard_choice_filters_live_cards(self):
+        a = self.make_adapter()
+        self.enter_first_main(a)
+        p1 = a.runtime("p1").app
+        p2 = a.runtime("p2").app
+        p2.cards_db["B-010"]["card_type"] = "LIVE"
+        p2.cards_db["B-011"]["card_type"] = "MEMBER"
+        p2.gs.hand = ["B-010", "B-011"]
+        p1.gs.pending.append({
+            "kind": "confirm_effect",
+            "text": "A-SRC[登場] 相手がライブカードを控え室に置かなかった場合、ライブ終了時までライブの合計スコアを+1します。置かなかったなら Apply、置いたなら Skip。",
+            "options": ["apply", "skip"],
+            "source_cn": "A-SRC",
+        })
+        a.player_command("p1", "resolve_pending", {"idx": 0, "choice": "skip"})
+        self.assertEqual(p1.gs.pending[0]["kind"], "dual_opponent_discard_from_hand")
+        self.assertEqual(p1.gs.pending[0]["options"], ["B-010"])
+
+    def test_opponent_random_reveal_uses_real_hand_and_draws_only_without_live(self):
+        a = self.make_adapter()
+        self.enter_first_main(a)
+        p1 = a.runtime("p1").app
+        p2 = a.runtime("p2").app
+        p2.cards_db["B-010"]["card_type"] = "MEMBER"
+        p2.gs.hand = ["B-010"]
+        p1.gs.deck = ["A-020", "A-021"]
+        p1.gs.hand = []
+        p1.gs.pending.append({
+            "kind": "confirm_effect",
+            "text": "相手の手札を見ないで1枚公開し、その中にライブカードがない場合カードを1枚引きます。",
+            "options": ["apply", "skip"],
+            "source_cn": "A-SRC",
+        })
+        out = a.player_command("p1", "resolve_pending", {"idx": 0, "choice": "apply"})
+        self.assertTrue(out.get("dual_transaction_committed"))
+        self.assertEqual(p1.gs.hand, ["A-020"])
+        self.assertEqual(p1.gs.pending[0]["kind"], "show_revealed_cards_ack")
+        self.assertEqual(p1.gs.pending[0]["display_cards"], ["B-010"])
+
+    def test_favorite_answer_applies_opponent_draw_and_stage_blade(self):
+        a = self.make_adapter()
+        self.enter_first_main(a)
+        p1 = a.runtime("p1").app
+        p2 = a.runtime("p2").app
+        p2.gs.deck = ["B-010"]
+        p2.gs.hand = []
+        p1.gs.pending.append({"kind": "favorite_icecream_answer", "source_cn": "A-SRC"})
+        a.player_command("p1", "resolve_pending", {"idx": 0, "choice": "あなた"})
+        self.assertEqual(p2.gs.hand, ["B-010"])
+        p1.gs.pending.append({"kind": "favorite_icecream_answer", "source_cn": "A-SRC"})
+        p2.gs.stage["C"] = FakeSlot("B-011", active=True)
+        a.player_command("p1", "resolve_pending", {"idx": 0, "choice": "それ以外"})
+        self.assertEqual(getattr(p2.gs.stage["C"], "temp_blade", 0), 1)
+
+    def test_opponent_front_position_notice_creates_real_position_choice_and_undo(self):
+        a = self.make_adapter()
+        self.enter_first_main(a)
+        p1 = a.runtime("p1").app
+        p2 = a.runtime("p2").app
+        p1.gs.stage["L"] = FakeSlot("A-SRC", active=True)
+        p2.gs.stage["C"] = FakeSlot("B-010", active=True)
+        p2.gs.stage["R"] = None
+        p1.gs.pending.append({
+            "kind": "effect_notice",
+            "text": "相手ステージのメンバー1人をこのメンバーの正面にポジションチェンジします。",
+            "options": ["ok"],
+            "source_cn": "A-SRC",
+        })
+        a.player_command("p1", "resolve_pending", {"idx": 0, "choice": "ok"})
+        self.assertEqual(p1.gs.pending[0]["kind"], "dual_opponent_position_change")
+        self.assertEqual(p1.gs.pending[0]["dest"], "R")
+        a.player_command("p1", "resolve_pending", {"idx": 0, "choice": "C"})
+        self.assertIsNone(p2.gs.stage["C"])
+        self.assertEqual(p2.gs.stage["R"].cardnumber, "B-010")
+        a.action("UNDO", {})
+        self.assertEqual(p2.gs.stage["C"].cardnumber, "B-010")
+        self.assertIsNone(p2.gs.stage["R"])
+
+    def test_both_center_position_notice_creates_opponent_center_choice(self):
+        a = self.make_adapter()
+        self.enter_first_main(a)
+        p1 = a.runtime("p1").app
+        p2 = a.runtime("p2").app
+        p2.gs.stage["C"] = FakeSlot("B-010", active=True)
+        p2.gs.stage["L"] = None
+        p1.gs.pending.append({
+            "kind": "choose_stage_member_to_position_change_source",
+            "text": "自分のセンターにいるメンバーをポジションチェンジします。相手のセンターは手動で処理してください。",
+            "options": ["C"],
+            "source_cn": "A-SRC",
+        })
+        a.player_command("p1", "resolve_pending", {"idx": 0, "choice": "C"})
+        self.assertEqual(p1.gs.pending[0]["kind"], "dual_opponent_position_change")
+        self.assertEqual(p1.gs.pending[0]["src_pos"], "C")
+        a.player_command("p1", "resolve_pending", {"idx": 0, "choice": "L"})
+        self.assertEqual(p2.gs.stage["L"].cardnumber, "B-010")
+        self.assertIsNone(p2.gs.stage["C"])
+
+    def test_opponent_rotate_position_notice_updates_real_opponent_stage(self):
+        a = self.make_adapter()
+        self.enter_first_main(a)
+        p1 = a.runtime("p1").app
+        p2 = a.runtime("p2").app
+        p2.gs.stage["L"] = FakeSlot("B-L", active=True)
+        p2.gs.stage["C"] = FakeSlot("B-C", active=True)
+        p2.gs.stage["R"] = FakeSlot("B-R", active=True)
+        p1.gs.pending.append({
+            "kind": "effect_notice",
+            "text": "自分のステージを C→L、L→R、R→C に移動しました。相手も同じ移動を手動で処理してください。",
+            "options": ["ok"],
+            "source_cn": "A-SRC",
+        })
+        a.player_command("p1", "resolve_pending", {"idx": 0, "choice": "ok"})
+        self.assertEqual(p2.gs.stage["L"].cardnumber, "B-C")
+        self.assertEqual(p2.gs.stage["R"].cardnumber, "B-L")
+        self.assertEqual(p2.gs.stage["C"].cardnumber, "B-R")
+
     def test_legacy_success_placement_aliases_are_filtered(self):
         a = self.make_adapter()
         samples = [
@@ -632,8 +978,8 @@ class LegacyAdapterTransactionTests(unittest.TestCase):
 
     def test_draw_result_remains_as_simultaneous_three_success_safety(self):
         a = self.make_adapter()
-        a.runtime("p1").app.gs.success_zone = ["A-010", "A-011", "A-012"]
-        a.runtime("p2").app.gs.success_zone = ["B-010", "B-011", "B-012"]
+        a.engine.state.players[0].success_zone = ["A-010", "A-011", "A-012"]
+        a.engine.state.players[1].success_zone = ["B-010", "B-011", "B-012"]
         winner, result = a._game_result_after_success_moves()
         self.assertIsNone(winner)
         self.assertEqual(result, "DRAW")

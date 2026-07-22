@@ -1,4 +1,4 @@
-# BUILD_TAG = "ui_asset_bundle_glob_search_20260721a"
+# BUILD_TAG = "decklog_llc_texticon_bundle_paths_20260722a"
 """Install locally supplied Loveca UI assets.
 
 The public GitHub package intentionally excludes downloaded card images.  Small
@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-BUILD_TAG = "ui_asset_bundle_glob_search_20260721a"
+BUILD_TAG = "decklog_llc_texticon_bundle_paths_20260722a"
 
 ASSET_BUNDLE_NAMES = (
     "loveca-ui-assets.zip",
@@ -59,6 +59,38 @@ ALLOWED_ASSET_PATHS = {
     "llocg_db_out_full/card_images/texticons/icon_all.png",
     "llocg_db_out_full/card_images/texticons/icon_any.png",
     "llocg_db_out_full/card_images/texticons/icon_blade.png",
+    "llocg_db_out_full/card_images/texticons/blade_pink.png",
+    "llocg_db_out_full/card_images/texticons/blade_red.png",
+    "llocg_db_out_full/card_images/texticons/blade_yellow.png",
+    "llocg_db_out_full/card_images/texticons/blade_green.png",
+    "llocg_db_out_full/card_images/texticons/blade_blue.png",
+    "llocg_db_out_full/card_images/texticons/blade_purple.png",
+    "llocg_db_out_full/card_images/texticons/blade_all.png",
+    "llocg_db_out_full/card_images/texticons/blade_any.png",
+    "llocg_db_out_full/card_images/texticons/blade_heart01.png",
+    "llocg_db_out_full/card_images/texticons/blade_heart02.png",
+    "llocg_db_out_full/card_images/texticons/blade_heart03.png",
+    "llocg_db_out_full/card_images/texticons/blade_heart04.png",
+    "llocg_db_out_full/card_images/texticons/blade_heart05.png",
+    "llocg_db_out_full/card_images/texticons/blade_heart06.png",
+    "llocg_db_out_full/card_images/texticons/blade_heart01_on.png",
+    "llocg_db_out_full/card_images/texticons/blade_heart02_on.png",
+    "llocg_db_out_full/card_images/texticons/blade_heart03_on.png",
+    "llocg_db_out_full/card_images/texticons/blade_heart04_on.png",
+    "llocg_db_out_full/card_images/texticons/blade_heart05_on.png",
+    "llocg_db_out_full/card_images/texticons/blade_heart06_on.png",
+    "llocg_db_out_full/card_images/texticons/sp_all.png",
+    "llocg_db_out_full/card_images/texticons/sp_all_on.png",
+    "llocg_db_out_full/card_images/texticons/sp_score.png",
+    "llocg_db_out_full/card_images/texticons/sp_score_on.png",
+    "llocg_db_out_full/card_images/texticons/sp_draw.png",
+    "llocg_db_out_full/card_images/texticons/sp_draw_on.png",
+    "llocg_db_out_full/card_images/texticons/b_heart01.png",
+    "llocg_db_out_full/card_images/texticons/b_heart02.png",
+    "llocg_db_out_full/card_images/texticons/b_heart03.png",
+    "llocg_db_out_full/card_images/texticons/b_heart04.png",
+    "llocg_db_out_full/card_images/texticons/b_heart05.png",
+    "llocg_db_out_full/card_images/texticons/b_heart06.png",
 }
 
 
