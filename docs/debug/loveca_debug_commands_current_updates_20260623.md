@@ -2894,3 +2894,48 @@ python3 ./llocg_deckcode_to_decklist.py \
   - `LL-bp2-001 / R2`
   - `PL!-bp5-333 / P+`
   - `PL!SP-pb2-005 / PP`
+
+## 20260723 PL!SP-bp1-005 山札上Liella!カード選択の種類不問化
+
+報告:
+
+- `PL!SP-bp1-005` の登場効果で、山札上5枚から『Liella!』のライブカードを選べない。
+- 効果文は「『Liella!』のカード」指定であり、メンバーカード限定ではない。
+
+原因:
+
+- `topk_filtered_optional_pick` の `filter_kind` が未指定の場合、旧互換キーと同じく `MEMBER` を既定値にしていた。
+- そのため、DB側で `filter_group=Liella!` のみを指定している `PL!SP-bp1-005` もメンバーカード限定として扱われていた。
+
+修正:
+
+- `llocg_ui/effects/topdeck.py`
+  - `BUILD_TAG=topdeck_any_card_group_filter_20260723a`
+  - `topk_filtered_optional_pick` は `filter_kind` 未指定なら種類不問にする。
+  - 旧互換キー `enter_top5_member_optional_pick` / `body_stage_to_green_top5_member_optional` / `body_stage_to_green_top5_live_optional` のみ、従来通りメンバー/ライブ指定を補完する。
+
+内部確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from pathlib import Path
+from llocg_ui.db import load_cards_db
+from llocg_ui.engine import new_game, try_apply_effect_template
+cards=load_cards_db(Path('.'))
+gs,rng=new_game(Path('llocg_db_out_full'),'test',seed=1,debug=True)
+gs._cards_db=cards
+gs.deck=['PL!SP-bp1-020','PL!SP-bp1-006','PL!N-bp4-030','PL!SP-bp5-023','PL!-bp3-020']
+eff='自分のデッキの上からカードを5枚見る。その中から『Liella!』のカードを1枚まで公開して手札に加えてもよい。残りを控え室に置く。'
+assert try_apply_effect_template(gs,rng,cards,eff,{'source_cn':'PL!SP-bp1-005'})
+p=gs.pending[-1]
+assert 'PL!SP-bp5-023' in p.get('options', [])
+assert 'メンバーカード' not in p.get('text', '')
+print('OK PL!SP-bp1-005 can choose Liella! live cards')
+PY
+
+python3 -m py_compile ./llocg_ui/engine.py ./llocg_ui/server.py ./llocg_ui/engine_effect.py ./llocg_ui/effects/*.py
+```
+
+※20260723内部確認: 上記コマンドで、`PL!SP-bp5-023` が選択候補に含まれ、表示文言もメンバーカード限定にならないことを確認済み。

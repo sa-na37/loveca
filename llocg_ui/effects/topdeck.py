@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: topdeck_modal_contract_cleanup_20260629ae
+# BUILD_TAG: topdeck_any_card_group_filter_20260723a
 from __future__ import annotations
 
 """llocg_ui.effects.topdeck
@@ -314,8 +314,15 @@ def try_apply_topdeck_ext(
             k = 5
 
         filter_kind = str(gd.get('filter_kind') or '').strip().upper()
-        if not filter_kind:
-            filter_kind = 'LIVE' if ext_key == 'body_stage_to_green_top5_live_optional' else 'MEMBER'
+        if not filter_kind and ext_key in (
+            'enter_top5_member_optional_pick',
+            'body_stage_to_green_top5_member_optional',
+        ):
+            filter_kind = 'MEMBER'
+        elif not filter_kind and ext_key == 'body_stage_to_green_top5_live_optional':
+            filter_kind = 'LIVE'
+        if filter_kind in ('ANY', 'CARD', 'カード'):
+            filter_kind = ''
 
         filter_group = str(gd.get('filter_group') or '').strip()
         raw_names = str(gd.get('filter_names') or '').strip()
