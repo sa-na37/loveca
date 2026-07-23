@@ -2939,3 +2939,155 @@ python3 -m py_compile ./llocg_ui/engine.py ./llocg_ui/server.py ./llocg_ui/engin
 ```
 
 ※20260723内部確認: 上記コマンドで、`PL!SP-bp5-023` が選択候補に含まれ、表示文言もメンバーカード限定にならないことを確認済み。
+
+## 20260723 「カード」指定の暗黙種類フィルタ監査
+
+確認対象:
+
+- `topk_filtered_optional_pick`
+- engine `_EFFECT_RULES` の `look_top_choose_filtered`
+- 控え室からグループ指定カード回収
+- エール公開カードからの手札追加 / デッキ上・下移動
+
+確認結果:
+
+- 静的登録 `EXTRA_EFFECT_RULES` では、効果文が「のカード」指定なのに `want_kind` / `filter_kind` を持つ登録は0件。
+- engine `_EFFECT_RULES` では、「カード」指定の代表ルートは `card_kind=ANY` または `kind` 未指定から `ANY` へ落ちることを確認。
+- `メンバーカード` / `ライブカード` と明記された文型のみ、`MEMBER` / `LIVE` に絞る構造であることを確認。
+- 再発防止として `docs/notes/loveca_runtime_implementation_rules_20260708.md` に「カード指定はANY扱い」のルールを追記。
+
+内部確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from pathlib import Path
+from llocg_ui.db import load_cards_db
+from llocg_ui.engine import new_game, try_apply_effect_template
+cards=load_cards_db(Path('.'))
+
+def fresh():
+    gs,rng=new_game(Path('llocg_db_out_full'),'test',seed=1,debug=True)
+    gs._cards_db=cards
+    return gs,rng
+
+gs,rng=fresh()
+gs.deck=['PL!SP-bp1-020','PL!SP-bp5-023','PL!N-bp4-030','PL!-bp3-020','PL!SP-bp1-006']
+eff='自分のデッキの上からカードを5枚見る。その中から『Liella!』のカードを1枚まで公開して手札に加えてもよい。残りを控え室に置く。'
+assert try_apply_effect_template(gs,rng,cards,eff,{'source_cn':'audit_topdeck_group_card'})
+p=gs.pending[-1]
+assert 'PL!SP-bp1-020' in p.get('options', []) and 'PL!SP-bp5-023' in p.get('options', [])
+
+gs,rng=fresh()
+gs.green_room=['PL!SP-bp1-020','PL!SP-bp5-023','PL!N-bp4-030']
+eff='自分の控え室から『Liella!』のカードを1枚手札に加える。'
+assert try_apply_effect_template(gs,rng,cards,eff,{'source_cn':'audit_green_group_card'})
+p=gs.pending[-1]
+assert 'PL!SP-bp1-020' in p.get('options', []) and 'PL!SP-bp5-023' in p.get('options', [])
+
+for eff in [
+    'エールにより公開された自分のカードの中から、カードを1枚手札に加える。',
+    'エールで公開された自分のカードの中から、カードを1枚デッキの一番上に置いてもよい。',
+    'エールにより公開された自分のカードの中から、カードを2枚まで手札に加える。',
+    'エールで公開された自分のカードの中から、カードを2枚までデッキの一番下に置く。',
+]:
+    gs,rng=fresh()
+    gs._yell_revealed_this_live=['PL!SP-bp1-020','PL!SP-bp5-023']
+    gs.resolve_zone=['PL!SP-bp1-020','PL!SP-bp5-023']
+    assert try_apply_effect_template(gs,rng,cards,eff,{'source_cn':'audit_yell_any'})
+    p=gs.pending[-1]
+    assert 'PL!SP-bp1-020' in p.get('options', []) and 'PL!SP-bp5-023' in p.get('options', [])
+    assert p.get('card_kind', 'ANY') == 'ANY'
+print('OK generic card wording keeps MEMBER and LIVE candidates')
+PY
+```
+
+※20260723内部確認: 山札上・控え室・エール公開の「カード」指定代表ルートで、メンバーとライブの両方が候補に残ることを確認。同型の暗黙MEMBER/LIVE化は追加検出なし。
+
+## 20260723 手動シミュレータ開始時マリガン不可 / 公開ウィンドウ不安定
+
+確認結果:
+
+- `_force_mulligan_start()` の本体が誤って undo 復元処理側へ入り込んでおり、通常起動時にマリガン開始へ戻せていなかった。
+- その影響で、手動シミュレータ開始直後に turn 1 / MAIN へ進んだ状態が残り、マリガン選択ボタンが使えない状態になっていた。
+- 公開ウィンドウでは、サーバ側 `APP_VERSION` と HTML 内 `CLIENT_UI_VERSION` が不一致になっており、公開画面だけ自動リロードを繰り返す可能性があった。
+- 公開用 state 生成自体は軽量で、手札・山札は中身を伏せ、枚数だけ返す状態を維持している。
+
+修正:
+
+- `_force_mulligan_start()` にマリガン復帰処理を戻し、undo 側に入り込んだ誤配置を解消。
+- HTML 内の公開ウィンドウ用クライアントバージョンを `APP_VERSION` から自動注入する形へ変更。
+- 公開ウィンドウの自動更新間隔を 250ms から 500ms へ変更し、公開窓を開いた状態の負荷を軽減。
+
+内部確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./llocg_ui/server.py ./llocg_ui/engine.py ./llocg_ui/effects/*.py
+
+python3 - <<'PY'
+from llocg_ui.server import APP_VERSION, HTML
+print('APP_VERSION', APP_VERSION)
+print('version_in_html', APP_VERSION in HTML)
+print('placeholder_left', '__LOVECA_APP_VERSION__' in HTML)
+assert APP_VERSION in HTML
+assert '__LOVECA_APP_VERSION__' not in HTML
+PY
+
+python3 - <<'PY'
+import os
+from pathlib import Path
+from llocg_ui.server import App
+from llocg_ui.views import make_view_state
+hand='PL!SP-bp1-020,PL!SP-bp1-006,PL!N-bp4-030,PL!SP-bp5-023,PL!-bp3-020,PL!S-bp2-024'
+deck=','.join(['PL!SP-bp1-020','PL!SP-bp1-006','PL!N-bp4-030','PL!SP-bp5-023','PL!-bp3-020','PL!S-bp2-024']*9)
+old=os.environ.copy()
+os.environ.update({
+ 'LLOCG_START_HAND': hand,
+ 'LLOCG_START_HAND_SIZE':'0',
+ 'LLOCG_START_DECK_EXACT': deck,
+ 'LLOCG_START_DECK_EXACT_STRICT':'1',
+ 'LLOCG_START_SHUFFLE':'0',
+ 'LLOCG_APP_NORMAL_MATCH_SETUP':'1',
+ 'LLOCG_APP_MULLIGAN_REQUIRED':'1',
+})
+for k in ['LLOCG_START_PHASE','LLOCG_START_TURN','LLOCG_DEBUG_PRESET']:
+ os.environ.pop(k,None)
+try:
+ app=App(Path('.'), code='test', deck_code='llocg_db_out_full/decklists/deck_24a4efd236092325fdd1.tsv', seed=1, debug=False)
+ st=app.state_json()
+ pub=make_view_state(st, 'public')
+ assert st.get('phase') == 'MULLIGAN'
+ assert len(st.get('hand',[])) == 6
+ assert pub.get('hand_count') == 6 and pub.get('deck_count') == 54
+ assert pub.get('hand') == [] and pub.get('deck') == []
+ app._cmd_mulligan_next([0,1])
+ st2=app.state_json()
+ assert st2.get('phase') == 'MAIN'
+ assert len(st2.get('hand',[])) == 7
+ print('OK mulligan start and public redaction')
+finally:
+ os.environ.clear(); os.environ.update(old)
+PY
+```
+
+HTTP確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+env LLOCG_START_HAND=PL!SP-bp1-020,PL!SP-bp1-006,PL!N-bp4-030,PL!SP-bp5-023,PL!-bp3-020,PL!S-bp2-024 \
+  LLOCG_START_HAND_SIZE=0 \
+  LLOCG_START_SHUFFLE=0 \
+  LLOCG_APP_NORMAL_MATCH_SETUP=1 \
+  LLOCG_APP_MULLIGAN_REQUIRED=1 \
+  python3 ./run_llocg_ui_web.py --host 127.0.0.1 --port 8899
+
+curl -i http://127.0.0.1:8899/public
+curl -i 'http://127.0.0.1:8899/state?view=public'
+curl -i http://127.0.0.1:8899/state
+```
+
+※20260723内部確認: `/public`、`/state?view=public`、`/state` が HTTP 200 で応答することを確認。公開 state は hand/deck の中身を返さず、`hand_count` / `deck_count` を返す。

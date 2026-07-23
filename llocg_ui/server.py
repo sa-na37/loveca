@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: yell_no_bh_dual_menu_refresh_undo_20260722a
+# BUILD_TAG: mulligan_public_window_stability_20260723a
 from __future__ import annotations
 
 """llocg_ui.server
@@ -71,7 +71,7 @@ from .engine import (
     _rule_refresh_main_deck,
 )
 
-APP_VERSION = "match_record_reset_buttons_20260722a"
+APP_VERSION = "mulligan_public_window_stability_20260723a"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -1247,37 +1247,6 @@ class App:
         except Exception:
             pass
 
-    def _push_undo_with_app_state(self) -> None:
-        push_undo(self.gs, self.rng)
-        try:
-            if self.gs.undo_stack:
-                self.gs.undo_stack[-1]["app_state"] = {
-                    "refresh_notice_ack_seq": int(getattr(self, "_refresh_notice_ack_seq", 0) or 0),
-                }
-        except Exception:
-            pass
-
-    def _do_undo_with_app_state(self) -> None:
-        app_state: Dict[str, Any] = {}
-        try:
-            if self.gs.undo_stack:
-                app_state = dict(self.gs.undo_stack[-1].get("app_state") or {})
-        except Exception:
-            app_state = {}
-        do_undo(self.gs, self.rng)
-        if "refresh_notice_ack_seq" in app_state:
-            try:
-                self._refresh_notice_ack_seq = int(app_state.get("refresh_notice_ack_seq", 0) or 0)
-                return
-            except Exception:
-                pass
-        try:
-            cur_seq = int(getattr(self.gs, "refresh_notice_seq", 0) or 0)
-            cur_ack = int(getattr(self, "_refresh_notice_ack_seq", 0) or 0)
-            self._refresh_notice_ack_seq = max(0, min(cur_ack, cur_seq))
-        except Exception:
-            pass
-
         # Return any existing hand to deck, then shuffle and draw 6
         try:
             deck = list(getattr(gs, 'deck', []) or [])
@@ -1327,6 +1296,37 @@ class App:
 
         try:
             gs.log.append('[PHASE] MULLIGAN (choose cards to redraw)')
+        except Exception:
+            pass
+
+    def _push_undo_with_app_state(self) -> None:
+        push_undo(self.gs, self.rng)
+        try:
+            if self.gs.undo_stack:
+                self.gs.undo_stack[-1]["app_state"] = {
+                    "refresh_notice_ack_seq": int(getattr(self, "_refresh_notice_ack_seq", 0) or 0),
+                }
+        except Exception:
+            pass
+
+    def _do_undo_with_app_state(self) -> None:
+        app_state: Dict[str, Any] = {}
+        try:
+            if self.gs.undo_stack:
+                app_state = dict(self.gs.undo_stack[-1].get("app_state") or {})
+        except Exception:
+            app_state = {}
+        do_undo(self.gs, self.rng)
+        if "refresh_notice_ack_seq" in app_state:
+            try:
+                self._refresh_notice_ack_seq = int(app_state.get("refresh_notice_ack_seq", 0) or 0)
+                return
+            except Exception:
+                pass
+        try:
+            cur_seq = int(getattr(self.gs, "refresh_notice_seq", 0) or 0)
+            cur_ack = int(getattr(self, "_refresh_notice_ack_seq", 0) or 0)
+            self._refresh_notice_ack_seq = max(0, min(cur_ack, cur_seq))
         except Exception:
             pass
 
@@ -3763,7 +3763,7 @@ HTML = r'''<!doctype html>
   // running stale JS.  Compare the state ui_version and reload once when the
   // server-side bundle changes, so public refresh notices use the current modal
   // layout and owner-OK synchronization.
-  const CLIENT_UI_VERSION = 'broad_ui_layout_resize_popup_cards_20260721a';
+  const CLIENT_UI_VERSION = '__LOVECA_APP_VERSION__';
   let clientReloadingForVersion = false;
   const urlParams = new URLSearchParams(window.location.search || '');
   const VIEW_MODE = String(urlParams.get('view') || (window.location.pathname === '/public' ? 'public' : 'private')).toLowerCase();
@@ -9816,7 +9816,7 @@ inner.appendChild(card);
   // Public window is read-only and must follow the owner window automatically.
   // The owner/private window still updates immediately after each /cmd response.
   if(IS_PUBLIC_VIEW){
-    setInterval(()=>{ refreshStateFromServer({force:false}); }, 250);
+    setInterval(()=>{ refreshStateFromServer({force:false}); }, 500);
     window.addEventListener('storage', (ev)=>{
       if(ev && ev.key === 'llocg_public_refresh_ping'){
         refreshStateFromServer({force:true});
@@ -9827,3 +9827,5 @@ inner.appendChild(card);
 </script>
 </body>
 </html>'''
+
+HTML = HTML.replace('__LOVECA_APP_VERSION__', APP_VERSION)
