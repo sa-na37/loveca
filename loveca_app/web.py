@@ -1,4 +1,4 @@
-# BUILD_TAG = "dual_launch_menu_yell_undo_20260722a"
+# BUILD_TAG = "launcher_progress_remote_nickname_fast_probe_20260723a"
 """Loveca local web UI and HTTP routing."""
 from __future__ import annotations
 
@@ -139,6 +139,24 @@ pre {
   overflow: auto;
 }
 .status { margin-top: 12px; color: var(--muted); font-size:15px; line-height:1.45; }
+.launch-progress {
+  position: fixed;
+  right: 22px;
+  bottom: 18px;
+  z-index: 40000;
+  display: none;
+  width: min(420px, calc(100vw - 44px));
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(18, 22, 30, .96);
+  box-shadow: 0 18px 60px rgba(0,0,0,.45);
+}
+.launch-progress.open { display: block; }
+.launch-progress-title { display:flex; justify-content:space-between; gap:12px; font-weight:800; }
+.launch-progress-message { color:var(--muted); font-size:13px; margin-top:6px; min-height:1.35em; }
+.launch-progress-track { height:9px; border-radius:999px; background:#0d1015; overflow:hidden; margin-top:9px; border:1px solid var(--line); }
+.launch-progress-fill { width:0%; height:100%; background:linear-gradient(90deg, var(--accent), #8cc7ff); transition:width .18s ease; }
 .ok { color: var(--ok); }
 .bad { color: var(--bad); }
 .warn { color: var(--warn); }
@@ -427,6 +445,11 @@ def page(title: str, body: str) -> bytes:
 </header>
 <main>{body}</main>
 </div>
+<div id="lovecaLaunchProgress" class="launch-progress" aria-live="polite">
+  <div class="launch-progress-title"><span id="lovecaLaunchStage">起動準備</span><span id="lovecaLaunchPercent">0%</span></div>
+  <div class="launch-progress-message" id="lovecaLaunchMessage">準備しています。</div>
+  <div class="launch-progress-track"><div class="launch-progress-fill" id="lovecaLaunchFill"></div></div>
+</div>
 <div id="quickSettingsOverlay" class="quick-settings-overlay" hidden onclick="if(event.target===this)closeQuickSettings()">
   <section class="quick-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="quickSettingsTitle">
     <h2 id="quickSettingsTitle">簡易設定</h2>
@@ -538,6 +561,26 @@ async function saveQuickSettings() {{
 }}
 function openQuickSettings(){{ quickSettingsOverlay.hidden=false; }}
 function closeQuickSettings(){{ quickSettingsOverlay.hidden=true; }}
+function showLaunchProgress(stage='起動準備', percent=5, message='準備しています。') {{
+  const root=document.getElementById('lovecaLaunchProgress');
+  if(!root) return;
+  const p=Math.max(0,Math.min(100,Number(percent)||0));
+  root.classList.add('open');
+  const stageEl=document.getElementById('lovecaLaunchStage'); if(stageEl) stageEl.textContent=stage;
+  const percentEl=document.getElementById('lovecaLaunchPercent'); if(percentEl) percentEl.textContent=String(Math.round(p))+'%';
+  const msgEl=document.getElementById('lovecaLaunchMessage'); if(msgEl) msgEl.textContent=message;
+  const fill=document.getElementById('lovecaLaunchFill'); if(fill) fill.style.width=p+'%';
+}}
+function hideLaunchProgress(delay=900) {{
+  setTimeout(()=>{{ const root=document.getElementById('lovecaLaunchProgress'); if(root) root.classList.remove('open'); }}, delay);
+}}
+function updateLaunchProgressFromState(state, fallback='シミュレータを起動しています。') {{
+  const status=String((state&&state.status)||'');
+  const stage=String((state&&state.stage)|| (status==='ready'?'起動完了':'起動確認'));
+  const progress=Number((state&&state.progress_percent)||0) || (status==='ready'?100:35);
+  const message=String((state&&state.message)||fallback);
+  showLaunchProgress(stage, progress, message);
+}}
 document.addEventListener("change",event=>{{ if(event.target && (event.target.id==="quick_ui_scale" || event.target.id==="quick_control_size")) saveQuickSettings(); }});
 document.addEventListener("keydown",event=>{{ if(event.key==="Escape") closeQuickSettings(); }});
 function enhanceNumberInputs(root=document) {{
@@ -1227,13 +1270,14 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/settings/save":
             form = self.read_form()
             try:
-                player = safe_player_id(form.get("player_id", ""))
+                player = safe_player_nickname(form.get("player_id", ""))
                 key_length = int(form.get("remote_key_length", "4"))
                 if key_length < 3 or key_length > 5:
                     raise ValueError("キー長は3〜5桁で指定してください。")
                 auto_update = form.get("auto_update_on_startup", "") == "1"
                 self.app.save_settings({
                     "player_id": player,
+                    "player_nickname": player,
                     "remote_key_length": key_length,
                     "auto_update_on_startup": auto_update,
                 })
@@ -1399,7 +1443,7 @@ async function shutdownLovecaApp() {{
         active_deck = html.escape(str(settings.get("active_deck") or "未選択"))
         body = """
 <div class="grid menu-grid">
-<section class="card"><h2>手動シミュレータ</h2><p>起動時に使用デッキを選択します。</p><a class="button" href="/manual">デッキを選んで起動</a></section>
+<section class="card"><h2>手動シミュレータ</h2><p>起動時に使用デッキを選択します。</p><a class="button" href="/manual" onclick="showLaunchProgress('デッキ一覧を読み込み中', 18, 'デッキ構成を確認しています。')">デッキを選んで起動</a></section>
 <section class="card"><h2>リモート対戦</h2><p>対戦コードを発行し、シミュレータ本体とパブリック画面を起動します。</p><a class="button" href="/remote">開く</a></section>
 <section class="card"><h2>2デッキ対戦</h2><p>2つのデッキを一人で交互に操作して対戦を進めます。</p><a class="button" href="/dual">開く</a></section>
 <section class="card"><h2>デッキ管理</h2><p>デッキの作成、読込、編集、整理を行います。</p><a class="button" href="/decks">開く</a></section>
@@ -1518,6 +1562,7 @@ async function startDual() {{
   const deck2=document.getElementById('dualDeck2').value;
   if(!deck1||!deck2) {{ box.className='status bad'; box.textContent='デッキを2つ選択してください。'; return; }}
   box.className='status'; box.textContent='2デッキシミュレータを起動しています...';
+  showLaunchProgress('2デッキ起動準備', 12, 'デッキを確認しています。');
   const body=new URLSearchParams({{deck1_path:deck1,deck2_path:deck2}});
   try {{
     const res=await fetch('/api/dual/start',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},body}});
@@ -1526,7 +1571,8 @@ async function startDual() {{
     for(let i=0;i<80;i++) {{
       const r=await fetch('/api/dual/window-status',{{cache:'no-store'}});
       const state=await r.json();
-      if(state.running && state.url) {{ markLovecaInternalNavigation(); location.replace('/dual/simulator'); return; }}
+      updateLaunchProgressFromState(state, '2デッキシミュレータを起動しています。');
+      if(state.running && state.url) {{ showLaunchProgress('起動完了', 100, '対戦画面へ移動します。'); markLovecaInternalNavigation(); location.replace('/dual/simulator'); return; }}
       if(state.status==='failed'||state.status==='timeout'||state.status==='stopped') {{
         box.className='status bad'; box.textContent=state.message||'起動できませんでした。'; return;
       }}
@@ -1651,6 +1697,7 @@ async function waitForWindows(privatePopup, publicPopup, box) {{
 async function startManual(deckPath) {{
   const box=document.getElementById('manualStatus');
   box.textContent='起動中...';
+  showLaunchProgress('シミュレータ起動準備', 10, 'デッキを確認しています。');
   const body=new URLSearchParams({{deck_path:deckPath}});
   try {{
     const res=await fetch('/api/manual/start',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},body}});
@@ -1659,7 +1706,9 @@ async function startManual(deckPath) {{
     for(let i=0;i<140;i++) {{
       const statusRes=await fetch('/api/manual/window-status',{{cache:'no-store'}});
       const state=await statusRes.json();
+      updateLaunchProgressFromState(state, 'シミュレータを起動しています。');
       if(state.status==='ready' && state.private_url) {{
+        showLaunchProgress('起動完了', 100, 'シミュレータ画面へ移動します。');
         markLovecaInternalNavigation();
         location.replace('/simulator');
         return;
@@ -1682,7 +1731,7 @@ async function startManual(deckPath) {{
 
     def remote_body(self) -> str:
         settings = self.app.load_settings()
-        player_id = html.escape(str(settings.get("player_id") or ""))
+        player_id = html.escape(str(settings.get("player_nickname") or settings.get("player_id") or ""))
         key_length = int(settings.get("remote_key_length") or 4)
         options = "".join(
             '<option value="{}" {}>{}桁</option>'.format(
@@ -1720,7 +1769,7 @@ async function startManual(deckPath) {{
             '<option value="{}">{} / {} / {}</option>'.format(
                 html.escape(str(item.get("saved_to") or ""), quote=True),
                 html.escape(str(item.get("date") or "")),
-                html.escape(str(item.get("player_id") or "")),
+                html.escape(str(item.get("player_nickname") or item.get("player_id") or "")),
                 html.escape(str(item.get("short_key") or "")),
             )
             for item in remote_sessions
@@ -1730,7 +1779,7 @@ async function startManual(deckPath) {{
         session_rows = "".join(
             '<tr><td>{}</td><td>{}</td><td>{}</td><td><a class="button secondary" href="/api/remote/session?path={}">JSONを開く</a></td></tr>'.format(
                 html.escape(str(item.get("date") or "")),
-                html.escape(str(item.get("player_id") or "")),
+                html.escape(str(item.get("player_nickname") or item.get("player_id") or "")),
                 html.escape(str(item.get("short_key") or "")),
                 quote(str(item.get("saved_to") or "")),
             )
@@ -1748,8 +1797,8 @@ async function startManual(deckPath) {{
   <select id="deck_path" name="deck_path" required>{}</select>
   <div class="row">
     <div>
-      <label for="player_id">プレイヤー識別子</label>
-      <input id="player_id" name="player_id" maxlength="24" required placeholder="TAKESHI" value="{}">
+      <label for="player_id">ニックネーム（アルファベット）</label>
+      <input id="player_id" name="player_id" maxlength="24" required placeholder="TAKESHI" value="{}" pattern="[A-Za-z0-9_-]+">
     </div>
     <div>
       <label for="key_length">自動生成するキー長</label>
@@ -1765,7 +1814,7 @@ async function startManual(deckPath) {{
 </section>
 <section class="panel">
 <h2>リモート対戦ログ同一性確認</h2>
-<p>相手から受け取ったセッションJSONとローカル記録を照合します。対戦日・共有キー・共有照合IDが一致し、プレイヤー識別子が異なる場合のみ同一対戦として承認します。</p>
+<p>相手から受け取ったセッションJSONとローカル記録を照合します。対戦日・共有キー・共有照合IDが一致し、ニックネームが異なる場合のみ同一対戦として承認します。</p>
 <table><thead><tr><th>日付</th><th>プレイヤー</th><th>共有キー</th><th>共有用記録</th></tr></thead><tbody>{}</tbody></table>
 <form method="post" action="/remote/verify" style="margin-top:18px">
 <label for="local_session">ローカル側セッション記録</label>
@@ -1791,6 +1840,7 @@ async function startRemote(event) {{
     return false;
   }}
   box.className='status'; box.textContent='コード発行・起動中...';
+  showLaunchProgress('リモート対戦起動準備', 10, '対戦キーとデッキを確認しています。');
   try {{
     const form=new FormData(document.getElementById('remoteStartForm'));
     const body=new URLSearchParams(form);
@@ -1801,10 +1851,12 @@ async function startRemote(event) {{
     for(let i=0;i<140;i++) {{
       const statusRes=await fetch('/api/manual/window-status',{{cache:'no-store'}});
       const state=await statusRes.json();
+      updateLaunchProgressFromState(state, 'シミュレータとパブリック画面を起動しています。');
       if(state.public_url && !publicPopup.closed) publicPopup.location.replace(state.public_url);
       if(state.status==='ready') {{
         box.className='status ok';
         box.textContent='シミュレータとパブリック画面を開きました。';
+        showLaunchProgress('起動完了', 100, 'シミュレータ画面へ移動します。');
         markLovecaInternalNavigation();
         location.replace('/simulator');
         return false;
@@ -2216,6 +2268,7 @@ applyDeckListView();
 async function startDeck(deckPath) {{
   const box=document.getElementById('deckListStatus');
   box.textContent='シミュレータを起動しています...';
+  showLaunchProgress('シミュレータ起動準備', 10, 'デッキを確認しています。');
   const body=new URLSearchParams({{deck_path:deckPath}});
   try {{
     const res=await fetch('/api/manual/start',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},body}});
@@ -2224,7 +2277,8 @@ async function startDeck(deckPath) {{
     for(let i=0;i<140;i++) {{
       const r=await fetch('/api/manual/window-status',{{cache:'no-store'}});
       const state=await r.json();
-      if(state.status==='ready' && state.private_url) {{ markLovecaInternalNavigation(); location.replace('/simulator'); return; }}
+      updateLaunchProgressFromState(state, 'シミュレータを起動しています。');
+      if(state.status==='ready' && state.private_url) {{ showLaunchProgress('起動完了', 100, 'シミュレータ画面へ移動します。'); markLovecaInternalNavigation(); location.replace('/simulator'); return; }}
       if(state.status==='failed'||state.status==='timeout') {{
         box.className='status bad'; box.textContent=state.message; return;
       }}
@@ -2355,13 +2409,15 @@ function closeCard() {{ document.getElementById('cardModalBackdrop').classList.r
 async function startDeckGame(deckPath) {{
   const box=document.getElementById('deckStartStatus');
   box.textContent='シミュレータを起動しています...';
+  showLaunchProgress('シミュレータ起動準備', 10, 'デッキを確認しています。');
   const body=new URLSearchParams({{deck_path:deckPath}});
   try {{
     const res=await fetch('/api/manual/start',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},body}}); const data=await res.json();
     if(!data.ok) {{ box.className='status bad'; box.textContent=data.message; return; }}
     for(let i=0;i<140;i++) {{
       const r=await fetch('/api/manual/window-status',{{cache:'no-store'}}); const state=await r.json();
-      if(state.status==='ready' && state.private_url) {{ markLovecaInternalNavigation(); location.replace('/simulator'); return; }}
+      updateLaunchProgressFromState(state, 'シミュレータを起動しています。');
+      if(state.status==='ready' && state.private_url) {{ showLaunchProgress('起動完了', 100, 'シミュレータ画面へ移動します。'); markLovecaInternalNavigation(); location.replace('/simulator'); return; }}
       if(state.status==='failed'||state.status==='timeout') {{ box.className='status bad'; box.textContent=state.message; return; }}
       await new Promise(resolve=>setTimeout(resolve,350));
     }}
@@ -4293,7 +4349,7 @@ poll();
 
     def settings_body(self) -> str:
         settings = self.app.load_settings()
-        player = html.escape(str(settings.get("player_id") or ""))
+        player = html.escape(str(settings.get("player_nickname") or settings.get("player_id") or ""))
         key_length = int(settings.get("remote_key_length") or 4)
         auto_update_checked = "checked" if bool(settings.get("auto_update_on_startup", True)) else ""
         options = "".join(
@@ -4304,8 +4360,8 @@ poll();
 <section class="panel">
 <h2>設定</h2>
 <form method="post" action="/settings/save">
-<label for="player_id">プレイヤー識別子</label>
-<input id="player_id" name="player_id" maxlength="24" value="{player}" required>
+<label for="player_id">リモート対戦ニックネーム（アルファベット）</label>
+<input id="player_id" name="player_id" maxlength="24" value="{player}" required pattern="[A-Za-z0-9_-]+">
 <label for="remote_key_length">リモート対戦キー長</label>
 <select id="remote_key_length" name="remote_key_length">{options}</select>
 <label><input type="checkbox" name="auto_update_on_startup" value="1" {auto_update_checked} style="width:auto;margin-right:8px">起動時にカードデータ更新を確認する</label>

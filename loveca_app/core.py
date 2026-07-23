@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# BUILD_TAG = "dual_launch_menu_yell_undo_20260722a"
+# BUILD_TAG = "launcher_progress_remote_nickname_fast_probe_20260723a"
 """
 Loveca application launcher (phase 1).
 
@@ -49,7 +49,7 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 
 
-BUILD_TAG = "dual_launch_menu_yell_undo_20260722a"
+BUILD_TAG = "launcher_progress_remote_nickname_fast_probe_20260723a"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8875
 SESSION_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -124,6 +124,12 @@ def canonical_json(value: Any) -> str:
 
 def safe_player_id(raw: str) -> str:
     filtered = "".join(ch for ch in raw.strip() if ch.isalnum() or ch in "-_")
+    return filtered[:24] or "PLAYER"
+
+
+def safe_player_nickname(raw: str) -> str:
+    text = unicodedata.normalize("NFKC", str(raw or "")).strip()
+    filtered = "".join(ch for ch in text if ch.isascii() and (ch.isalnum() or ch in "-_"))
     return filtered[:24] or "PLAYER"
 
 
@@ -318,7 +324,7 @@ class AppState:
     }
 
     def __init__(self, root: Path) -> None:
-        self.root = root
+        self.root = Path(root).resolve()
         self.lock = threading.RLock()
         self.update_job = JobState()
         self.update_process: subprocess.Popen[str] | None = None
@@ -338,6 +344,8 @@ class AppState:
             "remote_key": "",
             "remote_label": "",
             "output": [],
+            "progress_percent": 0,
+            "stage": "",
         }
         self.dual_process: subprocess.Popen[str] | None = None
         self.dual_launch_state: dict[str, Any] = {
@@ -353,6 +361,8 @@ class AppState:
             "simulator_host": "",
             "simulator_port": None,
             "output": [],
+            "progress_percent": 0,
+            "stage": "",
         }
         self._card_index_cache: dict[str, dict[str, Any]] | None = None
         self._image_index_cache: dict[str, Path] | None = None
@@ -362,6 +372,7 @@ class AppState:
         self._variants_by_card_cache: dict[str, list[dict[str, Any]]] | None = None
         self._variant_path_cache: dict[str, Path] | None = None
         self._product_catalog_cache: dict[str, str] | None = None
+        threading.Thread(target=self._warm_startup_caches, daemon=True).start()
 
     def path(self, relative: str) -> Path:
         return self.root / relative
@@ -376,11 +387,22 @@ class AppState:
         self._variant_path_cache = None
         self._product_catalog_cache = None
 
+    def _warm_startup_caches(self) -> None:
+        """Warm card/deck metadata in the background after the launcher opens."""
+        try:
+            started = time.perf_counter()
+            self.load_card_index()
+            elapsed = time.perf_counter() - started
+            print(f"[APP-CACHE] card index warmed in {elapsed:.2f}s", flush=True)
+        except Exception as exc:
+            print(f"[APP-CACHE][WARN] warmup failed: {type(exc).__name__}: {exc}", flush=True)
+
     def load_settings(self) -> dict[str, Any]:
         path = self.path(SETTINGS_PATH)
         defaults: dict[str, Any] = {
             "schema_version": 1,
             "player_id": "",
+            "player_nickname": "",
             "remote_key_length": 4,
             "active_deck": "",
             "ui_scale_percent": 100,
@@ -2074,9 +2096,14 @@ class AppState:
         other_count = 0
         for row in rows:
             count = int(row["count"])
-            card_type = self.searchable_card(
-                row["card_no"], self.card_record(row["card_no"])
-            )["card_type"].casefold()
+            record = self.card_record(row["card_no"])
+            card_type = str(
+                record.get("card_type_norm")
+                or record.get("card_type")
+                or record.get("card_type_raw")
+                or record.get("type")
+                or ""
+            ).casefold()
             if "メンバー" in card_type or "member" in card_type:
                 member_count += count
             elif "ライブ" in card_type or "live" in card_type:
@@ -2793,9 +2820,8 @@ class AppState:
     def _detect_simulator_windows(self, remote: bool) -> None:
         with self.lock:
             configured_port = self.manual_launch_state.get("simulator_port")
-        known_ports = {8000, 8080, 8766, 5000, 7860, 3000}
-        if isinstance(configured_port, int) and configured_port > 0:
-            known_ports.add(configured_port)
+        configured_port_i = int(configured_port or 0) if isinstance(configured_port, int) else 0
+        known_ports = {configured_port_i} if configured_port_i > 0 else {8000, 8080, 8766, 5000, 7860, 3000}
         private_paths = ("/", "/game", "/play", "/index.html")
         public_paths = ("/public", "/public/", "/?view=public", "/?public=1", "/public.html")
         deadline = time.monotonic() + 45.0
@@ -2832,9 +2858,12 @@ class AppState:
             with self.lock:
                 private_url = str(self.manual_launch_state.get("private_url") or "")
                 public_url = str(self.manual_launch_state.get("public_url") or "")
+                self.manual_launch_state["stage"] = "待受確認"
+                self.manual_launch_state["progress_percent"] = max(35, int(self.manual_launch_state.get("progress_percent") or 0))
 
             ports = set(known_ports)
-            ports.update(self._manual_listening_ports())
+            if configured_port_i <= 0:
+                ports.update(self._manual_listening_ports())
             for url in (private_url, public_url):
                 match = re.search(r":(\d+)", url)
                 if match:
@@ -2890,6 +2919,8 @@ class AppState:
                 self.manual_launch_state["private_url"] = private_url
                 self.manual_launch_state["public_url"] = public_url
                 if private_url and (not remote or public_url):
+                    self.manual_launch_state["stage"] = "起動完了"
+                    self.manual_launch_state["progress_percent"] = 100
                     self.manual_launch_state["status"] = "ready"
                     self.manual_launch_state["message"] = "表示先を検出しました。"
                     return
@@ -2914,9 +2945,24 @@ class AppState:
             state = dict(self.manual_launch_state)
             running = bool(process and process.poll() is None)
             state["running"] = running
+            if running and state.get("status") == "starting":
+                try:
+                    started = datetime.fromisoformat(str(state.get("started_at") or ""))
+                    elapsed = max(0.0, (datetime.now().astimezone() - started).total_seconds())
+                except Exception:
+                    elapsed = 0.0
+                progress = int(state.get("progress_percent") or 0)
+                if state.get("public_url") and state.get("private_url"):
+                    progress = max(progress, 55)
+                else:
+                    progress = max(progress, min(90, 25 + int(elapsed * 4)))
+                state["progress_percent"] = min(95, progress)
+                state["stage"] = str(state.get("stage") or "起動確認")
             if not running and state.get("status") in ("starting", "ready"):
                 state["status"] = "stopped"
                 state["message"] = "シミュレータは終了しています。"
+                self.manual_launch_state.update(state)
+            elif running:
                 self.manual_launch_state.update(state)
             return state
 
@@ -2926,9 +2972,19 @@ class AppState:
             state = dict(self.dual_launch_state)
             running = bool(process and process.poll() is None)
             state["running"] = running
+            if running and state.get("status") == "starting":
+                try:
+                    started = datetime.fromisoformat(str(state.get("started_at") or ""))
+                    elapsed = max(0.0, (datetime.now().astimezone() - started).total_seconds())
+                except Exception:
+                    elapsed = 0.0
+                state["progress_percent"] = max(int(state.get("progress_percent") or 0), min(95, 25 + int(elapsed * 5)))
+                state["stage"] = str(state.get("stage") or "起動確認")
             if not running and state.get("status") in ("starting", "ready"):
                 state["status"] = "stopped"
                 state["message"] = "2デッキシミュレータは終了しています。"
+                self.dual_launch_state.update(state)
+            elif running:
                 self.dual_launch_state.update(state)
             return state
 
@@ -3203,6 +3259,8 @@ class AppState:
                     "simulator_host": simulator_host,
                     "simulator_port": simulator_port,
                     "output": [],
+                    "progress_percent": 100,
+                    "stage": "起動完了",
                 }
                 threading.Thread(target=self._read_dual_output, args=(self.dual_process,), daemon=True).start()
             except Exception as exc:
@@ -3319,6 +3377,7 @@ class AppState:
                     simulator_host,
                     simulator_port,
                 )
+                simulator_public_url = simulator_base_url.rstrip("/") + "/public"
 
                 # run_llocg_ui_web.py accepts explicit host/port arguments.
                 # The launcher itself uses 8765, so using the simulator default
@@ -3345,7 +3404,7 @@ class AppState:
                 self.manual_launch_state = {
                     "status": "starting",
                     "private_url": simulator_base_url,
-                    "public_url": "",
+                    "public_url": simulator_public_url if remote_session is not None else "",
                     "remote": remote_session is not None,
                     "message": "シミュレータの待受開始を確認しています。 port={}".format(
                         simulator_port
@@ -3359,6 +3418,8 @@ class AppState:
                     "remote_key": str((remote_session or {}).get("short_key") or ""),
                     "remote_label": str((remote_session or {}).get("session_label") or ""),
                     "output": [],
+                    "progress_percent": 25,
+                    "stage": "起動準備",
                 }
                 threading.Thread(target=self._read_manual_output, args=(self.manual_process,), daemon=True).start()
                 threading.Thread(target=self._detect_simulator_windows, args=(remote_session is not None,), daemon=True).start()
@@ -3491,7 +3552,7 @@ class AppState:
         key_length: int,
         short_key: str | None = None,
     ) -> dict[str, Any]:
-        player = safe_player_id(player_id)
+        player = safe_player_nickname(player_id)
         key = (short_key or "").strip().upper()
         if key:
             if len(key) < 3 or len(key) > 5 or any(ch not in SESSION_ALPHABET for ch in key):
@@ -3517,6 +3578,7 @@ class AppState:
         folder.mkdir(parents=True, exist_ok=True)
         target = folder / f"{record['session_label']}.json"
         target.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+        self.save_settings({"player_id": player, "player_nickname": player, "remote_key_length": int(key_length)})
         record["saved_to"] = str(target.relative_to(self.root))
         return record
 

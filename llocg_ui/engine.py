@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: yell_condition_reference_ack_20260722a
+# BUILD_TAG: heart_choice_split_fix_reset_seed_20260723a
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -616,6 +616,26 @@ _HEART_JP_MAP = {
     'green': 'green', 'blue': 'blue', 'purple': 'purple',
 }
 _HEART_DISPLAY_ORDER = ('pink', 'red', 'yellow', 'green', 'blue', 'purple', 'any', 'all')
+
+def _extract_jp_heart_choices_from_text(text: str) -> List[str]:
+    """Extract listed heart choices in text order without assuming a color set.
+
+    Some compiled clauses split a leading choice icon into the ability
+    condition field, so callers should pass both condition and effect fragments
+    when available.
+    """
+    choices: List[str] = []
+    try:
+        bare = str(text or '').strip()
+        if bare in _HEART_JP_MAP:
+            return [bare]
+        for m in re.finditer(r'<(?:\(([^)]+)\)|([^<>]+))>', str(text or '')):
+            jp = str((m.group(1) or m.group(2) or '')).strip()
+            if jp in _HEART_JP_MAP and jp not in choices:
+                choices.append(jp)
+    except Exception:
+        pass
+    return choices
 
 def _ordered_heart_counts(counts: Dict[str, int]) -> Dict[str, int]:
     """Return heart counts in the canonical display order.
@@ -9330,13 +9350,11 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
     if op == 'success_count_choose_heart_gain':
         src = str((ctx or {}).get('source_cn', '') or '')
         pos = str((ctx or {}).get('pos', '') or '').upper()
-        choices = []
-        for raw in re.findall(r'<\(([^)]+)\)>', str(gd.get('choices', '') or '')):
-            ch = str(raw or '').strip()
-            if ch and ch not in choices:
-                choices.append(ch)
+        choices = _extract_jp_heart_choices_from_text(
+            str((ctx or {}).get('condition_text', '') or '') + str(gd.get('choices', '') or '')
+        )
         if not choices:
-            choices = ['桃', '黄', '紫']
+            choices = ['桃', '赤', '黄', '緑', '青', '紫']
         gs.pending.append({
             'kind': 'live_start_success_heart_by_success',
             'pos': pos,
@@ -11339,6 +11357,17 @@ def try_apply_effect_template(gs: 'GameState', rng: random.Random, cards_db: Dic
     if not m:
         return False
     rule, gd = m
+    if (
+        str(rule.get('op') or '') == 'success_count_choose_heart_gain'
+        and isinstance(gd, dict)
+        and str((ctx or {}).get('condition_text', '') or '').strip()
+    ):
+        cond_choices = _extract_jp_heart_choices_from_text(str((ctx or {}).get('condition_text', '') or ''))
+        body_choices = _extract_jp_heart_choices_from_text(str(gd.get('choices', '') or ''))
+        merged_choices = cond_choices + [c for c in body_choices if c not in cond_choices]
+        if merged_choices:
+            gd = dict(gd)
+            gd['choices'] = ''.join(f'<({c})>' for c in merged_choices)
     _apply_effect_by_rule(gs, rng, cards_db, rule, gd, ctx)
     return True
 def _ability_has_choose_header(ab: Dict[str, Any]) -> bool:
@@ -16409,7 +16438,8 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                     ('選んだハート' in blob_all) and
                     (('1つを選ぶ' in blob_all) or ('1つ選ぶ' in blob_all))
                 ):
-                    opts = [c for c in ['桃', '黄', '紫'] if f"<({c})>" in blob_all]
+                    condition_blob = str(ab.get('conditions', '') or '') if isinstance(ab, dict) else ''
+                    opts = _extract_jp_heart_choices_from_text(condition_blob + blob_all)
                     if len(opts) >= 2:
                         pr = {
                             'kind': 'live_start_success_heart_by_success',
@@ -16435,15 +16465,17 @@ def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) ->
                     blob = str(eff or "")
                     if (not str(getattr(gs, 'success_zone_heart_color', '') or '').strip()) and (
                         ('成功ライブカード置き場' in blob) and ('選んだハート' in blob) and
-                        ('<(桃)>' in blob) and ('<(黄)>' in blob) and ('<(紫)>' in blob) and
                         ('1つを選ぶ' in blob)
                     ):
+                        opts = _extract_jp_heart_choices_from_text(blob)
+                        if len(opts) < 2:
+                            continue
                         pr = {
                             'kind': 'live_start_success_heart_by_success',
                             'pos': pos,
                             'cn': ci.cardnumber,
-                            'text': f"{pos}: {ci.cardnumber} ライブ開始時 → (桃/黄/紫)を選ぶ：成功ライブ置き場1枚につき選んだハート+1 (ライブ終了時まで)",
-                            'options': ['桃', '黄', '紫'],
+                            'text': f"{pos}: {ci.cardnumber} ライブ開始時 → ({'/'.join(opts)})を選ぶ：成功ライブ置き場1枚につき選んだハート+1 (ライブ終了時まで)",
+                            'options': opts,
                         }
                         _append_prompt(pr, f"{pos}: {ci.cardnumber} ライブ開始時")
                         continue
@@ -26226,15 +26258,7 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         return
     if kind == 'live_start_success_heart_by_success':
         ch = str(choice_str or '').strip()
-        m = {
-            '桃': 'pink',
-            '黄': 'yellow',
-            '紫': 'purple',
-            'pink': 'pink',
-            'yellow': 'yellow',
-            'purple': 'purple',
-        }
-        col = m.get(ch, '')
+        col = _HEART_JP_MAP.get(ch, '')
         if not col:
             gs.log.append(f"[ERR] live_start_success_heart: invalid choice '{ch}'")
             gs.pending.append(p)

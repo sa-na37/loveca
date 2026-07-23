@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# BUILD_TAG = "loveca_seed_http_cache_distribution_20260721a"
+# BUILD_TAG = "loveca_patch_zip_distribution_20260723a"
 """Build a pruned Loveca Application distribution zip."""
 from __future__ import annotations
 
@@ -7,13 +7,15 @@ import argparse
 import os
 import shutil
 import stat
+import subprocess
 import sys
 import zipfile
 from datetime import datetime
 from pathlib import Path
+from typing import List
 
 
-BUILD_TAG = "loveca_seed_http_cache_distribution_20260721a"
+BUILD_TAG = "loveca_patch_zip_distribution_20260723a"
 
 
 RUNTIME_INCLUDE_DIRS = (
@@ -149,6 +151,49 @@ def add_http_cache_tree(zf: zipfile.ZipFile, root: Path, base: Path, package_roo
         zf.writestr(zinfo, path.read_bytes(), compress_type=zipfile.ZIP_DEFLATED)
 
 
+def patch_candidate_paths(root: Path, base_ref: str = "HEAD") -> List[Path]:
+    try:
+        proc = subprocess.run(
+            ["git", "diff", "--name-only", "--diff-filter=ACMRT", str(base_ref), "--"],
+            cwd=str(root),
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except Exception as exc:
+        raise RuntimeError(f"failed to list patch files from git diff: {exc}") from exc
+    out: List[Path] = []
+    for line in proc.stdout.splitlines():
+        rel = line.strip()
+        if not rel:
+            continue
+        path = (root / rel).resolve()
+        try:
+            path.relative_to(root)
+        except ValueError:
+            continue
+        if not path.is_file() or should_skip(path, root):
+            continue
+        if rel.startswith(("user_data/", "_codex_outputs/", "sim_out/")):
+            continue
+        out.append(path)
+    return sorted(dict.fromkeys(out))
+
+
+def build_patch(output: Path, *, base_ref: str = "HEAD") -> Path:
+    root = project_root()
+    package_root = "loveca"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    if output.exists():
+        output.unlink()
+    paths = patch_candidate_paths(root, base_ref=base_ref)
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for path in paths:
+            add_file(zf, root, path, package_root)
+    return output
+
+
 def build(output: Path, *, include_docs: bool = True, target: str = "source") -> Path:
     root = project_root()
     package_root = "loveca"
@@ -210,9 +255,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--target",
-        choices=("source", "macos", "windows", "ui-assets"),
+        choices=("source", "macos", "windows", "ui-assets", "patch"),
         default="source",
-        help="Prune launcher files for a target platform, or build the separate UI asset bundle",
+        help="Prune launcher files for a target platform, build the separate UI asset bundle, or build changed-file patch zip",
+    )
+    parser.add_argument(
+        "--patch-from-ref",
+        default="HEAD",
+        help="Git ref used as the base when --target patch is selected.",
     )
     return parser.parse_args()
 
@@ -225,6 +275,14 @@ def main() -> int:
         print("[LOVECA DIST] target ui-assets")
         print("[LOVECA DIST] wrote {}".format(out))
         print("[LOVECA DIST] place this zip beside the downloaded Loveca app folder before launch")
+        return 0
+    if str(args.target) == "patch":
+        out = build_patch(args.output.expanduser().resolve(), base_ref=str(args.patch_from_ref or "HEAD"))
+        print("[LOVECA DIST] BUILD_TAG={}".format(BUILD_TAG))
+        print("[LOVECA DIST] target patch")
+        print("[LOVECA DIST] base {}".format(args.patch_from_ref))
+        print("[LOVECA DIST] wrote {}".format(out))
+        print("[LOVECA DIST] apply: unzip over an existing Loveca folder")
         return 0
     include_docs = args.include_docs or (str(args.target) == "source" and not args.no_docs)
     if args.no_docs:

@@ -3091,3 +3091,217 @@ curl -i http://127.0.0.1:8899/state
 ```
 
 ※20260723内部確認: `/public`、`/state?view=public`、`/state` が HTTP 200 で応答することを確認。公開 state は hand/deck の中身を返さず、`hand_count` / `deck_count` を返す。
+
+## 20260723 メニュー起動速度 / 起動進捗 / public top-k reveal / remote nickname
+
+確認結果:
+
+- メニューの「デッキを選んで起動」遷移が重い主因は、デッキ構成チェックでカード種類だけを見る場面でも `searchable_card()` を呼び、画像バリアント/レアリティメタ構築まで初回実行していたこと。
+- `AppState` に相対rootを渡した場合、絶対パスとの比較でデッキ検証が不正扱いになる不安定要因があった。
+- リモート対戦の公開URL検出では、アプリが予約したポートが分かっているのに広めのポート探索へ進む余地があり、公開ウィンドウ起動待ちが長くなる要因になっていた。
+- `公開して手札に加える` top-k 効果は、メイン画面の候補全体が公開情報になるべきだが、public view では `choose_from_topk` が非公開top-k扱いで伏せられていた。
+
+修正:
+
+- `deck_composition()` をカードDBの種別フィールド直接参照へ変更し、画像バリアント構築を起動前検証から外した。
+- `AppState.root` を常に絶対パス化。
+- アプリ起動後にカードDBインデックスをバックグラウンドで温める処理を追加。
+- 手動/リモート/2デッキ起動状態に `progress_percent` / `stage` を追加し、メニュー右下の進捗バーへ表示。
+- リモート時は予約済みポートから public URL を先に組み立て、検出処理も予約ポート中心にした。
+- リモート対戦の入力表示を「ニックネーム（アルファベット）」に変更し、次回以降の既定値として保存。
+- `公開して手札` の `choose_from_topk` pending に `public_reveal_pool` を付与し、public view では候補全体を公開カードとして表示。
+
+内部確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/core.py ./loveca_app/web.py ./llocg_ui/server.py ./llocg_ui/views.py ./llocg_ui/effects/topdeck.py ./llocg_ui/engine.py ./llocg_ui/effects/*.py
+
+python3 - <<'PY'
+from loveca_app.core import AppState
+from pathlib import Path
+import time
+app=AppState(Path('.'))
+for i in range(3):
+    t=time.perf_counter()
+    ds=app.list_decks()
+    print(i, round(time.perf_counter()-t,4), len(ds), sum(1 for d in ds if d.get('valid')))
+PY
+```
+
+確認結果: 初回 `list_decks()` は約0.014秒、2回目以降は約0.003秒。修正前に観測した約2.8秒の初回待ちを解消。
+
+公開top-k確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from pathlib import Path
+from llocg_ui.db import load_cards_db
+from llocg_ui.engine import new_game, try_apply_effect_template
+from llocg_ui.views import make_view_state
+cards=load_cards_db(Path('.'))
+gs,rng=new_game(Path('llocg_db_out_full'),'test',seed=1,debug=True)
+gs._cards_db=cards
+gs.deck=['PL!SP-bp1-020','PL!SP-bp5-023','PL!N-bp4-030','PL!-bp3-020','PL!SP-bp1-006']
+eff='自分のデッキの上からカードを5枚見る。その中から『Liella!』のカードを1枚まで公開して手札に加えてもよい。残りを控え室に置く。'
+assert try_apply_effect_template(gs,rng,cards,eff,{'source_cn':'PL!SP-bp1-005','effect_text':eff})
+p=gs.pending[-1]
+assert p.get('public_reveal_pool') is True
+state={'phase':gs.phase,'turn':gs.turn,'deck':gs.deck,'hand':gs.hand,'green_room':gs.green_room,'set_zone':gs.set_zone,'resolve_zone':gs.resolve_zone,'success_zone':getattr(gs,'success_zone',[]),'stage':{},'stage_detail':{},'pending':gs.pending,'cn2name':{'PL!SP-bp1-020':'鬼塚夏美','PL!SP-bp5-023':'Shooting Voice!!','PL!N-bp4-030':'Daydream Mermaid','PL!-bp3-020':'Snow halation','PL!SP-bp1-006':'桜小路きな子'},'cn2label':{},'cn2type':{},'cn2is_live':{},'cn2yell_hearts':{},'cn2yell_draw_icons':{},'cn2yell_score_icons':{},'cn2image_rarity':{},'cn2image_variant_id':{},'cn2group':{},'cn2unit':{},'cn2cost':{},'cn2score':{},'card_instances':{},'card_instance_meta':{},'public_reveal_events':[]}
+pub=make_view_state(state,'public')
+assert pub['pending'][0].get('display_cards') == p.get('display_cards')
+assert set(pub['cn2name']) >= set(p.get('display_cards'))
+print('OK real topk route public pool')
+PY
+```
+
+実起動確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from loveca_app.core import AppState
+from pathlib import Path
+import time
+app=AppState(Path('.'))
+deck=next(d for d in app.list_decks() if d.get('valid'))['path']
+ok,msg=app.start_manual(deck)
+print('start', ok, msg)
+try:
+    for i in range(30):
+        st=app.manual_window_status()
+        print('status', i, st.get('status'), st.get('progress_percent'), st.get('stage'), st.get('private_url'), st.get('public_url'), st.get('message'))
+        if st.get('status') in ('ready','failed','timeout','stopped'):
+            break
+        time.sleep(0.3)
+finally:
+    print(app.stop_manual())
+PY
+```
+
+確認結果: 通常起動は `starting 28 起動準備` から次回確認で `ready 100 起動完了` へ遷移。
+
+リモート起動確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from loveca_app.core import AppState
+from pathlib import Path
+import time
+app=AppState(Path('.'))
+deck=next(d for d in app.list_decks() if d.get('valid'))['path']
+rec=app.create_remote_session('CodexTest',4,'BCDE')
+ok,msg=app.start_manual(deck, remote_session=rec)
+print('start', ok, msg)
+try:
+    for i in range(30):
+        st=app.manual_window_status()
+        print('status', i, st.get('status'), st.get('progress_percent'), st.get('stage'), st.get('private_url'), st.get('public_url'), st.get('message'))
+        if st.get('status') in ('ready','failed','timeout','stopped'):
+            break
+        time.sleep(0.3)
+finally:
+    print(app.stop_manual())
+PY
+```
+
+確認結果: リモート起動は初回statusから `public_url=http://127.0.0.1:<port>/public` と `progress_percent=55` が入り、次回確認で `ready 100 起動完了` へ遷移。テストで生成した `user_data/remote_sessions/20260723-CodexTest-BCDE.json` は削除済み。
+
+## 20260723 パブリックウィンドウ動作負荷軽減
+
+原因整理:
+
+- パブリックウィンドウは別サーバではなく、既にメイン画面と同じ `run_llocg_ui_web.py` / `ThreadingHTTPServer` の `/public` で配信されている。
+- ただしメイン画面とパブリック画面がそれぞれ `/state` を取得すると、巨大な state 構築、カード名/画像/効果表示用 map 構築、public view 用 redaction が毎回走るため、2画面起動時に重複計算が発生していた。
+
+修正:
+
+- `llocg_ui/server.py` に短時間の view-state cache を追加。GET `/state` と `/public_state` は同じゲーム状態の短時間内で base state と serialized view state を共有する。
+- `save_trace()` 実行時に cache revision を進めて破棄するため、コマンド実行後の状態更新は stale にならない。
+- パブリック画面の定期 polling を `500ms` から `1200ms` へ緩和。メイン画面の操作時は `localStorage` の `llocg_public_refresh_ping` で即時更新されるため、操作追従性を保ちつつアイドル時負荷を下げる。
+
+内部確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from pathlib import Path
+from llocg_ui.server import App
+app=App(Path('llocg_db_out_full'),'ui','1RCBL',seed=1,debug=False)
+a=app.view_state_bytes('private')
+b=app.view_state_bytes('public')
+c=app.view_state_bytes('public')
+assert a and b and c
+assert b == c
+print('OK view cache bytes', len(a), len(b))
+PY
+```
+
+## 20260723 PL!-bp5-011 ハート選択肢復元 / リセットseed再シャッフル
+
+原因整理:
+
+- `PL!-bp5-011` は DB本文では `<緑>か<青>か<紫>` を選ぶ効果だが、compiled では先頭の `緑` が ability `conditions` に裸の色名として分離され、clause 側は `か<青>か<紫>...` になっていた。
+- runtime 側に過去の `桃/黄/紫` 固定処理が残っており、似た効果を同一選択肢として扱う危険があった。
+- アプリ起動デッキは初期手札/山札を環境変数で固定して渡すため、内部リセット時に新seedを作っても同じ `LLOCG_START_HAND` / `LLOCG_START_DECK_EXACT` が再適用され、同じ手札から始まっていた。
+
+修正:
+
+- ハート選択肢抽出を共通化し、`conditions` 側に分離された裸の色名 + clause 側の `<色>` を復元するよう修正。
+- `live_start_success_heart_by_success` の解決を6色対応に修正。
+- 横断確認として、「選んだハート」系の候補色を全件確認。`PL!-bp5-011` 以外にもカードごとに色組み合わせが異なることを確認し、固定色リストを使わないルールを `docs/notes/loveca_runtime_implementation_rules_20260708.md` に追記。
+- 通常アプリ起動デッキの内部リセット時は、`LLOCG_APP_DECK_VARIANTS_JSON` から60枚の個体リストを再構築し、新seedで手札6枚/山札54枚を再シャッフルするよう修正。
+- リモート勝敗記録ボタンは、記録後に `1: 同じデッキでもう一度対戦` / `2: デッキ変更` / `3: シミュレータ終了` を選ぶ流れへ変更。
+
+内部確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from pathlib import Path
+from llocg_ui.db import load_cards_db, _get_card
+from llocg_ui.engine import new_game, try_apply_effect_template, cmd_resolve_pending, StageSlot
+cards=load_cards_db(Path('llocg_db_out_full'))
+ci=_get_card(cards,'PL!-bp5-011')
+gs,rng=new_game(Path('llocg_db_out_full'),'test',seed=1,debug=True)
+gs.stage['C']=StageSlot('PL!-bp5-011')
+gs.success_zone=['PL!-bp5-030','PL!-bp5-031']
+ab=next(ab for ab in ci.abilities if 'ライブ開始時' in str(ab.get('trigger')))
+cl=(ab.get('clauses') or [])[0]
+eff=str(cl.get('effect_template') or cl.get('raw') or '')
+assert try_apply_effect_template(gs,rng,cards,eff,{'source_cn':'PL!-bp5-011','pos':'C','condition_text':str(ab.get('conditions') or '')})
+assert gs.pending[-1]['options'] == ['緑','青','紫']
+cmd_resolve_pending(gs,cards,0,'緑',rng)
+assert getattr(gs,'success_zone_heart_color','') == 'green'
+print('OK PL!-bp5-011 choices/restored green')
+PY
+```
+
+## 20260723 シミュレータ手動デバッグモード / stats 表示修正 / パッチzip
+
+修正:
+
+- ステージの「下部確認」ボタンをカード画像内からカード画像外の下部へ移動し、起動ボタンと重ならないようにした。
+- 画面左上のターン表示列に「デバッグモード」ボタンを追加。ON の間は手札・山札・控え室・ステージ・成功ライブ置き場のカードを選んで任意領域へ移動できる。
+- デバッグモード中は山札 / 控え室 / 成功ライブ置き場のポップアップを管理リスト表示に切り替え、山札と控え室は上下ボタンで順番を入れ替えられる。
+- デバッグ移動は通常の効果処理 / post-process を走らせず、操作前の undo snapshot だけを残す。
+- stats 表示は「基礎ブレード + 基礎ハート + 効果で増えたブレード + 効果で増えたハート」に修正。エールアイコン由来のハートを参照していた誤りを修正し、カード上の略記 `ST` を `stats` に変更した。
+- 配布ビルドに `--target patch` を追加。最新の本体 zip とは別に、更新ファイルだけを含む上書き用パッチ zip を作成できるようにした。
+
+内部確認予定:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./llocg_ui/server.py ./tools/build_loveca_distribution.py
+
+python3 ./tools/build_loveca_distribution.py --target patch --output ./_codex_outputs/github_release/loveca-patch-20260723.zip
+```

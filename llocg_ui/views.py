@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: public_view_hand_reveal_instance_exact_20260722a
+# BUILD_TAG: public_topk_reveal_pool_20260723a
 from __future__ import annotations
 
 """View-state helpers for Loveca UI.
@@ -20,7 +20,7 @@ import re
 from typing import Any, Dict, Iterable, Set
 
 
-PUBLIC_BUILD_TAG = "public_view_hand_reveal_instance_exact_20260722a"
+PUBLIC_BUILD_TAG = "public_topk_reveal_pool_20260723a"
 
 
 def _as_list(value: Any) -> list:
@@ -55,9 +55,17 @@ def _public_pending_revealed_cardnumbers(state: Dict[str, Any]) -> Set[str]:
         if not isinstance(item, dict):
             continue
         kind = str(item.get("kind", "") or item.get("type", "") or "")
-        if kind not in {"show_revealed_cards_ack"}:
+        public_topk = bool(item.get("public_reveal_pool"))
+        if not public_topk:
+            text_blob = " ".join([
+                str(item.get("text", "") or ""),
+                str(item.get("effect_text", "") or ""),
+                str(item.get("detail_text", "") or ""),
+            ])
+            public_topk = kind == "choose_from_topk" and "公開" in text_blob and "手札" in text_blob
+        if kind not in {"show_revealed_cards_ack"} and not public_topk:
             continue
-        for key in ("display_cards", "shown", "revealed_cards", "cards", "candidates"):
+        for key in ("display_cards", "display_pool_all", "pool", "shown", "revealed_cards", "cards", "candidates"):
             v = item.get(key)
             if isinstance(v, list):
                 for cn in v:
@@ -205,6 +213,16 @@ def _pending_is_private_hidden(kind: str, item: Dict[str, Any]) -> bool:
     hand discard/selection, and deck-top placement choices.
     """
     k = str(kind or "").strip()
+    if k == "choose_from_topk" and bool(item.get("public_reveal_pool")):
+        return False
+    if k == "choose_from_topk":
+        text_blob = " ".join([
+            str(item.get("text", "") or ""),
+            str(item.get("effect_text", "") or ""),
+            str(item.get("detail_text", "") or ""),
+        ])
+        if "公開" in text_blob and "手札" in text_blob:
+            return False
     private_exact = {
         "choose_from_topk",
         "view_topk_no_match",

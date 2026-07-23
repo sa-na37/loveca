@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: mulligan_public_window_stability_20260723a
+# BUILD_TAG: manual_debug_move_stats_patch_20260723a
 from __future__ import annotations
 
 """llocg_ui.server
@@ -34,6 +34,8 @@ import time
 import os
 import pickle
 import re
+import threading
+import random
 from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -71,7 +73,7 @@ from .engine import (
     _rule_refresh_main_deck,
 )
 
-APP_VERSION = "mulligan_public_window_stability_20260723a"
+APP_VERSION = "reset_seed_record_flow_view_cache_20260723a"
 
 
 def _write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -236,11 +238,74 @@ class App:
         self._public_hand_revealed_instance_ids: List[str] = []
         self._public_hand_reveal_events: List[Dict[str, Any]] = []
         self._public_hand_reveal_seq: int = 0
+        self._view_cache_lock = threading.RLock()
+        self._view_cache_revision: int = 0
+        self._view_cache_ttl_sec: float = 0.25
+        self._poll_state_cache: Dict[str, Any] = {}
+        self._view_bytes_cache: Dict[str, Dict[str, Any]] = {}
         self._apply_optional_extensions()
         self.save_trace()
 
     def _fresh_reset_seed(self) -> int:
         return int(time.time() * 1000) & 0x7FFFFFFF
+
+    def _reshuffle_app_normal_match_from_env(self, seed: int) -> bool:
+        if str(os.environ.get("LLOCG_APP_NORMAL_MATCH_SETUP", "") or "").strip().lower() in ("", "0", "false", "no"):
+            return False
+        raw = os.environ.get("LLOCG_APP_DECK_VARIANTS_JSON", "")
+        try:
+            variants = json.loads(raw) if raw else []
+        except Exception:
+            variants = []
+        if not isinstance(variants, list):
+            return False
+        entries: List[Dict[str, str]] = []
+        seq = 0
+        for row in variants:
+            if not isinstance(row, dict):
+                continue
+            cn = str(row.get("card_no") or row.get("cardnumber") or "").strip()
+            if not cn:
+                continue
+            try:
+                count = max(0, int(row.get("count", 0) or 0))
+            except Exception:
+                count = 0
+            for _ in range(count):
+                seq += 1
+                entries.append({
+                    "instance_id": f"dc{seq:03d}",
+                    "cardnumber": cn,
+                    "rarity": str(row.get("rarity", "") or ""),
+                    "variant_id": str(row.get("variant_id", "") or ""),
+                })
+        if len(entries) != 60:
+            return False
+        rng = random.Random(int(seed or 0))
+        rng.shuffle(entries)
+        opening_entries = entries[:6]
+        remaining_entries = entries[6:]
+        try:
+            self.gs.hand = [str(x.get("cardnumber") or "") for x in opening_entries]
+            self.gs.deck = [str(x.get("cardnumber") or "") for x in remaining_entries]
+            self.gs.phase = "MULLIGAN"
+            self.gs.turn = 0
+            self.gs.green_room = []
+            self.gs.resolve_zone = []
+            self.gs.set_zone = []
+            self.gs.success_zone = []
+            self.gs.energy_active = 0
+            self.gs.energy_wait = 0
+            self.gs.live_start_prompted = False
+            self.gs.log.append(f"[RESET] normal match reshuffled from selected deck seed={seed}")
+        except Exception:
+            return False
+        os.environ["LLOCG_APP_INITIAL_INSTANCES_JSON"] = json.dumps(
+            {"hand": opening_entries, "deck": remaining_entries},
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        return True
 
     def reset_match(self) -> None:
         debug = bool(getattr(self.gs, "debug", False))
@@ -252,6 +317,7 @@ class App:
             pass
         self._force_mulligan_start()
         self._apply_start_overrides_from_env()
+        self._reshuffle_app_normal_match_from_env(new_seed)
         self.card_instance_zones = {}
         self.card_instance_meta = {}
         self.card_instance_seq = 0
@@ -312,6 +378,15 @@ class App:
     def record_result_and_reset(self, result: Any) -> Dict[str, Any]:
         record = self._append_match_result_record(str(result or ""))
         self.reset_match()
+        try:
+            self.gs.log.append(f"[MATCH-RECORD] result={record['result']} saved=user_data/logs/loveca_match_results.jsonl")
+        except Exception:
+            pass
+        self.save_trace()
+        return record
+
+    def record_result_only(self, result: Any) -> Dict[str, Any]:
+        record = self._append_match_result_record(str(result or ""))
         try:
             self.gs.log.append(f"[MATCH-RECORD] result={record['result']} saved=user_data/logs/loveca_match_results.jsonl")
         except Exception:
@@ -1136,8 +1211,64 @@ class App:
                 pass
 
     def save_trace(self) -> None:
+        self._invalidate_view_cache()
         self.outdir.mkdir(parents=True, exist_ok=True)
         _write_text(self.outdir / "ui_trace.txt", "\n".join(self.gs.log) + ("\n" if self.gs.log else ""))
+
+    def _invalidate_view_cache(self) -> None:
+        try:
+            lock = getattr(self, "_view_cache_lock", None)
+            if lock is None:
+                return
+            with lock:
+                self._view_cache_revision = int(getattr(self, "_view_cache_revision", 0) or 0) + 1
+                self._poll_state_cache = {}
+                self._view_bytes_cache = {}
+        except Exception:
+            pass
+
+    def view_state_bytes(self, mode: str = "private") -> bytes:
+        """Return serialized view state, sharing short-lived polling work.
+
+        The owner and public windows poll the same simulator.  Building the full
+        state and then redacting it for the public view is expensive, so GET
+        requests share a tiny cache.  Mutating commands call save_trace(), which
+        invalidates this cache before their fresh response is built.
+        """
+        view_mode = str(mode or "private").strip().lower() or "private"
+        if view_mode in {"share", "shared"}:
+            view_mode = "public"
+        now = time.time()
+        ttl = float(getattr(self, "_view_cache_ttl_sec", 0.25) or 0.25)
+        with self._view_cache_lock:
+            rev = int(getattr(self, "_view_cache_revision", 0) or 0)
+            cached = self._view_bytes_cache.get(view_mode)
+            if (
+                isinstance(cached, dict)
+                and int(cached.get("revision", -1)) == rev
+                and now - float(cached.get("ts", 0.0) or 0.0) <= ttl
+            ):
+                data = cached.get("data")
+                if isinstance(data, (bytes, bytearray)):
+                    return bytes(data)
+
+            base_entry = self._poll_state_cache
+            base_state = None
+            if (
+                isinstance(base_entry, dict)
+                and int(base_entry.get("revision", -1)) == rev
+                and now - float(base_entry.get("ts", 0.0) or 0.0) <= ttl
+            ):
+                candidate = base_entry.get("state")
+                if isinstance(candidate, dict):
+                    base_state = candidate
+            if base_state is None:
+                base_state = self.state_json()
+                self._poll_state_cache = {"revision": rev, "ts": now, "state": base_state}
+
+            data = json.dumps(make_view_state(base_state, view_mode), ensure_ascii=False).encode("utf-8")
+            self._view_bytes_cache[view_mode] = {"revision": rev, "ts": now, "data": data}
+            return data
 
     def _capture_suspend_snapshot(self) -> Dict[str, Any]:
         return {
@@ -2279,6 +2410,21 @@ class App:
                 out[cn] = n
         return out
 
+    def _cn2base_hearts(self) -> Dict[str, Dict[str, int]]:
+        out: Dict[str, Dict[str, int]] = {}
+        for cn in self._all_cardnumbers_in_state():
+            ci = _get_card(self.cards_db, cn)
+            if ci is None:
+                continue
+            try:
+                hearts = getattr(ci, "base_hearts", None) or {}
+                counts = _ordered_heart_counts({str(k): int(v) for k, v in dict(hearts).items() if int(v or 0) > 0})
+            except Exception:
+                counts = {}
+            if counts:
+                out[cn] = counts
+        return out
+
     def _cn2name(self) -> Dict[str, str]:
         out: Dict[str, str] = {}
         for cn in self._all_cardnumbers_in_state():
@@ -2457,6 +2603,7 @@ class App:
             "cn2cost": self._cn2cost(),
             "cn2score": self._cn2score(),
             "cn2blade": self._cn2blade(),
+            "cn2base_hearts": self._cn2base_hearts(),
             "stage_detail": {
                 k: (
                     {
@@ -2640,6 +2787,112 @@ class App:
                 pass
             return False
 
+    def _debug_list_zone(self, zone: str) -> Optional[List[str]]:
+        key = str(zone or "").strip().lower()
+        if key == "hand":
+            return self.gs.hand
+        if key == "deck":
+            return self.gs.deck
+        if key in {"green", "green_room", "waiting"}:
+            return self.gs.green_room
+        if key in {"success", "success_zone"}:
+            return self.gs.success_zone
+        return None
+
+    def _debug_stage_pos(self, zone: str, pos: str = "") -> str:
+        text = str(pos or "").strip().upper()
+        if text in {"L", "C", "R"}:
+            return text
+        z = str(zone or "").strip().upper()
+        if z.startswith("STAGE:"):
+            cand = z.split(":", 1)[1].strip().upper()
+            if cand in {"L", "C", "R"}:
+                return cand
+        if z in {"L", "C", "R"}:
+            return z
+        return ""
+
+    def _debug_take_card(self, zone: str, index: Any = None, pos: str = "") -> str:
+        stage_pos = self._debug_stage_pos(zone, pos)
+        if stage_pos:
+            slot = (getattr(self.gs, "stage", {}) or {}).get(stage_pos)
+            if not slot or not getattr(slot, "cardnumber", ""):
+                raise ValueError("移動元ステージにカードがありません。")
+            cn = str(getattr(slot, "cardnumber", "") or "")
+            under_cards = [str(x) for x in list(getattr(slot, "under_cards", []) or []) if str(x or "").strip()]
+            energy_under = int(getattr(slot, "energy_under", 0) or 0)
+            self.gs.stage[stage_pos] = None
+            if under_cards:
+                self.gs.green_room.extend(under_cards)
+                self.gs.log.append(f"[DEBUG-MOVE] stage:{stage_pos} under_cards -> green_room count={len(under_cards)}")
+            if energy_under:
+                self.gs.log.append(f"[DEBUG-MOVE] stage:{stage_pos} energy_under cleared count={energy_under}")
+            return cn
+
+        lst = self._debug_list_zone(zone)
+        if lst is None:
+            raise ValueError("移動元領域が不正です。")
+        try:
+            idx = int(index)
+        except Exception:
+            idx = -1
+        if idx < 0 or idx >= len(lst):
+            raise ValueError("移動元カード位置が不正です。")
+        return str(lst.pop(idx) or "")
+
+    def _debug_put_card(self, cn: str, zone: str, index: Any = None, pos: str = "") -> None:
+        cardnumber = str(cn or "").strip()
+        if not cardnumber:
+            raise ValueError("移動カードが空です。")
+        stage_pos = self._debug_stage_pos(zone, pos)
+        if stage_pos:
+            old = (getattr(self.gs, "stage", {}) or {}).get(stage_pos)
+            if old and getattr(old, "cardnumber", ""):
+                old_cn = str(getattr(old, "cardnumber", "") or "")
+                self.gs.green_room.append(old_cn)
+                under_cards = [str(x) for x in list(getattr(old, "under_cards", []) or []) if str(x or "").strip()]
+                if under_cards:
+                    self.gs.green_room.extend(under_cards)
+                self.gs.log.append(f"[DEBUG-MOVE] replaced stage:{stage_pos} -> green_room {old_cn}")
+            self.gs.stage[stage_pos] = StageSlot(cardnumber=cardnumber, active=True)
+            return
+
+        lst = self._debug_list_zone(zone)
+        if lst is None:
+            raise ValueError("移動先領域が不正です。")
+        try:
+            idx = int(index)
+        except Exception:
+            idx = len(lst)
+        idx = max(0, min(len(lst), idx))
+        lst.insert(idx, cardnumber)
+
+    def _cmd_debug_move_card(self, payload: Dict[str, Any]) -> None:
+        from_zone = str(payload.get("from_zone", "") or "")
+        to_zone = str(payload.get("to_zone", "") or "")
+        from_pos = str(payload.get("from_pos", "") or "")
+        to_pos = str(payload.get("to_pos", "") or "")
+        cn = self._debug_take_card(from_zone, payload.get("from_index", -1), from_pos)
+        try:
+            self._debug_put_card(cn, to_zone, payload.get("to_index", None), to_pos)
+        except Exception:
+            self._debug_put_card(cn, from_zone, payload.get("from_index", None), from_pos)
+            raise
+        self._sync_card_instances_from_state()
+        self.gs.log.append(f"[DEBUG-MOVE] {cn}: {from_zone}{(':'+from_pos) if from_pos else ''} -> {to_zone}{(':'+to_pos) if to_pos else ''}")
+
+    def _cmd_debug_reorder_zone(self, payload: Dict[str, Any]) -> None:
+        zone = str(payload.get("zone", "") or "")
+        lst = self._debug_list_zone(zone)
+        if lst is None:
+            raise ValueError("並び替え対象領域が不正です。")
+        new_cards = [str(x) for x in list(payload.get("cards", []) or [])]
+        if sorted(new_cards) != sorted([str(x) for x in lst]):
+            raise ValueError("並び替え前後のカード集合が一致しません。")
+        lst[:] = new_cards
+        self._sync_card_instances_from_state()
+        self.gs.log.append(f"[DEBUG-MOVE] reorder {zone} count={len(lst)}")
+
     def cmd(self, name: str, payload: Dict[str, Any]) -> Dict[str, Any]:        # PATCH_V2_10_GUARD_MAIN_ONLY
         try:
             ph0 = str(getattr(self.gs, 'phase', '') or '')
@@ -2671,9 +2924,12 @@ class App:
             "turn_order_set",
             "ack_yell_reveal",
             "ack_refresh_notice",
+            "record_result",
+            "debug_move_card",
+            "debug_reorder_zone",
         }
         unacked_refresh_seq = self._latest_unacked_refresh_notice_seq()
-        if mutating and unacked_refresh_seq and name not in {"ack_refresh_notice", "undo", "reset", "record_reset", "toggle_debug"}:
+        if mutating and unacked_refresh_seq and name not in {"ack_refresh_notice", "undo", "reset", "record_reset", "record_result", "toggle_debug", "debug_move_card", "debug_reorder_zone"}:
             if name == "next":
                 self._push_undo_with_app_state()
                 self._ack_refresh_notice(unacked_refresh_seq)
@@ -2715,6 +2971,26 @@ class App:
 
         if name == "play":
             cmd_play(self.gs, self.cards_db, int(payload.get("hand_idx", -1)), str(payload.get("pos", "")))
+        elif name == "debug_move_card":
+            try:
+                self._cmd_debug_move_card(payload)
+            except Exception as e:
+                self.gs.log.append(f"[DEBUG-MOVE-ERR] {e}")
+                self.gs.banner_text = str(e)
+                self.gs.banner_ts = time.time()
+                self.gs.banner_ttl = 2.5
+            self.save_trace()
+            return self.state_json()
+        elif name == "debug_reorder_zone":
+            try:
+                self._cmd_debug_reorder_zone(payload)
+            except Exception as e:
+                self.gs.log.append(f"[DEBUG-MOVE-ERR] {e}")
+                self.gs.banner_text = str(e)
+                self.gs.banner_ts = time.time()
+                self.gs.banner_ttl = 2.5
+            self.save_trace()
+            return self.state_json()
         elif name == "set":
             idxs = payload.get("indices", [])
             if not isinstance(idxs, list):
@@ -2768,6 +3044,9 @@ class App:
             return self.state_json()
         elif name == "record_reset":
             self.record_result_and_reset(payload.get("result", ""))
+            return self.state_json()
+        elif name == "record_result":
+            self.record_result_only(payload.get("result", ""))
             return self.state_json()
         elif name == "turn_order_set":
             raw = str(payload.get("value", "") or "").strip().lower()
@@ -3001,13 +3280,12 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/state":
             qs = parse_qs(u.query)
             view_mode = (qs.get("view", [""])[0] or qs.get("mode", [""])[0] or "private").strip().lower()
-            state = self.app.state_json()
-            data = json.dumps(make_view_state(state, view_mode), ensure_ascii=False).encode("utf-8")
+            data = self.app.view_state_bytes(view_mode)
             self._send(200, data, "application/json; charset=utf-8")
             return
 
         if u.path == "/public_state":
-            data = json.dumps(make_view_state(self.app.state_json(), "public"), ensure_ascii=False).encode("utf-8")
+            data = self.app.view_state_bytes("public")
             self._send(200, data, "application/json; charset=utf-8")
             return
 
@@ -3229,6 +3507,15 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(payload, dict):
             payload = {}
 
+        if cmd == "shutdown":
+            data = json.dumps({"ok": True, "message": "シミュレータを終了します。"}, ensure_ascii=False).encode("utf-8")
+            self._send(200, data, "application/json; charset=utf-8")
+            try:
+                threading.Thread(target=self.server.shutdown, daemon=True).start()
+            except Exception:
+                pass
+            return
+
         out = self.app.cmd(cmd, payload)
         data = json.dumps(out, ensure_ascii=False).encode("utf-8")
         self._send(200, data, "application/json; charset=utf-8")
@@ -3302,6 +3589,8 @@ HTML = r'''<!doctype html>
   #topBar .pill{background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:calc(6px * var(--uiScale)) calc(10px * var(--uiScale));font-size:calc(12px * var(--uiScale));}
   #topBar .miniBtn{background:rgba(255,255,255,.12);color:#eee;border:1px solid rgba(255,255,255,.12);padding:calc(6px * var(--uiScale)) calc(10px * var(--uiScale));border-radius:calc(10px * var(--uiScale));font-size:calc(12px * var(--uiScale));cursor:pointer;}
   #topBar .miniBtn:hover{background:rgba(255,255,255,.18);}
+  #topBar .debugMoveBtn{background:rgba(140,60,70,.82);border-color:rgba(255,185,195,.32);}
+  #topBar .debugMoveBtn.active{background:#ffda62;color:#15100a;border-color:rgba(0,0,0,.32);box-shadow:0 0 0 2px rgba(0,0,0,.28),0 0 14px rgba(255,218,98,.42);}
   body.publicView #topBar .miniBtn, body.publicView #topBar .oppWaitBtn{opacity:.35;cursor:not-allowed;pointer-events:none;}
   #publicViewBadge{display:none;background:#66d9ef;color:#071014;border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:6px 10px;font-size:12px;font-weight:900;letter-spacing:.04em;}
   body.publicView #publicViewBadge{display:inline-flex;}
@@ -3640,6 +3929,11 @@ HTML = r'''<!doctype html>
   }
   .underInspectBtn{position:absolute;left:calc(8px * var(--uiScale));right:calc(8px * var(--uiScale));bottom:calc(8px * var(--uiScale));z-index:95;border:1px solid rgba(255,255,255,.24);border-radius:calc(10px * var(--uiScale));background:rgba(18,24,34,.82);color:#fff;padding:calc(5px * var(--uiScale)) calc(7px * var(--uiScale));font-size:calc(11px * var(--uiScale));font-weight:900;line-height:1.1;cursor:pointer;box-shadow:0 calc(3px * var(--uiScale)) calc(10px * var(--uiScale)) rgba(0,0,0,.42);}
   .underInspectBtn:hover{background:rgba(42,58,82,.94);}
+  .underInspectBtn.stageOutside{left:auto;right:auto;bottom:auto;z-index:520;min-width:calc(92px * var(--uiScale));padding:calc(4px * var(--uiScale)) calc(7px * var(--uiScale));font-size:calc(10px * var(--uiScale));}
+  .debugMoveSource{box-shadow:0 0 0 calc(4px * var(--uiScale)) rgba(255,218,98,.96),0 calc(6px * var(--uiScale)) calc(18px * var(--uiScale)) rgba(0,0,0,.55) !important;}
+  .debugMoveTarget{outline:calc(2px * var(--uiScale)) solid rgba(255,218,98,.65);outline-offset:calc(-3px * var(--uiScale));}
+  .debugCardListRow{display:flex;gap:calc(6px * var(--uiScale));align-items:center;margin-top:calc(8px * var(--uiScale));flex-wrap:wrap;}
+  .debugCardListRow .miniBtn{font-size:calc(11px * var(--uiScale)) !important;padding:calc(4px * var(--uiScale)) calc(7px * var(--uiScale)) !important;}
   #cdImg{width:calc(140px * var(--uiScale)) !important;min-width:calc(140px * var(--uiScale)) !important;}
   #cdImg img{border-radius:calc(14px * var(--uiScale)) 0 0 calc(14px * var(--uiScale)) !important;}
   #cdBody{padding:calc(12px * var(--uiScale)) calc(14px * var(--uiScale)) !important;gap:calc(8px * var(--uiScale)) !important;}
@@ -3691,6 +3985,7 @@ HTML = r'''<!doctype html>
       <button class="miniBtn" id="btnSuspendLoad">再開読込</button>
       <input id="suspendFileInput" type="file" accept="application/json,.json" hidden>
       <button class="miniBtn" id="btnDbg">枠表示</button>
+      <button class="miniBtn debugMoveBtn" id="btnDebugMove">デバッグモード OFF</button>
     </div>
 
     <div id="resetPanel" aria-label="リセット操作">
@@ -3875,6 +4170,47 @@ HTML = r'''<!doctype html>
     updateTop();
     render();
   }
+  async function shutdownSimulatorWindow(){
+    try{
+      await requestJson('/cmd', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({cmd:'shutdown', payload:{}})
+      });
+    }catch(e){}
+    try{ window.close(); }catch(e){}
+  }
+  async function handleRemoteRecordResult(result, label){
+    if(IS_PUBLIC_VIEW) return;
+    const choice = window.prompt(
+      label + 'として記録します。次の操作を数字で選んでください。\n\n' +
+      '1: 同じデッキでもう一度対戦を開始\n' +
+      '2: デッキを変更する\n' +
+      '3: シミュレータを終了する',
+      '1'
+    );
+    if(choice === null) return;
+    const picked = String(choice).trim();
+    if(picked === '1'){
+      await handleResetPanelCommand('record_reset', {result}, '');
+      return;
+    }
+    if(picked === '2'){
+      st = await apiCmd('record_result', {result});
+      selHand = [];
+      updateTop();
+      render();
+      window.alert('勝敗を記録しました。アプリのリモート対戦画面でデッキを選び直してください。');
+      try{ window.close(); }catch(e){}
+      return;
+    }
+    if(picked === '3'){
+      await apiCmd('record_result', {result});
+      await shutdownSimulatorWindow();
+      return;
+    }
+    window.alert('1、2、3 のいずれかを入力してください。');
+  }
   if(btnSingleReset){
     btnSingleReset.addEventListener('click', ev=>{
       ev.stopPropagation();
@@ -3884,19 +4220,19 @@ HTML = r'''<!doctype html>
   if(btnRecordWin){
     btnRecordWin.addEventListener('click', ev=>{
       ev.stopPropagation();
-      handleResetPanelCommand('record_reset', {result:'win'}, '勝利として記録し、対戦をリセットします。よろしいですか？');
+      handleRemoteRecordResult('win', '勝利');
     });
   }
   if(btnRecordLose){
     btnRecordLose.addEventListener('click', ev=>{
       ev.stopPropagation();
-      handleResetPanelCommand('record_reset', {result:'lose'}, '敗北として記録し、対戦をリセットします。よろしいですか？');
+      handleRemoteRecordResult('lose', '敗北');
     });
   }
   if(btnRecordNoGame){
     btnRecordNoGame.addEventListener('click', ev=>{
       ev.stopPropagation();
-      handleResetPanelCommand('record_reset', {result:'no_game'}, 'No Gameとして記録し、対戦をリセットします。よろしいですか？');
+      handleRemoteRecordResult('no_game', 'No Game');
     });
   }
 
@@ -3940,6 +4276,7 @@ HTML = r'''<!doctype html>
   installHorizontalWheelScroll(elViewerCards);
 
   const btnDbg = document.getElementById('btnDbg');
+  const btnDebugMove = document.getElementById('btnDebugMove');
   const btnSuspendSave = document.getElementById('btnSuspendSave');
   const btnSuspendLoad = document.getElementById('btnSuspendLoad');
   const suspendFileInput = document.getElementById('suspendFileInput');
@@ -3948,6 +4285,9 @@ HTML = r'''<!doctype html>
   let st = null;
   let selHand = []; // indices
   let statsVisible = false;
+  let debugMoveMode = false;
+  let debugMoveSelection = null;
+  let debugMoveEnabledServerDebug = false;
   let popup = {type:null};
   let viewerPopup = {type:null};
   let popupsHiddenForInspect = false;
@@ -4284,6 +4624,76 @@ HTML = r'''<!doctype html>
       return stage ? String(stage[String(pos || '').toUpperCase()] || '') : '';
     }catch(e){ return ''; }
   }
+  function debugZoneLabel(zone, pos=''){
+    const z = String(zone || '');
+    const p = String(pos || '').toUpperCase();
+    if(z === 'hand') return '手札';
+    if(z === 'deck') return '山札';
+    if(z === 'green_room') return '控え室';
+    if(z === 'success_zone') return '成功ライブ置き場';
+    if(z === 'stage') return p ? `ステージ${p}` : 'ステージ';
+    return z || '領域';
+  }
+  function debugSelectionSame(zone, index=-1, pos=''){
+    if(!debugMoveSelection) return false;
+    return String(debugMoveSelection.zone || '') === String(zone || '')
+      && String(debugMoveSelection.pos || '') === String(pos || '')
+      && Number(debugMoveSelection.index) === Number(index);
+  }
+  function updateDebugMoveButton(){
+    if(!btnDebugMove) return;
+    btnDebugMove.classList.toggle('active', !!debugMoveMode);
+    btnDebugMove.textContent = debugMoveMode ? 'デバッグモード ON' : 'デバッグモード OFF';
+    btnDebugMove.title = debugMoveMode
+      ? 'カードを選び、移動先をクリックして配置を変更します'
+      : '効果検証用にカードを自由移動するモード';
+  }
+  function clearDebugMoveSelection(){
+    debugMoveSelection = null;
+  }
+  function selectDebugMoveCard(zone, index, cn, pos=''){
+    if(!debugMoveMode || IS_PUBLIC_VIEW) return false;
+    const cardnumber = String(cn || '').trim();
+    if(!cardnumber || cardnumber === '__BACK__') return true;
+    if(debugSelectionSame(zone, index, pos)){
+      clearDebugMoveSelection();
+      setBanner('デバッグ移動の選択を解除');
+      render();
+      return true;
+    }
+    debugMoveSelection = {zone:String(zone || ''), index:Number(index), cardnumber, pos:String(pos || '')};
+    setBanner(`${cardDisplayText(cardnumber)} の移動先をクリック`);
+    render();
+    return true;
+  }
+  async function putDebugMoveCard(toZone, toIndex=null, toPos=''){
+    if(!debugMoveMode || IS_PUBLIC_VIEW) return false;
+    if(!debugMoveSelection){
+      setBanner('先に移動するカードを選択してください');
+      return true;
+    }
+    const payload = {
+      from_zone: debugMoveSelection.zone,
+      from_index: debugMoveSelection.index,
+      from_pos: debugMoveSelection.pos || '',
+      to_zone: String(toZone || ''),
+      to_index: (toIndex === null || toIndex === undefined) ? null : Number(toIndex),
+      to_pos: String(toPos || ''),
+    };
+    clearDebugMoveSelection();
+    st = await apiCmd('debug_move_card', payload);
+    selHand = [];
+    updateTop();
+    render();
+    return true;
+  }
+  async function reorderDebugZone(zone, cards){
+    if(!debugMoveMode || IS_PUBLIC_VIEW) return false;
+    st = await apiCmd('debug_reorder_zone', {zone:String(zone || ''), cards:(cards || []).map(x=>String(x || ''))});
+    updateTop();
+    render();
+    return true;
+  }
   function imgUrl(cn, instanceId=''){
     const params = new URLSearchParams({cn:String(cn || '')});
     try{
@@ -4505,6 +4915,11 @@ HTML = r'''<!doctype html>
   }
   function yellHeartCountsForCard(cn){
     const m = (st && st.cn2yell_hearts) ? st.cn2yell_hearts : null;
+    const v = (m && cn && typeof m[cn] === 'object') ? m[cn] : null;
+    return v && !Array.isArray(v) ? v : {};
+  }
+  function baseHeartCountsForCard(cn){
+    const m = (st && st.cn2base_hearts) ? st.cn2base_hearts : null;
     const v = (m && cn && typeof m[cn] === 'object') ? m[cn] : null;
     return v && !Array.isArray(v) ? v : {};
   }
@@ -4777,7 +5192,7 @@ HTML = r'''<!doctype html>
     const sd = (st && st.stage_detail) ? st.stage_detail : null;
     const det = sd ? (sd[slotKey] || {}) : {};
     const baseBlade = cardBladeFor(cn);
-    const baseHearts = sumNumericMap(yellHeartCountsForCard(cn));
+    const baseHearts = sumNumericMap(baseHeartCountsForCard(cn));
     const bonusBlade = Number(det.temp_blade || 0) + Number(det.always_blade_bonus || 0);
     const bonusHearts =
       sumNumericMap(det.temp_hearts || {}) +
@@ -5367,7 +5782,7 @@ ${text}`;
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'statsToggleBtn' + (statsVisible ? ' active' : '');
-    btn.textContent = statsVisible ? 'stats ON' : 'stats OFF';
+    btn.textContent = statsVisible ? 'stats表示 ON' : 'stats表示 OFF';
     btn.title = 'ステージ上メンバーごとのstats表示を切り替え';
     btn.addEventListener('click', ev=>{
       ev.stopPropagation();
@@ -5555,6 +5970,12 @@ ${text}`;
 
   function renderHand(zoneEl, cards){
     const inner = zoneEl.querySelector('.zoneInner');
+    zoneEl.onclick = (ev)=>{
+      if(debugMoveMode && !IS_PUBLIC_VIEW && debugMoveSelection){
+        ev.stopPropagation();
+        putDebugMoveCard('hand', (Array.isArray(st && st.hand) ? st.hand.length : 0));
+      }
+    };
     const zoneW = zoneEl.clientWidth;
     const zoneH = zoneEl.clientHeight;
     const padTop = 22;
@@ -5588,7 +6009,12 @@ ${text}`;
       const cap = labelFor(cn);
       const isSel = selHand.includes(i);
       const instanceId = zoneInstanceId('hand', i);
-      const card = makeCard(cn, 'portrait', x, y, sz.w, sz.h, cap, ()=>toggleSel(i), isSel, 100+i, false, null, false, instanceId);
+      const onHandCardClick = ()=>{
+        if(debugMoveMode && !IS_PUBLIC_VIEW) return selectDebugMoveCard('hand', i, cn);
+        return toggleSel(i);
+      };
+      const card = makeCard(cn, 'portrait', x, y, sz.w, sz.h, cap, onHandCardClick, isSel, 100+i, false, null, false, instanceId);
+      if(debugSelectionSame('hand', i)) card.classList.add('debugMoveSource');
       const publicIds = publicHandRevealedIds();
       const instanceTrackingReady = !!(st && st.card_instances);
       const publicCardsFallback = (publicIds.length || instanceTrackingReady) ? [] : publicHandRevealedCards();
@@ -6171,6 +6597,11 @@ inner.appendChild(card);
   function renderStage(zoneEl, slotKey, slotObj){
     // clicking the zone plays a selected hand card into this slot (card itself is also clickable)
     const doPlayHere = async ()=>{
+      if(debugMoveMode && !IS_PUBLIC_VIEW){
+        if(debugMoveSelection) return putDebugMoveCard('stage', null, slotKey);
+        setBanner('移動するカードを選択してください');
+        return;
+      }
       if(selHand.length !== 1){
         setBanner('手札を1枚選択して、置きたい枠をクリック');
         return;
@@ -6195,6 +6626,7 @@ inner.appendChild(card);
     const availW = zoneW - 10;
     const availH = zoneH - padTop - 10;
     const isWait = slotObj && (slotObj.active === false);
+    const underCardsForButton = Array.isArray(slotObj.under_cards) ? slotObj.under_cards.map(x=>String(x||'')).filter(Boolean) : [];
     // spec: same scale for all cards; portrait is reference scale
     const szPortrait = computeDispSize('portrait', availW, availH);
     stdPortrait = {w: szPortrait.w, h: szPortrait.h};
@@ -6203,7 +6635,7 @@ inner.appendChild(card);
     const sz = isWait ? {w: szPortrait.h, h: szPortrait.w} : szPortrait;
     const dispOrient = isWait ? 'landscape' : 'portrait';
     // wait card is wider than zone → allow overflow so it's not clipped
-    inner.style.overflow = isWait ? 'visible' : 'hidden';
+    inner.style.overflow = (isWait || underCardsForButton.length > 0) ? 'visible' : 'hidden';
     const x = (zoneW - sz.w)/2;
     const y = padTop + Math.max(0, (availH - sz.h)/2);
 
@@ -6251,26 +6683,35 @@ inner.appendChild(card);
       }
     }catch(e){}
     const instanceId = stageInstanceId(slotKey);
-    const card = makeCard(cn, dispOrient, x, y, sz.w, sz.h, labelFor(cn), ()=>doPlayHere(), false, 400, false, null, false, instanceId);
+    const onStageCardClick = ()=>{
+      if(debugMoveMode && !IS_PUBLIC_VIEW){
+        if(debugMoveSelection && !debugSelectionSame('stage', -1, slotKey)) return putDebugMoveCard('stage', null, slotKey);
+        return selectDebugMoveCard('stage', -1, cn, slotKey);
+      }
+      return doPlayHere();
+    };
+    const card = makeCard(cn, dispOrient, x, y, sz.w, sz.h, labelFor(cn), onStageCardClick, false, 400, false, null, false, instanceId);
+    if(debugSelectionSame('stage', -1, slotKey)) card.classList.add('debugMoveSource');
     try{
       const sb = document.createElement('div');
       sb.className = 'stageStatsBadge';
-      sb.textContent = `ST ${stageStatsFor(slotKey, slotObj)}`;
+      sb.textContent = `stats ${stageStatsFor(slotKey, slotObj)}`;
       card.appendChild(sb);
     }catch(e){}
     try{
-      const underCardsForButton = Array.isArray(slotObj.under_cards) ? slotObj.under_cards.map(x=>String(x||'')).filter(Boolean) : [];
       if(underCardsForButton.length > 0){
         const ub = document.createElement('button');
-        ub.className = 'underInspectBtn';
+        ub.className = 'underInspectBtn stageOutside';
         ub.type = 'button';
         ub.textContent = `下部確認 ${underCardsForButton.length}`;
         ub.title = 'このメンバーの下に置かれているメンバーカードを確認';
+        ub.style.left = `${Math.max(2, x + (sz.w - px(92)) / 2)}px`;
+        ub.style.top = `${y + sz.h + px(6)}px`;
         ub.addEventListener('click', ev=>{
           ev.stopPropagation();
           openUnderCardsPopup(`${slotKey} 下部カード`, underCardsForButton, 'このメンバーの下に置かれているメンバーカードです。');
         });
-        card.appendChild(ub);
+        inner.appendChild(ub);
       }
     }catch(e){}
 
@@ -6872,12 +7313,12 @@ inner.appendChild(card);
     return surf;
   }
 
-  function openCardListPopup(title, cards, {closable=true, helperText='', forcePortrait=false, forceLandscape=false, confirmClose=false, normalizeNatural=false } = {}){
+  function openCardListPopup(title, cards, {closable=true, helperText='', forcePortrait=false, forceLandscape=false, confirmClose=false, normalizeNatural=false, debugZone='' } = {}){
     let cardsList = cards.slice();
     // sort waiting room cards (spec update): by cardnumber asc, then card type
     try{
       const t = String(title||'');
-      if(t.includes('控え室') || t.toLowerCase().includes('waiting')){
+      if(!debugZone && (t.includes('控え室') || t.toLowerCase().includes('waiting'))){
         const typeOrder = (tp)=>{ const u=String(tp||'').toUpperCase(); if(u.includes('MEMBER')) return 0; if(u.includes('LIVE')) return 1; return 2; };
         cardsList.sort((a,b)=>{
           const sa=String(a||'');
@@ -6912,13 +7353,91 @@ inner.appendChild(card);
     targetCards.style.flexDirection = '';
     targetCards.style.gap = '';
 
-    targetCards.appendChild(renderPopupCardSurface(targetCards, cardsList, {
-      forcePortrait,
-      forceLandscape,
-      normalizeNatural,
-    }));
+    const isDebugList = !!debugZone && debugMoveMode && !IS_PUBLIC_VIEW;
+    if(isDebugList){
+      targetCards.style.display = 'flex';
+      targetCards.style.flexDirection = 'column';
+      targetCards.style.gap = uiCalc(7);
+      targetCards.style.overflow = 'auto';
+      cardsList.forEach((cn, i)=>{
+        const row = document.createElement('div');
+        row.className = 'debugCardListRow';
+        const thumb = document.createElement('img');
+        thumb.src = imgUrl(cn, zoneInstanceId(debugZone, i));
+        thumb.alt = cn;
+        thumb.style.cssText = `width:${uiCalc(34)};height:${uiCalc(48)};object-fit:contain;border-radius:${uiCalc(4)};background:rgba(0,0,0,.45);flex:0 0 auto;`;
+        const label = document.createElement('div');
+        label.textContent = `${i + 1}. ${cardDisplayText(cn)} / ${cn}`;
+        label.style.cssText = 'min-width:0;flex:1 1 auto;font-size:12px;line-height:1.25;color:#eee;white-space:normal;word-break:break-word;';
+        const bSelect = document.createElement('button');
+        bSelect.className = 'miniBtn';
+        bSelect.textContent = debugSelectionSame(debugZone, i) ? '選択中' : '選択';
+        bSelect.addEventListener('click', ev=>{
+          ev.stopPropagation();
+          selectDebugMoveCard(debugZone, i, cn);
+        });
+        const bUp = document.createElement('button');
+        bUp.className = 'miniBtn';
+        bUp.textContent = '上へ';
+        bUp.disabled = i <= 0;
+        bUp.addEventListener('click', ev=>{
+          ev.stopPropagation();
+          const next = cardsList.slice();
+          const tmp = next[i - 1];
+          next[i - 1] = next[i];
+          next[i] = tmp;
+          reorderDebugZone(debugZone, next);
+        });
+        const bDown = document.createElement('button');
+        bDown.className = 'miniBtn';
+        bDown.textContent = '下へ';
+        bDown.disabled = i >= cardsList.length - 1;
+        bDown.addEventListener('click', ev=>{
+          ev.stopPropagation();
+          const next = cardsList.slice();
+          const tmp = next[i + 1];
+          next[i + 1] = next[i];
+          next[i] = tmp;
+          reorderDebugZone(debugZone, next);
+        });
+        row.appendChild(thumb);
+        row.appendChild(label);
+        row.appendChild(bSelect);
+        if(debugZone === 'deck' || debugZone === 'green_room'){
+          row.appendChild(bUp);
+          row.appendChild(bDown);
+        }
+        targetCards.appendChild(row);
+      });
+    }else{
+      targetCards.appendChild(renderPopupCardSurface(targetCards, cardsList, {
+        forcePortrait,
+        forceLandscape,
+        normalizeNatural,
+      }));
+    }
 
     if(useViewer){
+      if(isDebugList && debugMoveSelection){
+        const topBtn = document.createElement('button');
+        topBtn.className = 'miniBtn';
+        topBtn.textContent = '選択カードを先頭へ';
+        topBtn.addEventListener('click', ev=>{
+          ev.stopPropagation();
+          putDebugMoveCard(debugZone, 0);
+          closeViewerPopup();
+        });
+        const endBtn = document.createElement('button');
+        endBtn.className = 'miniBtn';
+        endBtn.textContent = '選択カードを末尾へ';
+        endBtn.addEventListener('click', ev=>{
+          ev.stopPropagation();
+          putDebugMoveCard(debugZone, cardsList.length);
+          closeViewerPopup();
+        });
+        targetActions.appendChild(topBtn);
+        targetActions.appendChild(endBtn);
+      }
       const close = document.createElement('button');
       close.className = 'miniBtn';
       close.textContent = 'Close';
@@ -9679,6 +10198,7 @@ inner.appendChild(card);
       if(btnRecordNoGame) btnRecordNoGame.style.display = (show && remote) ? '' : 'none';
       [btnSingleReset, btnRecordWin, btnRecordLose, btnRecordNoGame].forEach(btn=>{ if(btn) btn.disabled = !show; });
     }
+    updateDebugMoveButton();
     setBanner(st && st.banner && st.banner.text ? String(st.banner.text) : '');
   }
 
@@ -9698,30 +10218,33 @@ inner.appendChild(card);
 
     // DECK: public view receives only deck_count, so keep the back-card mask visible.
     const deckCount = IS_PUBLIC_VIEW ? publicCount('deck_count', st.deck||[]) : ((st.deck||[]).length);
+    const deckClick = (!IS_PUBLIC_VIEW && debugMoveMode)
+      ? (()=>openCardListPopup('山札', Array.isArray(st.deck) ? st.deck : [], {closable:true, helperText:'デバッグモード: 山札の順番を入れ替え、カードを選んで移動できます。', debugZone:'deck'}))
+      : null;
     if(deckCount > 0){
-      renderTopCard(zels.deck, '__BACK__', 'portrait', deckCount, null, {useStandardSize:true});
+      renderTopCard(zels.deck, '__BACK__', 'portrait', deckCount, deckClick, {useStandardSize:true});
     }else{
-      renderEmptyZone(zels.deck, 0, null);
+      renderEmptyZone(zels.deck, 0, (debugMoveMode && debugMoveSelection && !IS_PUBLIC_VIEW) ? (()=>putDebugMoveCard('deck', 0)) : deckClick);
     }
 
     // Waiting room: カードあり→最後尾を表示、なし→何も表示しない
     const gr = Array.isArray(st.green_room) ? st.green_room : [];
     if(gr.length){
       renderTopCard(zels.green, String(gr[gr.length-1]), 'portrait', gr.length, ()=>{
-        openCardListPopup('控え室', gr, {closable:true, helperText:''});
+        openCardListPopup('控え室', gr, {closable:true, helperText: debugMoveMode ? 'デバッグモード: 控え室の順番を入れ替え、カードを選んで移動できます。' : '', debugZone: debugMoveMode ? 'green_room' : ''});
       }, {instanceId: zoneInstanceId('green_room', gr.length - 1)});
     }else{
-      renderEmptyZone(zels.green, 0, null);
+      renderEmptyZone(zels.green, 0, (debugMoveMode && debugMoveSelection && !IS_PUBLIC_VIEW) ? (()=>putDebugMoveCard('green_room', 0)) : null);
     }
 
     // Success live storage: カードあり→縦スタック表示、なし→何も表示しない
     const sz = Array.isArray(st.success_zone) ? st.success_zone : [];
     if(sz.length){
       renderVertStack(zels.success, sz, 'landscape', sz.length, ()=>{
-        openCardListPopup('成功ライブ', sz, {closable:true, helperText:'', forceLandscape:true});
+        openCardListPopup('成功ライブ', sz, {closable:true, helperText: debugMoveMode ? 'デバッグモード: カードを選んで移動できます。' : '', forceLandscape:true, debugZone: debugMoveMode ? 'success_zone' : ''});
       }, {overlap:0.70, maxShow:4, forceIntrinsicOrient:'landscape', instanceIds: st.card_instances && st.card_instances.success_zone});
     }else{
-      renderEmptyZone(zels.success, null, null);
+      renderEmptyZone(zels.success, null, (debugMoveMode && debugMoveSelection && !IS_PUBLIC_VIEW) ? (()=>putDebugMoveCard('success_zone', 0)) : null);
     }
 
 
@@ -9764,6 +10287,24 @@ inner.appendChild(card);
   }
 
   btnDbg.addEventListener('click', ()=>{ debug = !debug; render(); });
+  if(btnDebugMove){
+    btnDebugMove.addEventListener('click', async ()=>{
+      const nextMode = !debugMoveMode;
+      debugMoveMode = nextMode;
+      clearDebugMoveSelection();
+      selHand = [];
+      if(debugMoveMode && st && !st.debug){
+        st = await apiCmd('toggle_debug', {});
+        debugMoveEnabledServerDebug = true;
+      }else if(!debugMoveMode && debugMoveEnabledServerDebug && st && st.debug){
+        st = await apiCmd('toggle_debug', {});
+        debugMoveEnabledServerDebug = false;
+      }
+      updateDebugMoveButton();
+      setBanner(debugMoveMode ? 'デバッグモード: カードを選んで移動先をクリック' : 'デバッグモードを終了');
+      render();
+    });
+  }
   if(btnSuspendSave){
     btnSuspendSave.addEventListener('click', (ev)=>{
       ev.stopPropagation();
@@ -9816,7 +10357,7 @@ inner.appendChild(card);
   // Public window is read-only and must follow the owner window automatically.
   // The owner/private window still updates immediately after each /cmd response.
   if(IS_PUBLIC_VIEW){
-    setInterval(()=>{ refreshStateFromServer({force:false}); }, 500);
+    setInterval(()=>{ refreshStateFromServer({force:false}); }, 1200);
     window.addEventListener('storage', (ev)=>{
       if(ev && ev.key === 'llocg_public_refresh_ping'){
         refreshStateFromServer({force:true});

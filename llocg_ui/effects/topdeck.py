@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: topdeck_any_card_group_filter_20260723a
+# BUILD_TAG: topdeck_public_reveal_pool_20260723a
 from __future__ import annotations
 
 """llocg_ui.effects.topdeck
@@ -463,6 +463,7 @@ def try_apply_topdeck_ext(
                 'pool': list(pool),
                 'display_cards': list(pool),
                 'display_pool_all': list(pool),
+                'public_reveal_pool': True,
                 'candidates': list(candidates),
                 'optional': optional,
             }
