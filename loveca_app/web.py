@@ -1,4 +1,4 @@
-# BUILD_TAG = "launcher_progress_remote_nickname_fast_probe_20260723a"
+# BUILD_TAG = "deck_regulation_presets_ui_20260728a"
 """Loveca local web UI and HTTP routing."""
 from __future__ import annotations
 
@@ -160,6 +160,19 @@ pre {
 .ok { color: var(--ok); }
 .bad { color: var(--bad); }
 .warn { color: var(--warn); }
+.loveca-point-line { margin: 8px 0; font-weight: 800; }
+.loveca-point-detail { color: var(--muted); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.loveca-point-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel2);
+  font-weight: 800;
+}
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 9px; border-bottom: 1px solid var(--line); }
 nav a { color: var(--text); margin-left: 14px; font-size:15px; }
@@ -1163,21 +1176,26 @@ class Handler(BaseHTTPRequestHandler):
                     deck_code=form.get("deck_code", ""),
                     deck_name=form.get("deck_name", ""),
                     tags=form.get("tags", ""),
+                    regulation_key=form.get("regulation", ""),
                 )
                 self.send_html(page("保存完了", """
 <section class="panel">
 <h2>デッキコードからデッキを保存しました</h2>
 <p><strong>{}</strong></p>
 <p>デッキコード：<code>{}</code></p>
+<p>レギュレーション：{}</p>
 <p>カード種類数：{} / 合計枚数：{}</p>
+{}
 <a class="button" href="/decks/view?path={}">内容を確認</a>
 <a class="button secondary" href="/decks">一覧へ</a>
 </section>
 """.format(
                     html.escape(record["name"]),
                     html.escape(record["code"]),
+                    html.escape(str((record.get("regulation") or {}).get("label") or "")),
                     record["card_types"],
                     record["card_count"],
+                    self.loveca_point_summary_html(record.get("loveca_points", {}), compact=True),
                     html.escape(record["path"], quote=True),
                 )))
             except ValueError as exc:
@@ -1199,6 +1217,7 @@ class Handler(BaseHTTPRequestHandler):
                     tsv_text=form.get("tsv_text", ""),
                     existing_path=form.get("existing_path", ""),
                     tags=form.get("tags", ""),
+                    regulation_key=form.get("regulation", ""),
                 )
                 start_after_save = form.get("start_after_save", "") == "1"
                 start_result = ""
@@ -1214,12 +1233,14 @@ class Handler(BaseHTTPRequestHandler):
 <section class="panel">
 <h2>デッキを保存しました</h2>
 <p><strong>{html.escape(record['name'])}</strong></p>
+<p>レギュレーション：{html.escape(str((record.get('regulation') or {}).get('label') or ''))}</p>
 <p>カード種類数：{record['card_types']} / 合計枚数：{record['card_count']}</p>
 <p class="{'ok' if record['composition']['valid'] else 'warn'}">
 メンバー：{record['composition']['member']} / 48、
 ライブ：{record['composition']['live']} / 12
 {('' if record['composition']['other'] == 0 else f"、その他：{record['composition']['other']}")}
 </p>
+{self.loveca_point_summary_html(record.get('loveca_points', {}), compact=True)}
 {start_result}
 <a class="button" href="/decks/view?path={html.escape(record['path'], quote=True)}">内容を確認</a>
 <a class="button secondary" href="/decks">一覧へ</a>
@@ -1662,14 +1683,18 @@ async function stopSimulatorOnPage() {{
         rendered = []
         for deck in decks:
             comp = deck.get("composition", {}); valid = bool(deck.get("valid"))
+            points = deck.get("loveca_points", {}) if isinstance(deck.get("loveca_points"), dict) else {}
+            regulation = deck.get("regulation", {}) if isinstance(deck.get("regulation"), dict) else {}
             status = "<span class='ok'>使用可能</span>" if valid else "<span class='bad'>構成不正</span>"
             button = f"<button onclick='startManual({json.dumps(deck['path'])})'>このデッキで起動</button>" if valid else "<button disabled>起動不可</button>"
-            rendered.append(f"<tr><td>{html.escape(deck['name'])}</td><td>{status}</td><td>{comp.get('member',0)}/48</td><td>{comp.get('live',0)}/12</td><td>{comp.get('total',0)}/60</td><td><a class='button secondary' href='/decks/view?path={html.escape(deck['path'], quote=True)}'>確認</a></td><td>{button}</td></tr>")
-        rows = "".join(rendered) if rendered else "<tr><td colspan='7' class='warn'>使用できるデッキがありません。</td></tr>"
+            point_limit = points.get("limit")
+            point_text = f"{int(points.get('total') or 0)}/" + (str(int(point_limit)) if point_limit not in (None, "") else "なし")
+            rendered.append(f"<tr><td>{html.escape(deck['name'])}<div class='status'>{html.escape(str(regulation.get('label') or ''))}</div></td><td>{status}</td><td>{comp.get('member',0)}/{comp.get('expected_member',48)}</td><td>{comp.get('live',0)}/{comp.get('expected_live',12)}</td><td>{comp.get('total',0)}/{comp.get('expected_total',60)}</td><td><span class='loveca-point-badge {'ok' if bool(points.get('valid', True)) else 'bad'}'>{point_text}</span></td><td><a class='button secondary' href='/decks/view?path={html.escape(deck['path'], quote=True)}'>確認</a></td><td>{button}</td></tr>")
+        rows = "".join(rendered) if rendered else "<tr><td colspan='8' class='warn'>使用できるデッキがありません。</td></tr>"
         session_panel = self.simulator_session_panel(False)
         return session_panel + f"""
 <section class="panel"><h2>手動シミュレータを起動</h2><p class="status">通常対戦セットアップ：選択した60枚デッキをシャッフルし、手札6枚・山札54枚へ分割します。引き直しとエネルギー配置は通常のゲーム開始処理で行います。</p><p>構成検証済みのデッキだけを起動できます。</p>
-<table><thead><tr><th>名前</th><th>状態</th><th>メンバー</th><th>ライブ</th><th>合計</th><th></th><th></th></tr></thead><tbody>{rows}</tbody></table><div id="manualStatus" class="status"></div></section>
+<table><thead><tr><th>名前</th><th>状態</th><th>メンバー</th><th>ライブ</th><th>合計</th><th>ラブカPt</th><th></th><th></th></tr></thead><tbody>{rows}</tbody></table><div id="manualStatus" class="status"></div></section>
 <script>
 function reserveWindow(name) {{
   const popup=window.open('about:blank',name);
@@ -2018,6 +2043,8 @@ function beginDeckCodeImport() {{
 
         composition = imported["composition"]
         status_class = "ok" if composition.get("valid") else "warn"
+        point_html = self.loveca_point_summary_html(imported.get("loveca_points", {}))
+        regulation_select = self.regulation_select_html(AppState.DEFAULT_DECK_REGULATION, "deck_import_regulation")
         return """
 <style>
 .import-grid {{
@@ -2084,6 +2111,7 @@ function beginDeckCodeImport() {{
 種類数：{types} / 合計：{total}枚 /
 メンバー：{member} / 48、ライブ：{live} / 12
 </p>
+{point_html}
 <div class="import-grid">{cards}</div>
 </section>
 <section class="panel">
@@ -2095,6 +2123,8 @@ function beginDeckCodeImport() {{
 <input id="deck_name" name="deck_name" value="{deck_name_attr}" required>
 <label for="deck_tags">タグ（任意・カンマ区切り）</label>
 <input id="deck_tags" name="tags" placeholder="例：大会用, お気に入り">
+<label for="deck_import_regulation">レギュレーション</label>
+{regulation_select}
 <div style="display:flex;gap:10px;margin-top:14px">
 <button type="submit">保存</button>
 <a class="button secondary" href="/decks/import">コードを入力し直す</a>
@@ -2115,7 +2145,66 @@ function beginDeckCodeImport() {{
             total=imported["card_count"],
             member=composition.get("member", 0),
             live=composition.get("live", 0),
+            point_html=point_html,
+            regulation_select=regulation_select,
             cards="".join(cards),
+        )
+
+    def loveca_point_summary_html(self, loveca_points: dict[str, Any], compact: bool = False) -> str:
+        total = int(loveca_points.get("total") or 0)
+        limit_raw = loveca_points.get("limit")
+        enabled = bool(loveca_points.get("enabled", limit_raw not in (None, "")))
+        limit = int(limit_raw) if limit_raw not in (None, "") else None
+        valid = bool(loveca_points.get("valid", True if limit is None else total <= limit))
+        entries = loveca_points.get("entries") if isinstance(loveca_points.get("entries"), list) else []
+        unresolved = loveca_points.get("unresolved") if isinstance(loveca_points.get("unresolved"), list) else []
+        limit_text = str(limit) if enabled and limit is not None else "制限なし"
+        line = "<p class='loveca-point-line {}'>ラブカポイント：{} / {}</p>".format(
+            "ok" if valid else "bad",
+            total,
+            limit_text,
+        )
+        if compact:
+            return line
+        if entries:
+            detail = "、".join(
+                "{} {} {}枚×{}pt={}".format(
+                    html.escape(str(item.get("card_no") or "")),
+                    html.escape(str(item.get("rarity") or "")),
+                    int(item.get("count") or 0),
+                    int(item.get("points") or 0),
+                    int(item.get("subtotal") or 0),
+                )
+                for item in entries
+            )
+        else:
+            detail = "対象カードなし"
+        unresolved_text = ""
+        if unresolved:
+            unresolved_text = "<div class='loveca-point-detail warn'>レアリティ未特定の対象候補：" + "、".join(
+                html.escape(str(item.get("card_no") or ""))
+                for item in unresolved
+            ) + "</div>"
+        return line + "<div class='loveca-point-detail'>{}</div>{}".format(detail, unresolved_text)
+
+    def regulation_select_html(self, selected_key: str, field_id: str = "deck_regulation") -> str:
+        selected = AppState._normalize_deck_regulation_key(selected_key)
+        options = []
+        for item in self.app.deck_regulation_options():
+            key = str(item.get("key") or "")
+            label = str(item.get("label") or key)
+            description = str(item.get("description") or "")
+            options.append(
+                '<option value="{key}" title="{title}" {selected}>{label}</option>'.format(
+                    key=html.escape(key, quote=True),
+                    title=html.escape(description, quote=True),
+                    selected="selected" if key == selected else "",
+                    label=html.escape(label),
+                )
+            )
+        return '<select id="{id}" name="regulation">{options}</select>'.format(
+            id=html.escape(field_id, quote=True),
+            options="".join(options),
         )
 
     def decks_body(self) -> str:
@@ -2125,6 +2214,8 @@ function beginDeckCodeImport() {{
 
         for deck in decks:
             comp = deck.get("composition", {})
+            points = deck.get("loveca_points", {}) if isinstance(deck.get("loveca_points"), dict) else {}
+            regulation = deck.get("regulation", {}) if isinstance(deck.get("regulation"), dict) else {}
             valid = bool(deck.get("valid"))
             tags = [str(tag) for tag in deck.get("tags", [])]
             all_tags.update(tags)
@@ -2144,14 +2235,20 @@ function beginDeckCodeImport() {{
                 for tag in tags
             ) or "<span class='status'>タグなし</span>"
 
+            point_limit = points.get("limit")
+            point_text = "{}/{}".format(
+                int(points.get("total") or 0),
+                str(int(point_limit)) if point_limit not in (None, "") else "なし",
+            )
             rendered.append(
                 """
 <tr data-name="{name_key}" data-modified="{modified}" data-code="{code_key}"
     data-tags="{tags_key}" data-valid="{valid_key}">
-  <td><strong>{name}</strong><div class="status">{code}</div></td>
+  <td><strong>{name}</strong><div class="status">{code}</div><div class="status">{regulation_label}</div></td>
   <td>{tags}</td>
   <td>{status}</td>
   <td>{total}</td>
+  <td><span class="loveca-point-badge {point_class}">{point_text}</span></td>
   <td>{modified_text}</td>
   <td class="deck-actions">
     <a class="button secondary" href="/decks/view?path={path_attr}">確認</a>
@@ -2176,9 +2273,12 @@ function beginDeckCodeImport() {{
                     valid_key="1" if valid else "0",
                     name=html.escape(str(deck.get("name", ""))),
                     code=html.escape(str(deck.get("code", ""))),
+                    regulation_label=html.escape(str(regulation.get("label") or "")),
                     tags=tag_html,
                     status=status,
                     total=comp.get("total", 0),
+                    point_class="ok" if bool(points.get("valid", True)) else "bad",
+                    point_text=point_text,
                     modified_text=html.escape(str(deck.get("modified", ""))),
                     path_attr=html.escape(str(deck.get("path", "")), quote=True),
                     start=start_button,
@@ -2187,7 +2287,7 @@ function beginDeckCodeImport() {{
 
         rows = "".join(rendered)
         if not rows:
-            rows = "<tr><td colspan='6' class='warn'>保存されているデッキはありません。</td></tr>"
+            rows = "<tr><td colspan='7' class='warn'>保存されているデッキはありません。</td></tr>"
 
         tag_options = "".join(
             "<option value='{}'>{}</option>".format(
@@ -2237,7 +2337,7 @@ function beginDeckCodeImport() {{
   </label>
 </div>
 <table>
-<thead><tr><th>名前</th><th>タグ</th><th>状態</th><th>枚数</th><th>更新日時</th><th>操作</th></tr></thead>
+<thead><tr><th>名前</th><th>タグ</th><th>状態</th><th>枚数</th><th>ラブカPt</th><th>更新日時</th><th>操作</th></tr></thead>
 <tbody id="deckListRows">{rows}</tbody>
 </table>
 <div id='deckListStatus' class='status'></div>
@@ -2300,6 +2400,8 @@ async function startDeck(deckPath) {{
         total = sum(int(row["count"]) for row in rows)
         validation = self.app.deck_validation(deck_path)
         valid = bool(validation.get("valid"))
+        point_html = self.loveca_point_summary_html(validation.get("loveca_points", {}))
+        regulation = validation.get("regulation", {}) if isinstance(validation.get("regulation"), dict) else {}
         if valid:
             validation_html = "<span class='ok'>ゲーム開始可能</span>"
             start_button = "<button type='button' onclick='startDeckGame({})'>このデッキで開始</button>".format(
@@ -2349,7 +2451,9 @@ async function startDeck(deckPath) {{
         return f"""
 <section class="panel">
 <h2>{html.escape(name)} <small><code>{html.escape(code)}</code></small></h2>
+<p class="status">レギュレーション：{html.escape(str(regulation.get("label") or ""))}</p>
 <p>カード種類数：{len(rows)} / 合計枚数：{total}</p><p>{validation_html}</p>
+{point_html}
 <div style="margin-bottom:14px">{start_button}
 <a class="button" href="/decks/edit?path={html.escape(deck_path, quote=True)}">編集</a>
 <a class="button secondary" href="/decks">一覧へ</a>
@@ -2434,6 +2538,7 @@ document.addEventListener('keydown', event => {{ if (event.key === 'Escape') clo
             name = ""
             tags_text = ""
             existing = ""
+            regulation_key = AppState.DEFAULT_DECK_REGULATION
             title = "新規デッキ作成"
         else:
             try:
@@ -2443,6 +2548,7 @@ document.addEventListener('keydown', event => {{ if (event.key === 'Escape') clo
             name = str(metadata.get("deck_name") or Path(deck_path).stem)
             tags_text = ", ".join(self.app._normalize_deck_tags(metadata.get("tags")))
             existing = deck_path
+            regulation_key = AppState._normalize_deck_regulation_key(metadata.get("regulation"))
             title = "デッキ編集"
             for row in rows:
                 display = self.app.card_display_data(row)
@@ -2527,6 +2633,22 @@ document.addEventListener('keydown', event => {{ if (event.key === 'Escape') clo
         initial_json = json.dumps(initial_cards, ensure_ascii=False).replace("</", "<\\/")
         base_rarity_json = json.dumps(options.get("rarity", []), ensure_ascii=False).replace("</", "<\\/")
         parallel_rarity_json = json.dumps(options.get("parallel_rarity", []), ensure_ascii=False).replace("</", "<\\/")
+        loveca_point_rules_json = json.dumps(
+            self.app.loveca_point_rules_payload(regulation_key),
+            ensure_ascii=False,
+        ).replace("</", "<\\/")
+        regulation_options_json = json.dumps(
+            self.app.deck_regulation_options(),
+            ensure_ascii=False,
+        ).replace("</", "<\\/")
+        regulation_payloads_json = json.dumps(
+            {
+                str(option.get("key") or ""): self.app.loveca_point_rules_payload(option.get("key"))
+                for option in self.app.deck_regulation_options()
+            },
+            ensure_ascii=False,
+        ).replace("</", "<\\/")
+        regulation_select = self.regulation_select_html(regulation_key, "visible_deck_regulation")
         return f"""
 <style>
 html,body {{min-width:0}}
@@ -2541,7 +2663,7 @@ main {{
   top:72px;
   z-index:80;
   display:grid;
-  grid-template-columns:auto minmax(220px,1fr) minmax(180px,.7fr) auto;
+  grid-template-columns:auto minmax(220px,1fr) minmax(170px,.55fr) minmax(260px,.8fr) auto;
   gap:10px;
   align-items:end;
   margin:0 0 14px;
@@ -2560,7 +2682,8 @@ main {{
 .deck-editor-toolbar label {{
   margin:0 0 4px;
 }}
-.deck-editor-toolbar input {{
+.deck-editor-toolbar input,
+.deck-editor-toolbar select {{
   margin:0;
 }}
 .deck-editor-actions {{
@@ -2712,7 +2835,7 @@ main {{
 .deck-row img {{width:66px;height:92px;object-fit:contain;background:#0d1015;border-radius:6px}}
 .count-controls {{display:flex;align-items:center;gap:6px}}
 .count-controls button {{padding:6px 10px}}
-.composition {{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:10px 0}}
+.composition {{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:10px 0}}
 .composition div {{background:var(--panel2);padding:8px;border-radius:8px;text-align:center}}
 details.advanced {{
   margin-top:12px;
@@ -2857,7 +2980,7 @@ details.subfilter summary {{
 .deck-analysis-header .spacer {{flex:1}}
 .deck-analysis-summary {{
   display:grid;
-  grid-template-columns:minmax(0,30fr) minmax(0,30fr) minmax(0,40fr);
+  grid-template-columns:minmax(0,24fr) minmax(0,24fr) minmax(0,32fr) minmax(0,20fr);
   gap:12px;
   width:100%;
   margin:6px 0 14px;
@@ -3018,6 +3141,10 @@ body.deck-analysis-open {{overflow:hidden}}
     <label for="visible_deck_tags">タグ（任意・カンマ区切り）</label>
     <input id="visible_deck_tags" value="{html.escape(tags_text, quote=True)}" placeholder="例：大会用, お気に入り">
   </div>
+  <div>
+    <label for="visible_deck_regulation">レギュレーション</label>
+    {regulation_select}
+  </div>
   <div class="deck-editor-actions">
     <button type="submit" onclick="return prepareSave(false)">保存</button>
     <button type="submit" onclick="return prepareSave(true)">保存して開始</button>
@@ -3174,9 +3301,10 @@ body.deck-analysis-open {{overflow:hidden}}
 <section class="panel deck-side">
 <h2>現在のデッキ</h2>
 <div class="composition">
-  <div>メンバー<br><strong id="memberCount">0</strong> / 48</div>
-  <div>ライブ<br><strong id="liveCount">0</strong> / 12</div>
-  <div>合計<br><strong id="totalCount">0</strong> / 60</div>
+  <div>メンバー<br><strong id="memberCount">0</strong> / <span id="memberExpected">48</span></div>
+  <div>ライブ<br><strong id="liveCount">0</strong> / <span id="liveExpected">12</span></div>
+  <div>合計<br><strong id="totalCount">0</strong> / <span id="totalExpected">60</span></div>
+  <div>ラブカPt<br><strong id="lovecaPointCount">0</strong> / <span id="lovecaPointLimit">9</span></div>
 </div>
 <div id="deckWarning" class="status"></div>
 <div id="deckLoadStatus" class="status"></div>
@@ -3232,6 +3360,9 @@ let initialCards = [];
 let editorInitialized = false;
 const baseRarityOptions = {base_rarity_json};
 const parallelRarityOptions = {parallel_rarity_json};
+const regulationOptions = {regulation_options_json};
+const regulationPointPayloads = {regulation_payloads_json};
+let lovecaPointRules = {loveca_point_rules_json};
 function deckKey(card) {{
   return card.variant_id || `${{card.card_no}}|${{card.rarity||""}}`;
 }}
@@ -3259,6 +3390,47 @@ function typeKind(card) {{
   if(t.includes("メンバー")||t.includes("member")) return "member";
   if(t.includes("ライブ")||t.includes("live")) return "live";
   return "other";
+}}
+function currentRegulationKey() {{
+  return visible_deck_regulation ? visible_deck_regulation.value : "standard_20260403";
+}}
+function currentRegulation() {{
+  const key=currentRegulationKey();
+  return regulationOptions.find(item=>item.key===key) || regulationOptions[0] || {{member:48,live:12,total:60,loveca_point_limit:9}};
+}}
+function applyRegulationSelection() {{
+  const key=currentRegulationKey();
+  lovecaPointRules=regulationPointPayloads[key] || {{limit:null,cards:{{}}}};
+  renderDeck();
+}}
+function normalizeRarity(value) {{
+  const text=String(value||"").trim().toUpperCase().replaceAll("＋","+").replaceAll(" ","");
+  const aliases={{"R2":"R＋","R+":"R＋","L2":"L＋","L+":"L＋","P2":"P＋","P+":"P＋","SEC2":"SEC＋","SEC+":"SEC＋","PR2":"PR＋","PR+":"PR＋","PE2":"PE＋","PE+":"PE＋"}};
+  return aliases[text] || text.replaceAll("+","＋");
+}}
+function lovecaPointForCard(card) {{
+  const rule=(lovecaPointRules.cards||{{}})[card.card_no];
+  if(!rule) return null;
+  const rarity=normalizeRarity(card.rarity||"");
+  const allowed=(rule.rarities||[]).map(normalizeRarity);
+  if(!rarity || !allowed.includes(rarity)) return null;
+  return {{points:Number(rule.points)||0, rarity}};
+}}
+function lovecaPointSummary() {{
+  const limitRaw=lovecaPointRules.limit;
+  const limit=(limitRaw===null || limitRaw===undefined || limitRaw==="") ? null : Number(limitRaw);
+  let total=0;
+  const entries=[];
+  for(const card of deck.values()) {{
+    const point=lovecaPointForCard(card);
+    if(!point) continue;
+    const count=Number(card.count)||0;
+    const subtotal=count*point.points;
+    total+=subtotal;
+    entries.push({{card,count,points:point.points,rarity:point.rarity,subtotal}});
+  }}
+  entries.sort((a,b)=>b.subtotal-a.subtotal || String(a.card.card_no).localeCompare(String(b.card.card_no),"ja"));
+  return {{total,limit,valid:limit===null || total<=limit,entries}};
 }}
 function cardNumberCount(cardNo) {{
   let total=0;
@@ -3297,36 +3469,55 @@ function changeCount(key,delta) {{
   renderDeck();
 }}
 function composition() {{
+  const regulation=currentRegulation();
   let member=0,live=0,other=0;
   for(const card of deck.values()) {{
     const kind=typeKind(card);
     if(kind==="member")member+=card.count; else if(kind==="live")live+=card.count; else other+=card.count;
   }}
-  return {{member,live,other,total:member+live+other}};
+  return {{
+    member,live,other,total:member+live+other,
+    expected_member:Number(regulation.member)||48,
+    expected_live:Number(regulation.live)||12,
+    expected_total:Number(regulation.total)||60,
+  }};
 }}
 function renderDeck() {{
   const cards=[...deck.values()].sort((a,b)=>(a.card_no+"|"+(a.rarity||"")).localeCompare(b.card_no+"|"+(b.rarity||"")));
   const c=composition();
+  const pointSummary=lovecaPointSummary();
   memberCount.textContent=c.member; liveCount.textContent=c.live; totalCount.textContent=c.total;
+  memberExpected.textContent=c.expected_member;
+  liveExpected.textContent=c.expected_live;
+  totalExpected.textContent=c.expected_total;
+  lovecaPointCount.textContent=pointSummary.total;
+  lovecaPointLimit.textContent=pointSummary.limit===null ? "なし" : pointSummary.limit;
   const copyErrors=copyLimitViolations();
-  const valid=c.member===48&&c.live===12&&c.other===0&&copyErrors.length===0;
+  const valid=c.member===c.expected_member&&c.live===c.expected_live&&c.total===c.expected_total&&c.other===0&&copyErrors.length===0&&pointSummary.valid;
   deckWarning.className="status "+(valid?"ok":"warn");
   if(valid) {{
     deckWarning.textContent="デッキ構成要件を満たしています。";
   }} else {{
     const messages=[];
-    if(!(c.member===48&&c.live===12&&c.other===0)) {{
-      messages.push(`構成未達：メンバー ${{c.member}}/48、ライブ ${{c.live}}/12${{c.other?`、その他 ${{c.other}}`:``}}`);
+    if(!(c.member===c.expected_member&&c.live===c.expected_live&&c.total===c.expected_total&&c.other===0)) {{
+      messages.push(`構成未達：メンバー ${{c.member}}/${{c.expected_member}}、ライブ ${{c.live}}/${{c.expected_live}}${{c.other?`、その他 ${{c.other}}`:``}}`);
     }}
     if(copyErrors.length) {{
       messages.push("4枚超過："+copyErrors.map(([cardNo,count])=>`${{cardNo}}=${{count}}枚`).join("、"));
+    }}
+    if(!pointSummary.valid) {{
+      messages.push(`ラブカポイント超過：${{pointSummary.total}}/${{pointSummary.limit}}`);
     }}
     deckWarning.textContent=messages.join(" / ");
   }}
   deckRows.innerHTML=cards.map(card=>`
     <div class="deck-row">
       <img src="${{imageUrl(card)}}" alt="" onerror="fallbackCardImage(this,'${{esc(card.card_no)}}')">
-      <div><div>${{esc(card.name||card.card_no)}}</div><div class="search-meta">${{esc(card.card_no)}} / ${{esc(card.card_type||"—")}}</div></div>
+      <div>
+        <div>${{esc(card.name||card.card_no)}}</div>
+        <div class="search-meta">${{esc(card.card_no)}} / ${{esc(card.card_type||"—")}}</div>
+        ${{lovecaPointForCard(card)?`<div class="search-meta">ラブカPt：${{lovecaPointForCard(card).points}} × ${{Number(card.count)||0}}</div>`:""}}
+      </div>
       <div class="count-controls">
         <button type="button" class="secondary" onclick='changeCount(${{JSON.stringify(deckKey(card))}},-1)'>−</button>
         <strong>${{card.count}}</strong>
@@ -3466,6 +3657,19 @@ function buildDeckAnalysis() {{
 
   const mainGroupLabels=["μ's","Aqours","虹ヶ咲","Liella!","蓮ノ空","その他"];
   const groupEntries=mainGroupLabels.map(label=>[label, groupCounts.get(label)||0]);
+  const pointSummary=lovecaPointSummary();
+  const pointDetailHtml=`
+    <section class="deck-analysis-block" data-analysis-kind="loveca-point">
+      <h2>ラブカポイント</h2>
+      <p class="${{pointSummary.valid?"ok":"bad"}}" style="font-weight:800;margin:0 0 8px">
+        ${{pointSummary.total}} / ${{pointSummary.limit}}
+      </p>
+      <div class="loveca-point-detail">
+        ${{pointSummary.entries.length
+          ? pointSummary.entries.map(entry=>`${{esc(entry.card.card_no)}} ${{esc(entry.rarity)}}：${{entry.count}}枚×${{entry.points}}pt=${{entry.subtotal}}`).join("<br>")
+          : "対象カードなし"}}
+      </div>
+    </section>`;
 
   deckAnalysisSummary.innerHTML=[
     histogramHtml(
@@ -3484,6 +3688,7 @@ function buildDeckAnalysis() {{
       bladeAnalysisDefinitions.map(([token,label,iconToken])=>[label,bladeCounts[token],token,iconToken||""]),
       {{kind:"blade",showIcons:true}}
     ),
+    pointDetailHtml,
   ].join("");
 
   deckAnalysisGrid.innerHTML=cards.map(card=>`
@@ -3603,6 +3808,7 @@ async function searchCards() {{
         <div class="search-meta">${{card.is_prerelease ? "プレリリース / " : ""}}${{esc(card.product_code||"")}}</div>
         <div class="search-meta">${{esc(card.card_type||"—")}} / ${{esc(card.group||"—")}}</div>
         <div class="search-meta">${{card.is_parallel ? "パラレル / " + esc(card.raw_rarity||"別レアリティ") : esc(card.rarity||"レアリティ不明")}}</div>
+        ${{lovecaPointForCard(card)?`<div class="search-meta">ラブカPt：${{lovecaPointForCard(card).points}}</div>`:""}}
         <button type="button" class="add-search-card" data-variant-id="${{esc(card.variant_id)}}">＋ デッキへ追加</button>
       </article>`).join("");
     for (const button of searchResults.querySelectorAll(".add-search-card")) {{
@@ -3645,7 +3851,8 @@ function openCardDetail(variantId) {{
   const card=searchCardCache.get(variantId); if(!card) return;
   cardDetailTitle.textContent=card.name||card.card_no||"カード詳細";
   cardDetailImage.src=imageUrl(card); cardDetailImage.alt=card.name||card.card_no||"";
-  const values=[card.card_no,card.card_type||"—",card.group||"—",card.unit||"",card.cost!==""?`コスト：${{card.cost}}`:"",card.score!==""?`スコア：${{card.score}}`:"",card.blade!==""?`ブレード：${{card.blade}}`:"",card.rarity||card.raw_rarity||""].filter(Boolean);
+  const point=lovecaPointForCard(card);
+  const values=[card.card_no,card.card_type||"—",card.group||"—",card.unit||"",card.cost!==""?`コスト：${{card.cost}}`:"",card.score!==""?`スコア：${{card.score}}`:"",card.blade!==""?`ブレード：${{card.blade}}`:"",card.rarity||card.raw_rarity||"",point?`ラブカPt：${{point.points}}`:""].filter(Boolean);
   cardDetailMeta.textContent=values.join(" / ");
   cardDetailText.textContent=formatCardTextForDisplay(card.effect);
   cardDetailOverlay.hidden=false;
@@ -3734,7 +3941,7 @@ document.addEventListener("click",event=>{{
 
 function resetSearch() {{
   for(const element of document.querySelectorAll('input[type="text"],input[type="number"],select')) {{
-    if(element.id==="visible_deck_name" || element.id==="visible_deck_tags") continue;
+    if(element.id==="visible_deck_name" || element.id==="visible_deck_tags" || element.id==="visible_deck_regulation") continue;
     element.value="";
   }}
   for(const checkbox of document.querySelectorAll('input[name="blade_heart_token"]')) checkbox.checked=false;
@@ -3759,9 +3966,15 @@ function buildSavePayload(startAfterSave=false, allowInvalidPrompt=true) {{
     return null;
   }}
   const c=composition();
-  if(!(c.member===48&&c.live===12&&c.other===0)) {{
+  if(!(c.member===c.expected_member&&c.live===c.expected_live&&c.total===c.expected_total&&c.other===0)) {{
     if(!allowInvalidPrompt || !confirm(
-      `デッキ構成要件を満たしていません。\\nメンバー ${{c.member}}/48\\nライブ ${{c.live}}/12\\nこのまま保存しますか？`
+      `デッキ構成要件を満たしていません。\\nメンバー ${{c.member}}/${{c.expected_member}}\\nライブ ${{c.live}}/${{c.expected_live}}\\n合計 ${{c.total}}/${{c.expected_total}}\\nこのまま保存しますか？`
+    )) return null;
+  }}
+  const pointSummary=lovecaPointSummary();
+  if(!pointSummary.valid) {{
+    if(!allowInvalidPrompt || !confirm(
+      `ラブカポイントが上限を超えています。\\n現在 ${{pointSummary.total}} / ${{pointSummary.limit}}\\nこのまま保存しますか？`
     )) return null;
   }}
 
@@ -3780,6 +3993,7 @@ function buildSavePayload(startAfterSave=false, allowInvalidPrompt=true) {{
     existing_path:document.querySelector('#saveForm input[name="existing_path"]').value,
     deck_name:name,
     tags:visible_deck_tags.value.trim(),
+    regulation:currentRegulationKey(),
     tsv_text:lines.join("\\n")+"\\n",
     start_after_save:startAfterSave ? "1" : "0",
   }};
@@ -3808,6 +4022,7 @@ function editorSnapshot() {{
   return JSON.stringify({{
     name:visible_deck_name.value.trim(),
     tags:visible_deck_tags.value.trim(),
+    regulation:currentRegulationKey(),
     rows,
   }});
 }}
@@ -3976,6 +4191,7 @@ function initializeDeckEditor() {{
   editorLeaveError.hidden=true;
   editorLeaveError.textContent="";
   refreshRarityOptions();
+  applyRegulationSelection();
   editorInitialSnapshot=editorSnapshot();
 
   searchCardCache.clear();
@@ -4018,7 +4234,7 @@ function clearControls(container) {{
 
 for (const field of document.querySelectorAll(".search-field")) {{
   const control = field.querySelector("input,select");
-  if (!control || control.id === "visible_deck_name" || control.id === "visible_deck_tags") continue;
+  if (!control || control.id === "visible_deck_name" || control.id === "visible_deck_tags" || control.id === "visible_deck_regulation") continue;
   const button = document.createElement("button");
   button.type = "button";
   button.className = "field-clear";
@@ -4030,6 +4246,10 @@ for (const field of document.querySelectorAll(".search-field")) {{
   }});
   field.appendChild(button);
 }}
+
+visible_deck_regulation.addEventListener("change",()=>{{
+  applyRegulationSelection();
+}});
 
 for (const button of document.querySelectorAll("[data-clear-section]")) {{
   button.addEventListener("click", event => {{

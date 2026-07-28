@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: heart_choice_split_fix_reset_seed_20260723a
+# BUILD_TAG: yell_bottom_source_audit_20260727a
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -89,7 +89,8 @@ _EFFECT_RULES = [
     {"id": "look_top_named_members_optional_then_opponent_wait_cost_blade", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から(?P<names>「[^」]+」(?:か「[^」]+」)*)のメンバーカードを1枚公開して手札に加えてもよい。残りを控え室に置く。その後、相手のステージにいる、これにより公開したカードのコスト以下で、かつ元々持つ<\(ブレード\)>の数が(?P<blade_lim>\d+)つ以下のメンバーをすべてウェイトにする。$", "op": "look_top_named_members_optional_then_opponent_wait_cost_blade"},
     {"id": "look_top_k_choose_if_energy_gte", "pattern": r"^自分のエネルギーが(?P<n>\d+)枚以上ある場合、自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から1枚を手札に加え、残りを控え室に置く。$", "op": "look_top_choose_if", "cond": "energy_gte"},
     {"id": "look_top_k_reorder_keep_any_rest_waiting", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。その中から好きな枚数を好きな順(?:番|場)でデッキの上に置き、残りを控え室に置く。$", "op": "look_top_reorder_keep_any"},
-    {"id": "look_top_k_reorder_all_on_top", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。それらを好きな順番でデッキの上に置く。$", "op": "look_top_reorder_all"},
+    {"id": "look_top_k_reorder_all_on_top", "pattern": r"^自分のデッキの上からカードを(?P<k>\d+)枚見る。(?:その後、)?それらを好きな順番でデッキの上に置く。$", "op": "look_top_reorder_all"},
+    {"id": "look_bottom_k_reorder_keep_any_rest_waiting", "pattern": r"^自分のデッキの下からカードを(?P<k>\d+)枚見る。その中から好きな枚数を好きな順番でデッキの下に置き、残りを控え室に置く。$", "op": "look_bottom_reorder_keep_any"},
     {"id": "look_top1_optional_mill", "pattern": r"^自分のデッキの上からカードを1枚見る。そのカードを控え室に置いてもよい。$", "op": "self_top1_optional_green"},
     {"id": "look_self_top1_optional_bottom", "pattern": r"^自分のデッキの一番上のカードを見る。それをデッキの一番下に置いてもよい。$", "op": "self_top1_optional_bottom"},
     {"id": "look_top_stage_member_count_plus_keep_one_top_rest_waiting", "pattern": r"^自分のデッキの上から、自分のステージにいるメンバーの数に(?P<plus_n>\d+)を足した数に等しい枚数見る。その中から1枚をデッキの一番上に置き、残りを控え室に置く。$", "op": "look_top_stage_member_count_plus_keep_one_top_rest_waiting"},
@@ -132,6 +133,7 @@ _EFFECT_RULES = [
     {"id": "live_storage_count_choose_group_live_no_live_start_topdeck_gain_icons", "pattern": r"^自分のライブカード置き場にカードが(?P<count_n>\d+)枚以上ある場合、その中から<ライブ開始時>能力を持たない『(?P<group>[^』]+)』のライブカードを1枚選び、デッキの一番上に置いてもよい。そうした場合、ライブ終了時まで、(?P<icons>(?:<(?:\([^)]+\)|[^<>]+)>と?)+)を得る。$", "op": "live_storage_count_choose_group_live_no_live_start_topdeck_gain_icons"},
     {"id": "bottom_all_green_members_optional_group_threshold_stage_named_blade", "pattern": r"^自分の控え室にあるすべてのメンバーカードをシャッフルし、デッキの下に置いてもよい。これにより『(?P<threshold_group>[^』]+)』のカードを(?P<threshold_n>\d+)枚以上デッキの下に置いた場合、ライブ終了時まで、自分のステージにいる「(?P<target_name>[^」]+)」1人は(?P<blades>(?:<\(ブレード\)>)+)を得る。$", "op": "bottom_all_green_members_optional_group_threshold_stage_named_blade"},
     {"id": "bottom_green_group_members_exact_no_bh_threshold_gain_blade", "pattern": r"^自分の控え室から『(?P<group>[^』]+)』のメンバーカード(?P<n>\d+)枚を好きな順番でデッキの一番下に置いてもよい。これによりデッキの下に置いたカードの中にブレードハートを持たないメンバーカードが(?P<threshold_n>\d+)枚以上ある場合、ライブ終了時まで、(?P<blades>(?:<\(ブレード\)>)+)を得る。$", "op": "bottom_green_group_members_exact_no_bh_threshold_gain_blade"},
+    {"id": "green_group_members_exact_shuffle_bottom_all_stage_blade", "pattern": r"^自分の控え室にある『(?P<group>[^』]+)』のメンバーカードを(?P<n>\d+)枚選び、それらをシャッフルし、デッキの一番下に置いてもよい。そうしたとき、ライブ終了時まで、自分のステージにいるすべてのメンバーは(?P<blades>(?:<\(ブレード\)>)+)を得る。$", "op": "green_group_members_exact_shuffle_bottom_all_stage_blade"},
     {"id": "both_players_bottom_all_green_members_threshold_retrieve_live_gain_blade", "pattern": r"^自分と相手はそれぞれ、自身の控え室にあるすべてのメンバーカードをシャッフルし、自身のデッキの下に置く。これにより自分と相手のカードが合計(?P<threshold_n>\d+)枚以上デッキの下に置かれた場合、自分の控え室からライブカードを(?P<retrieve_n>\d+)枚手札に加え、ライブ終了時まで、(?P<blades>(?:<\(ブレード\)>)+)を得る。$", "op": "both_players_bottom_all_green_members_threshold_retrieve_live_gain_blade"},
     {"id": "draw_then_hand_bottom", "pattern": r"^カードを(?P<draw_n>\d+)枚引き、手札を(?P<bottom_n>\d+)枚デッキの一番下に置く。$", "op": "draw_then_hand_to_deck_bottom"},
     {"id": "draw_then_hand_top", "pattern": r"^カードを(?P<draw_n>\d+)枚引き、自分の手札を(?P<top_n>\d+)枚デッキの一番上に置く。$", "op": "draw_then_hand_to_deck_top"},
@@ -207,6 +209,8 @@ _EFFECT_RULES = [
     {"id": "draw_and_gain_blades_per_baton_old_group_no_bladeheart", "pattern": r"^バトンタッチして登場した場合、このバトンタッチ(?:で|によって)控え室に置かれた『(?P<group>[^』]+)』のメンバーカード1枚につき、カードを(?P<draw_n>\d+)枚引く。ブレードハートを持たない『(?P=group)』のメンバーカード1枚につき、ライブ終了時まで、(?P<blades>(?:<\(ブレード\)>)+)を得る。$", "op": "draw_and_gain_blades_per_baton_old_group_no_bladeheart"},
     {"id": "put_baton_old_group_member_under_self", "pattern": r"^バトンタッチして登場した場合、このバトンタッチ(?:で|によって)控え室に置かれた『(?P<group>[^』]+)』のメンバーカードを(?P<n>\d+)枚、このメンバーの下に置く。$", "op": "put_baton_old_group_member_under_self"},
     {"id": "baton_from_group_and_energy_gte_put_wait_energy", "pattern": r"^『(?P<group>[^』]+)』のメンバーからバトンタッチして登場しており、かつ自分のエネルギーが(?P<energy_min>\d+)枚以上ある場合、自分のエネルギーデッキから、エネルギーカードを(?P<n>\d+)枚ウェイト状態で置く。$", "op": "baton_from_group_and_energy_gte_put_wait_energy"},
+    {"id": "baton_from_group_both_players_keep_hand_bottom_draw", "pattern": r"^『(?P<group>[^』]+)』のメンバーからバトンタッチして登場した場合、自分と相手はそれぞれ、自身の手札のカードを(?P<keep_n>\d+)枚まで選び、選んだカード以外のカードをシャッフルし、自身のデッキの下に置く。その後、自分と相手はそれぞれカードを(?P<draw_n>\d+)枚引く。$", "op": "baton_from_group_both_players_keep_hand_bottom_draw"},
+    {"id": "both_players_keep_hand_bottom_draw", "pattern": r"^自分と相手はそれぞれ、自身の手札のカードを(?P<keep_n>\d+)枚まで選び、選んだカード以外のカードをシャッフルし、自身のデッキの下に置く。その後、自分と相手はそれぞれカードを(?P<draw_n>\d+)枚引く。$", "op": "both_players_keep_hand_bottom_draw"},
     {"id": "this_live_card_gains_live_success_effect_until_end_live", "pattern": r"^このカードは「<ライブ成功時>(?P<inner>.+)」を得る。$", "op": "this_live_card_gains_live_success_effect_until_end_live"},
     {"id": "live_total_score_plus_n", "pattern": r"^ライブの合計スコアを\+(?P<n>\d+)する。$", "op": "live_total_score_plus"},
     {"id": "live_total_score_bonus_until_end_live", "pattern": r"^ライブ終了時まで、(?:「|『)<常時>ライブの合計スコアを\+(?P<n>\d+)する。(?:」|』)を得る。$", "op": "live_total_score_plus"},
@@ -225,6 +229,7 @@ _EFFECT_RULES = [
     {"id": "live_success_success_zone_group_exists_draw", "pattern": r"^自分の成功ライブカード置き場に『(?P<group>[^』]+)』のカードがある場合、カードを(?P<n>\d+)枚引く。$", "op": "live_success_success_zone_group_exists_draw"},
     {"id": "live_success_stage_current_heart_gt_original_exists_draw", "pattern": r"^自分のステージに、元々持つハートの数より多い数のハートを持つメンバーがいる場合、カードを(?P<n>\d+)枚引く。$", "op": "live_success_stage_current_heart_gt_original_exists_draw"},
     {"id": "live_success_revealed_group_member_count_score", "pattern": r"^エールにより公開された自分のカードの中に『(?P<group>[^』]+)』のメンバーカードが(?P<count>\d+)枚以上ある場合、このカードのスコアを\+(?P<delta>\d+)する。$", "op": "live_success_revealed_group_member_count_score"},
+    {"id": "live_success_all_revealed_group_cards_score", "pattern": r"^エールにより公開された自分のカードがすべて『(?P<group>[^』]+)』の場合、このカードのスコアを\+(?P<delta>\d+)する。$", "op": "live_success_all_revealed_group_cards_score"},
     {"id": "live_success_stage_member_count_retrieve_live_score_le", "pattern": r"^自分のステージにメンバーが(?P<count>\d+)人以上いる場合、自分の控え室からスコア(?P<score>\d+)以下のライブカードを(?P<n>\d+)枚手札に加える。$", "op": "live_success_stage_member_count_retrieve_live_score_le"},
     {"id": "live_success_score_gt_opponent_stage_group_put_wait_energy", "pattern": r"^ライブの合計スコアが相手より高く、かつ自分のステージに『(?P<group>[^』]+)』のメンバーがいる場合、自分のエネルギーデッキから、エネルギーカードを(?P<n>\d+)枚ウェイト状態で置く。$", "op": "live_success_score_gt_opponent_stage_group_put_wait_energy"},
     {"id": "live_success_score_gt_opponent_apply", "pattern": r"^ライブの合計スコアが相手より高い場合、(?P<inner>.+)$", "op": "live_success_score_gt_opponent_apply"},
@@ -372,6 +377,7 @@ _EFFECT_RULES = [
     {"id": "optional_discard_one_from_hand_then_effect", "pattern": r"^手札を1枚控え室に置いてもよい。そうした場合、(?P<after>.+)$", "op": "optional_discard_one_from_hand_then_effect"},
     {"id": "optional_discard_one_from_hand_then_effect_direct", "pattern": r"^手札を1枚控え室に置いてもよい。(?P<after>.+)$", "op": "optional_discard_one_from_hand_then_effect", "prefix_text": "手札を1枚控え室に置いてもよい。", "condition_text": "手札を1枚控え室に置いた場合", "timing": "任意コスト"},
     {"id": "discarded_group_top4_choose2_else_retrieve_live", "pattern": r"^これにより控え室に置いたカードが『(?P<group>[^』]+)』のカードの場合、自分のデッキの上からカードを(?P<k>\d+)枚見る。その中からカードを(?P<n>\d+)枚手札に加える。残りを控え室に置く。『(?P=group)』のカード以外の場合、自分の控え室からライブカードを1枚手札に加える。$", "op": "discarded_group_topk_choose_n_else_retrieve_live"},
+    {"id": "milled_context_group_live_or_no_bh_member_choose_one", "pattern": r"^これにより控え室に置いたカードの中に、『(?P<group>[^』]+)』のライブカードかブレードハートを持たない『(?P=group)』のメンバーカードがある場合、以下から1つを選ぶ。$", "op": "milled_context_group_live_or_no_bh_member_choose_one"},
     {"id": "retrieve_waiting_live_and_member_upto1", "pattern": r"^自分の控え室からライブカードとメンバーカードをそれぞれ1枚まで手札に加える。$", "op": "retrieve_waiting_live_and_member_upto1"},
     {"id": "stage_member_gain_icons_until_end_live", "pattern": r"^ライブ終了時まで、自分のステージにいるメンバー1人は、(?P<icons>(?:<(?:\([^)]+\)|[^<>]+)>)+)を得る。$", "op": "stage_member_gain_icons_until_end_live"},
     {"id": "stage_member_gain_icons_until_end_live_no_comma", "pattern": r"^ライブ終了時まで、自分のステージにいるメンバー1人は(?P<icons>(?:<(?:\([^)]+\)|[^<>]+)>)+)を得る。$", "op": "stage_member_gain_icons_until_end_live"},
@@ -1198,6 +1204,83 @@ def _current_yell_reveal_count(gs: 'GameState', base_count: int) -> int:
     return max(0, base + delta)
 
 
+def _ability_text_fragments(ab: Dict[str, Any]) -> List[str]:
+    texts: List[str] = []
+    if not isinstance(ab, dict):
+        return texts
+    for key in ('raw', 'effect_template', 'text', 'conditions', 'trigger', 'ability_type'):
+        val = str(ab.get(key, '') or '').strip()
+        if val:
+            texts.append(val)
+    clauses = ab.get('clauses', [])
+    if isinstance(clauses, list):
+        for cl in clauses:
+            if not isinstance(cl, dict):
+                continue
+            for key in ('raw', 'effect_template', 'text'):
+                val = str(cl.get(key, '') or '').strip()
+                if val:
+                    texts.append(val)
+    return texts
+
+
+def _card_replaces_own_yell_with_deck_bottom(ci: Optional[CardInfo]) -> bool:
+    if not ci:
+        return False
+    try:
+        abilities = list(getattr(ci, 'abilities', []) or [])
+    except Exception:
+        abilities = []
+    for ab in abilities:
+        if not isinstance(ab, dict):
+            continue
+        blob = ''.join(_ability_text_fragments(ab))
+        compact = _yell_compact_text(blob)
+        if '自分のエール' not in compact:
+            continue
+        if 'デッキの上から行う代わりにデッキの下から行う' in compact:
+            return True
+        if 'デッキの上から行うかわりにデッキの下から行う' in compact:
+            return True
+    return False
+
+
+def _yell_uses_deck_bottom(gs: 'GameState', cards_db: Dict[str, CardInfo]) -> Tuple[bool, List[str]]:
+    """Return whether current own YELL should reveal from the deck bottom.
+
+    The source is a BODY/always replacement effect, so live-set draw and normal
+    draw effects still use the deck top.  Scan staged members and current LIVE
+    cards generically instead of binding the behavior to one card number.
+    """
+    sources: List[str] = []
+    try:
+        for pos in ('L', 'C', 'R'):
+            slot = (getattr(gs, 'stage', {}) or {}).get(pos)
+            cn = str(getattr(slot, 'cardnumber', '') or '').strip() if slot else ''
+            if cn and _card_replaces_own_yell_with_deck_bottom(_get_card(cards_db, cn)):
+                sources.append(_canon_cardno(cn))
+    except Exception:
+        pass
+    try:
+        for cn in list(getattr(gs, 'set_zone', []) or []):
+            canon = _canon_cardno(str(cn or ''))
+            if canon and _card_replaces_own_yell_with_deck_bottom(_get_card(cards_db, canon)):
+                sources.append(canon)
+    except Exception:
+        pass
+    uniq: List[str] = []
+    seen = set()
+    for cn in sources:
+        if cn and cn not in seen:
+            seen.add(cn)
+            uniq.append(cn)
+    return (bool(uniq), uniq)
+
+
+def _take_yell_card_from_deck(gs: 'GameState', from_bottom: bool = False) -> str:
+    return str(gs.deck.pop() if bool(from_bottom) else gs.deck.pop(0))
+
+
 def _perform_additional_yell(gs: 'GameState', rng: random.Random, cards_db: Dict[str, CardInfo], n: int, reason: str = '') -> List[str]:
     """Reveal n additional YELL cards, add draw icons, and queue any YELL-time autos."""
     base_n = max(0, int(n or 0))
@@ -1206,13 +1289,14 @@ def _perform_additional_yell(gs: 'GameState', rng: random.Random, cards_db: Dict
         gs.log.append(f"[YELL+] reveal count modifier: {base_n} -> {n} ({reason or 'additional'})")
     if n <= 0:
         return []
+    bottom_source, bottom_sources = _yell_uses_deck_bottom(gs, cards_db)
     revealed: List[str] = []
     for i in range(n):
         if not getattr(gs, 'deck', None):
             _rule_refresh_main_deck(gs, rng, reason=f'additional_yell@{i}')
         if not getattr(gs, 'deck', None):
             break
-        revealed.append(gs.deck.pop(0))
+        revealed.append(_take_yell_card_from_deck(gs, bottom_source))
     if not revealed:
         gs.log.append(f"[YELL+] additional yell 0 ({reason or 'no cards'})")
         return []
@@ -1241,7 +1325,10 @@ def _perform_additional_yell(gs: 'GameState', rng: random.Random, cards_db: Dict
     else:
         got, drawn_cards = 0, []
     gs.log.append(f"[YELL+-DEBUG] drawn_cards={drawn_cards} deck_after_draw n={len(getattr(gs, 'deck', []) or [])} hand_n={len(getattr(gs, 'hand', []) or [])}")
-    gs.log.append(f"[YELL+] revealed {len(revealed)} ({reason or 'additional'}, draw+{draw_n} -> drew {got})")
+    source_note = 'deck_bottom' if bottom_source else 'deck_top'
+    if bottom_source and bottom_sources:
+        source_note += f" by {','.join(bottom_sources)}"
+    gs.log.append(f"[YELL+] revealed {len(revealed)} ({reason or 'additional'}, source={source_note}, draw+{draw_n} -> drew {got})")
     _append_effect_event(gs, 'additional_yell', source_cn=str(reason or ''), detail=f'revealed {len(revealed)} cards; draw icons {draw_n}; drew {got}', revealed=revealed, drawn=drawn_cards, requested_count=base_n, effective_count=n)
     try:
         queued = int(_enqueue_yell_revealed_body_auto_triggers(gs, cards_db, revealed, draw_icon_count=draw_n, drew_count=got, drawn_cards=drawn_cards) or 0)
@@ -1406,6 +1493,24 @@ def _ability_usage_flags(ab: Dict[str, Any]) -> Dict[str, Any]:
 def _ability_key(ci: CardInfo, ab: Dict[str, Any], pos: str) -> str:
     cn = str(getattr(ci, 'cardnumber', '') or '')
     aid = str(ab.get('ability_id', '') or ab.get('ability_index', '') or '')
+    if not aid:
+        try:
+            parts = [
+                str(ab.get('ability_type', '') or ''),
+                str(ab.get('trigger', '') or ''),
+                str(ab.get('conditions', '') or ''),
+            ]
+            clauses = ab.get('clauses', [])
+            if isinstance(clauses, list):
+                for cl in clauses[:2]:
+                    if not isinstance(cl, dict):
+                        continue
+                    parts.append(str(cl.get('cost_template', '') or ''))
+                    parts.append(str(cl.get('effect_template', '') or cl.get('raw', '') or ''))
+            blob = _yell_compact_text('|'.join(parts))
+            aid = blob[:80]
+        except Exception:
+            aid = ''
     return f"{pos}:{cn}:{aid}"
 
 def _activated_clause_is_hand_self_discard_draw_named_blade(cost_text: str, effect_text: str) -> Dict[str, Any]:
@@ -1986,11 +2091,21 @@ def can_activate_in_state(gs: 'GameState', cards_db: Dict[str, CardInfo], pos: s
         if not isinstance(clauses, list) or not clauses:
             continue
         ok_any = False
-        for cl in clauses:
+        for cl_idx, cl in enumerate(clauses):
             if not isinstance(cl, dict):
                 continue
             cost = str(cl.get('cost_template', '') or '')
             eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+            sibling_choice_effects: List[str] = []
+            try:
+                for cl2 in list(clauses)[int(cl_idx) + 1:]:
+                    if not isinstance(cl2, dict):
+                        continue
+                    eff2 = str(cl2.get('effect_template', '') or cl2.get('raw', '') or '').strip()
+                    if eff2:
+                        sibling_choice_effects.append(eff2)
+            except Exception:
+                sibling_choice_effects = []
             if not eff:
                 continue
             # BODY起動効果（手札をすべて公開する）はeffect_templateが_EFFECT_RULESにないためスキップ
@@ -3141,6 +3256,33 @@ def _enqueue_reorder_from_topk_all(gs: 'GameState', k: int, rng: Optional[random
         'kept': [],
     })
     gs.log.append(f'[PENDING] reorder top {len(pool)} all cards')
+
+
+def _enqueue_reorder_from_bottomk_keep_any(gs: 'GameState', k: int, rng: Optional[random.Random] = None, ctx: Optional[Dict[str, Any]] = None) -> None:
+    k = int(k or 0)
+    if k <= 0:
+        return
+    if not gs.deck:
+        gs.log.append('[INFO] look_bottom_reorder: deck empty')
+        return
+    pool: List[str] = []
+    for _ in range(min(k, len(gs.deck))):
+        pool.append(gs.deck.pop())
+    if not pool:
+        return
+    opts = list(pool) + ['skip']
+    common_modal = _topdeck_modal_common_from_ctx(ctx)
+    gs.pending.append({
+        **common_modal,
+        'kind': 'reorder_bottomk_keep_any',
+        'text': f'デッキ下から{len(pool)}枚を見る：好きな枚数を好きな順番でデッキ下に置く（1枚目=一番下）。残りは控え室。/ skipで終了',
+        'options': opts,
+        'pool': list(pool),
+        'kept': [],
+        'allow_less': True,
+    })
+    gs.log.append(f'[PENDING] reorder bottom {len(pool)} keep-any (rest -> waiting room)')
+
 
 def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[str, CardInfo], rule: Dict[str, Any], gd: Dict[str, str], ctx: Dict[str, Any]) -> None:
     # Extension hook: try lightweight effect layer first. This lets day-to-day
@@ -5062,6 +5204,33 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         })
         gs.log.append(f'[PENDING] {source_cn}: optional mass bottom all own MEMBER cards')
         return
+    if op == 'green_group_members_exact_shuffle_bottom_all_stage_blade':
+        source_cn = str((ctx or {}).get('source_cn', '') or '')
+        group = str(gd.get('group', '') or '').strip()
+        n = int(gd.get('n', 0) or 0)
+        blade_n = _count_blade_icons_from_tagblob(str(gd.get('blades', '') or ''))
+        cands: List[str] = []
+        for cn0 in list(getattr(gs, 'green_room', []) or []):
+            ci0 = _get_card(cards_db, cn0)
+            if ci0 and _is_member_ci(ci0) and _ci_matches_group_or_unit(ci0, group):
+                cands.append(str(cn0))
+        if n <= 0 or len(cands) < n:
+            gs.log.append(f'[SKIP] {source_cn}: waiting-room 『{group}』 MEMBER candidates={len(cands)}/{n} -> optional bottom skipped')
+            return
+        gs.pending.append({
+            'kind': 'choose_green_group_members_exact_shuffle_bottom_all_stage_blade',
+            'text': f'{source_cn or "この能力"}：控え室の『{group}』メンバーカードを{n}枚選び、シャッフルしてデッキ下に置きますか？',
+            'options': ['skip'] + list(cands),
+            'display_cards': list(cands),
+            'candidates': list(cands),
+            'picked': [],
+            'remaining': int(n),
+            'group': group,
+            'blade_n': int(blade_n),
+            'source_cn': source_cn,
+        })
+        gs.log.append(f'[PENDING] {source_cn}: choose exact {n} 『{group}』 MEMBER -> shuffled deck bottom, all stage blade +{blade_n}')
+        return
     if op == 'both_players_bottom_all_green_members_threshold_retrieve_live_gain_blade':
         source_cn = str((ctx or {}).get('source_cn', '') or '')
         source_pos = str((ctx or {}).get('pos', '') or '').upper()
@@ -5705,6 +5874,41 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
             gs.log.append(f'[AUTO] {src}: discarded {discarded or "-"} does not match 『{group}』 -> retrieve LIVE from waiting room')
             _enqueue_choose_from_green(gs, cards_db, kind='LIVE', n=1, ctx=ctx, allow_less=False)
         return
+    if op == 'milled_context_group_live_or_no_bh_member_choose_one':
+        group = str(gd.get('group', '') or '').strip()
+        src = str((ctx or {}).get('source_cn', '') or '')
+        try:
+            moved = [str(x) for x in list(getattr(gs, '_last_activate_milled_cards', []) or []) if str(x or '').strip()]
+        except Exception:
+            moved = []
+        matched_cards: List[str] = []
+        for cn0 in moved:
+            ci0 = _get_card(cards_db, cn0)
+            if not ci0 or not _ci_matches_group_or_unit(ci0, group):
+                continue
+            if _is_live_ci(ci0) or (_is_member_ci(ci0) and not _ci_has_blade_heart_payload(ci0)):
+                matched_cards.append(str(cn0))
+        choices = [str(x) for x in list((ctx or {}).get('choice_effects', []) or []) if str(x or '').strip()]
+        if not matched_cards:
+            gs.log.append(f'[SKIP] {src}: milled cards do not contain 『{group}』 LIVE or no-bladeheart MEMBER -> choice skipped')
+            return
+        if not choices:
+            gs.log.append(f'[WARN] {src}: milled condition met by {matched_cards}, but no following choices were available')
+            return
+        gs.pending.append({
+            'kind': 'choose_effects',
+            'text': f'{src or "この能力"}: コストで控え室に置いたカードが条件を満たしました。以下から1つを選んでください。',
+            'options': list(choices),
+            'remaining': list(choices),
+            'picked': [],
+            'min': 1,
+            'max': 1,
+            'ctx': dict(ctx or {}),
+            'display_cards': list(matched_cards),
+            'referenced_cards': list(matched_cards),
+        })
+        gs.log.append(f'[PENDING] {src}: milled context matched {matched_cards}; choose 1/{len(choices)} effects')
+        return
     if op == 'stage_group_optional_mill_top_k':
         group = str(gd.get('group', '') or '').strip()
         k = int(gd.get('k', 0) or 0)
@@ -5849,6 +6053,10 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
     if op == 'look_top_reorder_all':
         k = int(gd.get('k', 0) or 0)
         _enqueue_reorder_from_topk_all(gs, k, rng, ctx=ctx)
+        return
+    if op == 'look_bottom_reorder_keep_any':
+        k = int(gd.get('k', 0) or 0)
+        _enqueue_reorder_from_bottomk_keep_any(gs, k, rng, ctx=ctx)
         return
     if op == 'self_top1_optional_green':
         _rule_refresh_for_top_access(gs, rng, 1, reason='self_top1_optional_green')
@@ -8600,6 +8808,22 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         else:
             gs.log.append(f'[SKIP] {src}: revealed 『{group_name}』 members={got}/{need} -> score skipped')
         return
+    if op == 'live_success_all_revealed_group_cards_score':
+        group_name = str(gd.get('group', '') or '').strip()
+        delta = int(gd.get('delta', 0) or 0)
+        src = str((ctx or {}).get('source_cn', '') or '')
+        revealed_cards = [str(x) for x in list(getattr(gs, '_yell_revealed_this_live', []) or []) if str(x or '').strip()]
+        ok = bool(revealed_cards)
+        for cn0 in revealed_cards:
+            ci0 = _get_card(cards_db, cn0)
+            if not ci0 or not _ci_matches_group_or_unit(ci0, group_name):
+                ok = False
+                break
+        if ok:
+            _add_live_success_score_bonus(gs, src, delta, detail=f'all revealed cards are 『{group_name}』 ({len(revealed_cards)})')
+        else:
+            gs.log.append(f'[SKIP] {src}: all revealed cards are 『{group_name}』 -> not satisfied ({len(revealed_cards)} revealed)')
+        return
     if op == 'live_success_stage_member_count_retrieve_live_score_le':
         need = int(gd.get('count', 0) or 0)
         score_lim = int(gd.get('score', 0) or 0)
@@ -8959,34 +9183,26 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         src = str((ctx or {}).get('source_cn', '') or '')
         group_name = str(gd.get('group', '') or '').strip()
         delta = int(gd.get('delta', 0) or 0)
-        needed = {'red', 'green', 'blue'}
-        got_colors: Set[str] = set()
-        referenced: List[str] = []
-        seen_ref: Set[str] = set()
-        for cn2 in list(getattr(gs, '_yell_revealed_this_live', []) or []):
-            ci2 = _get_card(cards_db, cn2)
-            if not ci2 or not _is_member_ci(ci2) or not _ci_matches_group_or_unit(ci2, group_name):
-                continue
-            matched = False
-            for mp in (getattr(ci2, 'base_hearts', {}) or {}, getattr(ci2, 'blade_hearts', {}) or {}):
-                for k, v in (mp or {}).items():
-                    if str(k) in needed and int(v or 0) > 0:
-                        got_colors.add(str(k))
-                        matched = True
-            if matched:
-                cn_key = _canon_cardno(cn2)
-                if cn_key and cn_key not in seen_ref:
-                    seen_ref.add(cn_key)
-                    referenced.append(cn_key)
-        if needed.issubset(got_colors):
+        needed = ['red', 'green', 'blue']
+        refs_by_color, got_colors, referenced = _revealed_group_member_reference_by_color(gs, cards_db, group_name, needed)
+        sections = [
+            {
+                'label': f'{_heart_color_keys_to_jp([color])}を持つ『{group_name}』メンバー',
+                'cards': list(refs_by_color.get(color, []) or []),
+                'condition_status': 'met' if refs_by_color.get(color) else 'unmet',
+            }
+            for color in needed
+        ]
+        if set(needed).issubset(got_colors):
             gs.pending.append({
-                'kind': 'show_revealed_cards_ack',
-                'label': 'エール公開条件確認',
-                'title': 'エール公開条件確認',
+                'kind': 'show_referenced_cards_ack',
+                'label': '参照カード確認',
+                'title': '参照カード確認',
                 'source_cn': src,
                 'text': f'{src}[ライブ成功時]：エールにより公開されたカードの中に、赤・緑・青を持つ『{group_name}』メンバーカードがそれぞれあるため、このカードのスコアを+{delta}します。\n条件を達成するために参照したカードを確認してください。',
                 'display_cards': list(referenced),
-                'revealed_cards': list(referenced),
+                'referenced_cards': list(referenced),
+                'reference_sections': sections,
                 'options': ['ok'],
                 'condition_status': {'state': 'met', 'text': f'条件達成: 赤・緑・青 {sorted(got_colors)}'},
                 'after_live_success_score_bonus': {
@@ -8998,13 +9214,14 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
             gs.log.append(f'[PENDING] {src}: revealed 『{group_name}』 member colors={sorted(got_colors)} -> confirm referenced cards')
         else:
             gs.pending.append({
-                'kind': 'show_revealed_cards_ack',
-                'label': 'エール公開条件確認',
-                'title': 'エール公開条件確認',
+                'kind': 'show_referenced_cards_ack',
+                'label': '参照カード確認',
+                'title': '参照カード確認',
                 'source_cn': src,
                 'text': f'{src}[ライブ成功時]：エールにより公開された『{group_name}』メンバーカードのハート色は {sorted(got_colors)} です。赤・緑・青が揃っていないため、この効果は適用されません。',
                 'display_cards': list(referenced),
-                'revealed_cards': list(referenced),
+                'referenced_cards': list(referenced),
+                'reference_sections': sections,
                 'options': ['ok'],
                 'condition_status': {'state': 'unmet', 'text': f'条件未達成: 赤・緑・青が必要 / 現在 {sorted(got_colors)}'},
             })
@@ -9789,6 +10006,45 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         add = _put_wait_energy_from_deck(gs, n, reason=f'{src} baton from {group_name} energy>={energy_min}')
         _enqueue_energy_placed_auto_triggers(gs, cards_db, add)
         gs.log.append(f'[AUTO] {src}: baton from 『{group_name}』 and energy {energy_count}>={energy_min} -> wait energy +{add}/{n}')
+        return
+    if op in ('baton_from_group_both_players_keep_hand_bottom_draw', 'both_players_keep_hand_bottom_draw'):
+        group_name = str(gd.get('group', '') or '').strip()
+        keep_n = int(gd.get('keep_n', 0) or 0)
+        draw_n = int(gd.get('draw_n', 0) or 0)
+        src = str((ctx or {}).get('source_cn', '') or '')
+        if op == 'baton_from_group_both_players_keep_hand_bottom_draw':
+            old_cns = _baton_old_member_cardnumbers(ctx)
+            from_group = False
+            for cn0 in old_cns:
+                ci0 = _get_card(cards_db, cn0)
+                if ci0 and _is_member_ci(ci0) and _ci_matches_group_or_unit(ci0, group_name):
+                    from_group = True
+                    break
+            if not from_group:
+                gs.log.append(f'[SKIP] {src}: not baton-entered from 『{group_name}』 member')
+                return
+        hand_cards = [str(x) for x in list(getattr(gs, 'hand', []) or []) if str(x or '').strip()]
+        if not hand_cards:
+            drew = draw(gs, draw_n, rng) if draw_n > 0 else 0
+            gs.pending.append({
+                'kind': 'message_ack',
+                'source_cn': src,
+                'text': f'{src or "この能力"}：自分の手札は0枚のためデッキ下に戻すカードはありません。カードを{drew}/{draw_n}枚引きました。相手も同じ処理を手動で行ってください。',
+                'options': ['ok'],
+            })
+            gs.log.append(f'[AUTO] {src}: baton hand cleanup no hand; drew {drew}/{draw_n}; opponent manual')
+            return
+        gs.pending.append({
+            'kind': 'choose_hand_keep_for_baton_bottom_draw',
+            'text': f'{src or "この能力"}：手札から残すカードを{keep_n}枚まで選んでください。選ばなかったカードはシャッフルしてデッキ下に置き、その後カードを{draw_n}枚引きます。',
+            'options': list(hand_cards) + ['Done'],
+            'display_cards': list(hand_cards),
+            'picked': [],
+            'max_keep': int(keep_n),
+            'draw_n': int(draw_n),
+            'source_cn': src,
+        })
+        gs.log.append(f'[PENDING] {src}: baton hand keep up to {keep_n}, bottom rest, draw {draw_n}; opponent manual')
         return
     if op == 'this_live_card_gains_live_success_effect_until_end_live':
         inner = str(gd.get('inner', '') or '').strip()
@@ -10947,18 +11203,24 @@ def try_apply_effect_template(gs: 'GameState', rng: random.Random, cards_db: Dic
     if m_baton_group_enter:
         group_name = str(m_baton_group_enter.group('group') or '').strip()
         inner = str(m_baton_group_enter.group('inner') or '').strip()
-        old_cn = _canon_cardno(str((ctx or {}).get('baton_old_cn', '') or ''))
-        ci_old = _get_card(cards_db, old_cn)
-        ok = bool(old_cn and ci_old and _is_member_ci(ci_old) and _ci_matches_group_or_unit(ci_old, group_name))
+        old_cns = _baton_old_member_cardnumbers(ctx)
+        matched_old = ''
+        ok = False
+        for old_cn0 in old_cns:
+            ci_old = _get_card(cards_db, old_cn0)
+            if old_cn0 and ci_old and _is_member_ci(ci_old) and _ci_matches_group_or_unit(ci_old, group_name):
+                matched_old = old_cn0
+                ok = True
+                break
         if not ok:
-            skip_msg = f'enter baton group condition not met: old={old_cn or "?"} group={group_name}'
+            skip_msg = f'enter baton group condition not met: old={old_cns or "?"} group={group_name}'
             try:
                 ctx['_effect_skipped_reason'] = skip_msg
             except Exception:
                 pass
             gs.log.append(f'[SKIP] {skip_msg}')
             return True
-        detail = _auto_effect_detail_for_condition(ctx, text_norm, f'バトンタッチ元 {old_cn} が『{group_name}』メンバー', '登場時')
+        detail = _auto_effect_detail_for_condition(ctx, text_norm, f'バトンタッチ元 {matched_old} が『{group_name}』メンバー', '登場時')
         return bool(try_apply_effect_template(gs, rng, cards_db, inner, _with_auto_effect_detail(ctx, detail)))
 
     m_baton_not_named_group_enter = re.match(r"^「(?P<exclude_name>[^」]+)」以外の『(?P<group>[^』]+)』のメンバーからバトンタッチして登場した場合、(?P<inner>.+)$", text_norm)
@@ -16376,6 +16638,56 @@ def _revealed_group_members_have_all_six_colors(gs: GameState, cards_db: Dict[st
                 cols.add(k)
     return len(cols) == 6
 
+
+def _revealed_group_member_reference_by_color(
+    gs: GameState,
+    cards_db: Dict[str, CardInfo],
+    group_name: str,
+    needed_colors: List[str],
+) -> Tuple[Dict[str, List[str]], Set[str], List[str]]:
+    """Return the first revealed group member used to satisfy each color."""
+    needed = [str(c or '').strip() for c in list(needed_colors or []) if str(c or '').strip()]
+    by_color: Dict[str, List[str]] = {c: [] for c in needed}
+    got_colors: Set[str] = set()
+    candidates_by_color: Dict[str, List[str]] = {c: [] for c in needed}
+    ordered_refs: List[str] = []
+    seen_refs: Set[str] = set()
+    group_name = str(group_name or '').strip()
+    for cn2 in list(getattr(gs, '_yell_revealed_this_live', []) or []):
+        ci2 = _get_card(cards_db, cn2)
+        if not ci2 or not _is_member_ci(ci2) or not _ci_matches_group_or_unit(ci2, group_name):
+            continue
+        colors = set()
+        for mp in (getattr(ci2, 'base_hearts', {}) or {}, getattr(ci2, 'blade_hearts', {}) or {}):
+            for k, v in (mp or {}).items():
+                if str(k) in needed and int(v or 0) > 0:
+                    colors.add(str(k))
+        if not colors:
+            continue
+        cn_key = _canon_cardno(cn2)
+        for color in needed:
+            if color in colors:
+                got_colors.add(color)
+                if cn_key and cn_key not in candidates_by_color.get(color, []):
+                    candidates_by_color[color].append(cn_key)
+    used_unique: Set[str] = set()
+    for color in needed:
+        cands = list(candidates_by_color.get(color, []) or [])
+        pick = ''
+        for cn_key in cands:
+            if cn_key not in used_unique:
+                pick = cn_key
+                break
+        if not pick and cands:
+            pick = cands[0]
+        if pick:
+            by_color[color] = [pick]
+            used_unique.add(pick)
+            if pick not in seen_refs:
+                seen_refs.add(pick)
+                ordered_refs.append(pick)
+    return by_color, got_colors, ordered_refs
+
 def _enqueue_live_start_prompts(gs: GameState, cards_db: Dict[str, CardInfo]) -> int:
     """Queue live-start auto effects once per live (until Attempt resolves)."""
     if gs.live_start_prompted:
@@ -20155,13 +20467,14 @@ def cmd_yell(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo]) -
             gs.log.append("[YELL] 0 (reveal count reduced to 0)")
         gs.yell_flow_completed_this_live = True
         return
+    bottom_source, bottom_sources = _yell_uses_deck_bottom(gs, cards_db)
     revealed = []
     for i in range(n):
         if not gs.deck:
             _rule_refresh_main_deck(gs, rng, reason=f'yell@{i}')
         if not gs.deck:
             break
-        revealed.append(gs.deck.pop(0))
+        revealed.append(_take_yell_card_from_deck(gs, bottom_source))
     gs.resolve_zone.extend(revealed)
     # Track cheer reveals for this live (e.g., Poppin' Up!)
     try:
@@ -20185,7 +20498,10 @@ def cmd_yell(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo]) -
     else:
         got, drawn_cards = 0, []
     gs.log.append(f"[YELL-DEBUG] drawn_cards={drawn_cards} deck_after_draw n={len(getattr(gs, 'deck', []) or [])} hand_n={len(getattr(gs, 'hand', []) or [])}")
-    gs.log.append(f"[YELL] revealed {len(revealed)} (blade={n}), draw+{draw_n} -> drew {got}")
+    source_note = 'deck_bottom' if bottom_source else 'deck_top'
+    if bottom_source and bottom_sources:
+        source_note += f" by {','.join(bottom_sources)}"
+    gs.log.append(f"[YELL] revealed {len(revealed)} (blade={n}, source={source_note}), draw+{draw_n} -> drew {got}")
     _append_effect_event(gs, 'yell', detail=f'revealed {len(revealed)} cards; draw icons {draw_n}; drew {got}', revealed=revealed, drawn=drawn_cards, base_count=base_n, effective_count=n)
     queued_yell_auto = _enqueue_yell_revealed_body_auto_triggers(gs, cards_db, revealed, draw_icon_count=draw_n, drew_count=got, drawn_cards=drawn_cards)
     # Normal YELL without an auto trigger previously relied on the resolve_zone
@@ -24171,16 +24487,26 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
             used = int((getattr(gs, 'used_this_turn', {}) or {}).get(akey, 0) or 0)
             if used >= 1:
                 gs.log.append(f"[INFO] activate: already used this turn ({akey})")
-                return
+                continue
         clauses = ab.get('clauses', [])
         if not isinstance(clauses, list) or not clauses:
             continue
         gs.log.append(f"[ACT] {pos}: {ci.cardnumber} activated")
-        for cl in clauses:
+        for cl_idx, cl in enumerate(clauses):
             if not isinstance(cl, dict):
                 continue
             cost = str(cl.get('cost_template', '') or '')
             eff = str(cl.get('effect_template', '') or cl.get('raw', '') or '').strip()
+            sibling_choice_effects: List[str] = []
+            try:
+                for cl2 in list(clauses)[int(cl_idx) + 1:]:
+                    if not isinstance(cl2, dict):
+                        continue
+                    eff2 = str(cl2.get('effect_template', '') or cl2.get('raw', '') or '').strip()
+                    if eff2:
+                        sibling_choice_effects.append(eff2)
+            except Exception:
+                sibling_choice_effects = []
             cond_thr = int(_activated_success_score_sum_condition(eff) or 0)
             if cond_thr:
                 got_sum = int(_own_success_zone_score_sum(gs, cards_db) or 0)
@@ -24454,6 +24780,10 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                     for _ in range(mill_n):
                         moved_cost.append(gs.deck.pop(0))
                     gs.green_room.extend(moved_cost)
+                    try:
+                        setattr(gs, '_last_activate_milled_cards', list(moved_cost))
+                    except Exception:
+                        pass
                     gs.log.append(f"[COST] activate {ci.cardnumber}: moved top {len(moved_cost)}/{mill_n} cards to waiting room")
             # Special cost: move 1 energy from energy zone under this member
             # Prefer WAIT energy first, then ACTIVE (Mia etc.).
@@ -24596,9 +24926,13 @@ def cmd_activate_to_green(gs: GameState, cards_db: Dict[str, CardInfo], pos: str
                     except Exception:
                         pass
             ctx = {'pos': pos, 'source_cn': ci.cardnumber, 'effect_timing': '起動効果'}
+            if sibling_choice_effects:
+                ctx['choice_effects'] = list(sibling_choice_effects)
             matched = try_apply_effect_template(gs, rng, cards_db, eff, ctx)
             if not matched:
                 gs.log.append(f"[WARN] activate: unsupported effect_template: {eff}")
+            if ('以下から1つを選ぶ' in eff) or ('以下から1つを選ぶ' in _normalize_icon_token_text(eff)):
+                return
             if gs.pending:
                 return
         return
@@ -25963,6 +26297,22 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
                 gs.log.append('[ACK] yell reveal confirmation acknowledged')
         except Exception:
             pass
+        _r = p.get('_resume') if isinstance(p, dict) else None
+        if isinstance(_r, dict) and _r:
+            gs.pending.append(_r)
+        _enqueue_auto_order_from_deferred()
+        return
+    if kind == 'show_referenced_cards_ack':
+        gs.log.append('[ACT] show_referenced_cards_ack: ok')
+        score_bonus = p.get('after_live_success_score_bonus') if isinstance(p, dict) else None
+        if isinstance(score_bonus, dict):
+            src = str(p.get('source_cn', '') or '')
+            cn_bonus = str(score_bonus.get('cn_live', src) or src or '')
+            bonus_n = int(score_bonus.get('bonus', 0) or 0)
+            detail = str(score_bonus.get('detail', '') or '')
+            if cn_bonus and bonus_n:
+                _add_live_success_score_bonus(gs, cn_bonus, bonus_n, detail=detail)
+                gs.log.append(f'[AUTO] {cn_bonus}[ライブ成功時]: referenced cards confirmed -> score +{bonus_n}')
         _r = p.get('_resume') if isinstance(p, dict) else None
         if isinstance(_r, dict) and _r:
             gs.pending.append(_r)
@@ -28554,6 +28904,52 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         })
         gs.log.append(f"[PENDING] reorder_topk_all: picked {pick_cn}; remaining {len(pool)}")
         return
+    if kind == 'reorder_bottomk_keep_any':
+        pool = list(p.get('pool', []) or [])
+        kept = list(p.get('kept', []) or [])
+        if not pool and not kept:
+            gs.log.append('[ERR] reorder_bottomk: state missing')
+            return
+        low = choice_str.lower()
+        if low in ('skip', '__skip__', 'no', 'n', '0', 'false'):
+            if pool:
+                gs.green_room.extend(pool)
+            if kept:
+                gs.deck.extend(list(reversed(kept)))
+            gs.log.append(f"[ACT] reorder_bottomk: kept {len(kept)} on bottom; rest {len(pool)} -> waiting room")
+            return
+        cn = _canon_cardno(choice_str)
+        pick_idx = None
+        for i, x in enumerate(pool):
+            if _canon_cardno(x) == cn:
+                pick_idx = i
+                break
+        if pick_idx is None:
+            gs.log.append(f"[ERR] reorder_bottomk: invalid choice {cn}")
+            gs.deck.extend(list(reversed(pool + kept)))
+            return
+        pick_cn = pool.pop(pick_idx)
+        kept.append(pick_cn)
+        if not pool:
+            gs.deck.extend(list(reversed(kept)))
+            gs.log.append(f"[ACT] reorder_bottomk: kept {len(kept)} on bottom; rest 0 -> waiting room")
+            return
+        opts = list(pool) + ['skip']
+        gs.pending.append({
+            **_topdeck_modal_common_from_ctx(p.get('ctx', {}) if isinstance(p, dict) else {}),
+            'source_cn': str(p.get('source_cn', '') or (p.get('ctx', {}) or {}).get('source_cn', '') or ''),
+            'effect_text': str(p.get('effect_text', '') or p.get('detail_text', '') or ''),
+            'detail_text': str(p.get('detail_text', '') or p.get('effect_text', '') or ''),
+            'trigger': str(p.get('trigger', '') or (p.get('ctx', {}) or {}).get('trigger', '') or ''),
+            'kind': 'reorder_bottomk_keep_any',
+            'text': f'次にデッキ下に置くカードを選択（残り{len(pool)}枚）/ skipで終了',
+            'options': opts,
+            'pool': list(pool),
+            'kept': list(kept),
+            'allow_less': True,
+        })
+        gs.log.append(f"[PENDING] reorder_bottomk: picked {pick_cn}; remaining {len(pool)}")
+        return
     if kind == 'confirm_mill_top_to_green':
         low = str(choice_str or '').strip().lower()
         src = str(p.get('source_cn', '') or '')
@@ -29022,6 +29418,138 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
             _grant_temp_heart(slot, col, add)
         gs.log.append(f'[AUTO] {src}: {pos} under-energy -> energy deck x{n}; gain per {icons} (blade+{b}, hearts={hearts_total})')
         return
+    if kind == 'choose_green_group_members_exact_shuffle_bottom_all_stage_blade':
+        low = str(choice_str or '').strip().lower()
+        src = str(p.get('source_cn', '') or '')
+        if low in ('skip', '__skip__', 'no', 'n', '0', 'false', 'cancel', '使わない', 'いいえ', 'スキップ'):
+            gs.log.append(f'[SKIP] {src}: optional exact group bottom skipped')
+            return
+        cands = [str(x) for x in list(p.get('candidates', []) or []) if str(x or '').strip()]
+        picked = [str(x) for x in list(p.get('picked', []) or []) if str(x or '').strip()]
+        remaining = int(p.get('remaining', 0) or 0)
+        cn = _canon_cardno(choice_str)
+        pick_idx = None
+        for i, x in enumerate(cands):
+            if _canon_cardno(x) == cn:
+                pick_idx = i
+                break
+        if pick_idx is None or remaining <= 0:
+            gs.log.append(f'[ERR] choose exact group bottom: invalid choice {choice_str}')
+            gs.pending.append(p)
+            return
+        pick_cn = cands.pop(pick_idx)
+        picked.append(pick_cn)
+        remaining -= 1
+        if remaining > 0:
+            p2 = dict(p)
+            p2['candidates'] = list(cands)
+            p2['options'] = list(cands)
+            p2['display_cards'] = list(cands)
+            p2['picked'] = list(picked)
+            p2['remaining'] = int(remaining)
+            p2['text'] = f'{src or "この能力"}：デッキ下に戻すカードを選んでください（選択済み{len(picked)}枚、残り{remaining}枚）。'
+            gs.pending.append(p2)
+            gs.log.append(f'[PENDING] {src}: exact group bottom picked={len(picked)} remaining={remaining}')
+            return
+        removed: List[str] = []
+        green_copy = list(getattr(gs, 'green_room', []) or [])
+        for want in picked:
+            wc = _canon_cardno(want)
+            for i, x in enumerate(list(green_copy)):
+                if _canon_cardno(x) == wc:
+                    removed.append(str(green_copy.pop(i)))
+                    break
+        if len(removed) != len(picked):
+            gs.log.append(f'[ERR] {src}: selected cards no longer all exist in waiting room')
+            gs.pending.append(p)
+            return
+        gs.green_room = green_copy
+        try:
+            rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
+        except Exception:
+            rng2 = random.Random()
+        shuffled = list(removed)
+        rng2.shuffle(shuffled)
+        gs.deck.extend(shuffled)
+        blade_n = int(p.get('blade_n', 0) or 0)
+        applied = []
+        if blade_n:
+            for pos2 in ('L', 'C', 'R'):
+                if _grant_stage_member_temp_blade(gs, cards_db, pos2, blade_n, source_cn=src):
+                    applied.append(pos2)
+        gs.log.append(f'[ACT] {src}: selected {len(removed)} cards -> shuffled deck bottom; all stage members {applied} blade +{blade_n}')
+        return
+    if kind == 'choose_hand_keep_for_baton_bottom_draw':
+        src = str(p.get('source_cn', '') or '')
+        picked = [str(x) for x in list(p.get('picked', []) or []) if str(x or '').strip()]
+        max_keep = int(p.get('max_keep', 0) or 0)
+        draw_n = int(p.get('draw_n', 0) or 0)
+        choice0 = str(choice_str or '').strip()
+        if choice0.lower() in ('done', '__done__', 'finish', 'end', '終了', '完了'):
+            keep_canon = [_canon_cardno(x) for x in picked]
+            keep_cards: List[str] = []
+            bottom_cards: List[str] = []
+            for hcn in list(getattr(gs, 'hand', []) or []):
+                hc = _canon_cardno(hcn)
+                if hc in keep_canon:
+                    keep_cards.append(str(hcn))
+                    try:
+                        keep_canon.remove(hc)
+                    except Exception:
+                        pass
+                else:
+                    bottom_cards.append(str(hcn))
+            try:
+                rng2 = random.Random(int(getattr(gs, 'seed', 0) or 0) + int(getattr(gs, 'turn', 0) or 0))
+            except Exception:
+                rng2 = random.Random()
+            shuffled = list(bottom_cards)
+            rng2.shuffle(shuffled)
+            gs.hand = list(keep_cards)
+            gs.deck.extend(shuffled)
+            drew = draw(gs, draw_n, rng) if draw_n > 0 else 0
+            gs.pending.append({
+                'kind': 'message_ack',
+                'source_cn': src,
+                'text': f'{src or "この能力"}：手札から{len(keep_cards)}枚を残し、{len(bottom_cards)}枚をシャッフルしてデッキ下に置き、カードを{drew}/{draw_n}枚引きました。相手も同じ処理を手動で行ってください。',
+                'options': ['ok'],
+            })
+            gs.log.append(f'[ACT] {src}: baton hand keep={len(keep_cards)} bottom={len(bottom_cards)} draw={drew}/{draw_n}; opponent manual')
+            return
+        if len(picked) >= max_keep:
+            gs.log.append(f'[ERR] choose_hand_keep_for_baton: already picked max {max_keep}; use Done')
+            gs.pending.append(p)
+            return
+        cn = _canon_cardno(choice0)
+        hand_canon = [_canon_cardno(x) for x in list(getattr(gs, 'hand', []) or [])]
+        if not cn or cn not in hand_canon:
+            gs.log.append(f'[ERR] choose_hand_keep_for_baton: invalid hand card {choice_str}')
+            gs.pending.append(p)
+            return
+        picked.append(choice0)
+        p2 = dict(p)
+        p2['picked'] = list(picked)
+        if len(picked) >= max_keep:
+            p2['options'] = ['Done']
+            p2['display_cards'] = []
+        else:
+            picked_canon = [_canon_cardno(x) for x in picked]
+            rest = []
+            for hcn in list(getattr(gs, 'hand', []) or []):
+                hc = _canon_cardno(hcn)
+                if hc in picked_canon:
+                    try:
+                        picked_canon.remove(hc)
+                    except Exception:
+                        pass
+                    continue
+                rest.append(str(hcn))
+            p2['options'] = list(rest) + ['Done']
+            p2['display_cards'] = list(rest)
+        p2['text'] = f'{src or "この能力"}：残す手札を選んでください（{len(picked)}/{max_keep}枚選択済み）。終了する場合はDone。'
+        gs.pending.append(p2)
+        gs.log.append(f'[PENDING] {src}: baton hand keep picked={len(picked)}/{max_keep}')
+        return
     if kind == 'confirm_mass_green_members_to_bottom':
         low = str(choice_str or '').strip().lower()
         src = str(p.get('source_cn', '') or '')
@@ -29396,9 +29924,25 @@ def cmd_resolve_pending(gs: GameState, cards_db: Dict[str, CardInfo], idx: int, 
         if len(targets) < 2:
             gs.log.append(f'[ERR] {src}: enter-ability replay targets missing source={src_pos} target={pos2}')
             return
+        triggers = []
         for pos0, cn0 in targets:
-            handle_enter_auto(gs, cards_db, pos0, cn0, rng=rng, entry_origin='ability_replay')
-            gs.log.append(f'[AUTO] {src}: replayed ENTER ability of {cn0} at {pos0}')
+            triggers.append({
+                'kind': 'enter_auto',
+                'source_cn': cn0,
+                'pos': pos0,
+                'cn': cn0,
+                'entry_origin': 'ability_replay',
+                'label': f'{pos0}: {cn0}[登場/再発動]',
+            })
+        if triggers:
+            gs.pending.insert(0, {
+                'kind': 'auto_order',
+                'text': f'{src or "この能力"}：選ばれたメンバーが持つ<登場>能力が同時に発動しました。解決する順番を選んでください（1つずつ解決）。',
+                'options': [_auto_trigger_option_text(t) for t in triggers if _auto_trigger_option_text(t)],
+                'queue': list(triggers),
+                'source_cn': src,
+            })
+            gs.log.append(f'[PROMPT] {src}: replay ENTER abilities queued targets={targets}')
         _enqueue_auto_order_from_deferred()
         return
     if kind == 'choose_energy_or_stage_group_member_to_activate':
@@ -30537,7 +31081,7 @@ def cmd_next(gs: GameState, rng: random.Random, cards_db: Dict[str, CardInfo], i
             k0 = str(p0.get('kind', '') or '')
             opts0 = [str(x).strip().lower() for x in list(p0.get('options', []) or []) if str(x).strip()]
             ack_kinds = {
-                'show_revealed_cards_ack', 'message_ack', 'effect_notice',
+                'show_revealed_cards_ack', 'show_referenced_cards_ack', 'message_ack', 'effect_notice',
                 'live_start_success_count_distinct_names_score_ack',
                 'live_attempt_summary_ack',
                 'mass_bottom_auto_ack', 'mass_bottom_optional_result_ack',

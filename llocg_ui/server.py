@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: manual_debug_move_stats_patch_20260723a
+# BUILD_TAG: referenced_cards_popup_scroll_20260723a
 from __future__ import annotations
 
 """llocg_ui.server
@@ -4255,7 +4255,7 @@ HTML = r'''<!doctype html>
   function installHorizontalWheelScroll(element){
     if(!element) return;
     element.addEventListener('wheel', (ev)=>{
-      const target = ev.target && ev.target.closest ? ev.target.closest('.choiceRow, #modalCards, #viewerCards') : element;
+      const target = ev.target && ev.target.closest ? ev.target.closest('.choiceRow, .yellRevealCardRow, .referencedCardRow, #modalCards, #viewerCards') : element;
       const scroller = (target && target.scrollWidth > target.clientWidth) ? target : element;
       if(!scroller || scroller.scrollWidth <= scroller.clientWidth) return;
       const vertical = Math.abs(ev.deltaY || 0) >= Math.abs(ev.deltaX || 0);
@@ -6982,7 +6982,7 @@ inner.appendChild(card);
     const label = String((p && p.label) || '');
     const kind = String((p && p.kind) || '');
     return !!(p.yell_reveal_ack || p.yell_draw_icon_count || p.yell_heart_counts || p.yell_score_icon_count)
-      || label.includes('エール公開')
+      || (kind === 'show_revealed_cards_ack' && label === 'エール公開カード確認')
       || kind === 'choose_yell_revealed_to_green_then_extra_yell';
   }
 
@@ -7563,11 +7563,102 @@ inner.appendChild(card);
     applyPopupPeekState();
   }
 
+  function openReferencedCardsPopup(p){
+    const title = String((p && (p.title || p.label)) || '参照カード確認');
+    const helperText = String((p && (p.text || p.prompt || p.message)) ? (p.text || p.prompt || p.message) : '効果の条件判定で参照したカードを確認してください。');
+    popup = {type:'pending', title, closable:false, helperText};
+    elModalTitle.textContent = title;
+    setRichText(elModalText, helperText);
+    elModalActions.innerHTML = '';
+    elModalCards.innerHTML = '';
+    elModalCards.style.display = 'flex';
+    elModalCards.style.flexDirection = 'column';
+    elModalCards.style.gap = uiCalc(8);
+
+    const sections = Array.isArray(p && p.reference_sections) ? p.reference_sections : [];
+    const fallbackCards = Array.isArray(p && p.display_cards) ? p.display_cards.map(x=>String(x||'')).filter(Boolean) : [];
+    const renderSection = (label, cards, status='')=>{
+      const sec = document.createElement('div');
+      sec.className = 'referencedCardSection';
+      sec.style.cssText = 'display:flex;flex-direction:column;gap:6px;min-width:0;';
+      const head = document.createElement('div');
+      head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;font-weight:900;color:#dfe8f7;';
+      const name = document.createElement('span');
+      name.textContent = String(label || '参照カード');
+      head.appendChild(name);
+      if(status){
+        const chip = document.createElement('span');
+        chip.style.cssText = 'font-size:11px;padding:2px 7px;border-radius:999px;border:1px solid rgba(255,255,255,.18);color:#dfe8f7;background:rgba(255,255,255,.08);';
+        chip.textContent = status === 'met' ? '達成' : (status === 'unmet' ? '未達' : String(status));
+        head.appendChild(chip);
+      }
+      sec.appendChild(head);
+      const row = document.createElement('div');
+      row.className = 'referencedCardRow';
+      row.style.cssText = 'display:flex;gap:8px;overflow:auto;padding:5px 1px 8px;';
+      const list = (Array.isArray(cards) ? cards : []).map(x=>String(x||'')).filter(Boolean);
+      if(list.length){
+        list.forEach((cn, idx)=>{
+          const item = document.createElement('button');
+          item.type = 'button';
+          item.className = 'choiceBtn';
+          item.style.width = uiCalc(78);
+          item.style.height = uiCalc(120);
+          const img = document.createElement('img');
+          img.src = imgUrl(cn);
+          img.alt = cn;
+          const cap = document.createElement('div');
+          cap.className = 'choiceCap';
+          cap.textContent = cardChoiceCaption(cn, idx + 1, list.length);
+          item.appendChild(img);
+          item.appendChild(cap);
+          item.addEventListener('click', ev=>{ ev.stopPropagation(); showCardDetail(cn, item); });
+          row.appendChild(item);
+        });
+      }else{
+        const note = document.createElement('div');
+        note.style.cssText = 'font-size:12px;color:rgba(255,255,255,.62);padding:8px 2px;';
+        note.textContent = '該当カードなし';
+        row.appendChild(note);
+      }
+      sec.appendChild(row);
+      elModalCards.appendChild(sec);
+    };
+
+    if(sections.length){
+      sections.forEach(sec=>{
+        renderSection(String(sec && sec.label || ''), Array.isArray(sec && sec.cards) ? sec.cards : [], String(sec && sec.condition_status || ''));
+      });
+    }else{
+      renderSection('参照カード', fallbackCards, '');
+    }
+
+    const btnOk = document.createElement('button');
+    btnOk.className = 'miniBtn';
+    btnOk.textContent = '確認';
+    let submitting = false;
+    btnOk.addEventListener('click', async ev=>{
+      ev.stopPropagation();
+      if(submitting) return;
+      submitting = true;
+      st = await apiCmd('resolve_pending', {idx:0, choice:'ok'});
+      selHand = [];
+      updateTop();
+      render();
+    });
+    elModalActions.appendChild(btnOk);
+    elMask.style.display = 'block';
+    applyPopupPeekState();
+  }
+
   function closePopup(){
     popup = {type:null};
     elMask.style.display = 'none';
     elMask.classList.remove('popupPeekHidden');
     clearModalLead();
+    elModalCards.style.display = '';
+    elModalCards.style.flexDirection = '';
+    elModalCards.style.gap = '';
     elModalCards.innerHTML = '';
     elModalText.textContent = '';
     elModalActions.innerHTML = '';
@@ -7808,10 +7899,18 @@ inner.appendChild(card);
   function showPending(p){
     const kind = (p && p.kind) ? String(p.kind) : '';
     setModalContextFromPending(p);
+    elModalCards.style.display = '';
+    elModalCards.style.flexDirection = '';
+    elModalCards.style.gap = '';
 
     // Drag-and-drop reorder UI
     if(kind === 'reorder_topk_keep_any'){
       showReorderPopup(p);
+      return;
+    }
+
+    if(kind === 'show_referenced_cards_ack'){
+      openReferencedCardsPopup(p);
       return;
     }
 

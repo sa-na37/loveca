@@ -24,7 +24,7 @@ from llocg_ui.server import App, HTML as SINGLE_HTML
 from llocg_ui.views import make_view_state
 from .core import ENERGY_DECK_SIZE, DualMatchEngine, Phase, discover_data_root
 
-BUILD_TAG = "llocg_dual_v2_record_reset_top_right_20260722a"
+BUILD_TAG = "llocg_dual_v2_no_game_label_20260723a"
 
 
 @dataclass
@@ -3857,7 +3857,7 @@ button{{border:1px solid rgba(255,255,255,.25);border-radius:8px;background:#2a3
 .judgmentCard:hover{{background:#303b50}}.judgmentCard.selected{{border-color:#56a4ff;background:#213f69;box-shadow:0 0 0 3px rgba(86,164,255,.2)}}.judgmentCard img{{width:126px;height:176px;object-fit:contain;border-radius:8px;background:#080a0e}}.judgmentCard div{{font-size:12px;font-weight:850;word-break:break-all;margin-top:7px}}
 #judgmentHint{{text-align:center;margin-top:16px;color:#ffdd84;font-weight:850}}
 #judgmentNotice{{position:fixed;left:50%;top:50%;transform:translate(-50%,-112%);z-index:45000;display:none;max-width:min(920px,82vw);padding:12px 20px;border-radius:14px;background:rgba(21,28,42,.96);border:2px solid #6684b3;box-shadow:0 10px 40px rgba(0,0,0,.72);font-size:15px;font-weight:850;text-align:center;pointer-events:none}}
-</style></head><body><div id="tag">{BUILD_TAG}</div><div id="recordButtons"><button id="recordP1" type="button">P1勝利</button><button id="recordP2" type="button">P2勝利</button><button id="recordNG" type="button">NG</button></div><div id="shell"><iframe id="p2frame" class="playerFrame" src="/p2/ui?upper=1"></iframe><div id="divider"><div id="phaseBanner">読み込み中</div><div id="requestStatus"></div><div id="controls"><form id="undoForm" method="post" action="/match_action_form"><input type="hidden" name="action" value="UNDO"><button id="undo" type="submit">UNDO</button></form><button id="save" type="button">中断保存</button><button id="loadBtn" type="button">再開読込</button><input id="loadFile" type="file" accept="application/json,.json" hidden><form id="nextForm" method="post" action="/match_action_form"><input type="hidden" name="action" value="NEXT"><button id="next" type="submit">NEXT</button></form></div></div><iframe id="p1frame" class="playerFrame" src="/p1/ui"></iframe></div>
+</style></head><body><div id="tag">{BUILD_TAG}</div><div id="recordButtons"><button id="recordP1" type="button">P1勝利</button><button id="recordP2" type="button">P2勝利</button><button id="recordNG" type="button">No Game</button></div><div id="shell"><iframe id="p2frame" class="playerFrame" src="/p2/ui?upper=1"></iframe><div id="divider"><div id="phaseBanner">読み込み中</div><div id="requestStatus"></div><div id="controls"><form id="undoForm" method="post" action="/match_action_form"><input type="hidden" name="action" value="UNDO"><button id="undo" type="submit">UNDO</button></form><button id="save" type="button">中断保存</button><button id="loadBtn" type="button">再開読込</button><input id="loadFile" type="file" accept="application/json,.json" hidden><form id="nextForm" method="post" action="/match_action_form"><input type="hidden" name="action" value="NEXT"><button id="next" type="submit">NEXT</button></form></div></div><iframe id="p1frame" class="playerFrame" src="/p1/ui"></iframe></div>
 <div id="judgmentNotice"></div>
 <div id="gameOverNotice"><div id="gameOverTitle">対戦終了</div><div id="gameOverBody"></div></div>
 <div id="judgmentOverlay"><div id="judgmentPanel"><div id="judgmentTitle">成功ライブカードを選択</div><div id="judgmentMessage"></div><div id="judgmentCards"></div><div id="judgmentHint">カードを1枚選択して、中央の「成功ライブを決定」を押してください</div></div></div>

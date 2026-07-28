@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# BUILD_TAG = "launcher_progress_remote_nickname_fast_probe_20260723a"
+# BUILD_TAG = "deck_regulation_presets_20260728a"
 """
 Loveca application launcher (phase 1).
 
@@ -49,7 +49,7 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 
 
-BUILD_TAG = "launcher_progress_remote_nickname_fast_probe_20260723a"
+BUILD_TAG = "deck_regulation_presets_20260728a"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8875
 SESSION_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -322,6 +322,82 @@ class AppState:
             BASE_RARITY_CATALOG + PARALLEL_RARITY_CATALOG
         )
     }
+    DEFAULT_DECK_REGULATION = "standard_20260403"
+    LOVECA_POINT_LIMIT = 9
+    LOVECA_POINT_RULES_20260403: dict[str, dict[str, Any]] = {
+        "PL!N-bp1-003": {"points": 4, "rarities": ("R＋", "P", "P＋", "SEC")},
+        "PL!N-bp1-012": {"points": 3, "rarities": ("R＋", "P", "P＋", "SEC")},
+        "LL-bp2-001": {"points": 3, "rarities": ("R＋",)},
+        "PL!N-bp1-002": {"points": 2, "rarities": ("R＋", "P", "P＋", "SEC")},
+        "PL!N-sd1-008": {"points": 2, "rarities": ("SD", "RM")},
+        "PL!HS-bp2-014": {"points": 2, "rarities": ("N",)},
+        "PL!SP-bp1-005": {"points": 1, "rarities": ("R", "P")},
+        "PL!N-bp1-029": {"points": 1, "rarities": ("L",)},
+        "PL!SP-sd1-019": {"points": 1, "rarities": ("SD", "RM")},
+        "PL!SP-sd1-020": {"points": 1, "rarities": ("SD", "RM")},
+        "PL!SP-pb1-014": {"points": 1, "rarities": ("N",)},
+        "PL!SP-bp2-024": {"points": 1, "rarities": ("L", "SECL")},
+    }
+    LOVECA_POINT_RULES_20260808: dict[str, dict[str, Any]] = {
+        **LOVECA_POINT_RULES_20260403,
+        "LL-bp2-001": {"points": 5, "rarities": ("R＋",)},
+        "PL!N-pb1-011": {"points": 2, "rarities": ("R", "P＋")},
+        "PL!N-bp3-030": {"points": 1, "rarities": ("L",)},
+        "PL!N-bp4-030": {"points": 1, "rarities": ("L",)},
+    }
+    LOVECA_POINT_RULES_20260808.pop("PL!SP-bp2-024", None)
+    DECK_REGULATIONS: dict[str, dict[str, Any]] = {
+        "standard_20260403": {
+            "label": "通常60枚（ラブカPt 2026/4/3適用）",
+            "description": "メンバー48枚・ライブ12枚。ラブカポイントは2026年4月3日から2026年8月7日までの適用分。",
+            "member": 48,
+            "live": 12,
+            "total": 60,
+            "copy_limit": 4,
+            "loveca_point_limit": LOVECA_POINT_LIMIT,
+            "loveca_point_rules": LOVECA_POINT_RULES_20260403,
+        },
+        "standard_20260808": {
+            "label": "通常60枚（ラブカPt 2026/8/8予定）",
+            "description": "メンバー48枚・ライブ12枚。2026年8月8日から適用予定として告知されたラブカポイント。",
+            "member": 48,
+            "live": 12,
+            "total": 60,
+            "copy_limit": 4,
+            "loveca_point_limit": LOVECA_POINT_LIMIT,
+            "loveca_point_rules": LOVECA_POINT_RULES_20260808,
+        },
+        "standard_no_loveca_points": {
+            "label": "通常60枚（ラブカPtなし）",
+            "description": "メンバー48枚・ライブ12枚。ラブカポイントだけを適用しない確認用。",
+            "member": 48,
+            "live": 12,
+            "total": 60,
+            "copy_limit": 4,
+            "loveca_point_limit": None,
+            "loveca_point_rules": {},
+        },
+        "half_no_loveca_points": {
+            "label": "ハーフ30枚（ラブカPtなし）",
+            "description": "メンバー24枚・ライブ6枚。短時間テストや仮組み確認用。",
+            "member": 24,
+            "live": 6,
+            "total": 30,
+            "copy_limit": 4,
+            "loveca_point_limit": None,
+            "loveca_point_rules": {},
+        },
+        "half_20260403": {
+            "label": "ハーフ30枚（ラブカPt 2026/4/3適用）",
+            "description": "メンバー24枚・ライブ6枚。ラブカポイントは通常デッキと同じ上限9で確認。",
+            "member": 24,
+            "live": 6,
+            "total": 30,
+            "copy_limit": 4,
+            "loveca_point_limit": LOVECA_POINT_LIMIT,
+            "loveca_point_rules": LOVECA_POINT_RULES_20260403,
+        },
+    }
 
     def __init__(self, root: Path) -> None:
         self.root = Path(root).resolve()
@@ -372,6 +448,8 @@ class AppState:
         self._variants_by_card_cache: dict[str, list[dict[str, Any]]] | None = None
         self._variant_path_cache: dict[str, Path] | None = None
         self._product_catalog_cache: dict[str, str] | None = None
+        self._diagnostics_cache: dict[str, Any] | None = None
+        self._diagnostics_cache_at = 0.0
         threading.Thread(target=self._warm_startup_caches, daemon=True).start()
 
     def path(self, relative: str) -> Path:
@@ -386,6 +464,8 @@ class AppState:
         self._variants_by_card_cache = None
         self._variant_path_cache = None
         self._product_catalog_cache = None
+        self._diagnostics_cache = None
+        self._diagnostics_cache_at = 0.0
 
     def _warm_startup_caches(self) -> None:
         """Warm card/deck metadata in the background after the launcher opens."""
@@ -525,10 +605,56 @@ class AppState:
                             html.unescape(str(tag))
                             for tag in self._normalize_deck_tags(raw.get("tags"))
                         ]
+                    raw["regulation"] = self._normalize_deck_regulation_key(
+                        raw.get("regulation")
+                        or raw.get("deck_regulation")
+                        or raw.get("regulation_key")
+                    )
                     return raw
             except Exception:
                 continue
         return {}
+
+    @classmethod
+    def _normalize_deck_regulation_key(cls, value: Any) -> str:
+        key = str(value or "").strip()
+        if key in cls.DECK_REGULATIONS:
+            return key
+        aliases = {
+            "standard": "standard_20260403",
+            "default": "standard_20260403",
+            "current": "standard_20260403",
+            "20260403": "standard_20260403",
+            "20260808": "standard_20260808",
+            "unrestricted": "standard_no_loveca_points",
+            "no_loveca_points": "standard_no_loveca_points",
+            "half": "half_no_loveca_points",
+        }
+        return aliases.get(key.casefold(), cls.DEFAULT_DECK_REGULATION)
+
+    @classmethod
+    def deck_regulation(cls, regulation_key: Any = "") -> dict[str, Any]:
+        key = cls._normalize_deck_regulation_key(regulation_key)
+        regulation = dict(cls.DECK_REGULATIONS[key])
+        regulation["key"] = key
+        return regulation
+
+    @classmethod
+    def deck_regulation_options(cls) -> list[dict[str, Any]]:
+        options: list[dict[str, Any]] = []
+        for key in cls.DECK_REGULATIONS:
+            regulation = cls.deck_regulation(key)
+            options.append({
+                "key": key,
+                "label": str(regulation.get("label") or key),
+                "description": str(regulation.get("description") or ""),
+                "member": int(regulation.get("member") or 0),
+                "live": int(regulation.get("live") or 0),
+                "total": int(regulation.get("total") or 0),
+                "loveca_point_enabled": bool(regulation.get("loveca_point_rules")),
+                "loveca_point_limit": regulation.get("loveca_point_limit"),
+            })
+        return options
 
     def deck_validation(self, relative_path: str) -> dict[str, Any]:
         try:
@@ -537,6 +663,7 @@ class AppState:
             if not path.is_file():
                 raise ValueError("選択したデッキファイルが見つかりません。")
             metadata = self._read_deck_metadata(path)
+            regulation = self.deck_regulation(metadata.get("regulation"))
             rows: list[dict[str, str]] = []
             with path.open("r", encoding="utf-8-sig", newline="") as fh:
                 reader = csv.DictReader(fh, delimiter="\t")
@@ -555,26 +682,59 @@ class AppState:
                         continue
                     rows.append({"count": count or "1", "card_no": card_no, "rarity": str(row.get(rarity_key, "") or "").strip() if rarity_key else "", "name": html.unescape(str(row.get(name_key, "") or "")).strip() if name_key else "", "variant_id": str(row.get(variant_key, "") or "").strip() if variant_key else ""})
         except (ValueError, OSError) as exc:
-            return {"valid": False, "error": str(exc), "composition": {"member": 0, "live": 0, "other": 0, "total": 0, "valid": False}, "copy_violations": {}, "card_types": 0, "metadata": {}}
+            regulation = self.deck_regulation("")
+            return {"valid": False, "error": str(exc), "composition": {"member": 0, "live": 0, "other": 0, "total": 0, "valid": False}, "loveca_points": self.deck_loveca_points([], regulation["key"]), "regulation": regulation, "copy_violations": {}, "card_types": 0, "metadata": {}}
         copy_totals: dict[str, int] = {}
         for index, row in enumerate(rows, start=2):
             try:
                 count = int(str(row.get("count", "") or "0"))
             except ValueError:
-                return {"valid": False, "error": f"{index}行目のcountが整数ではありません。", "composition": {"member": 0, "live": 0, "other": 0, "total": 0, "valid": False}, "copy_violations": {}, "card_types": len(rows), "metadata": metadata}
+                return {"valid": False, "error": f"{index}行目のcountが整数ではありません。", "composition": {"member": 0, "live": 0, "other": 0, "total": 0, "valid": False}, "loveca_points": self.deck_loveca_points([], regulation["key"]), "regulation": regulation, "copy_violations": {}, "card_types": len(rows), "metadata": metadata}
             card_no = str(row.get("card_no", "") or "").strip()
             if count <= 0 or not card_no or self.card_record(card_no) == {}:
-                return {"valid": False, "error": f"デッキ行が不正です：{card_no or '(空欄)'}", "composition": {"member": 0, "live": 0, "other": 0, "total": 0, "valid": False}, "copy_violations": {}, "card_types": len(rows), "metadata": metadata}
+                return {"valid": False, "error": f"デッキ行が不正です：{card_no or '(空欄)'}", "composition": {"member": 0, "live": 0, "other": 0, "total": 0, "valid": False}, "loveca_points": self.deck_loveca_points([], regulation["key"]), "regulation": regulation, "copy_violations": {}, "card_types": len(rows), "metadata": metadata}
             copy_totals[card_no] = copy_totals.get(card_no, 0) + count
-        composition = self.deck_composition(rows)
-        copy_violations = {card_no: count for card_no, count in sorted(copy_totals.items()) if count > 4}
-        valid = bool(composition["valid"] and not copy_violations)
+        composition = self.deck_composition(rows, regulation["key"])
+        loveca_points = self.deck_loveca_points(rows, regulation["key"])
+        copy_limit = int(regulation.get("copy_limit") or 0)
+        copy_violations = {
+            card_no: count
+            for card_no, count in sorted(copy_totals.items())
+            if copy_limit > 0 and count > copy_limit
+        }
+        valid = bool(composition["valid"] and not copy_violations and loveca_points["valid"])
         errors: list[str] = []
         if not composition["valid"]:
-            errors.append(f"メンバー {composition['member']}/48、ライブ {composition['live']}/12、その他 {composition['other']}")
+            errors.append(
+                "メンバー {}/{expected_member}、ライブ {}/{expected_live}、その他 {}".format(
+                    composition["member"],
+                    composition["live"],
+                    composition["other"],
+                    expected_member=composition.get("expected_member", 48),
+                    expected_live=composition.get("expected_live", 12),
+                )
+            )
         if copy_violations:
-            errors.append("4枚超過：" + "、".join(f"{k}={v}枚" for k, v in copy_violations.items()))
-        return {"valid": valid, "error": " / ".join(errors), "composition": composition, "copy_violations": copy_violations, "copy_totals": copy_totals, "card_types": len(rows), "metadata": metadata, "rows": rows}
+            errors.append(f"{copy_limit}枚超過：" + "、".join(f"{k}={v}枚" for k, v in copy_violations.items()))
+        if not loveca_points["valid"]:
+            errors.append(
+                "ラブカポイント超過：{} / {}".format(
+                    loveca_points["total"],
+                    loveca_points["limit"],
+                )
+            )
+        return {
+            "valid": valid,
+            "error": " / ".join(errors),
+            "composition": composition,
+            "loveca_points": loveca_points,
+            "regulation": regulation,
+            "copy_violations": copy_violations,
+            "copy_totals": copy_totals,
+            "card_types": len(rows),
+            "metadata": metadata,
+            "rows": rows,
+        }
 
     def prepare_runtime_deck(self, relative_path: str) -> dict[str, Any]:
         selected = self.select_deck(relative_path)
@@ -587,7 +747,7 @@ class AppState:
             count = int(row["count"]); card_no = str(row["card_no"])
             exact_cards.extend([card_no] * count)
             variants.append({"card_no": card_no, "count": count, "rarity": str(row.get("rarity", "") or ""), "variant_id": str(row.get("variant_id", "") or "")})
-        payload = {"schema_version": 1, "generated_at": utc_now_iso(), "deck_name": selected["name"], "deck_path": selected["path"], "cards": exact_cards, "variants": variants, "composition": validation["composition"]}
+        payload = {"schema_version": 1, "generated_at": utc_now_iso(), "deck_name": selected["name"], "deck_path": selected["path"], "cards": exact_cards, "variants": variants, "composition": validation["composition"], "loveca_points": validation.get("loveca_points", {}), "regulation": validation.get("regulation", {})}
         bridge = self.path(RUNTIME_DECK_BRIDGE); bridge.parent.mkdir(parents=True, exist_ok=True)
         bridge.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         payload["bridge_path"] = str(bridge)
@@ -656,6 +816,8 @@ class AppState:
                 "valid": bool(validation.get("valid")),
                 "validation_error": str(validation.get("error") or ""),
                 "composition": validation.get("composition", {}),
+                "loveca_points": validation.get("loveca_points", {}),
+                "regulation": validation.get("regulation", {}),
                 "card_types": int(validation.get("card_types") or 0),
             })
         return decks
@@ -2090,7 +2252,15 @@ class AppState:
         ascii_part = re.sub(r"_+", "_", ascii_part).strip("_")
         return ascii_part[:32] or datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    def deck_composition(self, rows: list[dict[str, str]]) -> dict[str, int | bool]:
+    def deck_composition(
+        self,
+        rows: list[dict[str, str]],
+        regulation_key: Any = "",
+    ) -> dict[str, int | bool]:
+        regulation = self.deck_regulation(regulation_key)
+        expected_member = int(regulation.get("member") or 48)
+        expected_live = int(regulation.get("live") or 12)
+        expected_total = int(regulation.get("total") or (expected_member + expected_live))
         member_count = 0
         live_count = 0
         other_count = 0
@@ -2116,7 +2286,124 @@ class AppState:
             "live": live_count,
             "other": other_count,
             "total": total,
-            "valid": member_count == 48 and live_count == 12 and other_count == 0,
+            "expected_member": expected_member,
+            "expected_live": expected_live,
+            "expected_total": expected_total,
+            "valid": (
+                member_count == expected_member
+                and live_count == expected_live
+                and total == expected_total
+                and other_count == 0
+            ),
+        }
+
+    @classmethod
+    def loveca_point_rules_payload(cls, regulation_key: Any = "") -> dict[str, Any]:
+        regulation = cls.deck_regulation(regulation_key)
+        rules = regulation.get("loveca_point_rules")
+        if not isinstance(rules, dict):
+            rules = {}
+        cards: dict[str, dict[str, Any]] = {}
+        for card_no, rule in rules.items():
+            cards[card_no] = {
+                "points": int(rule.get("points") or 0),
+                "rarities": [
+                    cls._normalize_rarity(rarity)
+                    for rarity in rule.get("rarities", ())
+                    if cls._normalize_rarity(rarity)
+                ],
+            }
+        return {
+            "limit": regulation.get("loveca_point_limit"),
+            "cards": cards,
+            "source": str(regulation.get("description") or ""),
+            "regulation_key": str(regulation.get("key") or ""),
+            "regulation_label": str(regulation.get("label") or ""),
+        }
+
+    def _deck_row_effective_rarity(self, row: dict[str, str]) -> str:
+        rarity = self._normalize_rarity(
+            row.get("rarity", "") or self._rarity_from_variant_id(row.get("variant_id", ""))
+        )
+        if rarity:
+            return rarity
+        display = self.card_display_data(row)
+        return self._normalize_rarity(display.get("rarity", ""))
+
+    def _deck_row_name(self, row: dict[str, str]) -> str:
+        name = html.unescape(str(row.get("name", "") or "")).strip()
+        if name:
+            return name
+        record = self.card_record(str(row.get("card_no") or ""))
+        return str(record.get("cardname") or record.get("name") or "").strip()
+
+    def deck_loveca_points(
+        self,
+        rows: list[dict[str, str]],
+        regulation_key: Any = "",
+    ) -> dict[str, Any]:
+        regulation = self.deck_regulation(regulation_key)
+        rules = regulation.get("loveca_point_rules")
+        if not isinstance(rules, dict):
+            rules = {}
+        limit_raw = regulation.get("loveca_point_limit")
+        limit = int(limit_raw) if limit_raw not in (None, "") else None
+        total = 0
+        entries: list[dict[str, Any]] = []
+        unresolved: list[dict[str, Any]] = []
+        for row in rows:
+            card_no = str(row.get("card_no") or "").strip()
+            rule = rules.get(card_no)
+            if not rule:
+                continue
+            try:
+                count = int(str(row.get("count", "") or "0"))
+            except ValueError:
+                continue
+            rarity = self._deck_row_effective_rarity(row)
+            allowed = {
+                self._normalize_rarity(value)
+                for value in rule.get("rarities", ())
+                if self._normalize_rarity(value)
+            }
+            if not rarity:
+                unresolved.append({
+                    "card_no": card_no,
+                    "name": self._deck_row_name(row),
+                    "count": count,
+                    "rarity": "",
+                    "expected_rarities": sorted(allowed, key=lambda value: self.RARITY_SORT_ORDER.get(value, 999)),
+                })
+                continue
+            if rarity not in allowed:
+                continue
+            points = int(rule.get("points") or 0)
+            subtotal = points * count
+            total += subtotal
+            entries.append({
+                "card_no": card_no,
+                "name": self._deck_row_name(row),
+                "count": count,
+                "rarity": rarity,
+                "points": points,
+                "subtotal": subtotal,
+            })
+        entries.sort(
+            key=lambda item: (
+                -int(item.get("subtotal") or 0),
+                str(item.get("card_no") or ""),
+                str(item.get("rarity") or ""),
+            )
+        )
+        return {
+            "total": total,
+            "limit": limit,
+            "valid": True if limit is None else total <= limit,
+            "enabled": bool(rules) and limit is not None,
+            "entries": entries,
+            "unresolved": unresolved,
+            "regulation_key": str(regulation.get("key") or ""),
+            "regulation_label": str(regulation.get("label") or ""),
         }
 
 
@@ -2332,6 +2619,7 @@ class AppState:
         writer.writerows(normalized)
         self._validate_deck_tsv_for_import(tsv_buffer.getvalue())
         composition = self.deck_composition(normalized)
+        loveca_points = self.deck_loveca_points(normalized)
 
         deck_name = code
         source_meta: dict[str, Any] = {}
@@ -2376,6 +2664,7 @@ class AppState:
             "command": command,
             "rows": normalized,
             "composition": composition,
+            "loveca_points": loveca_points,
             "card_types": len(normalized),
             "card_count": composition["total"],
             "source_tsv": str(output_path),
@@ -2388,6 +2677,7 @@ class AppState:
         deck_code: str,
         deck_name: str,
         tags: Any = "",
+        regulation_key: Any = "",
     ) -> dict[str, Any]:
         session_dir = self._deck_import_session_dir(import_token)
         manifest_path = session_dir / "import.json"
@@ -2426,6 +2716,7 @@ class AppState:
             or str(manifest.get("deck_name") or "").strip()
             or stored_code
         )
+        regulation = self.deck_regulation(regulation_key)
         official_dir = self.path(PRIMARY_DECK_DIR)
         official_dir.mkdir(parents=True, exist_ok=True)
         deck_id, target = self._new_unique_deck_target(official_dir)
@@ -2455,6 +2746,7 @@ class AppState:
             "created_at": metadata.get("created_at") or utc_now_iso(),
             "updated_at": utc_now_iso(),
             "format_version": 3,
+            "regulation": regulation["key"],
         })
         target_meta.write_text(
             json.dumps(metadata, ensure_ascii=False, indent=2),
@@ -2464,7 +2756,8 @@ class AppState:
         rows: list[dict[str, str]] = []
         with target.open("r", encoding="utf-8-sig", newline="") as fh:
             rows.extend(dict(row) for row in csv.DictReader(fh, delimiter="\t"))
-        composition = self.deck_composition(rows)
+        composition = self.deck_composition(rows, regulation["key"])
+        loveca_points = self.deck_loveca_points(rows, regulation["key"])
 
         shutil.rmtree(session_dir, ignore_errors=True)
         return {
@@ -2474,6 +2767,8 @@ class AppState:
             "card_types": len(rows),
             "card_count": composition["total"],
             "composition": composition,
+            "loveca_points": loveca_points,
+            "regulation": regulation,
         }
 
     def save_deck(
@@ -2482,10 +2777,12 @@ class AppState:
         tsv_text: str,
         existing_path: str = "",
         tags: Any = "",
+        regulation_key: Any = "",
     ) -> dict[str, Any]:
         name = html.unescape(str(deck_name or "")).strip()
         if not name:
             raise ValueError("デッキ名を入力してください。")
+        regulation = self.deck_regulation(regulation_key)
 
         reader = csv.DictReader(io.StringIO(tsv_text), delimiter="\t")
         fields = [str(x or "").strip() for x in (reader.fieldnames or [])]
@@ -2534,15 +2831,16 @@ class AppState:
         if not variant_rows:
             raise ValueError("カードを1枚以上追加してください。")
 
+        copy_limit = int(regulation.get("copy_limit") or 0)
         over_limit = {
             card_no: count
             for card_no, count in sorted(cardnumber_totals.items())
-            if count > 4
+            if copy_limit > 0 and count > copy_limit
         }
         if over_limit:
             details = "、".join(f"{card_no}={count}枚" for card_no, count in over_limit.items())
             raise ValueError(
-                "同一カードナンバーは通常版・パラレル版を合計して4枚までです："
+                f"同一カードナンバーは通常版・パラレル版を合計して{copy_limit}枚までです："
                 + details
             )
 
@@ -2565,6 +2863,8 @@ class AppState:
                 existing_meta.get("deck_id")
                 or target.stem.removeprefix("deck_")
             )
+            if not regulation_key:
+                regulation = self.deck_regulation(existing_meta.get("regulation"))
         else:
             deck_id, target = self._new_unique_deck_target(deck_dir)
 
@@ -2598,13 +2898,15 @@ class AppState:
             "updated_at": utc_now_iso(),
             "source": metadata.get("source") or "loveca_app",
             "format_version": 3,
+            "regulation": regulation["key"],
         })
         meta_path.write_text(
             json.dumps(metadata, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
 
-        composition = self.deck_composition(normalized)
+        composition = self.deck_composition(normalized, regulation["key"])
+        loveca_points = self.deck_loveca_points(normalized, regulation["key"])
         return {
             "name": name,
             "code": str(metadata.get("deck_code") or ""),
@@ -2612,6 +2914,8 @@ class AppState:
             "card_types": len(normalized),
             "card_count": composition["total"],
             "composition": composition,
+            "loveca_points": loveca_points,
+            "regulation": regulation,
             "copy_totals": cardnumber_totals,
         }
 
@@ -2652,6 +2956,7 @@ class AppState:
             tsv_text=output.getvalue(),
             existing_path="",
             tags=self._normalize_deck_tags(metadata.get("tags")),
+            regulation_key=metadata.get("regulation"),
         )
 
         copied_path = (self.root / record["path"]).resolve()
@@ -2691,6 +2996,13 @@ class AppState:
         return deleted
 
     def diagnostics(self) -> dict[str, Any]:
+        now = time.monotonic()
+        if self._diagnostics_cache is not None and (now - self._diagnostics_cache_at) < 15.0:
+            cached = dict(self._diagnostics_cache)
+            cached["diagnostics_cached"] = True
+            return cached
+
+        started = time.perf_counter()
         compiled = self.path(DB_COMPILED)
         card_count: int | None = None
         db_error = ""
@@ -2711,10 +3023,9 @@ class AppState:
         image_dir = self.path("llocg_db_out_full/card_images")
         image_count = 0
         if image_dir.is_dir():
-            image_count = sum(
-                1 for p in image_dir.rglob("*")
-                if p.is_file() and p.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}
-            )
+            allowed_ext = {".png", ".jpg", ".jpeg", ".webp"}
+            for dirpath, _dirnames, filenames in os.walk(image_dir):
+                image_count += sum(1 for name in filenames if Path(name).suffix.lower() in allowed_ext)
 
         image_directories = {
             relative: self.path(relative).is_dir()
@@ -2727,13 +3038,23 @@ class AppState:
             try:
                 _, active_rows = self.read_deck_rows(active_deck)
                 active_deck_card_types = len(active_rows)
-                active_deck_image_matches = sum(
-                    1 for row in active_rows if self.find_card_image(row["card_no"]) is not None
-                )
+                if self._image_variants_cache is not None or self._variant_path_cache is not None:
+                    active_deck_image_matches = sum(
+                        1 for row in active_rows if self.find_card_image(row["card_no"]) is not None
+                    )
             except Exception:
                 pass
 
-        return {
+        def fast_json_count(relative_dir: str) -> int:
+            path = self.path(relative_dir)
+            if not path.is_dir():
+                return 0
+            try:
+                return sum(1 for entry in os.scandir(path) if entry.is_file() and entry.name.lower().endswith(".json"))
+            except OSError:
+                return 0
+
+        result = {
             "build_tag": BUILD_TAG,
             "root": str(self.root),
             "python": sys.version.split()[0],
@@ -2744,13 +3065,18 @@ class AppState:
             "card_count": card_count,
             "db_error": db_error,
             "image_count": image_count,
-            "deck_count": len(self.list_decks()),
-            "log_count": len(self.list_logs()),
-            "active_deck": self.load_settings().get("active_deck", ""),
+            "deck_count": fast_json_count(PRIMARY_DECK_DIR),
+            "log_count": fast_json_count(APP_LOG_DIR),
+            "active_deck": active_deck,
             "image_directories": image_directories,
             "active_deck_image_matches": active_deck_image_matches,
             "active_deck_card_types": active_deck_card_types,
+            "diagnostics_elapsed_ms": round((time.perf_counter() - started) * 1000, 1),
+            "diagnostics_cached": False,
         }
+        self._diagnostics_cache = dict(result)
+        self._diagnostics_cache_at = now
+        return result
 
     def _manual_process_ids(self) -> set[int]:
         process = self.manual_process
@@ -3004,6 +3330,54 @@ class AppState:
                 if urls and not self.dual_launch_state.get("url"):
                     self.dual_launch_state["url"] = urls[0].rstrip(".,)")
 
+    def _detect_dual_window(self, simulator_url: str, process: subprocess.Popen[str]) -> None:
+        deadline = time.monotonic() + 45.0
+        headers = {"User-Agent": "LovecaApp-DualProbe/1.0"}
+        while time.monotonic() < deadline:
+            if process.poll() is not None:
+                with self.lock:
+                    output = list(self.dual_launch_state.get("output") or [])
+                    detail = output[-1] if output else ""
+                    message = "2デッキシミュレータの起動プロセスが終了しました。"
+                    if detail:
+                        message += " 最終出力: " + detail
+                    self.dual_launch_state.update({
+                        "status": "failed",
+                        "message": message,
+                        "stage": "起動失敗",
+                    })
+                return
+            try:
+                request = Request(simulator_url, headers=headers)
+                with urlopen(request, timeout=0.7) as response:
+                    status = int(getattr(response, "status", 200))
+                    content_type = str(response.headers.get("Content-Type") or "")
+                    response.read(2048)
+                if status < 400 and ("text/html" in content_type.lower() or not content_type):
+                    with self.lock:
+                        self.dual_launch_state.update({
+                            "status": "ready",
+                            "url": simulator_url,
+                            "message": "2デッキシミュレータを起動しました。",
+                            "stage": "起動完了",
+                            "progress_percent": 100,
+                        })
+                    return
+            except (URLError, HTTPError, TimeoutError, OSError):
+                pass
+            with self.lock:
+                if self.dual_launch_state.get("status") == "starting":
+                    current = int(self.dual_launch_state.get("progress_percent") or 0)
+                    self.dual_launch_state["progress_percent"] = min(95, max(35, current + 3))
+                    self.dual_launch_state["stage"] = "待受確認"
+            time.sleep(0.35)
+        with self.lock:
+            self.dual_launch_state.update({
+                "status": "timeout",
+                "message": "2デッキシミュレータ画面の応答を確認できませんでした。",
+                "stage": "起動確認タイムアウト",
+            })
+
     def _runtime_dual_deck(self, relative_path: str, player_key: str) -> dict[str, str]:
         validation = self.deck_validation(relative_path)
         if not validation["valid"]:
@@ -3245,11 +3619,12 @@ class AppState:
                     bufsize=1,
                     env=env,
                     start_new_session=True,
+                    **no_window_subprocess_kwargs(),
                 )
                 self.dual_launch_state = {
-                    "status": "ready",
-                    "url": simulator_url,
-                    "message": "2デッキシミュレータを起動しました。",
+                    "status": "starting",
+                    "url": "",
+                    "message": "2デッキシミュレータを起動しています。",
                     "pid": self.dual_process.pid,
                     "deck1_path": deck1.get("source_path", ""),
                     "deck2_path": deck2.get("source_path", ""),
@@ -3259,13 +3634,14 @@ class AppState:
                     "simulator_host": simulator_host,
                     "simulator_port": simulator_port,
                     "output": [],
-                    "progress_percent": 100,
-                    "stage": "起動完了",
+                    "progress_percent": 20,
+                    "stage": "プロセス起動",
                 }
                 threading.Thread(target=self._read_dual_output, args=(self.dual_process,), daemon=True).start()
+                threading.Thread(target=self._detect_dual_window, args=(simulator_url, self.dual_process), daemon=True).start()
             except Exception as exc:
                 return False, "起動に失敗しました: {}: {}".format(type(exc).__name__, exc)
-        return True, "2デッキシミュレータを起動しました：{} vs {}".format(deck1.get("name", ""), deck2.get("name", ""))
+        return True, "2デッキシミュレータを起動しています：{} vs {}".format(deck1.get("name", ""), deck2.get("name", ""))
 
     def start_manual(
         self,

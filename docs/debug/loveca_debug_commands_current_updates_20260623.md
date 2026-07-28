@@ -3305,3 +3305,209 @@ python3 -m py_compile ./llocg_ui/server.py ./tools/build_loveca_distribution.py
 
 python3 ./tools/build_loveca_distribution.py --target patch --output ./_codex_outputs/github_release/loveca-patch-20260723.zip
 ```
+
+## 20260723 登場能力再発動キュー / エール参照カード確認 / 起動・診断・画像欠落補強
+
+修正:
+
+- `このメンバーとほかの『グループ』メンバーが持つ<登場>能力をそれぞれ発動` 系の効果は、複数の登場能力をその場で連続処理せず、既存の `auto_order` に接続して1つずつ解決するよう修正。
+- エール公開内容を参照するライブ成功時効果のうち、赤・緑・青など「各条件をそれぞれ満たす」文型は、条件ごとに実際に参照したカードだけを表示する `show_referenced_cards_ack` に変更。エール公開サマリーポップアップへ混線しないよう修正。
+- エール公開カード確認ポップアップ内の横長カード列を、マウスホイールの上下操作でも横送りできるよう修正。
+- 2デッキシミュレータの起動を即時 ready 扱いにせず、`/dual` が応答するまで起動確認するよう修正。起動失敗時は最後のログを表示する。
+- 2デッキシミュレータのリセット記録ボタン `NG` 表記を `No Game` に変更。
+- データ更新で、preview manifest に載っているが `preview_card_images` に実ファイルがないカードを画像取得対象へ追加。取得後も欠落している場合は成功扱いにしない。
+- 診断・バージョンページは15秒キャッシュを追加し、初回表示で重い画像バリエーション照合を走らせないよう修正。
+
+内部確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./llocg_ui/engine.py ./llocg_ui/server.py ./loveca_app/core.py ./llocg_dual_v2/server.py ./llocg_update_database.py ./llocg_fetch_all_card_images.py
+
+git diff --check
+
+python3 ./run_llocg_dual_v2.py --help
+
+python3 - <<'PY'
+from pathlib import Path
+import random
+from llocg_ui.db import load_cards_db
+from llocg_ui.engine import GameState, StageSlot, cmd_resolve_pending, try_apply_effect_template
+cards=load_cards_db(Path('llocg_db_out_full'))
+gs=GameState(root='.', code='smoke', seed=1, debug=True)
+gs.stage['C']=StageSlot('PL!S-bp7-005')
+gs.stage['L']=StageSlot('PL!S-bp7-006')
+gs.pending.append({'kind':'choose_stage_member_for_enter_ability_replay','source_cn':'PL!S-bp7-005','source_pos':'C','candidates':['L'],'options':['L']})
+cmd_resolve_pending(gs, cards, 0, 'L', random.Random(1))
+assert gs.pending[0]['kind'] == 'auto_order'
+assert len(gs.pending[0]['queue']) == 2
+
+gs2=GameState(root='.', code='smoke', seed=2, debug=True)
+gs2._yell_revealed_this_live=['PL!S-bp7-002','PL!S-bp7-003','PL!S-bp7-004','PL!S-bp7-005']
+text='エールにより公開された自分のカードの中に、<(赤)>、<(緑)>、<(青)>を持つ『Aqours』のメンバーカードがそれぞれあるなら、このカードのスコアを+1する。'
+try_apply_effect_template(gs2, random.Random(2), cards, text, {'source_cn':'PL!S-bp7-022'})
+p=gs2.pending[0]
+assert p['kind'] == 'show_referenced_cards_ack'
+assert [s['cards'][0] for s in p['reference_sections']] == ['PL!S-bp7-004','PL!S-bp7-002','PL!S-bp7-003']
+print('OK enter replay queue and referenced-card ack')
+PY
+
+python3 - <<'PY'
+from pathlib import Path
+from loveca_app.core import AppState
+app=AppState(Path('.').resolve())
+a=app.diagnostics()
+b=app.diagnostics()
+assert a.get('diagnostics_elapsed_ms', 9999) < 500
+assert b.get('diagnostics_cached') is True
+print('OK diagnostics fast/cache', a.get('diagnostics_elapsed_ms'), b.get('image_count'))
+PY
+```
+
+## 20260727 効果監査ZIP確認 / エール置換・デッキ上下操作・条件付き選択効果修正
+
+確認元:
+
+- `/Users/tekitou/Downloads/loveca_effect_debug_commands_20260724.zip`
+- `/Users/tekitou/Downloads/loveca_effect_behavior_audit_firstpass_20260724.zip`
+- 作業用に `/private/tmp/loveca_effect_audit_20260724` へ一時展開。リポジトリ内のファイル移動・削除・バックアップ作成はなし。
+
+修正:
+
+- `PL!S-bp7-022` の `自分のエールはデッキ下から行う` BODY常時を、カード番号固定ではなく効果文検出で実装。通常エールと追加エールの両方がデッキ下から公開される。
+- `PL!SP-bp7-028` の `エール公開カードがすべて『Liella!』ならスコア+1` を汎用文型として追加。公開0枚は条件未達。
+- `PL!SP-bp7-028` のライブ開始時効果を、控え室の指定グループメンバーを指定枚数選んでシャッフルしデッキ下へ戻し、ステージ全員へブレード付与する汎用 route に追加。
+- `PL!N-bp7-006` の `上から4枚見る。その後、好きな順番で上に置く` を既存 top reorder route に接続。
+- `PL!N-bp7-006` の `山札上3枚を控え室に置く` コスト後、そのカード内容を参照して2択を出す route を追加。条件未達時に後続選択肢が独立実行されないよう修正。
+- 同一カードに複数の起動効果がある場合の使用回数キーを、能力文ベースで分離。使用済み能力は飛ばして次の起動効果を確認するよう修正。
+- `PL!S-bp7-004` のライブ開始時 `デッキ下から3枚見る` をデッキ下用 reorder route に追加。
+- `PL!S-bp7-004` の登場時 `Aqoursからバトンタッチ時、手札を最大3枚残して残りをデッキ下、3ドロー` を既存バトンタッチ条件 route へ接続。自分側を処理し、相手側は手動処理メッセージを出す。
+- 既存の再エール系 `PL!S-bp2-004` / `PL!S-bp3-020` / `PL!HS-bp6-027` / `PL!S-bp6-021` は現行コード上の汎用 YELL auto route に乗っていることを内部確認。
+- `PL!N-bp4-002` / `PL!S-pb1-008` は選択プレイヤーのデッキ上確認 route にマッチ済みであることを内部確認。
+
+内部確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./llocg_ui/engine.py
+
+python3 - <<'PY'
+from pathlib import Path
+import random
+from llocg_ui.db import load_cards_db
+from llocg_ui.engine import GameState, StageSlot, cmd_yell, _perform_additional_yell
+cards=load_cards_db(Path('llocg_db_out_full'))
+gs=GameState(root='.', code='audit', seed=1, phase='LIVE_PERF')
+gs.stage['C']=StageSlot('PL!S-bp2-010')
+gs.set_zone=['PL!S-bp7-022']
+gs.deck=['PL!-PR-003','PL!-PR-004','PL!-PR-012','PL!-PR-014','PL!-PR-015','PL!S-PR-026','PL!S-PR-027','PL!S-PR-025']
+cmd_yell(gs, random.Random(1), cards)
+assert gs.resolve_zone[:3] == ['PL!S-PR-025','PL!S-PR-027','PL!S-PR-026']
+gs2=GameState(root='.', code='audit', seed=2, phase='LIVE_PERF')
+gs2.stage['C']=StageSlot('PL!S-bp2-010')
+gs2.set_zone=['PL!S-bp7-022']
+gs2.deck=['TOP','MID','BOT2','BOT1']
+assert _perform_additional_yell(gs2, random.Random(2), cards, 2, reason='audit') == ['BOT1','BOT2']
+print('OK PL!S-bp7-022 bottom-source YELL')
+PY
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from pathlib import Path
+import random
+from llocg_ui.db import load_cards_db
+from llocg_ui.engine import GameState, try_apply_effect_template
+cards=load_cards_db(Path('llocg_db_out_full'))
+eff=cards['PL!SP-bp7-028'].abilities[1]['clauses'][0]['effect_template']
+gs=GameState(root='.', code='audit', seed=1)
+gs._yell_revealed_this_live=['PL!SP-bp7-002','PL!SP-bp5-001']
+try_apply_effect_template(gs, random.Random(1), cards, eff, {'source_cn':'PL!SP-bp7-028'})
+assert 'score +1' in gs.log[-1]
+gs2=GameState(root='.', code='audit', seed=1)
+gs2._yell_revealed_this_live=['PL!SP-bp7-002','PL!S-bp7-002']
+try_apply_effect_template(gs2, random.Random(1), cards, eff, {'source_cn':'PL!SP-bp7-028'})
+assert 'not satisfied' in gs2.log[-1]
+print('OK PL!SP-bp7-028 all revealed group score')
+PY
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from pathlib import Path
+import random
+from llocg_ui.db import load_cards_db
+from llocg_ui.engine import GameState, StageSlot, cmd_activate_to_green, cmd_resolve_pending, _ability_key
+cards=load_cards_db(Path('llocg_db_out_full'))
+ci=cards['PL!N-bp7-006']
+gs=GameState(root='.', code='audit', seed=1, phase='MAIN')
+gs.stage['C']=StageSlot('PL!N-bp7-006')
+gs.used_this_turn[_ability_key(ci, ci.abilities[0], 'C')]=1
+gs.deck=['LL-bp1-001','PL!S-bp7-002','PL!S-bp7-003','PL!N-bp7-011']
+gs.energy_wait=2
+cmd_activate_to_green(gs, cards, 'C', random.Random(1))
+assert gs.pending and gs.pending[0]['kind'] == 'choose_effects'
+cmd_resolve_pending(gs, cards, 0, 'ライブ終了時まで、<(ブレード)><(ブレード)>を得る。', random.Random(1))
+assert gs.stage['C'].temp_blade == 2
+print('OK PL!N-bp7-006 second activated choice')
+PY
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from pathlib import Path
+import random
+from llocg_ui.db import load_cards_db
+from llocg_ui.engine import GameState, try_apply_effect_template, cmd_resolve_pending
+cards=load_cards_db(Path('llocg_db_out_full'))
+eff=cards['PL!S-bp7-004'].abilities[0]['clauses'][0]['effect_template']
+gs=GameState(root='.', code='audit', seed=1)
+gs.hand=['PL!S-bp7-002','PL!S-bp7-003','PL!S-bp7-004','PL!S-bp6-001']
+gs.deck=['PL!S-bp6-002','PL!S-bp6-003','PL!S-bp6-004','PL!S-bp6-005']
+try_apply_effect_template(gs, random.Random(1), cards, eff, {'source_cn':'PL!S-bp7-004','baton_old_cns':['PL!S-bp7-002']})
+assert gs.pending and gs.pending[0]['kind'] == 'choose_hand_keep_for_baton_bottom_draw'
+cmd_resolve_pending(gs, cards, 0, 'PL!S-bp7-002', random.Random(1))
+cmd_resolve_pending(gs, cards, 0, 'Done', random.Random(1))
+assert gs.pending and gs.pending[0]['kind'] == 'message_ack'
+print('OK PL!S-bp7-004 baton hand cleanup')
+PY
+```
+
+## 20260727 デッキ構築 ラブカポイント表示・検証
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./run_loveca_app.py
+```
+
+確認観点:
+- デッキ管理一覧に「ラブカPt」列が表示される。
+- デッキ内容確認ページにラブカポイント合計と対象カード内訳が表示される。
+- デッキ編集画面で `PL!N-bp1-003` の `R＋/P/P＋/SEC` など対象カードを追加すると、現在のデッキ欄のラブカPtが即時更新される。
+- 合計が9ptを超えたデッキは保存前に確認が出る。保存は可能だが、一覧・手動シミュレータ起動欄では構成不正扱いとなり起動できない。
+- 詳細分析ツールにラブカポイントの合計と対象カード内訳が表示される。
+
+## 20260728 デッキ構築 レギュレーション指定保存
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./run_loveca_app.py
+```
+
+確認観点:
+- デッキ編集画面の固定ヘッダでレギュレーションを選択できる。
+- 既存デッキは未指定でも「通常60枚（ラブカPt 2026/4/3適用）」として扱われる。
+- 「ハーフ30枚」を選ぶと、現在のデッキ欄がメンバー24 / ライブ6 / 合計30基準に切り替わる。
+- 「通常60枚（ラブカPtなし）」を選ぶと、ラブカポイントが `0 / 制限なし` 相当で表示され、ポイント超過扱いにならない。
+- 「通常60枚（ラブカPt 2026/8/8予定）」を選ぶと、`LL-bp2-001` が5pt、`PL!SP-bp2-024` が0pt扱いになる。
+- 保存後のデッキ内容確認・デッキ一覧・手動シミュレータ起動欄に、保存したレギュレーション名とその基準での検証結果が表示される。

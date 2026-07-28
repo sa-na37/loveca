@@ -21,7 +21,7 @@ BUILD_TAG is intentionally visible for delivery verification.
 
 from __future__ import annotations
 
-BUILD_TAG = "missing_existing_images_refetch_log_20260722b"
+BUILD_TAG = "missing_preview_images_refetch_20260723a"
 
 import argparse
 import csv
@@ -570,6 +570,16 @@ def scan_image_cardnumbers(root: Path) -> set[str]:
         if match:
             canonical, _rarity = canonical_cardnumber(match.group(1))
             out.add(canonical)
+    return out
+
+
+def manifest_cardnumbers(path: Path) -> set[str]:
+    cards = _manifest_cards(path)
+    out: set[str] = set()
+    for cardno0 in cards.keys():
+        cardno, _rarity = canonical_cardnumber(str(cardno0 or "").strip())
+        if cardno:
+            out.add(cardno)
     return out
 
 
@@ -1339,6 +1349,13 @@ def main() -> int:
         preview_before_path,
         preview_manifest_path,
     )
+    preview_manifest_cards = manifest_cardnumbers(preview_manifest_path)
+    preview_image_cards_after_manifest = scan_image_cardnumbers(preview_image_dir)
+    missing_preview_image_targets = {
+        cardno
+        for cardno in preview_manifest_cards
+        if cardno in all_cardnumbers and cardno not in preview_image_cards_after_manifest
+    }
 
     # 9. Fetch images only for cards that can have changed in this update.
     # Initial installs still target every newly created DB card.  Subsequent
@@ -1347,6 +1364,7 @@ def main() -> int:
         set(new_cardnumbers)
         | set(image_manifest_targets)
         | set(preview_changed_cards)
+        | set(missing_preview_image_targets)
         | set(reprint_image_targets)
         | set(missing_existing_image_targets)
     )
@@ -1360,8 +1378,16 @@ def main() -> int:
         f"targets={len(image_fetch_targets)} new_cards={len(new_cardnumbers)} "
         f"official_manifest_targets={len(image_manifest_targets)} "
         f"preview_changed={len(preview_changed_cards)} "
+        f"missing_preview={len(missing_preview_image_targets)} "
         f"missing_existing={len(missing_existing_image_targets)}"
     )
+    if missing_preview_image_targets:
+        sample = ", ".join(sorted(missing_preview_image_targets)[:30])
+        print(
+            "[IMAGE-MISSING-PREVIEW] "
+            f"preview_manifest_cards_without_local_image={len(missing_preview_image_targets)} "
+            f"sample={sample}"
+        )
     if image_fetch_targets:
         image_target_file = write_cardnumber_file(
             work_root / "image_fetch_targets.txt",
@@ -1410,6 +1436,21 @@ def main() -> int:
         print(f"[IMAGE-FETCH-ERROR] sample={sample}")
         raise SystemExit(
             "[ERROR] card image update incomplete; retry the update after confirming network access"
+        )
+    missing_preview_after_image_fetch = {
+        cardno
+        for cardno in manifest_cardnumbers(preview_manifest_path)
+        if cardno in all_cardnumbers and cardno not in scan_image_cardnumbers(preview_image_dir)
+    }
+    if missing_preview_after_image_fetch:
+        sample = ", ".join(sorted(missing_preview_after_image_fetch)[:30])
+        print(
+            "[IMAGE-FETCH-ERROR] "
+            f"missing preview card images after fetch: {len(missing_preview_after_image_fetch)}"
+        )
+        print(f"[IMAGE-FETCH-ERROR] preview_sample={sample}")
+        raise SystemExit(
+            "[ERROR] preview card image update incomplete; retry the update after confirming network access"
         )
 
     # 10. Final strict generation audit.
