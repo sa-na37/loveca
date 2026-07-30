@@ -3511,3 +3511,823 @@ python3 ./run_loveca_app.py
 - 「通常60枚（ラブカPtなし）」を選ぶと、ラブカポイントが `0 / 制限なし` 相当で表示され、ポイント超過扱いにならない。
 - 「通常60枚（ラブカPt 2026/8/8予定）」を選ぶと、`LL-bp2-001` が5pt、`PL!SP-bp2-024` が0pt扱いになる。
 - 保存後のデッキ内容確認・デッキ一覧・手動シミュレータ起動欄に、保存したレギュレーション名とその基準での検証結果が表示される。
+
+## 20260729 オートプレイ Stage 1 方針レポート
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from pathlib import Path
+from loveca_app.core import AppState
+
+app = AppState(Path('.'))
+decks = app.list_decks()
+valid_decks = [deck for deck in decks if deck.get('valid')]
+if not valid_decks:
+    print('OK autoplay report skipped: no valid deck')
+else:
+    report = app.autoplay_deck_report(valid_decks[0]['path'])
+    assert report['model_stage'] == 'stage1_policy_template'
+    assert report['curve']['totals']['cards'] > 0
+    assert report['progressions']
+    assert report['recommended_progression']
+    print('OK autoplay report', report['deck_name'], report['recommended_progression']['label'])
+PY
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./run_loveca_app.py
+```
+
+確認観点:
+- メニューに「オートプレイ」が表示される。
+- オートプレイ画面にデッキ一覧が表示され、構成検証済みデッキから方針レポートを開ける。
+- 方針レポートに推奨コスト進行、メンバーコスト分布、ライブスコア分布、進行候補、Stage 2目標プリセットが表示される。
+- 現段階では自動操作を開始せず、Stage 1の方針確認画面として動作する。
+
+## 20260729 プレビュー探索・ラブカPt超過試行・オートプレイ拡張
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile \
+  ./llocg_update_database.py \
+  ./llocg_build_preview_manifest_from_x.py \
+  ./loveca_app/autoplay.py \
+  ./loveca_app/core.py \
+  ./loveca_app/web.py \
+  ./loveca_autoplay_report.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from pathlib import Path
+from loveca_app.core import AppState
+
+app = AppState(Path('.'))
+decks = app.list_decks()
+playable_decks = [deck for deck in decks if deck.get('playable', deck.get('valid'))]
+if not playable_decks:
+    print('OK autoplay expanded report skipped: no playable deck')
+else:
+    report = app.autoplay_deck_report(playable_decks[0]['path'])
+    assert report['curve']['member_cost_bands']
+    assert 'special_signals' in report['curve']
+    assert any(item.get('phase') in {'late', 'late_special'} for item in report['progressions'])
+    markdown = app.autoplay_markdown_report(playable_decks[0]['path'])
+    assert '## Cost Bands' in markdown
+    print('OK autoplay expanded report', report['deck_name'], report['recommended_progression']['label'])
+PY
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --all --outdir docs/reports/autoplay
+```
+
+確認観点:
+- `llocg_update_database.py` のプレビュー公式ポスト集約ページキャッシュが15分基準になる。
+- 公式ポスト集約ページにあるがローカルDBへ未反映のプレビューカードは `[PREVIEW-INDEX-MISSING-DB]` に表示される。
+- ラブカポイント超過のみのデッキは、警告表示のまま手動シミュレータ、リモート、2デッキ、オートプレイの対象に残る。
+- 枚数不正、カード番号不明、同名枚数超過などのデッキとして成立しない不正は引き続き起動不可。
+- オートプレイ方針レポートに、5-10コスト帯、15コスト以上、コスト軽減、特殊バトンタッチの検出結果が表示される。
+- `docs/reports/autoplay/` にモデルデッキ比較用のMarkdownレポートを出力できる。
+
+## 20260729 デッキコード読込 デフォルトデッキ名
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./llocg_deckcode_to_decklist.py ./loveca_app/core.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from pathlib import Path
+from llocg_deckcode_to_decklist import extract_deck_name_from_html
+from loveca_app.core import AppState
+
+html = Path('llocg_db_out_full/decklists/7QEC8.html').read_text(encoding='utf-8', errors='replace')
+assert extract_deck_name_from_html(html, code='7QEC8') == '三神'
+assert extract_deck_name_from_html('デッキ名「7QEC8」のデッキ', code='7QEC8') == ''
+assert AppState._imported_deck_name_from_metadata({'deck_name':'7QEC8'}, '7QEC8') == ''
+assert AppState._imported_deck_name_from_metadata({'deck_name':'三神'}, '7QEC8') == '三神'
+print('OK deck import name extraction')
+PY
+```
+
+確認観点:
+- DeckLogのHTMLに `デッキ名「...」のデッキ` が含まれる場合、保存画面のデッキ名初期値にその名前が入る。
+- APIでカード一覧だけ先に取れた場合も、デッキ名取得用にHTMLを補助取得する。
+- デッキ名取得に失敗し、メタデータ上の `deck_name` がデッキコードそのものになっている場合は、コードをデフォルト名として表示しない。
+
+## 20260729 パラレルレアリティのラブカPt / オートプレイ試行
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile \
+  ./loveca_app/autoplay.py \
+  ./loveca_app/core.py \
+  ./loveca_autoplay_report.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from pathlib import Path
+from loveca_app.core import AppState
+
+app = AppState(Path('.'))
+for row in [
+    {'count':'1','card_no':'PL!SP-bp2-024','rarity':'SRL','name':'ビタミンSUMMER！','variant_id':''},
+    {'count':'1','card_no':'PL!SP-bp2-024-SRL','rarity':'','name':'ビタミンSUMMER！','variant_id':''},
+]:
+    pts = app.deck_loveca_points([row], 'standard_20260403')
+    assert pts['total'] == 1, pts
+print('OK loveca SRL points')
+PY
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --recent 3 --trials 500 --seed 29 --turns 4 --outdir docs/reports/autoplay
+```
+
+確認観点:
+- `PL!SP-bp2-024` の202604レギュレーション対象レアリティに `SRL` が含まれ、`PL!SP-bp2-024-SRL` のようにカード番号末尾へレアリティが付いたデッキ行でもラブカPtが計算される。
+- カード番号末尾のレアリティを分離する場合も、カード正本の番号照合は基礎カード番号で行う。
+- 直近更新デッキ3件について、構築評価、目標ターン形、500回試行の完全一致率、上位進行、サンプル進行を `docs/reports/autoplay/` に出力できる。
+
+## 20260729 オートプレイ試行 マリガン/上振れ/エネルギーブースト補正
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py ./loveca_app/core.py ./loveca_autoplay_report.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --recent 3 --trials 500 --seed 29 --turns 4 --outdir docs/reports/autoplay
+```
+
+確認観点:
+- 試行レポートにマリガン方針、成功判定、効果近似の前提が表示される。
+- `2-10-2` 目標に対して `2-11-2` などの上振れ盤面を達成扱いにする。
+- 7コスト矢澤にこなど、コスト2以下メンバーを追加登場させる効果をコスト進行判定に含める。
+- `君のこころは輝いてるかい？` などのライブ成功時ドロー効果を、手札改善として近似する。
+- Daydream Mermaid などのエネルギーブーストライブを、5軸ミラステの `2-4-2 -> 2-11-2` 進行に含める。
+- 東條希のように「バトンタッチして登場した場合」という受け身条件だけを持つカードを、特殊バトンタッチ札として誤検出しない。
+
+## 20260729 オートプレイ試行 主目標/代替目標分離
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py ./loveca_app/core.py ./loveca_autoplay_report.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --recent 3 --trials 500 --seed 29 --turns 4 --outdir docs/reports/autoplay
+```
+
+確認観点:
+- 君ここ系は主目標を `2-2 / 7-2 / 13-2` とし、`7-2-2` / `13-2-2` は `accepted targets` の上振れ代替に表示される。
+- 5軸ミラステはT2の `accepted targets` に `2-5-2 or 2-4-2` が表示される。
+- Daydream Mermaid系のエネルギーブーストは、そのターンにライブセットした場合だけ代替プランとして扱う。
+- 10軸ミラステはT3の `accepted targets` に `2-10-2 or 2-11-2 or 2-13-2` が表示される。
+- 各ターンのライブセット1ドローが、メンバー計画前の手札循環として試行に含まれる。
+
+## 20260729 オートプレイ試行 実デッキ内カード基準の目標生成
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py ./loveca_app/core.py ./loveca_autoplay_report.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --recent 3 --trials 500 --seed 29 --turns 4 --outdir docs/reports/autoplay
+```
+
+確認観点:
+- 進行候補一覧と試行目標に、デッキ内に存在しないメンバーコストが出ない。
+- 君ここレポートでT4目標が存在しない22コストではなく、実在する `LL-bp2-001` の20コスト目標になる。
+- `Target Cards And Routes` に各ターンの目標カード名、カード番号、到達経路が表示される。
+- `Decision Policy` にマリガンから1ターン目終了までの判断基準が表示される。
+
+## 20260729 オートプレイ試行 マリガン/ライブセット/配置優先順位再補正
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py ./loveca_app/core.py ./loveca_autoplay_report.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --recent 3 --trials 500 --seed 29 --turns 4 --outdir docs/reports/autoplay
+```
+
+確認観点:
+- マリガンがT1〜T3の達成率を基準にし、採用枚数の少ないT3目標カードを残しやすくする。
+- 過剰な2コストは、引き直し期待が高いカードとして戻しやすくする。
+- ライブセットを最大3枚の手札交換として扱い、非ライブカードも交換対象にする。
+- Daydream Mermaid系のエネルギーブーストカードは、必要ターン以外で無条件にセットしない。
+- 配置はターン目標予算内で、目標より大きいカード、目標ぴったり、最大妥協札の順に選ぶ。
+- 君ここ系のT4主目標が `13-7-2`、NS三神系上振れ代替が `13-20-2` として表示される。
+
+## 20260729 オートプレイ試行 ステージ継続モデル
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py ./loveca_app/core.py ./loveca_autoplay_report.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --recent 3 --trials 500 --seed 29 --turns 4 --outdir docs/reports/autoplay
+```
+
+確認観点:
+- 各ターンの試行でステージ3枠が維持され、毎ターン手札からゼロベースで盤面を作り直さない。
+- 既存ステージのうち目標形に近いカードは残し、空き枠または遠い枠だけを更新する。
+- ターン目標で登場可能と見る最大コストを超えるメンバーを、そのターンに新規登場させない。
+- T1 `2-2` 目標で13/20コストを置くような不自然なルートが出ない。
+- ステージ継続により、以前の過大評価された試行結果が再計算される。
+
+## 20260729 オートプレイ試行 低コスト妥協札の置換と複数T1目標
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py ./loveca_app/core.py ./loveca_autoplay_report.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --recent 3 --trials 500 --seed 29 --turns 4 --outdir docs/reports/autoplay
+```
+
+確認観点:
+- T2の4/5コストなど、後続高コスト目標に対する低コスト妥協札を固定し続けない。
+- T3に10/11/13コストを引いた場合、既存の低コスト妥協札を置き換え候補にする。
+- 10軸ではT1 `2-2` だけでなく、T2 `2-4-2` に接続する `4` もT1代替目標として扱う。
+- `Miss Reasons` に、君ここT2の `missing 7`、5軸T3の `missing 11`、10軸T3の `missing 10` などが出る。
+- 10軸/5軸のT3到達率が、妥協札固定バグで極端に低くならない。
+
+## 20260729 オートプレイ試行 累積達成率とライブスコア目標
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py ./loveca_app/core.py ./loveca_autoplay_report.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --recent 3 --trials 500 --seed 29 --turns 4 --outdir docs/reports/autoplay
+```
+
+確認観点:
+- `Turn Summary` に `hit_rate` と `cumulative` の説明が表示される。
+- 君ここ系のT4主目標が `13-7-2`、上振れ代替が `13-20-2` として表示され、進行の主評価は `cumulative` で確認できる。
+- 5軸のT4受け入れ目標が `15-5-2 or 15-4-2 or 15-2-2` になっている。
+- `Live Score Targets` に各ターンの目標スコア、受け入れスコア、該当ライブカード例、達成率が表示される。
+- ライブスコア達成率は、効果処理用ライブではなくライブセット交換で選ばれたライブカードの最大スコアを基準に集計される。
+
+## 20260729 オートプレイ試行 目標計画の一元化回帰
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py ./loveca_app/core.py ./loveca_autoplay_report.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from pathlib import Path
+from loveca_app.core import AppState
+
+app = AppState(Path('.'))
+paths = [
+    'llocg_db_out_full/decklists/deck_2d69085d8135c787adcc.tsv',
+    'llocg_db_out_full/decklists/deck_1d64365fb7bf71ac7081.tsv',
+    'llocg_db_out_full/decklists/deck_fcc369ef393b3ed66e43.tsv',
+]
+for path in paths:
+    result = app.autoplay_trial_report(path, trials=120, seed=29, max_turns=4)
+    assert len(result['stage_goal_plans']) == 4
+    assert result['target_turns'] == [plan['primary_shape'] for plan in result['stage_goal_plans']]
+    assert result['target_alternatives'] == [plan['accepted_shapes'] for plan in result['stage_goal_plans']]
+    for key in ('cumulative_hit_rates', 'live_score_cumulative_hit_rates', 'combined_cumulative_hit_rates'):
+        for prev, cur in zip(result[key], result[key][1:]):
+            assert cur <= prev + 1e-9, (key, result[key])
+print('OK autoplay goal-plan invariants')
+PY
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --recent 3 --trials 500 --seed 29 --turns 4 --outdir docs/reports/autoplay
+```
+
+確認観点:
+- `target_turns` は `stage_goal_plans[*].primary_shape` から生成され、表示専用の別補正を持たない。
+- `target_alternatives` は `stage_goal_plans[*].accepted_shapes` から生成され、判定用の別補正を持たない。
+- 盤面、ライブスコア、盤面+ライブスコアの累積率はターンが進んでも増加しない。
+- 5軸T4は主目標 `15-5-2`、受け入れ目標 `15-5-2 or 15-4-2 or 15-2-2` として表示される。
+- 君ここT4単独値が高くても、累積値と `combined_cumulative` で進行全体の達成度を確認できる。
+
+## 20260729 CPU対戦準備 オートプレイ再試行と2デッキHTML変換回帰
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --all --trials 800 --seed 31 --turns 4 --outdir docs/reports/autoplay_cpu_prep_20260729
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m unittest llocg_dual_v2.tests.test_rule_core llocg_dual_v2.tests.test_legacy_adapter_transactions
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py ./loveca_app/core.py ./loveca_app/web.py ./loveca_autoplay_report.py ./run_llocg_dual_v2.py ./llocg_dual_v2/core.py ./llocg_dual_v2/server.py
+```
+
+確認観点:
+- 全試行可能デッキのオートプレイレポートを `docs/reports/autoplay_cpu_prep_20260729/` に出力できる。
+- CPU対戦準備の総括レポート `docs/reports/autoplay_cpu_prep_20260729_summary.md` を更新できる。
+- 2デッキ埋め込みHTML生成は、1デッキ側のpublic polling間隔が変わっても失敗しない。
+- 2デッキのルールコア/legacy adapterテストが全通過する。
+
+## 20260729 CPU対戦準備 Step A action suggestion adapter
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py ./loveca_app/core.py ./loveca_app/web.py ./loveca_autoplay_report.py ./llocg_dual_v2/server.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from pathlib import Path
+from loveca_app.core import AppState
+
+app = AppState(Path('.'))
+deck = 'llocg_db_out_full/decklists/deck_1d64365fb7bf71ac7081.tsv'
+states = {
+    'mulligan': {'phase':'MULLIGAN','turn':1,'hand':['PL!N-bp1-026','PL!N-bp3-030','PL!N-bp5-027','PL!N-bp1-001','PL!N-bp1-002','PL!N-bp1-003']},
+    'live': {'phase':'LIVE_SET','turn':2,'hand':['PL!N-bp1-026','PL!N-bp3-030','PL!N-bp5-027','PL!N-bp1-001','PL!N-bp1-002','PL!N-bp1-003']},
+    'main': {'phase':'MAIN','turn':2,'hand':['PL!N-bp1-001','PL!N-bp1-002','PL!N-bp1-003','PL!N-bp4-001'], 'stage': {'L': None, 'C': None, 'R': None}},
+    'pending': {'phase':'MAIN','turn':1,'hand':[], 'pending':[{'kind':'confirm','choices':['ok']}]},
+}
+for label, state in states.items():
+    out = app.autoplay_action_suggestion(deck, state)
+    assert out.get('command'), out
+    assert out.get('kind'), out
+    print(label, out['kind'], out['command'], out.get('payload'))
+PY
+```
+
+確認観点:
+- `suggest_autoplay_action()` がマリガン、ライブセット、メイン登場、pending既定選択の候補を返す。
+- CPU候補は `command` と `payload` を持ち、後続の2デッキUIからそのまま中央/プレイヤー操作へ変換できる。
+- まだ完全自動対戦ではなく、1手分の提案を返す段階である。
+
+## 20260730 CPU対戦準備 Step C 2デッキCPU 1手ボタン/API
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./llocg_dual_v2/server.py ./loveca_app/autoplay.py ./loveca_app/core.py ./loveca_app/web.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m unittest llocg_dual_v2.tests.test_rule_core llocg_dual_v2.tests.test_legacy_adapter_transactions
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./run_llocg_dual_v2.py --deck1 W42B --deck2 W42B --host 127.0.0.1 --port 8898
+```
+
+別ターミナル:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+curl -sS http://127.0.0.1:8898/cpu_suggest
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+curl -sS -X POST http://127.0.0.1:8898/cpu_action -H 'Content-Type: application/json' --data '{"max_turns":4}'
+```
+
+確認観点:
+- `/cpu_suggest` が現在手番プレイヤーの `suggestion` を返す。
+- `/cpu_action` が返された候補を同じ中央/プレイヤー操作経路で1手実行する。
+- `W42B` のようなDB内デッキコードでもCPU判断用のデッキTSVを読める。
+- 中央UIに `CPU 1手` ボタンが表示され、対戦終了時や成功ライブ選択待ち中は無効化される。
+
+## 20260730 CPU対戦準備 片側/両側CPU自動トグル
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./llocg_dual_v2/server.py ./loveca_app/autoplay.py ./loveca_app/core.py ./loveca_app/web.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m unittest llocg_dual_v2.tests.test_rule_core llocg_dual_v2.tests.test_legacy_adapter_transactions
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from llocg_dual_v2.server import _shell_html
+manual = _shell_html(cpu_ui=False)
+cpu = _shell_html(cpu_ui=True, cpu_auto_default=True)
+for needle in ['id="cpuP1"', 'id="cpuP2"', 'id="cpuAuto"']:
+    assert needle not in manual, needle
+    assert needle in cpu, needle
+for needle in ['function scheduleCpuAuto', 'function toggleCpuAuto', 'CPU_UI=true', 'CPU_AUTO_DEFAULT=true']:
+    assert needle in cpu, needle
+assert 'CPU_UI=false' in manual
+print('OK split manual/cpu shell hooks')
+PY
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./run_llocg_dual_v2.py --deck1 W42B --deck2 W42B --host 127.0.0.1 --port 8898
+```
+
+別ターミナルで順に確認:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+curl -sS -X POST http://127.0.0.1:8898/cpu_action -H 'Content-Type: application/json' --data '{"max_turns":4}'
+```
+
+確認観点:
+- 通常起動の中央UIには `P1 CPU` / `P2 CPU` / `自動` トグルが表示されない。
+- `--cpu-ui --cpu-auto-default` 起動時のみ中央UIに `P1 CPU` / `P2 CPU` / `自動` トグルが表示される。
+- CPU設定は `localStorage` に保存される。
+- `自動` on時、現在手番がCPU指定プレイヤーなら `/cpu_action` を1手ずつ呼び直す。
+- 成功ライブカード選択待ちなど、人間入力が必要な中央ポップアップ中は自動操作が止まる。
+- API確認では、P1マリガン、P2マリガン、P1メイン登場操作まで通る。
+
+## 20260730 2デッキ入口分離
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./llocg_dual_v2/server.py ./loveca_app/autoplay.py ./loveca_app/core.py ./loveca_app/web.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from pathlib import Path
+from types import SimpleNamespace
+from loveca_app.core import AppState
+from loveca_app.web import Handler
+from llocg_dual_v2.server import _shell_html
+app = AppState(Path('/Users/tekitou/Desktop/gsim/loveca'))
+h = object.__new__(Handler)
+h.server = SimpleNamespace(app_state=app)
+home = h.home_body()
+manual = h.dual_body(False)
+cpu = h.dual_body(True)
+manual_shell = _shell_html(cpu_ui=False)
+cpu_shell = _shell_html(cpu_ui=True, cpu_auto_default=True)
+checks = {
+    'home manual card': '手動2デッキ対戦' in home,
+    'home cpu card': 'CPUオート2デッキ' in home,
+  'home autoplay card': 'オートプレイ' in home,
+    'manual start mode': "mode:'manual'" in manual,
+    'cpu start mode': "mode:'cpu'" in cpu,
+    'manual shell hides cpu': 'id="cpuP1"' not in manual_shell and 'CPU_UI=false' in manual_shell,
+    'cpu shell shows cpu': 'id="cpuP1"' in cpu_shell and 'CPU_UI=true' in cpu_shell,
+}
+for name, ok in checks.items():
+    print(('PASS' if ok else 'FAIL'), name)
+if not all(checks.values()):
+    raise SystemExit(1)
+PY
+```
+
+確認観点:
+- メニューに `手動2デッキ対戦` / `CPUオート2デッキ` / `オートプレイ` が別枠で表示される。
+- `/dual` は完全手動の既存2デッキシミュレータ入口として動作する。
+- `/dual-cpu` は片側CPU/両側CPU選択可能な2デッキシミュレータ入口として動作する。
+- UIなし大量試行は `/autoplay` 側のレポート/CLI運用と分離して扱う。
+
+## 20260730 CPU対戦 判断ログパネル
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./llocg_dual_v2/server.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from llocg_dual_v2.server import _shell_html
+manual = _shell_html(cpu_ui=False)
+cpu = _shell_html(cpu_ui=True, cpu_auto_default=True)
+checks = {
+    'manual no trace': 'id="cpuTrace"' not in manual,
+    'manual no cpu controls': 'id="cpuP1"' not in manual,
+    'cpu trace panel': 'id="cpuTrace"' in cpu and 'CPU判断ログ' in cpu,
+    'cpu trace functions': 'function pushCpuTrace' in cpu and 'function renderCpuTrace' in cpu,
+    'cpu controls': 'id="cpuP1"' in cpu and 'CPU_UI=true' in cpu,
+}
+for name, ok in checks.items():
+    print(('PASS' if ok else 'FAIL'), name)
+if not all(checks.values()):
+    raise SystemExit(1)
+PY
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./run_llocg_dual_v2.py --deck1 W42B --deck2 W42B --host 127.0.0.1 --port 8898 --cpu-ui --cpu-auto-default
+```
+
+別ターミナル:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+curl -sS -X POST http://127.0.0.1:8898/cpu_action -H 'Content-Type: application/json' --data '{"max_turns":4}'
+```
+
+確認観点:
+- CPU UI起動時のみ左下に `CPU判断ログ` パネルが表示される。
+- `CPU 1手` または自動進行で、手番、ターン、フェイズ、操作種別、信頼度、理由、対象カードがログへ蓄積される。
+- `クリア` ボタンで表示中のCPU判断ログだけを消せる。
+- 手動2デッキ起動ではCPU判断ログパネルが表示されない。
+
+## 20260730 UIなしオートプレイ 大量試行サマリ出力
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_autoplay_report.py ./loveca_app/autoplay.py ./loveca_app/core.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --root . --recent 1 --trials 5 --turns 4 --no-markdown --summary-csv sim_out/autoplay_summary_smoke.csv --summary-json sim_out/autoplay_summary_smoke.json
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+import csv, json
+from pathlib import Path
+csv_path = Path('sim_out/autoplay_summary_smoke.csv')
+json_path = Path('sim_out/autoplay_summary_smoke.json')
+rows = list(csv.DictReader(csv_path.open(encoding='utf-8')))
+data = json.loads(json_path.read_text(encoding='utf-8'))
+assert rows
+assert data
+for key in ['deck_path', 'deck_name', 'trials', 't1_target', 't4_cumulative', 't4_top_miss']:
+    assert key in rows[0], key
+print('OK autoplay summary smoke', rows[0].get('deck_name'), rows[0].get('trials'))
+PY
+```
+
+確認観点:
+- `--no-markdown` 指定時は、デッキごとのMarkdownを作らずCSV/JSONサマリだけを出力できる。
+- サマリにはデッキ名、試行回数、各ターン目標、達成率、ライブ達成率、複合達成率、平均ステージコスト、主な未達理由が入る。
+- 大量試行時は `--all --trials N --no-markdown --summary-csv ... --summary-json ...` で横比較用データを作れる。
+
+## 20260730 CPU pending 既定選択ポリシー
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py ./llocg_dual_v2/server.py ./loveca_app/core.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from loveca_app.autoplay import suggest_autoplay_action
+
+def lookup(cn):
+    return {'cardnumber': cn, 'card_no': cn, 'name': cn, 'card_type_norm': 'メンバー', 'cost': 2, 'score': None, 'effect_text': ''}
+
+rows = [{'count': '1', 'card_no': 'A-001'}]
+base = {'turn': 1, 'phase': 'MAIN', 'hand': [], 'stage': []}
+cases = [
+    ({'kind': 'confirm', 'options': ['ok']}, 'ok', 'high'),
+    ({'kind': 'choose_player_for_green_bottom', 'message': '相手を選ぶ', 'options': ['self', 'opponent']}, 'opponent', 'medium'),
+    ({'kind': 'dual_opponent_top1_to_green_or_keep', 'options': ['green', 'keep']}, 'green', 'medium'),
+    ({'kind': 'dual_opponent_topk_reorder_keep_any', 'options': ['B-010', 'B-011'], 'display_cards': ['B-010', 'B-011']}, 'B-010,B-011', 'medium'),
+    ({'kind': 'optional_effect', 'options': ['apply', 'skip']}, 'apply', 'medium'),
+]
+for pending, expected_choice, expected_conf in cases:
+    state = dict(base)
+    state['pending'] = [pending]
+    got = suggest_autoplay_action(rows, lookup, state)
+    assert got['payload']['choice'] == expected_choice, got
+    assert got['confidence'] == expected_conf, got
+print('OK pending choice policy smoke')
+PY
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m unittest llocg_dual_v2.tests.test_rule_core llocg_dual_v2.tests.test_legacy_adapter_transactions
+```
+
+確認観点:
+- 単一選択肢pendingは high confidence でその選択肢を返す。
+- 相手領域に関わる `self/opponent` pending は `opponent` を選ぶ。
+- `green/keep` は、効果実行側の `green` を選ぶ。
+- 山札上複数枚確認で任意枚数保持するpendingは、未知評価では全カードを元順で保持し、不要な控え室送りを避ける。
+- `apply/skip` は、CPU既定では `apply` を選び、判断ログに理由と信頼度を残す。
+
+## 20260730 CPU MAIN 目標超過優先
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py ./llocg_dual_v2/server.py ./loveca_app/core.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from loveca_app.autoplay import _cpu_main_action
+
+records = {
+    'M-002': {'cardnumber': 'M-002', 'name': 'base two', 'card_type_norm': 'MEMBER', 'cost': '2'},
+    'M-007': {'cardnumber': 'M-007', 'name': 'exact seven', 'card_type_norm': 'MEMBER', 'cost': '7'},
+    'M-013': {'cardnumber': 'M-013', 'name': 'over thirteen', 'card_type_norm': 'MEMBER', 'cost': '13'},
+}
+
+def lookup(card_no):
+    return records[card_no]
+
+state = {'phase': 'MAIN', 'hand': ['M-007', 'M-013'], 'stage': ['M-002', None, None]}
+plan = {'accepted_shapes': [[7, 2]], 'primary_shape': [7, 2]}
+action = _cpu_main_action(state, lookup, plan)
+assert action and action['card']['card_no'] == 'M-013', action
+print('OK over-target member priority', action)
+PY
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --root . --recent 1 --trials 5 --turns 4 --no-markdown --summary-csv sim_out/autoplay_summary_smoke.csv --summary-json sim_out/autoplay_summary_smoke.json
+```
+
+確認観点:
+- CPUのMAIN配置とUIなしオートプレイ試行の両方で、ターン目標コストを上限として候補を捨てない。
+- 目標より大きいカードを最優先、目標ぴったりを次点、どちらもない場合は可能な限り大きい妥協、というユーザー指定方針に揃える。
+- CPU判断ログの理由に、目標超過を優先評価したことが残る。
+
+## 20260730 CPU LIVE_SET ライブ目標ログ
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from loveca_app.autoplay import suggest_autoplay_action
+
+records = {
+    'L-001': {'cardnumber': 'L-001', 'name': 'score one', 'card_type_norm': 'LIVE', 'score': '1', 'effect_text': ''},
+    'L-005': {'cardnumber': 'L-005', 'name': 'score five', 'card_type_norm': 'LIVE', 'score': '5', 'effect_text': ''},
+    'M-002': {'cardnumber': 'M-002', 'name': 'two', 'card_type_norm': 'MEMBER', 'cost': '2', 'effect_text': ''},
+}
+
+def lookup(card_no):
+    return records[card_no]
+
+rows = [
+    {'count': '1', 'card_no': 'L-001'},
+    {'count': '1', 'card_no': 'L-005'},
+    {'count': '1', 'card_no': 'M-002'},
+]
+state = {'turn': 1, 'phase': 'LIVE_SET_FIRST', 'hand': ['L-005', 'M-002'], 'stage': []}
+action = suggest_autoplay_action(rows, lookup, state)
+assert action['kind'] == 'live_set', action
+assert action['confidence'] == 'high', action
+assert 'live target' in action['reason'], action
+assert 'L-005' in action['reason'], action
+assert any(card['card_no'] == 'L-005' for card in action['selected_cards']), action
+print('OK live-set score target trace', action)
+PY
+```
+
+確認観点:
+- ライブスコア目標を満たすライブカードを選んだ場合、CPU判断ログの信頼度が `high` になる。
+- 判断理由にターンのライブ目標点と、実際に選んだライブカード番号・スコアが残る。
+- 目標以上のライブスコアは達成候補として扱う。
+
+## 20260730 CPU MAIN 終了判断ログ
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from loveca_app.autoplay import _cpu_main_completion_action, suggest_autoplay_action
+
+records = {
+    'M-002': {'cardnumber': 'M-002', 'name': 'two', 'card_type_norm': 'MEMBER', 'cost': '2'},
+    'M-007': {'cardnumber': 'M-007', 'name': 'seven', 'card_type_norm': 'MEMBER', 'cost': '7'},
+    'M-013': {'cardnumber': 'M-013', 'name': 'thirteen', 'card_type_norm': 'MEMBER', 'cost': '13'},
+}
+
+def lookup(card_no):
+    return records[card_no]
+
+plan = {'accepted_shapes': [[2, 2]], 'primary_shape': [2, 2]}
+complete = _cpu_main_completion_action({'hand': [], 'stage': ['M-002', 'M-002']}, lookup, plan)
+assert complete['kind'] == 'main_complete' and complete['confidence'] == 'high', complete
+
+miss = _cpu_main_completion_action({'hand': [], 'stage': ['M-002']}, lookup, plan)
+assert miss['kind'] == 'main_pass' and miss['confidence'] == 'low', miss
+
+rows = [
+    {'count': '4', 'card_no': 'M-002'},
+    {'count': '4', 'card_no': 'M-007'},
+    {'count': '4', 'card_no': 'M-013'},
+]
+play = suggest_autoplay_action(rows, lookup, {'turn': 2, 'phase': 'MAIN_FIRST', 'hand': ['M-013'], 'stage': ['M-002']})
+assert play['kind'] == 'main_play' and play['card']['card_no'] == 'M-013', play
+print('OK main completion trace', complete, miss, play)
+PY
+```
+
+確認観点:
+- MAINで追加登場候補がなく、盤面がaccepted targetを満たしている場合は `main_complete` / high confidence でNextする。
+- MAINで追加登場候補がなく、盤面が未達の場合は `main_pass` / low confidence として、未達理由を判断ログに残す。
+- 同一MAINフェイズ中にまだ改善候補がある場合は、従来通り `main_play` を返し、CPU自動が次の1手として継続できる。

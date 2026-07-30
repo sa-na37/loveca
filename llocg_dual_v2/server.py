@@ -20,11 +20,12 @@ from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
+from loveca_app.autoplay import suggest_autoplay_action
 from llocg_ui.server import App, HTML as SINGLE_HTML
 from llocg_ui.views import make_view_state
 from .core import ENERGY_DECK_SIZE, DualMatchEngine, Phase, discover_data_root
 
-BUILD_TAG = "llocg_dual_v2_no_game_label_20260723a"
+BUILD_TAG = "llocg_dual_v2_cpu_decision_trace_20260730a"
 
 
 @dataclass
@@ -1229,6 +1230,140 @@ class LegacyUIAdapter:
             "effect_text_norm": str(pick("effect_text_norm") or effect),
             "abilities": abilities,
         }
+
+    def _cpu_deck_rows(self, key: str) -> List[Dict[str, str]]:
+        deck_key = "deck2" if str(key).lower() == "p2" else "deck1"
+        raw_path = str((self.reset_config or {}).get(deck_key, "") or "")
+        candidates: List[Path] = []
+        if raw_path:
+            p = Path(raw_path)
+            if p.is_absolute():
+                candidates.append(p)
+            for root_key in ("data_root", "project_root"):
+                root = (self.reset_config or {}).get(root_key)
+                if root:
+                    root_path = Path(root)
+                    candidates.append(root_path / raw_path)
+                    candidates.append(root_path / "decklists" / f"{raw_path}.tsv")
+                    candidates.append(root_path / "decklists" / f"deck_{raw_path}.tsv")
+                    candidates.append(root_path / "sim_decks" / f"deck_{raw_path}.tsv")
+            candidates.append(Path.cwd() / raw_path)
+        for path in candidates:
+            if not path.is_file():
+                continue
+            try:
+                with path.open("r", encoding="utf-8-sig", newline="") as fh:
+                    reader = csv.DictReader(fh, delimiter="\t")
+                    rows = [dict(row) for row in reader if isinstance(row, dict)]
+            except Exception:
+                continue
+            out: List[Dict[str, str]] = []
+            for row in rows:
+                card_no = str(row.get("card_no") or row.get("cardnumber") or row.get("cn") or "").strip()
+                if not card_no:
+                    continue
+                count = str(row.get("count") or "0").strip()
+                out.append({
+                    "count": count,
+                    "card_no": card_no,
+                    "rarity": str(row.get("rarity") or ""),
+                    "name": str(row.get("name") or row.get("cardname") or ""),
+                    "variant_id": str(row.get("variant_id") or ""),
+                })
+            if out:
+                return out
+        return []
+
+    def _cpu_card_lookup(self, rt: PlayerViewRuntime):
+        def lookup(cardnumber: str) -> Dict[str, Any]:
+            cn = str(cardnumber or "").strip()
+            record = self._detail_card_record(rt, cn)
+
+            def pick(*names: str) -> Any:
+                return self._record_value(record, *names)
+
+            effect_value = pick(
+                "effect_text_raw", "effect_text_norm", "effect_text",
+                "card_text_raw", "card_text", "ability_text_raw", "ability_text",
+                "raw_text", "raw", "source_text", "text", "effect", "ability",
+                "abilities", "clauses", "effects",
+            )
+            effect = self._card_text_value(effect_value)
+            return {
+                "cardnumber": cn,
+                "card_no": cn,
+                "cardname": str(pick("cardname", "name", "card_name") or cn),
+                "name": str(pick("cardname", "name", "card_name") or cn),
+                "card_type_norm": str(pick("card_type_norm", "card_type", "type") or ""),
+                "type": str(pick("card_type_norm", "card_type", "type") or ""),
+                "cost": pick("cost", "cost_value"),
+                "score": pick("score", "score_value"),
+                "effect_text_norm": effect,
+                "effect_text": effect,
+                "group": str(pick("group", "group_name") or ""),
+                "unit": str(pick("unit", "unit_name") or ""),
+            }
+
+        return lookup
+
+    def cpu_action_suggestion(self, max_turns: int = 4) -> Dict[str, Any]:
+        with self.lock:
+            self._sync_metadata_to_views()
+            state = self.state()
+            if state.get("phase") == "GAME_OVER":
+                return {
+                    "ok": True,
+                    "active_player_key": state.get("active_player_key"),
+                    "suggestion": {
+                        "kind": "none",
+                        "command": "",
+                        "payload": {},
+                        "reason": "対戦は終了しています",
+                    },
+                }
+            key = "p1" if self.engine.active_player_id() == 0 else "p2"
+            rt = self.runtime(key)
+            player_state = self.player_state(key, "private")
+            rows = self._cpu_deck_rows(key)
+            if not rows:
+                raise ValueError("CPU判断用のデッキ内容を読み込めませんでした")
+            suggestion = suggest_autoplay_action(
+                rows,
+                self._cpu_card_lookup(rt),
+                player_state,
+                max_turns=max(1, int(max_turns or 4)),
+            )
+            suggestion["active_player_key"] = key
+            suggestion["match_phase"] = state.get("phase")
+            return {"ok": True, "active_player_key": key, "suggestion": suggestion}
+
+    def apply_cpu_action_suggestion(self, max_turns: int = 4) -> Dict[str, Any]:
+        with self.lock:
+            suggestion_payload = self.cpu_action_suggestion(max_turns=max_turns)
+            suggestion = dict(suggestion_payload.get("suggestion") or {})
+            key = str(suggestion_payload.get("active_player_key") or "")
+            command = str(suggestion.get("command") or "").strip()
+            payload = suggestion.get("payload") if isinstance(suggestion.get("payload"), dict) else {}
+            if not command:
+                return {"ok": True, "suggestion": suggestion, "state": self.state(), "applied": False}
+            if command.upper() == "NEXT":
+                state = self.state()
+                action_payload = dict(payload)
+                action_payload.setdefault("expected_phase", state.get("phase"))
+                action_payload.setdefault("expected_active_player_key", key)
+                out = self.action("NEXT", action_payload)
+                out["suggestion"] = suggestion
+                out["applied"] = True
+                return out
+            rt = self.runtime(key)
+            out = self.player_command(rt.key, command, payload)
+            return {
+                "ok": True,
+                "suggestion": suggestion,
+                "state": self.state(),
+                "player_state": out,
+                "applied": True,
+            }
 
     def _card_effect_map(self, rt: PlayerViewRuntime) -> Dict[str, str]:
         """Return canonical effect text keyed by card number for the client UI."""
@@ -3698,18 +3833,24 @@ def _scoped_single_html(prefix: str, *, upper: bool, label: str, color: str) -> 
     # Embedded boards are refreshed by central actions and board-command events.
     # Do not add a periodic full-state refresh here: it destroys transient hand
     # selection and log-scroll state.
-    poll_old = """  if(IS_PUBLIC_VIEW){
-    setInterval(()=>{ refreshStateFromServer({force:false}); }, 250);
-    window.addEventListener('storage', (ev)=>{"""
+    poll_pattern = re.compile(
+        r"(?P<head>\s*if\s*\(\s*IS_PUBLIC_VIEW\s*\)\s*\{\s*)"
+        r"setInterval\s*\(\s*\(\)\s*=>\s*\{\s*refreshStateFromServer\s*\(\s*\{\s*force\s*:\s*false\s*\}\s*\)\s*;\s*\}\s*,\s*\d+\s*\)\s*;\s*"
+        r"(?P<tail>window\.addEventListener\s*\(\s*['\"]storage['\"]\s*,\s*\(ev\)\s*=>\s*\{)",
+        re.M,
+    )
     # Embedded dual boards are event-driven. Enabling the legacy polling loop
     # rebuilds transient selections, log position, and acknowledged popups.
     # Remove the 250 ms loop from both embedded private/public board variants.
-    if poll_old not in html:
+    match = poll_pattern.search(html)
+    if not match:
         raise RuntimeError('legacy public polling block not found')
-    poll_new = """  if(IS_PUBLIC_VIEW){
-    // Dual embedded boards are refreshed only by central actions or board commands.
-    window.addEventListener('storage', (ev)=>{"""
-    html = html.replace(poll_old, poll_new, 1)
+    poll_new = (
+        match.group("head")
+        + "// Dual embedded boards are refreshed only by central actions or board commands.\n"
+        + match.group("tail")
+    )
+    html = html[:match.start()] + poll_new + html[match.end():]
     injected = f'''<style>
 body.dualPlayerView{{--dualLabelW:178px}}
 body.dualPlayerView::before{{content:{json.dumps(label, ensure_ascii=False)};position:fixed;left:12px;top:10px;z-index:50000;box-sizing:border-box;width:var(--dualLabelW);max-width:calc(100vw - 24px);padding:7px 12px;border-radius:999px;background:{color};color:#fff;font-size:14px;line-height:1.15;font-weight:900;box-shadow:0 3px 14px rgba(0,0,0,.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}}
@@ -3836,9 +3977,17 @@ html,body{{overflow:hidden}}
     return html.replace('</body>', log_pin_script + '</body>')
 
 
-def _shell_html() -> str:
+def _shell_html(*, cpu_ui: bool = False, cpu_auto_default: bool = False) -> str:
+    title = "LLCG CPUオート2デッキ対戦 v2" if cpu_ui else "LLCG 2デッキ対戦 v2"
+    cpu_controls = ""
+    cpu_trace_panel = ""
+    if cpu_ui:
+        cpu_controls = '<div id="cpuMode"><button id="cpuP1" type="button">P1 CPU</button><button id="cpuP2" type="button">P2 CPU</button><button id="cpuAuto" type="button">自動</button></div><button id="cpuStep" type="button">CPU 1手</button>'
+        cpu_trace_panel = '<div id="cpuTrace"><div id="cpuTraceHead"><strong>CPU判断ログ</strong><button id="cpuTraceClear" type="button">クリア</button></div><div id="cpuTraceList"></div></div>'
+    cpu_ui_js = "true" if cpu_ui else "false"
+    cpu_auto_default_js = "true" if (cpu_ui and cpu_auto_default) else "false"
     return f'''<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>LLCG 2デッキ対戦 v2</title><style>
+<title>{title}</title><style>
 html,body{{height:100%;margin:0;background:#080a0e;color:#fff;font-family:system-ui,-apple-system,sans-serif;overflow:hidden}}
 #shell{{height:100%;display:grid;grid-template-rows:1fr 74px 1fr}}.playerFrame{{width:100%;height:100%;border:0;background:#111}}
 #divider{{position:relative;display:grid;grid-template-columns:minmax(150px,1fr) minmax(260px,1.35fr) minmax(390px,max-content);align-items:center;gap:12px;padding:0 14px;box-sizing:border-box;background:#151922;border-top:2px solid #343b4c;border-bottom:2px solid #343b4c;z-index:10;box-shadow:0 0 18px rgba(0,0,0,.6);overflow:hidden}}
@@ -3846,7 +3995,7 @@ html,body{{height:100%;margin:0;background:#080a0e;color:#fff;font-family:system
 #phaseSub{{display:block;min-width:0;font-size:12px;font-weight:750;line-height:1.15;letter-spacing:0;margin-top:3px;opacity:.82;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
 button{{border:1px solid rgba(255,255,255,.25);border-radius:8px;background:#2a3140;color:#fff;padding:7px 11px;font-weight:900;cursor:pointer;font-size:13px;line-height:1.15;white-space:nowrap}}button:hover{{background:#384258}}button:disabled{{opacity:.45;cursor:wait}}
 #tag{{position:fixed;right:8px;top:4px;z-index:20;font-size:10px;color:#9aa4b5}}#controls{{grid-column:3;grid-row:1;justify-self:end;display:flex;align-items:center;gap:6px;min-width:0}}#controls form{{display:flex;margin:0}}
-#next{{background:#276fca;min-width:108px}}#undo{{background:#555}}#save{{background:#2f7658}}#loadBtn{{background:#6a537c}}#recordButtons{{position:fixed;right:14px;top:24px;z-index:65000;display:flex;align-items:center;gap:6px;padding:8px 9px;border-radius:13px;background:rgba(15,18,24,.84);border:1px solid rgba(255,255,255,.22);box-shadow:0 8px 26px rgba(0,0,0,.48);backdrop-filter:blur(6px)}}#recordButtons::before{{content:'RESET';font-size:10px;font-weight:900;letter-spacing:.06em;color:#d6deea;opacity:.88}}#recordButtons button{{padding-left:9px;padding-right:9px;background:#784358}}#recordButtons button:hover{{background:#934c64}}#error{{color:#ff8d8d}}#requestStatus{{grid-column:1;grid-row:1;justify-self:start;min-width:0;max-width:100%;font-size:11px;color:#aeb8ca;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+#next{{background:#276fca;min-width:108px}}#cpuStep{{background:#7659bd;min-width:86px}}#undo{{background:#555}}#save{{background:#2f7658}}#loadBtn{{background:#6a537c}}#cpuMode{{display:flex;align-items:center;gap:3px;padding:3px;border-radius:10px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14)}}#cpuMode button{{padding:5px 7px;font-size:11px;background:#303747;color:#dce5f2}}#cpuMode button.active{{background:#7b5fe0;color:#fff;border-color:rgba(255,255,255,.42)}}#cpuAuto.active{{background:#bd5f83}}#recordButtons{{position:fixed;right:14px;top:24px;z-index:65000;display:flex;align-items:center;gap:6px;padding:8px 9px;border-radius:13px;background:rgba(15,18,24,.84);border:1px solid rgba(255,255,255,.22);box-shadow:0 8px 26px rgba(0,0,0,.48);backdrop-filter:blur(6px)}}#recordButtons::before{{content:'RESET';font-size:10px;font-weight:900;letter-spacing:.06em;color:#d6deea;opacity:.88}}#recordButtons button{{padding-left:9px;padding-right:9px;background:#784358}}#recordButtons button:hover{{background:#934c64}}#error{{color:#ff8d8d}}#requestStatus{{grid-column:1;grid-row:1;justify-self:start;min-width:0;max-width:100%;font-size:11px;color:#aeb8ca;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
 @media (max-width: 980px){{#divider{{grid-template-columns:minmax(80px,.6fr) minmax(160px,1fr) minmax(300px,max-content);gap:8px;padding:0 8px}}#phaseBanner{{font-size:20px}}button{{padding:6px 8px;font-size:12px}}#next{{min-width:92px}}}}
 #gameOverNotice{{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:70000;display:none;min-width:min(620px,86vw);padding:22px 28px;border-radius:18px;background:rgba(22,27,38,.97);border:3px solid #ffd76b;box-shadow:0 18px 80px rgba(0,0,0,.78);text-align:center;font-weight:950}}
 #gameOverTitle{{font-size:28px;margin-bottom:8px}}#gameOverBody{{font-size:18px;color:#f4ecd0}}
@@ -3857,14 +4006,52 @@ button{{border:1px solid rgba(255,255,255,.25);border-radius:8px;background:#2a3
 .judgmentCard:hover{{background:#303b50}}.judgmentCard.selected{{border-color:#56a4ff;background:#213f69;box-shadow:0 0 0 3px rgba(86,164,255,.2)}}.judgmentCard img{{width:126px;height:176px;object-fit:contain;border-radius:8px;background:#080a0e}}.judgmentCard div{{font-size:12px;font-weight:850;word-break:break-all;margin-top:7px}}
 #judgmentHint{{text-align:center;margin-top:16px;color:#ffdd84;font-weight:850}}
 #judgmentNotice{{position:fixed;left:50%;top:50%;transform:translate(-50%,-112%);z-index:45000;display:none;max-width:min(920px,82vw);padding:12px 20px;border-radius:14px;background:rgba(21,28,42,.96);border:2px solid #6684b3;box-shadow:0 10px 40px rgba(0,0,0,.72);font-size:15px;font-weight:850;text-align:center;pointer-events:none}}
-</style></head><body><div id="tag">{BUILD_TAG}</div><div id="recordButtons"><button id="recordP1" type="button">P1勝利</button><button id="recordP2" type="button">P2勝利</button><button id="recordNG" type="button">No Game</button></div><div id="shell"><iframe id="p2frame" class="playerFrame" src="/p2/ui?upper=1"></iframe><div id="divider"><div id="phaseBanner">読み込み中</div><div id="requestStatus"></div><div id="controls"><form id="undoForm" method="post" action="/match_action_form"><input type="hidden" name="action" value="UNDO"><button id="undo" type="submit">UNDO</button></form><button id="save" type="button">中断保存</button><button id="loadBtn" type="button">再開読込</button><input id="loadFile" type="file" accept="application/json,.json" hidden><form id="nextForm" method="post" action="/match_action_form"><input type="hidden" name="action" value="NEXT"><button id="next" type="submit">NEXT</button></form></div></div><iframe id="p1frame" class="playerFrame" src="/p1/ui"></iframe></div>
+#cpuTrace{{position:fixed;left:12px;bottom:86px;z-index:50000;width:min(520px,46vw);max-height:28vh;display:flex;flex-direction:column;background:rgba(12,15,22,.9);border:1px solid rgba(255,255,255,.22);border-radius:12px;box-shadow:0 10px 36px rgba(0,0,0,.54);overflow:hidden;backdrop-filter:blur(6px)}}
+#cpuTraceHead{{display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(255,255,255,.08);font-size:12px}}#cpuTraceHead strong{{flex:1}}#cpuTraceHead button{{padding:4px 7px;font-size:11px;background:#394150}}
+#cpuTraceList{{overflow:auto;padding:8px 10px;display:flex;flex-direction:column;gap:6px;font-size:11px;line-height:1.35;color:#dbe5f3}}.cpuTraceItem{{border-left:3px solid #7b5fe0;padding-left:8px}}.cpuTraceMeta{{color:#aeb8ca;font-weight:850}}.cpuTraceReason{{color:#f0e4b2}}.cpuTraceCards{{color:#c9d5e8;word-break:break-all}}
+@media (max-width: 980px){{#cpuTrace{{width:min(480px,62vw);max-height:22vh;bottom:82px}}}}
+</style></head><body><div id="tag">{BUILD_TAG}</div><div id="recordButtons"><button id="recordP1" type="button">P1勝利</button><button id="recordP2" type="button">P2勝利</button><button id="recordNG" type="button">No Game</button></div>{cpu_trace_panel}<div id="shell"><iframe id="p2frame" class="playerFrame" src="/p2/ui?upper=1"></iframe><div id="divider"><div id="phaseBanner">読み込み中</div><div id="requestStatus"></div><div id="controls"><form id="undoForm" method="post" action="/match_action_form"><input type="hidden" name="action" value="UNDO"><button id="undo" type="submit">UNDO</button></form><button id="save" type="button">中断保存</button><button id="loadBtn" type="button">再開読込</button>{cpu_controls}<input id="loadFile" type="file" accept="application/json,.json" hidden><form id="nextForm" method="post" action="/match_action_form"><input type="hidden" name="action" value="NEXT"><button id="next" type="submit">NEXT</button></form></div></div><iframe id="p1frame" class="playerFrame" src="/p1/ui"></iframe></div>
 <div id="judgmentNotice"></div>
 <div id="gameOverNotice"><div id="gameOverTitle">対戦終了</div><div id="gameOverBody"></div></div>
 <div id="judgmentOverlay"><div id="judgmentPanel"><div id="judgmentTitle">成功ライブカードを選択</div><div id="judgmentMessage"></div><div id="judgmentCards"></div><div id="judgmentHint">カードを1枚選択して、中央の「成功ライブを決定」を押してください</div></div></div>
 <script>
 let S=null,busy=false,lastError='',requestSeq=0,selectedLiveIndex=null,promptKey='';
+const CPU_UI={cpu_ui_js},CPU_AUTO_DEFAULT={cpu_auto_default_js};
+let cpuPlayers={{p1:false,p2:false}},cpuAuto=false,cpuAutoTimer=0,cpuAutoEpoch=0,cpuTraceLog=[];
 function activeFrame(){{return document.getElementById(S&&S.active_player_key==='p2'?'p2frame':'p1frame')}}
 function status(t){{document.getElementById('requestStatus').textContent=t||''}}
+function loadCpuPrefs(){{
+  if(!CPU_UI){{cpuPlayers={{p1:false,p2:false}};cpuAuto=false;return}}
+  try{{
+    const saved=JSON.parse(localStorage.getItem('llocgDualCpuPrefs')||'{{}}');
+    if(saved&&Object.prototype.hasOwnProperty.call(saved,'p1')){{
+      cpuPlayers.p1=Boolean(saved.p1);cpuPlayers.p2=Boolean(saved.p2);cpuAuto=Boolean(saved.auto);
+    }}else{{
+      cpuPlayers={{p1:true,p2:true}};cpuAuto=CPU_AUTO_DEFAULT;
+    }}
+  }}catch(e){{cpuPlayers={{p1:true,p2:true}};cpuAuto=CPU_AUTO_DEFAULT}}
+}}
+function saveCpuPrefs(){{if(!CPU_UI)return;try{{localStorage.setItem('llocgDualCpuPrefs',JSON.stringify({{p1:cpuPlayers.p1,p2:cpuPlayers.p2,auto:cpuAuto}}))}}catch(e){{}}}}
+function updateCpuButtons(){{
+  if(!CPU_UI)return;
+  const p1=document.getElementById('cpuP1'),p2=document.getElementById('cpuP2'),auto=document.getElementById('cpuAuto');
+  if(p1)p1.classList.toggle('active',Boolean(cpuPlayers.p1));
+  if(p2)p2.classList.toggle('active',Boolean(cpuPlayers.p2));
+  if(auto)auto.classList.toggle('active',Boolean(cpuAuto));
+}}
+function cpuBlockedByPrompt(){{
+  return Boolean(S&&S.judgment_prompt&&S.judgment_prompt.kind==='pick_success_live'&&selectedLiveIndex===null);
+}}
+function activePlayerIsCpu(){{
+  const key=S&&S.active_player_key==='p2'?'p2':'p1';
+  return Boolean(cpuPlayers[key]);
+}}
+function scheduleCpuAuto(){{
+  clearTimeout(cpuAutoTimer);
+  if(!CPU_UI||!cpuAuto||busy||!S||S.phase==='GAME_OVER'||cpuBlockedByPrompt()||!activePlayerIsCpu())return;
+  const epoch=++cpuAutoEpoch;
+  cpuAutoTimer=setTimeout(()=>{{if(epoch===cpuAutoEpoch&&cpuAuto&&!busy&&S&&S.phase!=='GAME_OVER'&&!cpuBlockedByPrompt()&&activePlayerIsCpu())cpuStep({{auto:true}})}},720);
+}}
 async function refreshBoard(id,options={{}}){{try{{const fn=document.getElementById(id).contentWindow.dualRefreshFromServer;if(typeof fn==='function')return await Promise.resolve(fn(options))}}catch(e){{}}return null}}
 async function refreshBoards(){{await Promise.allSettled(['p1frame','p2frame'].map(id=>refreshBoard(id,{{preserveSelection:true}})))}}
 let boardEventTimer=0;
@@ -3907,9 +4094,15 @@ function updateButtons(){{
   document.getElementById('undo').disabled=busy||!S||S.history_depth===0;
   document.getElementById('save').disabled=busy||!S;
   document.getElementById('loadBtn').disabled=busy;
+  const cpuStepEl=document.getElementById('cpuStep'),cpuP1El=document.getElementById('cpuP1'),cpuP2El=document.getElementById('cpuP2'),cpuAutoEl=document.getElementById('cpuAuto');
+  if(cpuStepEl)cpuStepEl.disabled=busy||!S||S.phase==='GAME_OVER'||cpuBlockedByPrompt();
+  if(cpuP1El)cpuP1El.disabled=busy;
+  if(cpuP2El)cpuP2El.disabled=busy;
+  if(cpuAutoEl)cpuAutoEl.disabled=busy;
   document.getElementById('recordP1').disabled=busy||!S;
   document.getElementById('recordP2').disabled=busy||!S;
   document.getElementById('recordNG').disabled=busy||!S;
+  updateCpuButtons();
 }}
 async function refresh(prefetched=null){{
   S=prefetched||await(await fetch('/match_state',{{cache:'no-store'}})).json();
@@ -3919,7 +4112,7 @@ async function refresh(prefetched=null){{
   const sub=lastError?'<span id="error">'+lastError+'</span>':over;
   document.getElementById('phaseBanner').innerHTML=`${{S.turn>0?'Turn '+S.turn+'　':''}}${{S.phase_label}}<span id="phaseSub">${{sub}}</span>`;
   document.getElementById('next').textContent=S.action_label||'NEXT';
-  renderJudgmentPrompt();renderGameOver();updateButtons();
+  renderJudgmentPrompt();renderGameOver();updateButtons();scheduleCpuAuto();
 }}
 async function saveSuspend(){{
   if(busy||!S)return;busy=true;status('中断データ作成中…');updateButtons();
@@ -3934,7 +4127,7 @@ async function saveSuspend(){{
     document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1200);
     status('中断データを保存しました');
   }}catch(e){{lastError=String(e.message||e);status('中断保存に失敗')}}
-  finally{{busy=false;await refresh();updateButtons()}}
+  finally{{busy=false;await refresh();updateButtons();scheduleCpuAuto()}}
 }}
 async function loadSuspendFile(file){{
   if(!file)return;busy=true;lastError='';status('中断データ読込中…');updateButtons();
@@ -3946,7 +4139,7 @@ async function loadSuspendFile(file){{
     if(!r.ok||!j.ok)throw new Error(j.error||'再開に失敗しました');
     await refresh(j.state);await refreshBoards();status('中断データから再開しました');
   }}catch(e){{lastError=String(e.message||e);status('再開読込に失敗');await refresh()}}
-  finally{{busy=false;document.getElementById('loadFile').value='';updateButtons()}}
+  finally{{busy=false;document.getElementById('loadFile').value='';updateButtons();scheduleCpuAuto()}}
 }}
 async function act(action){{
   if(busy)return false;busy=true;lastError='';const seq=++requestSeq;status('送信中… #'+seq);updateButtons();
@@ -3960,8 +4153,63 @@ async function act(action){{
     try{{if(action==='NEXT'&&j.clear_selected_hand)f.contentWindow.dualClearSelectedHand()}}catch(e){{}}
     await refresh(j.state);await refreshBoards();status('完了 #'+seq+' / '+S.phase);return false;
   }}catch(e){{lastError=String(e.message||e);status('失敗 #'+seq);await refresh();await refreshBoards();return false}}
-  finally{{busy=false;updateButtons()}}
+  finally{{busy=false;updateButtons();scheduleCpuAuto()}}
 }}
+function describeCpuSuggestion(s){{
+  if(!s||typeof s!=='object')return 'CPU操作を実行しました';
+  const card=s.card&&s.card.card_no?` / ${{s.card.name||s.card.card_no}}`:'';
+  const kind=s.kind?String(s.kind):'action';
+  const reason=s.reason?` / ${{s.reason}}`:'';
+  return `CPU ${{kind}}${{card}}${{reason}}`;
+}}
+function cpuTraceCardText(s){{
+  if(!s||typeof s!=='object')return '';
+  const cards=Array.isArray(s.selected_cards)?s.selected_cards:[];
+  const parts=[];
+  if(s.card&&s.card.card_no)parts.push(`${{s.card.name||s.card.card_no}}${{s.card.cost!=null?' cost='+s.card.cost:''}}`);
+  for(const card of cards){{if(card&&card.card_no)parts.push(`${{card.name||card.card_no}}${{card.kind?' / '+card.kind:''}}${{card.score!=null?' score='+card.score:''}}${{card.cost!=null?' cost='+card.cost:''}}`)}}
+  return parts.join('、');
+}}
+function renderCpuTrace(){{
+  if(!CPU_UI)return;
+  const list=document.getElementById('cpuTraceList');
+  if(!list)return;
+  list.innerHTML='';
+  if(!cpuTraceLog.length){{const empty=document.createElement('div');empty.className='cpuTraceMeta';empty.textContent='まだCPU操作はありません。';list.appendChild(empty);return}}
+  for(const item of cpuTraceLog.slice(-24).reverse()){{
+    const row=document.createElement('div');row.className='cpuTraceItem';
+    const meta=document.createElement('div');meta.className='cpuTraceMeta';meta.textContent=`#${{item.seq}} ${{item.player}} / T${{item.turn||'?'}} / ${{item.phase||'?'}} / ${{item.kind||'?'}} / ${{item.confidence||'?'}}`;
+    const reason=document.createElement('div');reason.className='cpuTraceReason';reason.textContent=item.reason||'';
+    row.appendChild(meta);if(item.cards){{const cards=document.createElement('div');cards.className='cpuTraceCards';cards.textContent=item.cards;row.appendChild(cards)}}row.appendChild(reason);list.appendChild(row);
+  }}
+}}
+function pushCpuTrace(s,seq){{
+  if(!CPU_UI||!s||typeof s!=='object')return;
+  cpuTraceLog.push({{
+    seq,
+    player:String(s.active_player_key||(S&&S.active_player_key)||'?').toUpperCase(),
+    turn:s.turn,
+    phase:s.phase||s.match_phase,
+    kind:s.kind,
+    confidence:s.confidence,
+    reason:s.reason,
+    cards:cpuTraceCardText(s),
+  }});
+  if(cpuTraceLog.length>80)cpuTraceLog=cpuTraceLog.slice(-80);
+  renderCpuTrace();
+}}
+async function cpuStep(options={{}}){{
+  if(busy)return;busy=true;lastError='';const seq=++requestSeq;status('CPU判断中… #'+seq);updateButtons();
+  try{{
+    const r=await fetch('/cpu_action',{{method:'POST',cache:'no-store',headers:{{'Content-Type':'application/json','X-Dual-Request':String(seq)}},body:JSON.stringify({{max_turns:4}})}});
+    const text=await r.text();let j;try{{j=JSON.parse(text)}}catch(e){{throw new Error('サーバー応答がJSONではありません: '+text.slice(0,120))}}
+    if(!r.ok||!j.ok)throw new Error(j.error||'CPU操作に失敗しました');
+    await refresh(j.state);await refreshBoards();pushCpuTrace(j.suggestion,seq);status(describeCpuSuggestion(j.suggestion));return false;
+  }}catch(e){{lastError=String(e.message||e);status('CPU操作に失敗 #'+seq);await refresh();await refreshBoards();return false}}
+  finally{{busy=false;updateButtons();scheduleCpuAuto()}}
+}}
+function toggleCpuPlayer(key){{if(!CPU_UI)return;cpuPlayers[key]=!cpuPlayers[key];saveCpuPrefs();updateButtons();scheduleCpuAuto()}}
+function toggleCpuAuto(){{if(!CPU_UI)return;cpuAuto=!cpuAuto;saveCpuPrefs();updateButtons();status(cpuAuto?'CPU自動を開始':'CPU自動を停止');scheduleCpuAuto()}}
 async function recordAndReset(result,label){{
   if(busy||!S)return;const msg=label+'として記録し、新しい対戦を開始します。よろしいですか？';
   if(!window.confirm(msg))return;busy=true;lastError='';status('勝敗を記録中…');updateButtons();
@@ -3971,12 +4219,19 @@ async function recordAndReset(result,label){{
     if(!r.ok||!j.ok)throw new Error(j.error||'記録に失敗しました');
     await refresh(j.state);await refreshBoards();status('記録してリセットしました');
   }}catch(e){{lastError=String(e.message||e);status('記録リセットに失敗');await refresh();await refreshBoards()}}
-  finally{{busy=false;updateButtons()}}
+  finally{{busy=false;updateButtons();scheduleCpuAuto()}}
 }}
+loadCpuPrefs();updateCpuButtons();
 document.getElementById('nextForm').addEventListener('submit',e=>{{e.preventDefault();act('NEXT')}});document.getElementById('undoForm').addEventListener('submit',e=>{{e.preventDefault();act('UNDO')}});refresh();setInterval(()=>{{if(!busy&&!document.hidden)refresh()}},1000);
 document.getElementById('save').addEventListener('click',saveSuspend);
 document.getElementById('loadBtn').addEventListener('click',()=>document.getElementById('loadFile').click());
 document.getElementById('loadFile').addEventListener('change',e=>loadSuspendFile(e.target.files&&e.target.files[0]));
+if(document.getElementById('cpuStep'))document.getElementById('cpuStep').addEventListener('click',cpuStep);
+if(document.getElementById('cpuP1'))document.getElementById('cpuP1').addEventListener('click',()=>toggleCpuPlayer('p1'));
+if(document.getElementById('cpuP2'))document.getElementById('cpuP2').addEventListener('click',()=>toggleCpuPlayer('p2'));
+if(document.getElementById('cpuAuto'))document.getElementById('cpuAuto').addEventListener('click',toggleCpuAuto);
+if(document.getElementById('cpuTraceClear'))document.getElementById('cpuTraceClear').addEventListener('click',()=>{{cpuTraceLog=[];renderCpuTrace()}});
+renderCpuTrace();
 document.getElementById('recordP1').addEventListener('click',()=>recordAndReset('p1_win','P1勝利'));
 document.getElementById('recordP2').addEventListener('click',()=>recordAndReset('p2_win','P2勝利'));
 document.getElementById('recordNG').addEventListener('click',()=>recordAndReset('no_game','No Game'));
@@ -4063,6 +4318,8 @@ def _find_runtime_card_image(rt: PlayerViewRuntime, cardnumber: str) -> Optional
 class Handler(BaseHTTPRequestHandler):
     adapter: LegacyUIAdapter
     verbose_http: bool = False
+    cpu_ui: bool = False
+    cpu_auto_default: bool = False
 
     def log_message(self, fmt: str, *args: Any) -> None:
         path = urlparse(getattr(self, "path", "")).path
@@ -4079,8 +4336,19 @@ class Handler(BaseHTTPRequestHandler):
     def do_HEAD(self): self.do_GET()
     def do_GET(self):
         u = urlparse(self.path)
-        if u.path in {'/', '/dual'}: return self._send(200, _shell_html().encode(), 'text/html; charset=utf-8')
+        if u.path in {'/', '/dual'}:
+            return self._send(
+                200,
+                _shell_html(cpu_ui=self.cpu_ui, cpu_auto_default=self.cpu_auto_default).encode(),
+                'text/html; charset=utf-8',
+            )
         if u.path == '/match_state': return self._send(200, json.dumps(self.adapter.state(), ensure_ascii=False).encode(), 'application/json; charset=utf-8')
+        if u.path == '/cpu_suggest':
+            try:
+                payload = self.adapter.cpu_action_suggestion()
+                return self._send(200, json.dumps(payload, ensure_ascii=False).encode(), 'application/json; charset=utf-8')
+            except Exception as exc:
+                return self._send(400, json.dumps({'ok': False, 'error': f'{type(exc).__name__}: {exc}'}, ensure_ascii=False).encode(), 'application/json; charset=utf-8')
         if u.path == '/suspend_state':
             return self._send(
                 200,
@@ -4170,6 +4438,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, json.dumps(out, ensure_ascii=False).encode(), 'application/json; charset=utf-8')
             except Exception as exc:
                 return self._send(400, json.dumps({'ok':False,'error':f'{type(exc).__name__}: {exc}'}, ensure_ascii=False).encode(), 'application/json; charset=utf-8')
+        if u.path == '/cpu_action':
+            try:
+                max_turns = int(obj.get('max_turns', 4) or 4)
+                out = self.adapter.apply_cpu_action_suggestion(max_turns=max_turns)
+                return self._send(200, json.dumps(out, ensure_ascii=False).encode(), 'application/json; charset=utf-8')
+            except Exception as exc:
+                return self._send(400, json.dumps({'ok':False,'error':f'{type(exc).__name__}: {exc}'}, ensure_ascii=False).encode(), 'application/json; charset=utf-8')
         rt, sub = self._route_player(u.path)
         if rt is not None and sub == '/cmd':
             cmd = str(obj.get('cmd', '') or '').strip()
@@ -4183,7 +4458,7 @@ class Handler(BaseHTTPRequestHandler):
         return self._send(404, b'not found', 'text/plain')
 
 
-def serve(*, host: str, port: int, project_root: Path, data_root: Path, deck1: str, deck2: str, seed: int, debug: bool, preserve_start_env: bool, verbose_http: bool) -> None:
+def serve(*, host: str, port: int, project_root: Path, data_root: Path, deck1: str, deck2: str, seed: int, debug: bool, preserve_start_env: bool, verbose_http: bool, cpu_ui: bool = False, cpu_auto_default: bool = False) -> None:
     engine = DualMatchEngine.from_codes(project_root, deck1, deck2, seed=seed, data_root=data_root)
     saved_env: Dict[str, str] = {}
     if not preserve_start_env:
@@ -4207,6 +4482,8 @@ def serve(*, host: str, port: int, project_root: Path, data_root: Path, deck1: s
     )
     Handler.adapter = adapter
     Handler.verbose_http = bool(verbose_http)
+    Handler.cpu_ui = bool(cpu_ui)
+    Handler.cpu_auto_default = bool(cpu_auto_default)
     httpd = ThreadingHTTPServer((host, int(port)), Handler)
     print(f'[LLCG DUAL V2] BUILD_TAG={BUILD_TAG}')
     print(f'[LLCG DUAL V2] project_root={project_root}')
@@ -4227,9 +4504,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument('--debug', action='store_true')
     ap.add_argument('--preserve-start-env', action='store_true')
     ap.add_argument('--verbose-http', action='store_true', help='定期state取得を含むHTTPアクセスログを表示する')
+    ap.add_argument('--cpu-ui', action='store_true', help='CPU操作用の2デッキUIを表示する')
+    ap.add_argument('--cpu-auto-default', action='store_true', help='CPU UI初回表示時に両側CPU/自動を既定ONにする')
     ns = ap.parse_args(argv)
     project_root = Path(ns.root).expanduser().resolve()
     explicit = Path(ns.data_root).expanduser() if ns.data_root else None
     data_root = discover_data_root(project_root, explicit)
-    serve(host=ns.host, port=ns.port, project_root=project_root, data_root=data_root, deck1=ns.deck1, deck2=ns.deck2, seed=ns.seed, debug=ns.debug, preserve_start_env=ns.preserve_start_env, verbose_http=ns.verbose_http)
+    serve(host=ns.host, port=ns.port, project_root=project_root, data_root=data_root, deck1=ns.deck1, deck2=ns.deck2, seed=ns.seed, debug=ns.debug, preserve_start_env=ns.preserve_start_env, verbose_http=ns.verbose_http, cpu_ui=ns.cpu_ui, cpu_auto_default=ns.cpu_auto_default)
     return 0

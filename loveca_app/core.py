@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# BUILD_TAG = "deck_regulation_presets_20260728a"
+# BUILD_TAG = "loveca_dual_manual_cpu_entrypoints_20260730a"
 """
 Loveca application launcher (phase 1).
 
@@ -48,8 +48,10 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 
+from .autoplay import build_autoplay_deck_report, build_autoplay_markdown_report, simulate_autoplay_trials, suggest_autoplay_action
 
-BUILD_TAG = "deck_regulation_presets_20260728a"
+
+BUILD_TAG = "loveca_dual_manual_cpu_entrypoints_20260730a"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8875
 SESSION_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -336,7 +338,7 @@ class AppState:
         "PL!SP-sd1-019": {"points": 1, "rarities": ("SD", "RM")},
         "PL!SP-sd1-020": {"points": 1, "rarities": ("SD", "RM")},
         "PL!SP-pb1-014": {"points": 1, "rarities": ("N",)},
-        "PL!SP-bp2-024": {"points": 1, "rarities": ("L", "SECL")},
+        "PL!SP-bp2-024": {"points": 1, "rarities": ("L", "SECL", "SRL")},
     }
     LOVECA_POINT_RULES_20260808: dict[str, dict[str, Any]] = {
         **LOVECA_POINT_RULES_20260403,
@@ -427,6 +429,7 @@ class AppState:
         self.dual_launch_state: dict[str, Any] = {
             "status": "idle",
             "url": "",
+            "mode": "manual",
             "message": "",
             "pid": None,
             "deck1_path": "",
@@ -690,9 +693,13 @@ class AppState:
                 count = int(str(row.get("count", "") or "0"))
             except ValueError:
                 return {"valid": False, "error": f"{index}行目のcountが整数ではありません。", "composition": {"member": 0, "live": 0, "other": 0, "total": 0, "valid": False}, "loveca_points": self.deck_loveca_points([], regulation["key"]), "regulation": regulation, "copy_violations": {}, "card_types": len(rows), "metadata": metadata}
-            card_no = str(row.get("card_no", "") or "").strip()
+            raw_card_no = str(row.get("card_no", "") or "").strip()
+            card_no, card_no_rarity = self._split_cardnumber_rarity(raw_card_no)
+            if card_no_rarity and not row.get("rarity"):
+                row["card_no"] = card_no
+                row["rarity"] = card_no_rarity
             if count <= 0 or not card_no or self.card_record(card_no) == {}:
-                return {"valid": False, "error": f"デッキ行が不正です：{card_no or '(空欄)'}", "composition": {"member": 0, "live": 0, "other": 0, "total": 0, "valid": False}, "loveca_points": self.deck_loveca_points([], regulation["key"]), "regulation": regulation, "copy_violations": {}, "card_types": len(rows), "metadata": metadata}
+                return {"valid": False, "error": f"デッキ行が不正です：{raw_card_no or '(空欄)'}", "composition": {"member": 0, "live": 0, "other": 0, "total": 0, "valid": False}, "loveca_points": self.deck_loveca_points([], regulation["key"]), "regulation": regulation, "copy_violations": {}, "card_types": len(rows), "metadata": metadata}
             copy_totals[card_no] = copy_totals.get(card_no, 0) + count
         composition = self.deck_composition(rows, regulation["key"])
         loveca_points = self.deck_loveca_points(rows, regulation["key"])
@@ -702,7 +709,8 @@ class AppState:
             for card_no, count in sorted(copy_totals.items())
             if copy_limit > 0 and count > copy_limit
         }
-        valid = bool(composition["valid"] and not copy_violations and loveca_points["valid"])
+        playable = bool(composition["valid"] and not copy_violations)
+        valid = bool(playable and loveca_points["valid"])
         errors: list[str] = []
         if not composition["valid"]:
             errors.append(
@@ -725,6 +733,7 @@ class AppState:
             )
         return {
             "valid": valid,
+            "playable": playable,
             "error": " / ".join(errors),
             "composition": composition,
             "loveca_points": loveca_points,
@@ -739,7 +748,7 @@ class AppState:
     def prepare_runtime_deck(self, relative_path: str) -> dict[str, Any]:
         selected = self.select_deck(relative_path)
         validation = self.deck_validation(selected["path"])
-        if not validation["valid"]:
+        if not validation.get("playable"):
             raise ValueError("デッキ構成が不正なため起動できません：" + (validation["error"] or "検証失敗"))
         exact_cards: list[str] = []
         variants: list[dict[str, Any]] = []
@@ -814,6 +823,7 @@ class AppState:
                 "modified": datetime.fromtimestamp(stat.st_mtime).astimezone().isoformat(timespec="seconds"),
                 "source_url": str(metadata.get("source_url") or ""),
                 "valid": bool(validation.get("valid")),
+                "playable": bool(validation.get("playable")),
                 "validation_error": str(validation.get("error") or ""),
                 "composition": validation.get("composition", {}),
                 "loveca_points": validation.get("loveca_points", {}),
@@ -1311,6 +1321,21 @@ class AppState:
         if len(parts) < 2:
             return ""
         return cls._normalize_rarity(parts[1])
+
+    @classmethod
+    def _split_cardnumber_rarity(cls, card_no: Any) -> tuple[str, str]:
+        text = str(card_no or "").strip()
+        match = re.match(r"^(.*)-([A-Za-z0-9+＋]+)$", text)
+        if not match:
+            return text, ""
+        rarity = cls._normalize_rarity(match.group(2))
+        known = set(cls.BASE_RARITY_CATALOG + cls.PARALLEL_RARITY_CATALOG)
+        if rarity not in known:
+            return text, ""
+        base = match.group(1)
+        if re.search(r"-(?:bp|pb|sd|cl)\d+-(?:\d+|E\d+)$", base, flags=re.IGNORECASE) or re.search(r"-PR-\d+$", base, flags=re.IGNORECASE):
+            return base, rarity
+        return text, ""
 
     @staticmethod
     def _card_text_signature(record: dict[str, Any]) -> str:
@@ -2242,6 +2267,60 @@ class AppState:
         path = self._resolve_known_deck_path(relative_path)
         return path.read_text(encoding="utf-8-sig")
 
+    def autoplay_deck_report(self, relative_path: str) -> dict[str, Any]:
+        metadata, rows = self.read_deck_rows(relative_path)
+        validation = self.deck_validation(relative_path)
+        report = build_autoplay_deck_report(rows, self.card_record)
+        report.update({
+            "deck_name": str(metadata.get("deck_name") or Path(relative_path).stem),
+            "deck_path": relative_path,
+            "card_types": len(rows),
+            "validation": {
+                "valid": bool(validation.get("valid")),
+                "playable": bool(validation.get("playable")),
+                "error": str(validation.get("error") or ""),
+                "composition": validation.get("composition", {}),
+                "regulation": validation.get("regulation", {}),
+                "loveca_points": validation.get("loveca_points", {}),
+            },
+        })
+        return report
+
+    def autoplay_trial_report(
+        self,
+        relative_path: str,
+        *,
+        trials: int = 200,
+        seed: int = 1,
+        max_turns: int = 4,
+    ) -> dict[str, Any]:
+        _metadata, rows = self.read_deck_rows(relative_path)
+        return simulate_autoplay_trials(rows, self.card_record, trials=trials, seed=seed, max_turns=max_turns)
+
+    def autoplay_markdown_report(
+        self,
+        relative_path: str,
+        *,
+        trials: int = 0,
+        seed: int = 1,
+        max_turns: int = 4,
+    ) -> str:
+        report = self.autoplay_deck_report(relative_path)
+        trial_result = None
+        if trials > 0:
+            trial_result = self.autoplay_trial_report(relative_path, trials=trials, seed=seed, max_turns=max_turns)
+        return build_autoplay_markdown_report(report, trial_result)
+
+    def autoplay_action_suggestion(
+        self,
+        relative_path: str,
+        state: dict[str, Any],
+        *,
+        max_turns: int = 4,
+    ) -> dict[str, Any]:
+        _metadata, rows = self.read_deck_rows(relative_path)
+        return suggest_autoplay_action(rows, self.card_record, state, max_turns=max_turns)
+
     @staticmethod
     def _deck_filename_token(name: str) -> str:
         normalized = unicodedata.normalize("NFKC", name)
@@ -2322,8 +2401,11 @@ class AppState:
         }
 
     def _deck_row_effective_rarity(self, row: dict[str, str]) -> str:
+        _base_card_no, card_no_rarity = self._split_cardnumber_rarity(row.get("card_no", ""))
         rarity = self._normalize_rarity(
-            row.get("rarity", "") or self._rarity_from_variant_id(row.get("variant_id", ""))
+            row.get("rarity", "")
+            or self._rarity_from_variant_id(row.get("variant_id", ""))
+            or card_no_rarity
         )
         if rarity:
             return rarity
@@ -2334,7 +2416,8 @@ class AppState:
         name = html.unescape(str(row.get("name", "") or "")).strip()
         if name:
             return name
-        record = self.card_record(str(row.get("card_no") or ""))
+        card_no, _rarity = self._split_cardnumber_rarity(row.get("card_no") or "")
+        record = self.card_record(card_no)
         return str(record.get("cardname") or record.get("name") or "").strip()
 
     def deck_loveca_points(
@@ -2352,7 +2435,8 @@ class AppState:
         entries: list[dict[str, Any]] = []
         unresolved: list[dict[str, Any]] = []
         for row in rows:
-            card_no = str(row.get("card_no") or "").strip()
+            raw_card_no = str(row.get("card_no") or "").strip()
+            card_no, card_no_rarity = self._split_cardnumber_rarity(raw_card_no)
             rule = rules.get(card_no)
             if not rule:
                 continue
@@ -2360,7 +2444,7 @@ class AppState:
                 count = int(str(row.get("count", "") or "0"))
             except ValueError:
                 continue
-            rarity = self._deck_row_effective_rarity(row)
+            rarity = self._deck_row_effective_rarity({**row, "card_no": card_no, "rarity": row.get("rarity", "") or card_no_rarity})
             allowed = {
                 self._normalize_rarity(value)
                 for value in rule.get("rarities", ())
@@ -2472,6 +2556,14 @@ class AppState:
         if candidate.parent != base:
             raise ValueError("デッキ読込セッションが不正です。")
         return candidate
+
+    @staticmethod
+    def _imported_deck_name_from_metadata(metadata: dict[str, Any], code: str) -> str:
+        deck_name = html.unescape(str(metadata.get("deck_name") or "")).strip()
+        code_norm = "".join(ch for ch in str(code or "").strip().upper() if ch.isalnum())
+        if code_norm and deck_name.upper() == code_norm:
+            return ""
+        return deck_name
 
     def import_deck_code(self, deck_code: str) -> dict[str, Any]:
         code = "".join(
@@ -2621,17 +2713,14 @@ class AppState:
         composition = self.deck_composition(normalized)
         loveca_points = self.deck_loveca_points(normalized)
 
-        deck_name = code
+        deck_name = ""
         source_meta: dict[str, Any] = {}
         if meta_path.is_file():
             try:
                 loaded_meta = json.loads(meta_path.read_text(encoding="utf-8"))
                 if isinstance(loaded_meta, dict):
                     source_meta = loaded_meta
-                    deck_name = (
-                        str(loaded_meta.get("deck_name") or "").strip()
-                        or code
-                    )
+                    deck_name = self._imported_deck_name_from_metadata(loaded_meta, code)
             except Exception:
                 pass
 
@@ -3380,7 +3469,7 @@ class AppState:
 
     def _runtime_dual_deck(self, relative_path: str, player_key: str) -> dict[str, str]:
         validation = self.deck_validation(relative_path)
-        if not validation["valid"]:
+        if not validation.get("playable"):
             raise ValueError("デッキ構成が不正なため起動できません：" + (validation["error"] or "検証失敗"))
         deck_name = ""
         for deck in self.list_decks():
@@ -3526,6 +3615,7 @@ class AppState:
                 self.dual_launch_state.update({
                     "status": "idle",
                     "url": "",
+                    "mode": "manual",
                     "message": "2デッキシミュレータは起動していません。",
                     "pid": None,
                     "simulator_host": "",
@@ -3563,6 +3653,7 @@ class AppState:
             self.dual_launch_state.update({
                 "status": "idle",
                 "url": "",
+                "mode": "manual",
                 "message": "2デッキシミュレータを終了しました。",
                 "pid": None,
                 "simulator_host": "",
@@ -3570,7 +3661,7 @@ class AppState:
             })
         return True, "2デッキシミュレータを終了しました。"
 
-    def start_dual(self, deck1_path: str, deck2_path: str) -> tuple[bool, str]:
+    def start_dual(self, deck1_path: str, deck2_path: str, *, cpu_mode: bool = False) -> tuple[bool, str]:
         script = self.path(DUAL_SCRIPT)
         if not script.exists():
             return False, "{} が見つかりません。".format(DUAL_SCRIPT)
@@ -3585,7 +3676,10 @@ class AppState:
             if self.dual_process and self.dual_process.poll() is None:
                 state = self.dual_window_status()
                 if state.get("url"):
-                    return False, "2デッキシミュレータはすでに起動しています。2デッキ画面の「対戦へ戻る」を使用してください。"
+                    running_mode = str(state.get("mode") or "manual")
+                    if bool(cpu_mode) == (running_mode == "cpu"):
+                        return False, "2デッキシミュレータはすでに起動しています。2デッキ画面の「対戦へ戻る」を使用してください。"
+                    return False, "別モードの2デッキシミュレータが起動中です。終了してから起動してください。"
                 return False, "2デッキシミュレータはすでに起動しています。終了してから再起動してください。"
             try:
                 env = os.environ.copy()
@@ -3610,6 +3704,8 @@ class AppState:
                     "--port",
                     str(simulator_port),
                 ]
+                if cpu_mode:
+                    launch_command.extend(["--cpu-ui", "--cpu-auto-default"])
                 self.dual_process = subprocess.Popen(
                     launch_command,
                     cwd=str(self.root),
@@ -3624,7 +3720,7 @@ class AppState:
                 self.dual_launch_state = {
                     "status": "starting",
                     "url": "",
-                    "message": "2デッキシミュレータを起動しています。",
+                    "message": ("CPUオート2デッキシミュレータを起動しています。" if cpu_mode else "2デッキシミュレータを起動しています。"),
                     "pid": self.dual_process.pid,
                     "deck1_path": deck1.get("source_path", ""),
                     "deck2_path": deck2.get("source_path", ""),
@@ -3636,12 +3732,14 @@ class AppState:
                     "output": [],
                     "progress_percent": 20,
                     "stage": "プロセス起動",
+                    "mode": "cpu" if cpu_mode else "manual",
                 }
                 threading.Thread(target=self._read_dual_output, args=(self.dual_process,), daemon=True).start()
                 threading.Thread(target=self._detect_dual_window, args=(simulator_url, self.dual_process), daemon=True).start()
             except Exception as exc:
                 return False, "起動に失敗しました: {}: {}".format(type(exc).__name__, exc)
-        return True, "2デッキシミュレータを起動しています：{} vs {}".format(deck1.get("name", ""), deck2.get("name", ""))
+        label = "CPUオート2デッキシミュレータ" if cpu_mode else "2デッキシミュレータ"
+        return True, "{}を起動しています：{} vs {}".format(label, deck1.get("name", ""), deck2.get("name", ""))
 
     def start_manual(
         self,
@@ -3856,7 +3954,7 @@ class AppState:
                         "--product-page-cache-ttl-days",
                         "3650",
                         "--preview-index-cache-minutes",
-                        "360",
+                        "15",
                         "--preview-page-cache-ttl-hours",
                         "24",
                         "--preview-empty-recheck-hours",

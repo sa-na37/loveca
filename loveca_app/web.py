@@ -1,4 +1,4 @@
-# BUILD_TAG = "deck_regulation_presets_ui_20260728a"
+# BUILD_TAG = "loveca_dual_manual_cpu_entrypoints_20260730a"
 """Loveca local web UI and HTTP routing."""
 from __future__ import annotations
 
@@ -453,7 +453,7 @@ def page(title: str, body: str) -> bytes:
   <h1>Loveca Application</h1>
   <div>
     <span class="tag">{html.escape(BUILD_TAG)}</span>
-    <nav><a href="/">メニュー</a><a href="/remote">リモート対戦</a><a href="/dual">2デッキ</a><a href="/decks">デッキ</a><a href="/update">更新</a><a href="/logs">ログ</a><button type="button" class="secondary" style="margin-left:14px" onclick="openQuickSettings()">簡易設定</button><a href="/diagnostics">診断</a><button type="button" style="background:var(--bad);color:white;margin-left:8px" onclick="shutdownLovecaApp()">アプリ終了</button></nav>
+    <nav><a href="/">メニュー</a><a href="/remote">リモート対戦</a><a href="/dual">手動2デッキ</a><a href="/dual-cpu">CPU2デッキ</a><a href="/decks">デッキ</a><a href="/update">更新</a><a href="/logs">ログ</a><button type="button" class="secondary" style="margin-left:14px" onclick="openQuickSettings()">簡易設定</button><a href="/diagnostics">診断</a><button type="button" style="background:var(--bad);color:white;margin-left:8px" onclick="shutdownLovecaApp()">アプリ終了</button></nav>
   </div>
 </header>
 <main>{body}</main>
@@ -976,10 +976,16 @@ class Handler(BaseHTTPRequestHandler):
             self.send_html(page("リモート対戦", self.remote_body()))
         elif path == "/dual":
             self.send_html(page("2デッキ対戦", self.dual_body()))
+        elif path == "/dual-cpu":
+            self.send_html(page("CPUオート2デッキ", self.dual_body(cpu_mode=True)))
+        elif path == "/autoplay":
+            self.send_html(page("オートプレイ", self.autoplay_body(query)))
         elif path == "/simulator":
             self.send_html(self.simulator_page())
         elif path == "/dual/simulator":
             self.send_html(self.dual_simulator_page())
+        elif path == "/dual-cpu/simulator":
+            self.send_html(self.dual_simulator_page(cpu_mode=True))
         elif path == "/decks":
             self.send_html(page("デッキ管理", self.decks_body()))
         elif path == "/decks/new":
@@ -1048,9 +1054,23 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/dual/start":
             form = self.read_form()
             try:
-                ok, message = self.app.start_dual(form.get("deck1_path", ""), form.get("deck2_path", ""))
+                cpu_mode = str(form.get("mode") or "").lower() == "cpu"
+                ok, message = self.app.start_dual(form.get("deck1_path", ""), form.get("deck2_path", ""), cpu_mode=cpu_mode)
                 self.send_json({"ok": ok, "message": message}, HTTPStatus.OK if ok else HTTPStatus.CONFLICT)
             except ValueError as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+        elif path == "/api/autoplay/suggest-action":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                raw = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+                deck_path = str(raw.get("deck_path") or "")
+                state = raw.get("state")
+                if not isinstance(state, dict):
+                    raise ValueError("state JSON が不正です。")
+                max_turns = int(raw.get("max_turns") or 4)
+                suggestion = self.app.autoplay_action_suggestion(deck_path, state, max_turns=max_turns)
+                self.send_json({"ok": True, "suggestion": suggestion})
+            except (ValueError, json.JSONDecodeError) as exc:
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
         elif path == "/api/remote/start":
             form = self.read_form()
@@ -1466,7 +1486,9 @@ async function shutdownLovecaApp() {{
 <div class="grid menu-grid">
 <section class="card"><h2>手動シミュレータ</h2><p>起動時に使用デッキを選択します。</p><a class="button" href="/manual" onclick="showLaunchProgress('デッキ一覧を読み込み中', 18, 'デッキ構成を確認しています。')">デッキを選んで起動</a></section>
 <section class="card"><h2>リモート対戦</h2><p>対戦コードを発行し、シミュレータ本体とパブリック画面を起動します。</p><a class="button" href="/remote">開く</a></section>
-<section class="card"><h2>2デッキ対戦</h2><p>2つのデッキを一人で交互に操作して対戦を進めます。</p><a class="button" href="/dual">開く</a></section>
+<section class="card"><h2>手動2デッキ対戦</h2><p>2つのデッキを一人で交互に操作します。CPU操作は表示しません。</p><a class="button" href="/dual">開く</a></section>
+<section class="card"><h2>CPUオート2デッキ</h2><p>片側CPU・両側CPUを切り替えながら2デッキ対戦を進めます。</p><a class="button" href="/dual-cpu">開く</a></section>
+<section class="card"><h2>オートプレイ</h2><p>画面を開かず、オートプレイをまとめて回すための方針確認とレポート出力を行います。</p><a class="button" href="/autoplay">開く</a></section>
 <section class="card"><h2>デッキ管理</h2><p>デッキの作成、読込、編集、整理を行います。</p><a class="button" href="/decks">開く</a></section>
 <section class="card"><h2>データ更新</h2><p>新しいカード情報やカード画像を取得します。</p><a class="button" href="/update">開く</a></section>
 <section class="card"><h2>ログ管理</h2><p>対戦や更新処理の履歴を確認します。</p><a class="button" href="/logs">開く</a></section>
@@ -1476,33 +1498,51 @@ async function shutdownLovecaApp() {{
 """
         return body.replace("{active_deck}", active_deck)
 
-    def dual_simulator_page(self) -> bytes:
+    def dual_simulator_page(self, cpu_mode: bool = False) -> bytes:
         state = self.app.dual_window_status()
         running = bool(state.get("running"))
         url = html.escape(str(state.get("url") or ""), quote=True)
         deck1 = html.escape(str(state.get("deck1_name") or "プレイヤー1"))
         deck2 = html.escape(str(state.get("deck2_name") or "プレイヤー2"))
+        running_mode = "cpu" if str(state.get("mode") or "manual") == "cpu" else "manual"
+        expected_mode = "cpu" if cpu_mode else "manual"
+        setup_path = "/dual-cpu" if expected_mode == "cpu" else "/dual"
+        running_setup_path = "/dual-cpu" if running_mode == "cpu" else "/dual"
+        running_title = "CPUオート2デッキ" if running_mode == "cpu" else "手動2デッキ対戦"
         if not running or not url:
-            return page("2デッキ対戦", """
+            return page("CPUオート2デッキ" if cpu_mode else "2デッキ対戦", """
 <section class="panel">
 <h2>2デッキシミュレータは起動していません</h2>
-<a class="button" href="/dual">起動画面へ戻る</a>
+<a class="button" href="{setup_path}">起動画面へ戻る</a>
 </section>
-""")
+""".format(setup_path=setup_path))
+        if running_mode != expected_mode:
+            return page("CPUオート2デッキ" if cpu_mode else "2デッキ対戦", """
+<section class="panel">
+<h2>{running_title}が起動中です</h2>
+<p class="status">現在起動しているモードの画面へ移動してください。</p>
+<a class="button" href="{running_path}/simulator">対戦へ戻る</a>
+<a class="button secondary" href="{setup_path}">この起動画面へ戻る</a>
+</section>
+""".format(
+                running_title=html.escape(running_title),
+                running_path=running_setup_path,
+                setup_path=setup_path,
+            ))
         doc = """<!doctype html>
 <html lang="ja">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Loveca 2デッキ対戦</title>
+<title>Loveca {title}</title>
 <style>{css}</style>
 </head>
 <body>
 <div class="simulator-shell">
   <div class="simulator-toolbar">
-    <strong>{deck1} vs {deck2}</strong>
+    <strong>{title}：{deck1} vs {deck2}</strong>
     <span class="spacer"></span>
-    <a class="button secondary" href="/dual">起動設定へ戻る</a>
+    <a class="button secondary" href="{setup_path}">起動設定へ戻る</a>
     <button type="button" style="background:var(--bad);color:white" onclick="stopDualSimulator()">2デッキを終了</button>
     <button type="button" style="background:var(--bad);color:white" onclick="shutdownLovecaApp()">アプリ終了</button>
   </div>
@@ -1513,7 +1553,7 @@ async function stopDualSimulator() {{
   if(!confirm('2デッキシミュレータを終了しますか？')) return;
   const res=await fetch('/api/dual/stop',{{method:'POST'}});
   const data=await res.json();
-  if(data.ok) location.replace('/dual');
+  if(data.ok) location.replace('{setup_path}');
   else alert(data.message||'終了に失敗しました。');
 }}
 async function shutdownLovecaApp() {{
@@ -1522,26 +1562,38 @@ async function shutdownLovecaApp() {{
 }}
 </script>
 </body>
-</html>""".format(css=CSS, deck1=deck1, deck2=deck2, url=url)
+</html>""".format(css=CSS, deck1=deck1, deck2=deck2, url=url, setup_path=running_setup_path, title=html.escape(running_title))
         return doc.encode("utf-8")
 
-    def dual_body(self) -> str:
-        decks = [deck for deck in self.app.list_decks() if bool(deck.get("valid"))]
+    def dual_body(self, cpu_mode: bool = False) -> str:
+        decks = [deck for deck in self.app.list_decks() if bool(deck.get("playable", deck.get("valid")))]
         state = self.app.dual_window_status()
         running_panel = ""
+        mode = "cpu" if cpu_mode else "manual"
+        running_mode = "cpu" if str(state.get("mode") or "manual") == "cpu" else "manual"
+        title = "CPUオート2デッキを起動" if cpu_mode else "手動2デッキ対戦を起動"
+        lead = "2つの60枚デッキを選び、片側CPU・両側CPUを切り替えられる対戦画面を起動します。" if cpu_mode else "2つの60枚デッキを選び、一人で交互に操作する完全手動の対戦画面を起動します。"
+        button_label = "CPUオート2デッキを起動" if cpu_mode else "手動2デッキ対戦を起動"
+        progress_title = "CPU2デッキ起動準備" if cpu_mode else "手動2デッキ起動準備"
+        progress_body = "CPU操作付きの対戦画面を起動しています。" if cpu_mode else "手動2デッキシミュレータを起動しています。"
+        simulator_path = "/dual-cpu/simulator" if cpu_mode else "/dual/simulator"
+        active_path = "/dual-cpu/simulator" if running_mode == "cpu" else "/dual/simulator"
+        active_title = "CPUオート2デッキ" if running_mode == "cpu" else "手動2デッキ対戦"
         if state.get("running") and state.get("url"):
             running_panel = """
 <section class="panel">
-<h2>2デッキシミュレータ起動中</h2>
+<h2>{active_title}が起動中</h2>
 <p>{deck1} vs {deck2}</p>
 <p class="status">{message}</p>
 <div style="display:flex;gap:10px;flex-wrap:wrap">
-  <a class="button" href="/dual/simulator">対戦へ戻る</a>
+  <a class="button" href="{active_path}">対戦へ戻る</a>
   <button type="button" style="background:var(--bad);color:white" onclick="stopDualOnPage()">2デッキを終了</button>
 </div>
 <div id="dualStopStatus" class="status"></div>
 </section>
 """.format(
+                active_title=html.escape(active_title),
+                active_path=active_path,
                 deck1=html.escape(str(state.get("deck1_name") or "プレイヤー1")),
                 deck2=html.escape(str(state.get("deck2_name") or "プレイヤー2")),
                 message=html.escape(str(state.get("message") or "")),
@@ -1557,11 +1609,13 @@ async function shutdownLovecaApp() {{
         )
         if not options:
             options = "<option value=''>使用可能なデッキがありません</option>"
-        disabled = "disabled" if not decks else ""
+        disabled = "disabled" if (not decks or state.get("running")) else ""
+        running_note = "<p class='status'>別の2デッキ画面を起動する場合は、現在の2デッキシミュレータを終了してください。</p>" if state.get("running") else ""
         return running_panel + """
 <section class="panel">
-<h2>2デッキ対戦を起動</h2>
-<p class="status">2つの60枚デッキを選び、一人で交互に操作する対戦画面を起動します。</p>
+<h2>{title}</h2>
+<p class="status">{lead}</p>
+{running_note}
 <div class="row">
   <label>プレイヤー1
     <select id="dualDeck1" {disabled}>{options}</select>
@@ -1571,7 +1625,7 @@ async function shutdownLovecaApp() {{
   </label>
 </div>
 <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
-  <button type="button" {disabled} onclick="startDual()">2デッキ対戦を起動</button>
+  <button type="button" {disabled} onclick="startDual()">{button_label}</button>
   <a class="button secondary" href="/decks">デッキ管理へ</a>
 </div>
 <div id="dualStatus" class="status"></div>
@@ -1583,8 +1637,8 @@ async function startDual() {{
   const deck2=document.getElementById('dualDeck2').value;
   if(!deck1||!deck2) {{ box.className='status bad'; box.textContent='デッキを2つ選択してください。'; return; }}
   box.className='status'; box.textContent='2デッキシミュレータを起動しています...';
-  showLaunchProgress('2デッキ起動準備', 12, 'デッキを確認しています。');
-  const body=new URLSearchParams({{deck1_path:deck1,deck2_path:deck2}});
+  showLaunchProgress('{progress_title}', 12, 'デッキを確認しています。');
+  const body=new URLSearchParams({{deck1_path:deck1,deck2_path:deck2,mode:'{mode}'}});
   try {{
     const res=await fetch('/api/dual/start',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},body}});
     const data=await res.json();
@@ -1592,8 +1646,8 @@ async function startDual() {{
     for(let i=0;i<80;i++) {{
       const r=await fetch('/api/dual/window-status',{{cache:'no-store'}});
       const state=await r.json();
-      updateLaunchProgressFromState(state, '2デッキシミュレータを起動しています。');
-      if(state.running && state.url) {{ showLaunchProgress('起動完了', 100, '対戦画面へ移動します。'); markLovecaInternalNavigation(); location.replace('/dual/simulator'); return; }}
+      updateLaunchProgressFromState(state, '{progress_body}');
+      if(state.running && state.url) {{ showLaunchProgress('起動完了', 100, '対戦画面へ移動します。'); markLovecaInternalNavigation(); location.replace('{simulator_path}'); return; }}
       if(state.status==='failed'||state.status==='timeout'||state.status==='stopped') {{
         box.className='status bad'; box.textContent=state.message||'起動できませんでした。'; return;
       }}
@@ -1615,7 +1669,18 @@ async function stopDualOnPage() {{
   if(data.ok) setTimeout(()=>location.reload(),500);
 }}
 </script>
-""".format(options=options, disabled=disabled)
+""".format(
+            options=options,
+            disabled=disabled,
+            title=html.escape(title),
+            lead=html.escape(lead),
+            button_label=html.escape(button_label),
+            running_note=running_note,
+            progress_title=progress_title,
+            progress_body=progress_body,
+            simulator_path=simulator_path,
+            mode=mode,
+        )
 
     def simulator_session_panel(self, remote_screen: bool) -> str:
         state = self.app.manual_window_status()
@@ -1678,15 +1743,185 @@ async function stopSimulatorOnPage() {{
 </script>
 """.format(deck_name, status_text, "".join(actions))
 
+    def autoplay_body(self, query: dict[str, list[str]]) -> str:
+        deck_path = (query.get("deck_path") or [""])[0]
+        decks = self.app.list_decks()
+        rows: list[str] = []
+        for deck in decks:
+            valid = bool(deck.get("valid"))
+            playable = bool(deck.get("playable", valid))
+            comp = deck.get("composition", {}) if isinstance(deck.get("composition"), dict) else {}
+            if valid:
+                status = "<span class='ok'>使用可能</span>"
+            elif playable:
+                status = "<span class='warn'>警告あり・試行可</span>"
+            else:
+                status = "<span class='bad'>構成不正</span>"
+            action = (
+                "<a class='button secondary' href='/autoplay?deck_path={path}'>方針レポート</a>"
+                if playable else "<button disabled>対象外</button>"
+            )
+            rows.append(
+                "<tr><td>{name}</td><td>{status}</td><td>{member}/{expected_member}</td>"
+                "<td>{live}/{expected_live}</td><td>{total}/{expected_total}</td><td>{action}</td></tr>".format(
+                    name=html.escape(str(deck.get("name") or "")),
+                    status=status,
+                    member=int(comp.get("member", 0) or 0),
+                    expected_member=int(comp.get("expected_member", 48) or 48),
+                    live=int(comp.get("live", 0) or 0),
+                    expected_live=int(comp.get("expected_live", 12) or 12),
+                    total=int(comp.get("total", 0) or 0),
+                    expected_total=int(comp.get("expected_total", 60) or 60),
+                    action=action.format(path=html.escape(str(deck.get("path") or ""), quote=True)) if playable else action,
+                )
+            )
+        deck_table = "".join(rows) if rows else "<tr><td colspan='6' class='warn'>デッキがありません。</td></tr>"
+
+        report_html = ""
+        if deck_path:
+            try:
+                report = self.app.autoplay_deck_report(deck_path)
+                rec = report.get("recommended_progression") if isinstance(report.get("recommended_progression"), dict) else {}
+                curve = report.get("curve") if isinstance(report.get("curve"), dict) else {}
+                member_costs = curve.get("member_costs") if isinstance(curve.get("member_costs"), dict) else {}
+                live_scores = curve.get("live_scores") if isinstance(curve.get("live_scores"), dict) else {}
+                cost_bands = curve.get("member_cost_bands") if isinstance(curve.get("member_cost_bands"), dict) else {}
+                special_signals = curve.get("special_signals") if isinstance(curve.get("special_signals"), dict) else {}
+                progressions = report.get("progressions") if isinstance(report.get("progressions"), list) else []
+                goals = report.get("goal_type_presets") if isinstance(report.get("goal_type_presets"), list) else []
+                notes = report.get("notes") if isinstance(report.get("notes"), list) else []
+
+                cost_rows = "".join(
+                    "<tr><td>{cost}</td><td>{count}</td></tr>".format(
+                        cost=html.escape(str(cost)),
+                        count=html.escape(str(count)),
+                    )
+                    for cost, count in sorted(member_costs.items(), key=lambda item: int(item[0]))
+                ) or "<tr><td colspan='2' class='warn'>メンバーコストを読めませんでした。</td></tr>"
+                live_rows = "".join(
+                    "<tr><td>{score}</td><td>{count}</td></tr>".format(
+                        score=html.escape(str(score)),
+                        count=html.escape(str(count)),
+                    )
+                    for score, count in sorted(live_scores.items(), key=lambda item: int(item[0]))
+                ) or "<tr><td colspan='2' class='warn'>ライブスコアを読めませんでした。</td></tr>"
+                band_rows = "".join(
+                    "<tr><td>{label}</td><td>{count}</td></tr>".format(
+                        label=html.escape(label),
+                        count=html.escape(str(cost_bands.get(key, 0))),
+                    )
+                    for key, label in (
+                        ("low_2_4", "2-4コスト"),
+                        ("mid_5_10", "5-10コスト"),
+                        ("bridge_11_14", "11-14コスト"),
+                        ("high_15_plus", "15コスト以上"),
+                    )
+                )
+                signal_rows: list[str] = []
+                for key, label in (
+                    ("cost_reduction", "コスト軽減"),
+                    ("special_baton", "特殊バトンタッチ"),
+                    ("high_cost_anchor", "15+高コスト"),
+                ):
+                    items = special_signals.get(key, []) if isinstance(special_signals.get(key, []), list) else []
+                    text = "なし"
+                    if items:
+                        text = " / ".join(
+                            "{} {}".format(item.get("card_no", ""), item.get("name", ""))
+                            for item in items
+                            if isinstance(item, dict)
+                        )
+                    signal_rows.append("<tr><td>{}</td><td>{}</td></tr>".format(html.escape(label), html.escape(text)))
+                progression_rows = []
+                for item in progressions:
+                    if not isinstance(item, dict):
+                        continue
+                    missing = item.get("missing_costs") if isinstance(item.get("missing_costs"), dict) else {}
+                    missing_text = "なし" if not missing else ", ".join(
+                        f"{cost}コスト×{need}" for cost, need in sorted(missing.items(), key=lambda part: int(part[0]))
+                    )
+                    turns = " / ".join("-".join(str(v) for v in turn) for turn in item.get("turns", []))
+                    progression_rows.append(
+                        "<tr><td>{label}<div class='status'>{intent}</div></td><td>{turns}</td>"
+                        "<td>{score}</td><td>{coverage}</td><td>{missing}</td></tr>".format(
+                            label=html.escape(str(item.get("label") or "")),
+                            intent=html.escape(str(item.get("intent") or "")),
+                            turns=html.escape(turns),
+                            score=html.escape(str(item.get("score") or "")),
+                            coverage=html.escape(str(item.get("coverage") or "")),
+                            missing=html.escape(missing_text),
+                        )
+                    )
+                goal_items = "".join(
+                    "<li>{}</li>".format(html.escape(str(item.get("label") or item.get("key") or "")))
+                    for item in goals if isinstance(item, dict)
+                )
+                note_items = "".join("<li>{}</li>".format(html.escape(str(note))) for note in notes)
+                validation = report.get("validation") if isinstance(report.get("validation"), dict) else {}
+                validation_text = "ゲーム開始可能" if bool(validation.get("valid")) else "構成要確認"
+                report_html = """
+<section class="panel">
+<h2>Stage 1 方針レポート</h2>
+<p class="status">現段階では、デッキ内容から汎用的なコスト進行テンプレートへの乗りやすさを評価します。</p>
+<div class="grid">
+  <section class="card"><h3>対象デッキ</h3><p>{deck_name}</p><p>{validation_text}</p></section>
+  <section class="card"><h3>推奨候補</h3><p>{recommended}</p><p class="status">{recommended_intent}</p></section>
+</div>
+<h3>メンバーコスト分布</h3>
+<table><thead><tr><th>コスト</th><th>枚数</th></tr></thead><tbody>{cost_rows}</tbody></table>
+<h3>ライブスコア分布</h3>
+<table><thead><tr><th>スコア</th><th>枚数</th></tr></thead><tbody>{live_rows}</tbody></table>
+<h3>コスト帯と特殊シグナル</h3>
+<div class="grid">
+<section class="card"><h3>コスト帯</h3><table><tbody>{band_rows}</tbody></table></section>
+<section class="card"><h3>特殊シグナル</h3><table><tbody>{signal_rows}</tbody></table></section>
+</div>
+<h3>コスト進行候補</h3>
+<table><thead><tr><th>型</th><th>ターン別形</th><th>評価</th><th>充足率</th><th>不足</th></tr></thead><tbody>{progression_rows}</tbody></table>
+<h3>Stage 2 目標プリセット</h3>
+<ul>{goal_items}</ul>
+<h3>実装メモ</h3>
+<ul>{note_items}</ul>
+</section>
+""".format(
+                    deck_name=html.escape(str(report.get("deck_name") or Path(deck_path).stem)),
+                    validation_text=html.escape(validation_text),
+                    recommended=html.escape(str(rec.get("label") or "未判定")),
+                    recommended_intent=html.escape(str(rec.get("intent") or "")),
+                    cost_rows=cost_rows,
+                    live_rows=live_rows,
+                    band_rows=band_rows,
+                    signal_rows="".join(signal_rows),
+                    progression_rows="".join(progression_rows),
+                    goal_items=goal_items or "<li>未設定</li>",
+                    note_items=note_items or "<li>なし</li>",
+                )
+            except ValueError as exc:
+                report_html = "<section class='panel'><p class='bad'>{}</p></section>".format(html.escape(str(exc)))
+
+        return """
+<section class="panel">
+<h2>オートプレイ</h2>
+<p class="status">3段階実装の入口です。まずはデッキごとの汎用プレイ方針を確認できるようにしています。</p>
+<table><thead><tr><th>デッキ</th><th>状態</th><th>メンバー</th><th>ライブ</th><th>合計</th><th></th></tr></thead><tbody>{deck_table}</tbody></table>
+</section>
+{report_html}
+""".format(deck_table=deck_table, report_html=report_html)
+
     def manual_body(self) -> str:
         decks = self.app.list_decks()
         rendered = []
         for deck in decks:
-            comp = deck.get("composition", {}); valid = bool(deck.get("valid"))
+            comp = deck.get("composition", {}); valid = bool(deck.get("valid")); playable = bool(deck.get("playable", valid))
             points = deck.get("loveca_points", {}) if isinstance(deck.get("loveca_points"), dict) else {}
             regulation = deck.get("regulation", {}) if isinstance(deck.get("regulation"), dict) else {}
-            status = "<span class='ok'>使用可能</span>" if valid else "<span class='bad'>構成不正</span>"
-            button = f"<button onclick='startManual({json.dumps(deck['path'])})'>このデッキで起動</button>" if valid else "<button disabled>起動不可</button>"
+            if valid:
+                status = "<span class='ok'>使用可能</span>"
+            elif playable:
+                status = "<span class='warn'>警告あり・試行可</span>"
+            else:
+                status = "<span class='bad'>構成不正</span>"
+            button = f"<button onclick='startManual({json.dumps(deck['path'])})'>このデッキで起動</button>" if playable else "<button disabled>起動不可</button>"
             point_limit = points.get("limit")
             point_text = f"{int(points.get('total') or 0)}/" + (str(int(point_limit)) if point_limit not in (None, "") else "なし")
             rendered.append(f"<tr><td>{html.escape(deck['name'])}<div class='status'>{html.escape(str(regulation.get('label') or ''))}</div></td><td>{status}</td><td>{comp.get('member',0)}/{comp.get('expected_member',48)}</td><td>{comp.get('live',0)}/{comp.get('expected_live',12)}</td><td>{comp.get('total',0)}/{comp.get('expected_total',60)}</td><td><span class='loveca-point-badge {'ok' if bool(points.get('valid', True)) else 'bad'}'>{point_text}</span></td><td><a class='button secondary' href='/decks/view?path={html.escape(deck['path'], quote=True)}'>確認</a></td><td>{button}</td></tr>")
@@ -1768,7 +2003,7 @@ async function startManual(deckPath) {{
         )
         deck_options = []
         for deck in self.app.list_decks():
-            if not bool(deck.get("valid")):
+            if not bool(deck.get("playable", deck.get("valid"))):
                 continue
             comp = deck.get("composition", {})
             label = "{}（メンバー{} / ライブ{}）".format(
@@ -2217,10 +2452,18 @@ function beginDeckCodeImport() {{
             points = deck.get("loveca_points", {}) if isinstance(deck.get("loveca_points"), dict) else {}
             regulation = deck.get("regulation", {}) if isinstance(deck.get("regulation"), dict) else {}
             valid = bool(deck.get("valid"))
+            playable = bool(deck.get("playable", valid))
             tags = [str(tag) for tag in deck.get("tags", [])]
             all_tags.update(tags)
             if valid:
                 status = "<span class='ok'>使用可能</span>"
+                start_button = (
+                    "<button type='button' onclick='startDeck({})'>開始</button>"
+                ).format(json.dumps(deck.get("path", ""), ensure_ascii=False))
+            elif playable:
+                status = "<span class='warn' title='{}'>警告あり・試行可</span>".format(
+                    html.escape(str(deck.get("validation_error", "")), quote=True)
+                )
                 start_button = (
                     "<button type='button' onclick='startDeck({})'>開始</button>"
                 ).format(json.dumps(deck.get("path", ""), ensure_ascii=False))
@@ -2270,7 +2513,7 @@ function beginDeckCodeImport() {{
                     modified=html.escape(str(deck.get("modified", "")), quote=True),
                     code_key=html.escape(str(deck.get("code", "")).casefold(), quote=True),
                     tags_key=html.escape("|".join(tag.casefold() for tag in tags), quote=True),
-                    valid_key="1" if valid else "0",
+                    valid_key="1" if playable else "0",
                     name=html.escape(str(deck.get("name", ""))),
                     code=html.escape(str(deck.get("code", ""))),
                     regulation_label=html.escape(str(regulation.get("label") or "")),
@@ -2400,10 +2643,18 @@ async function startDeck(deckPath) {{
         total = sum(int(row["count"]) for row in rows)
         validation = self.app.deck_validation(deck_path)
         valid = bool(validation.get("valid"))
+        playable = bool(validation.get("playable", valid))
         point_html = self.loveca_point_summary_html(validation.get("loveca_points", {}))
         regulation = validation.get("regulation", {}) if isinstance(validation.get("regulation"), dict) else {}
         if valid:
             validation_html = "<span class='ok'>ゲーム開始可能</span>"
+            start_button = "<button type='button' onclick='startDeckGame({})'>このデッキで開始</button>".format(
+                json.dumps(deck_path, ensure_ascii=False)
+            )
+        elif playable:
+            validation_html = "<span class='warn'>警告あり・試行可能：{}</span>".format(
+                html.escape(str(validation.get("error") or "ラブカポイント等の警告があります"))
+            )
             start_button = "<button type='button' onclick='startDeckGame({})'>このデッキで開始</button>".format(
                 json.dumps(deck_path, ensure_ascii=False)
             )

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# BUILD_TAG = "loveca_patch_zip_distribution_20260723a"
+# BUILD_TAG = "loveca_distribution_autoplay_cli_20260730a"
 """Build a pruned Loveca Application distribution zip."""
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import List
 
 
-BUILD_TAG = "loveca_patch_zip_distribution_20260723a"
+BUILD_TAG = "loveca_distribution_autoplay_cli_20260730a"
 
 
 RUNTIME_INCLUDE_DIRS = (
@@ -43,6 +43,7 @@ DEFAULT_INCLUDE_FILES = (
     "llocg_fetch_decklog_by_code.py",
     "llocg_sim_tool_v7.py",
     "llocg_update_database.py",
+    "loveca_autoplay_report.py",
     "refresh_loveca_product_catalog.py",
     "run_llocg_dual_v2.py",
     "run_llocg_ui_web.py",
@@ -163,8 +164,20 @@ def patch_candidate_paths(root: Path, base_ref: str = "HEAD") -> List[Path]:
         )
     except Exception as exc:
         raise RuntimeError(f"failed to list patch files from git diff: {exc}") from exc
+    try:
+        untracked_proc = subprocess.run(
+            ["git", "ls-files", "--others", "--exclude-standard"],
+            cwd=str(root),
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        extra_lines = untracked_proc.stdout.splitlines()
+    except Exception:
+        extra_lines = []
     out: List[Path] = []
-    for line in proc.stdout.splitlines():
+    for line in list(proc.stdout.splitlines()) + list(extra_lines):
         rel = line.strip()
         if not rel:
             continue

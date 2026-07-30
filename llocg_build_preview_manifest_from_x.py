@@ -18,7 +18,7 @@ BUILD_TAG is intentionally visible for delivery verification.
 """
 from __future__ import annotations
 
-BUILD_TAG = "x_preview_manifest_official_posts_index_20260710w"
+BUILD_TAG = "preview_index_freshness_and_missing_db_audit_20260729a"
 
 import argparse
 import csv
@@ -983,6 +983,20 @@ def main() -> int:
         f"known_db_entries={len(known_relevant)} "
         f"index_cards_not_in_db={len(missing_db)}"
     )
+    if missing_db:
+        sample = ", ".join(
+            "{}{}".format(
+                entry.cardnumber,
+                f"-{entry.rarity_raw}" if entry.rarity_raw else "",
+            )
+            for entry in missing_db[:30]
+        )
+        print(
+            "[PREVIEW-INDEX-MISSING-DB] "
+            f"cards={len(missing_db)} "
+            f"sample={sample} "
+            "reason=official-post index has prerelease rows that are not in the local DB yet"
+        )
     if args.require_discovered_posts and not known_relevant:
         raise SystemExit(
             "ERROR: no prerelease card/post mappings discovered on WIKIWIKI 公式ポスト index"

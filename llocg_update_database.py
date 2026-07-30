@@ -21,7 +21,7 @@ BUILD_TAG is intentionally visible for delivery verification.
 
 from __future__ import annotations
 
-BUILD_TAG = "missing_preview_images_refetch_20260723a"
+BUILD_TAG = "preview_index_freshness_20260729a"
 
 import argparse
 import csv
@@ -873,7 +873,7 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument(
         "--preview-index-cache-minutes",
         type=float,
-        default=30.0,
+        default=15.0,
         help=(
             "Freshness window for the one-page WIKIWIKI 公式ポスト index cache. "
             "The updater prefetches this page before DB crawling so the preview stage "

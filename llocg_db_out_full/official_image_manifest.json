@@ -4,7 +4,7 @@
   "generated_from": {
     "mode": "incremental_merge",
     "base_manifest": "/Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full/official_image_manifest.json",
-    "delta_manifest": "/Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full/_update_work/run_20260722_162844/image_manifest_delta/official_image_manifest.json"
+    "delta_manifest": ""
   },
   "base_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist",
   "cards_total_in_db": 1060,

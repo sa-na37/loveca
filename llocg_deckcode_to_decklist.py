@@ -24,11 +24,12 @@ Usage:
 
 from __future__ import annotations
 
-BUILD_TAG = "decklog_api_post_card_number_parse_20260722a"
+BUILD_TAG = "decklog_import_deck_name_default_20260729a"
 
 import argparse
 import csv
 import datetime
+import html
 import json
 import re
 import sys
@@ -90,13 +91,27 @@ def write_deck_txt(path: Path, cards: List[DeckEntry]) -> None:
 # Deck name extraction & meta JSON
 # -----------------------------
 
-def extract_deck_name_from_html(html_text: str) -> str:
-    m = re.search(r"<h2>\s*デッキ名「([^」]+)」のデッキ\s*</h2>", html_text)
+def clean_deck_name(value: str) -> str:
+    text = html.unescape(str(value or ""))
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def deck_name_is_code(deck_name: str, code: str = "") -> bool:
+    name = clean_deck_name(deck_name)
+    code_norm = "".join(ch for ch in str(code or "").strip().upper() if ch.isalnum())
+    return bool(code_norm and name.upper() == code_norm)
+
+
+def extract_deck_name_from_html(html_text: str, *, code: str = "") -> str:
+    m = re.search(r"<h2[^>]*>\s*デッキ名「([^」]+)」のデッキ\s*</h2>", html_text)
     if m:
-        return m.group(1).strip()
+        name = clean_deck_name(m.group(1))
+        return "" if deck_name_is_code(name, code) else name
     m = re.search(r"デッキ名「([^」]+)」", html_text)
     if m:
-        return m.group(1).strip()
+        name = clean_deck_name(m.group(1))
+        return "" if deck_name_is_code(name, code) else name
     return ""
 
 def write_deck_meta_json(
@@ -680,8 +695,40 @@ def main() -> int:
                 used_html_path = cache_html_path
             except Exception:
                 pass
+        if (not used_html_text) and cards and args.code:
+            _name_cards, name_html = try_fetch_and_parse_by_html(
+                args.code,
+                ua=args.user_agent,
+                timeout=args.timeout,
+                insecure_fallback=insecure_fallback,
+                log=log,
+            )
+            if name_html:
+                used_html_text = name_html
+                if cache_html_path and (not args.no_cache_html):
+                    try:
+                        write_text_file(cache_html_path, name_html)
+                        used_html_path = cache_html_path
+                    except Exception as e:
+                        log.append(f"[WARN] Failed to write name cache HTML: {type(e).__name__}: {e}")
         if used_html_text:
-            deck_name = extract_deck_name_from_html(used_html_text)
+            deck_name = extract_deck_name_from_html(used_html_text, code=args.code)
+        if not deck_name and args.code and (not args.no_playwright):
+            _name_cards, name_html = try_fetch_and_parse_by_playwright(
+                args.code,
+                timeout=max(args.timeout, 25.0),
+                log=log,
+            )
+            if name_html:
+                deck_name = extract_deck_name_from_html(name_html, code=args.code)
+                if deck_name:
+                    used_html_text = name_html
+                    if cache_html_path and (not args.no_cache_html):
+                        try:
+                            write_text_file(cache_html_path, name_html)
+                            used_html_path = cache_html_path
+                        except Exception as e:
+                            log.append(f"[WARN] Failed to write name Playwright HTML: {type(e).__name__}: {e}")
         try:
             meta_json_path = write_deck_meta_json(root, args.code, deck_name, source_url, used_html_path, out_path)
         except Exception as e:
