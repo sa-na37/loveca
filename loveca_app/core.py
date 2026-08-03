@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# BUILD_TAG = "loveca_dual_manual_cpu_entrypoints_20260730a"
+# BUILD_TAG = "loveca_autoplay_trace_report_20260803a"
 """
 Loveca application launcher (phase 1).
 
@@ -51,7 +51,7 @@ from urllib.error import URLError, HTTPError
 from .autoplay import build_autoplay_deck_report, build_autoplay_markdown_report, simulate_autoplay_trials, suggest_autoplay_action
 
 
-BUILD_TAG = "loveca_dual_manual_cpu_entrypoints_20260730a"
+BUILD_TAG = "loveca_autoplay_trace_report_20260803a"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8875
 SESSION_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -2293,9 +2293,10 @@ class AppState:
         trials: int = 200,
         seed: int = 1,
         max_turns: int = 4,
+        trace_trials: int = 0,
     ) -> dict[str, Any]:
         _metadata, rows = self.read_deck_rows(relative_path)
-        return simulate_autoplay_trials(rows, self.card_record, trials=trials, seed=seed, max_turns=max_turns)
+        return simulate_autoplay_trials(rows, self.card_record, trials=trials, seed=seed, max_turns=max_turns, trace_trials=trace_trials)
 
     def autoplay_markdown_report(
         self,

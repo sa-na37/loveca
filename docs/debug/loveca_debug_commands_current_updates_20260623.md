@@ -4226,8 +4226,12 @@ def lookup(card_no):
 state = {'phase': 'MAIN', 'hand': ['M-007', 'M-013'], 'stage': ['M-002', None, None]}
 plan = {'accepted_shapes': [[7, 2]], 'primary_shape': [7, 2]}
 action = _cpu_main_action(state, lookup, plan)
-assert action and action['card']['card_no'] == 'M-013', action
-print('OK over-target member priority', action)
+assert action and action['card']['card_no'] == 'M-007', action
+
+plan_with_upside = {'accepted_shapes': [[13, 2], [7, 2]], 'primary_shape': [13, 2]}
+action_with_upside = _cpu_main_action(state, lookup, plan_with_upside)
+assert action_with_upside and action_with_upside['card']['card_no'] == 'M-013', action_with_upside
+print('OK playable-shape member priority', action, action_with_upside)
 PY
 ```
 
@@ -4238,9 +4242,16 @@ python3 ./loveca_autoplay_report.py --root . --recent 1 --trials 5 --turns 4 --n
 ```
 
 確認観点:
-- CPUのMAIN配置とUIなしオートプレイ試行の両方で、ターン目標コストを上限として候補を捨てない。
-- 目標より大きいカードを最優先、目標ぴったりを次点、どちらもない場合は可能な限り大きい妥協、というユーザー指定方針に揃える。
-- CPU判断ログの理由に、目標超過を優先評価したことが残る。
+- CPUのMAIN配置とUIなしオートプレイ試行の両方で、候補生成と達成判定を分離する。
+- 20260731後続修正により、この検証は accepted playable shape 上限ではなく、実アクティブエネルギー制約へ置き換えた。
+- active energy が足りない場合は高コストカードを置かず、active energy が足りる場合は目標超過を優先する。
+- CPU判断ログの理由に、active energy と pay cost が残る。
+
+※20260731内部確認:
+- T1平均ステージコストが不自然に高くなる原因は、達成判定用の「目標以上ならOK」と配置候補生成が同じstage scoreだけを使っていたこと。
+- 暫定的な accepted playable shape 上限は、Daydream Mermaidなどのエネルギー増加を扱えないため、実エネルギー制約に置き換えた。
+- `_cpu_main_action` では state の `energy_active` とバトンタッチ軽減後の支払いコストを使って候補を制限する。
+- UIなし試行の `_improve_persistent_stage` では `active/wait/energy_deck_remaining` を持ち、通常登場で active -> wait、ターン開始時に wait -> active、エネルギーフェイズで energy deck -> active、ライブ成功時エネルギー増加で energy deck -> wait を処理する。
 
 ## 20260730 CPU LIVE_SET ライブ目標ログ
 
@@ -4331,3 +4342,348 @@ PY
 - MAINで追加登場候補がなく、盤面がaccepted targetを満たしている場合は `main_complete` / high confidence でNextする。
 - MAINで追加登場候補がなく、盤面が未達の場合は `main_pass` / low confidence として、未達理由を判断ログに残す。
 - 同一MAINフェイズ中にまだ改善候補がある場合は、従来通り `main_play` を返し、CPU自動が次の1手として継続できる。
+
+## 20260731 オートプレイ精度比較サマリ
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_autoplay_report.py ./loveca_app/autoplay.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --root . --recent 3 --trials 200 --seed 29 --turns 4 \
+  --no-markdown \
+  --summary-csv docs/reports/autoplay/autoplay_baseline_20260731a.csv \
+  --summary-json docs/reports/autoplay/autoplay_baseline_20260731a.json
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --root . --recent 3 --trials 200 --seed 29 --turns 4 \
+  --no-markdown \
+  --summary-csv docs/reports/autoplay/autoplay_current_20260731a.csv \
+  --summary-json docs/reports/autoplay/autoplay_current_20260731a.json \
+  --compare-json docs/reports/autoplay/autoplay_baseline_20260731a.json \
+  --compare-csv docs/reports/autoplay/autoplay_compare_20260731a.csv \
+  --compare-md docs/reports/autoplay/autoplay_compare_20260731a.md
+```
+
+確認観点:
+- `--compare-json` に前回サマリを指定すると、今回サマリとの差分CSV/Markdownが生成される。
+- 同一条件・同一コードで比較した場合、全metric deltaが0になる。
+- 精度改善時は `tN_combined_cumulative_delta`、`tN_cumulative_delta`、`tN_live_cumulative_delta`、`tN_avg_stage_cost_delta`、`tN_top_miss_before/after` を報告する。
+
+## 20260731 オートプレイ配置候補の実プレイ制約
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py ./loveca_autoplay_report.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from loveca_app.autoplay import _cpu_main_action
+
+records = {
+    'M-002': {'cardnumber': 'M-002', 'name': 'base two', 'card_type_norm': 'MEMBER', 'cost': '2'},
+    'M-007': {'cardnumber': 'M-007', 'name': 'exact seven', 'card_type_norm': 'MEMBER', 'cost': '7'},
+    'M-013': {'cardnumber': 'M-013', 'name': 'over thirteen', 'card_type_norm': 'MEMBER', 'cost': '13'},
+}
+
+def lookup(card_no):
+    return records[card_no]
+
+low_energy = {'phase': 'MAIN', 'energy_active': 7, 'hand': ['M-007', 'M-013'], 'stage': ['M-002', None, None]}
+restricted = _cpu_main_action(low_energy, lookup, {'accepted_shapes': [[13, 2], [7, 2]], 'primary_shape': [13, 2]})
+assert restricted and restricted['card']['card_no'] == 'M-007', restricted
+
+high_energy = {'phase': 'MAIN', 'energy_active': 13, 'hand': ['M-007', 'M-013'], 'stage': ['M-002', None, None]}
+with_energy = _cpu_main_action(high_energy, lookup, {'accepted_shapes': [[13, 2], [7, 2]], 'primary_shape': [13, 2]})
+assert with_energy and with_energy['card']['card_no'] == 'M-013', with_energy
+print('OK energy-gated member priority', restricted, with_energy)
+PY
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --root . --recent 3 --trials 200 --seed 29 --turns 4 \
+  --no-markdown \
+  --summary-csv docs/reports/autoplay/autoplay_current_20260731c.csv \
+  --summary-json docs/reports/autoplay/autoplay_current_20260731c.json \
+  --compare-json docs/reports/autoplay/autoplay_baseline_20260731a.json \
+  --compare-csv docs/reports/autoplay/autoplay_compare_20260731c_vs_baseline.csv \
+  --compare-md docs/reports/autoplay/autoplay_compare_20260731c_vs_baseline.md
+```
+
+確認結果:
+- 根本原因: 達成判定用の「目標以上ならOK」と、手札から出す配置候補生成が同じstage scoreだけを使っていた。そのためT1から13/20コストなどが置ける扱いになり、平均ステージコストと達成率が過大に出ていた。
+- 修正: `_cpu_main_action` と `_improve_persistent_stage` の両方で、実アクティブエネルギーとバトンタッチ軽減後の支払いコストを配置候補の制約にした。
+- 修正: `_stage_score` のステージ枚数加点を accepted target slot count までに制限し、目標枚数を超える空き枠埋めを抑制した。
+- 比較: 初期基準比でT1平均ステージコストは、君ここ `29.79 -> 3.96`、5軸 `28.74 -> 6.04`、10軸 `27.96 -> 6.76` に低下。T1から高コストを置く過大評価が解消した。
+- 比較: cumulativeは君ここT3 `0.965 -> 0.64`、5軸T3 `0.98 -> 0.76`、10軸T3 `0.975 -> 0.83` に低下。これは不正な早期高コスト配置が達成扱いから外れたためで、精度上は自然化。
+- 残観点: 5軸/10軸のT3以降を上げるには、次にライブセット交換・マリガン・エネルギーブースト成功後の手札補充/配置経路を改善する。
+
+## 20260731 オートプレイ実エネルギー制約への置換
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py ./loveca_autoplay_report.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from loveca_app.autoplay import _cpu_main_action
+records = {
+    'M-002': {'cardnumber': 'M-002', 'name': 'base two', 'card_type_norm': 'MEMBER', 'cost': '2'},
+    'M-007': {'cardnumber': 'M-007', 'name': 'exact seven', 'card_type_norm': 'MEMBER', 'cost': '7'},
+    'M-013': {'cardnumber': 'M-013', 'name': 'over thirteen', 'card_type_norm': 'MEMBER', 'cost': '13'},
+}
+def lookup(card_no): return records[card_no]
+low_energy = {'phase': 'MAIN', 'energy_active': 7, 'hand': ['M-007', 'M-013'], 'stage': ['M-002', None, None]}
+restricted = _cpu_main_action(low_energy, lookup, {'accepted_shapes': [[13, 2], [7, 2]], 'primary_shape': [13, 2]})
+assert restricted and restricted['card']['card_no'] == 'M-007', restricted
+high_energy = {'phase': 'MAIN', 'energy_active': 13, 'hand': ['M-007', 'M-013'], 'stage': ['M-002', None, None]}
+with_energy = _cpu_main_action(high_energy, lookup, {'accepted_shapes': [[13, 2], [7, 2]], 'primary_shape': [13, 2]})
+assert with_energy and with_energy['card']['card_no'] == 'M-013', with_energy
+print('OK energy-gated member priority')
+PY
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --root . --recent 3 --trials 200 --seed 29 --turns 4 \
+  --no-markdown \
+  --summary-csv docs/reports/autoplay/autoplay_current_20260731e.csv \
+  --summary-json docs/reports/autoplay/autoplay_current_20260731e.json \
+  --compare-json docs/reports/autoplay/autoplay_current_20260731c.json \
+  --compare-csv docs/reports/autoplay/autoplay_compare_20260731e_vs_c.csv \
+  --compare-md docs/reports/autoplay/autoplay_compare_20260731e_vs_c.md
+```
+
+確認結果:
+- 暫定の accepted playable shape 上限は、Daydream Mermaid等のエネルギー増加を表現できないため廃止した。
+- UIなし試行は `active/wait/energy_deck_remaining` を持ち、開始3エネルギー、各ターンのアクティブ/エネルギー/ドロー、通常登場の active -> wait、ライブ成功時エネルギー増加の energy deck -> wait を処理する。
+- CPU MAIN候補は state の `energy_active` とバトンタッチ軽減後の支払いコストで判定する。同じ `13-2` 目標でも active 7 なら7コスト、active 13なら13コストを選ぶ。
+- 比較: T1通常ドローを入れた影響で live cumulative は君ここT1 `0.34 -> 0.40`、5軸T1 `0.17 -> 0.325`、10軸T1 `0.095 -> 0.215` と改善。
+- 比較: 実エネルギー制約により平均ステージコストは自然化した一方、T3 cumulative は3デッキとも `0.0`。次の根本課題は、T3用の希少高コスト札をマリガン/ライブセット交換/配置で温存・探索する未来ターン評価。
+- 残観点: T2までの盤面達成だけを最大化すると、T3到達札を十分に守れない。次は future target protection とライブセット交換の優先順位を改善する。
+
+## 20260731 オートプレイ future target protection 第一段
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py ./loveca_autoplay_report.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from loveca_app.autoplay import _improve_persistent_stage, _stage_costs_with_virtual_low_summons
+stage=[{'kind':'member','cost':7,'low_cost_summon_n':1},{'kind':'member','cost':2},None]
+hand=[{'kind':'member','cost':13,'card_no':'M13'}]
+energy={'active':10,'wait':9,'deck_remaining':6}
+_improve_persistent_stage(stage, hand, [[13,2],[13,2,2]], energy)
+assert 13 in _stage_costs_with_virtual_low_summons(stage), (stage, hand, energy)
+print('OK baton future replacement', _stage_costs_with_virtual_low_summons(stage), hand, energy)
+PY
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --root . --recent 3 --trials 200 --seed 29 --turns 4 \
+  --no-markdown \
+  --summary-csv docs/reports/autoplay/autoplay_current_20260731f.csv \
+  --summary-json docs/reports/autoplay/autoplay_current_20260731f.json \
+  --compare-json docs/reports/autoplay/autoplay_current_20260731e.json \
+  --compare-csv docs/reports/autoplay/autoplay_compare_20260731f_vs_e.csv \
+  --compare-md docs/reports/autoplay/autoplay_compare_20260731f_vs_e.md
+```
+
+確認結果:
+- 根本原因: `13-2` を目指すターンで、前ターンの7コストが2コスト目標の上振れとして固定され、13コストへのバトンタッチ候補から外れていた。
+- 修正: `_stage_slots_to_replace` は空き枠と全占有枠を候補に出し、実際に置くかはstage scoreと実エネルギーで判定する。
+- 修正: 直近accepted targetを仮想低コスト召喚込みで満たした場合、そのターン内の追加配置を止める。
+- 比較: T3 cumulative は、君ここ `0.0 -> 0.695`、5軸 `0.0 -> 0.455`、10軸 `0.0 -> 0.10` に改善。
+- 比較: T4 cumulative は、君ここ `0.0 -> 0.485`、5軸 `0.0 -> 0.25`、10軸 `0.0 -> 0.075` に改善。
+- 残観点: 10軸はまだT3が低い。10コスト3枚などの希少札をマリガン/ライブセット交換でより強く守る評価が必要。
+- 将来接続: 控え室からカードを手札に加える効果も、直近不足を優先し、不足がない場合は未来ターン希少札を拾う同じ評価関数へ接続する。
+
+## 20260731 オートプレイ turn-aware future need
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py ./loveca_autoplay_report.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --root . --recent 3 --trials 200 --seed 29 --turns 4 \
+  --no-markdown \
+  --summary-csv docs/reports/autoplay/autoplay_current_20260731h.csv \
+  --summary-json docs/reports/autoplay/autoplay_current_20260731h.json \
+  --compare-json docs/reports/autoplay/autoplay_current_20260731g.json \
+  --compare-csv docs/reports/autoplay/autoplay_compare_20260731h_vs_g.csv \
+  --compare-md docs/reports/autoplay/autoplay_compare_20260731h_vs_g.md
+```
+
+確認結果:
+- 根本原因: マリガン/ライブセット交換の必要度評価がターンごとの目標候補を平坦化しており、10軸のT3希少札保護と、余剰低コスト交換の切り替えが弱かった。
+- 修正: `_card_need_score_by_turn` を追加し、ターン構造、採用枚数の少なさ、T3/T4希少札を評価できるようにした。
+- 修正: マリガン、CPUライブセット提案、UIなし試行ライブセット交換を同じturn-aware評価へ接続した。
+- 修正: 2/4コストなど採用枚数が多いカードは、手札+ステージで直近必要数を超えている場合だけ交換候補へ戻す。
+- 比較: 君ここT3 cumulative `0.75 -> 0.90`、T4 cumulative `0.625 -> 0.795`。
+- 比較: 5軸T3 cumulative `0.455 -> 0.52`、T4 cumulative `0.295 -> 0.425`。
+- 比較: 10軸T3 cumulative `0.10 -> 0.455`、T4 cumulative `0.095 -> 0.37`。
+- 残観点: 10軸T3の未達はまだ `missing 10` が最大。次はライブセット交換後のドロー、ライブ成功時ドロー、控え室回収候補の評価を同じneed scoreへ接続して、10/11/13到達札の探索量を増やす。
+
+## 20260731 オートプレイ progression support signals
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py ./loveca_autoplay_report.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from pathlib import Path
+from loveca_app.core import AppState
+from loveca_app.autoplay import build_autoplay_policy_context, _card_need_score_by_turn
+app=AppState(Path('.'))
+for deck in app.list_decks():
+    name = deck.get('name') or ''
+    if '10' in name or '5' in name or '君ここ' in name:
+        meta, rows = app.read_deck_rows(deck['path'])
+        ctx = build_autoplay_policy_context(rows, app.card_record, max_turns=4)
+        print('DECK', name)
+        for c in ctx['deck_cards']:
+            tags = c.get('progression_support_tags') or []
+            if tags or c.get('card_no') == 'PL!N-bp4-030':
+                sc = _card_need_score_by_turn(c, ctx['target_alternatives'][:3], ctx['deck_cards'])
+                print(' ', c.get('card_no'), c.get('name'), c.get('kind'), c.get('cost') or c.get('score'), tags, 'score=', round(sc, 2))
+        report = app.autoplay_deck_report(deck['path'])
+        print(' signals=', {k: len(v) for k,v in report['curve']['special_signals'].items() if v})
+PY
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --root . --recent 3 --trials 200 --seed 29 --turns 4 \
+  --no-markdown \
+  --summary-csv docs/reports/autoplay/autoplay_current_20260731i.csv \
+  --summary-json docs/reports/autoplay/autoplay_current_20260731i.json \
+  --compare-json docs/reports/autoplay/autoplay_current_20260731h.json \
+  --compare-csv docs/reports/autoplay/autoplay_compare_20260731i_vs_h.csv \
+  --compare-md docs/reports/autoplay/autoplay_compare_20260731i_vs_h.md
+```
+
+確認結果:
+- Daydream Mermaid は `energy_boost` として検出され、5軸/10軸系の序盤必要度評価で need score `30.0`。
+- 10軸青紫では `energy_activate` として近江彼方、三船栞子を検出。
+- 君ここでは `cost_reduction`、`overcost_member_play`、`low_cost_summon` を検出。
+- 同一seed 200試行の比較では、前回から cumulative/live/combined の数値差分は全て `0.0`。前回時点でエネルギー追加ライブの交換保護は効いていたため、今回は達成率改善ではなく、進行サポート札の汎用検出・スコアリング・レポート表示の追加。
+- 残観点: この `progression_support_tags` を控え室回収、山札検索、ライブ成功時ドロー後の選択へ接続し、直近不足札と未来ターンの希少進行札を同じ評価で探せるようにする。
+
+## 20260803 オートプレイ Decision Trace
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py ./loveca_app/core.py ./loveca_autoplay_report.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --root . --recent 3 --trials 50 --seed 29 --turns 4 --trace-trials 3 \
+  --outdir docs/reports/autoplay/decision_trace_20260803a \
+  --summary-csv docs/reports/autoplay/autoplay_trace_20260803a.csv \
+  --summary-json docs/reports/autoplay/autoplay_trace_20260803a.json
+```
+
+確認結果:
+- `--trace-trials N` を追加し、先頭N試行のマリガン、ライブセット、MAIN配置、結果をMarkdownへ出力できるようにした。
+- 生成先: `docs/reports/autoplay/decision_trace_20260803a/`
+- 5軸のDecision Traceで、T3目標 `2-11-2` に必要な11コスト札をライブセット交換で戻してしまうケースを確認。
+- 原因候補: 同一コスト採用枚数が多い場合の交換予算が、直近ターンに必要な到達札にも適用されている。次は「このターンの到達に必要な手札上の最高価値札」を交換不可にする保護を追加する。
+- 質問回答: 5軸で5コストもDaydream Mermaidによる `2-4-2` 代替も成立しない場合、現行モデルでは5軸のT2加速目標を満たせず、目標未達または後続のデッキ内高コストフォールバックへ落ちる。
+
+## 20260803 オートプレイ probability mulligan 第一段
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py ./loveca_app/core.py ./loveca_autoplay_report.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --root . --recent 3 --trials 200 --seed 29 --turns 4 --trace-trials 3 \
+  --outdir docs/reports/autoplay/decision_trace_20260803d \
+  --summary-csv docs/reports/autoplay/autoplay_current_20260803d.csv \
+  --summary-json docs/reports/autoplay/autoplay_current_20260803d.json \
+  --compare-json docs/reports/autoplay/autoplay_current_20260731i.json \
+  --compare-csv docs/reports/autoplay/autoplay_compare_20260803d_vs_i.csv \
+  --compare-md docs/reports/autoplay/autoplay_compare_20260803d_vs_i.md
+```
+
+確認結果:
+- マリガンは初手6枚の全キープ候補を評価し、T1/T2/T3までのアクセス確率 `p(T1/T2/T3)`、引ける想定枚数 `draw_windows`、上位候補比較をログへ出すようにした。
+- マリガンで戻した後に実際に引き直したカード `redraw` と、引き直し後の手札 `post mulligan hand` をDecision Traceへ追加。
+- `2,2,2,2,11,L` 型の手札で、2コスト過剰保持や11コスト過剰保持を避け、候補ごとの確率曲線を比較する土台を追加。
+- MAIN配置は、目標未達内容を改善しない余分な低コスト配置を止めた。T2で4/5に届かないのに追加2コストを置いてT3エネルギーを潰す動きを抑制。
+- 比較: 君ここ cumulative はT2 `0.91 -> 0.92`、T3 `0.90 -> 0.91`、T4 `0.795 -> 0.82`。
+- 比較: 10軸 cumulative はT3 `0.455 -> 0.545`、T4 `0.37 -> 0.44`。
+- 注意: 5軸 cumulative はT2 `0.795 -> 0.755`、T3 `0.52 -> 0.49` とまだ悪化。T2に5/4/Daydreamへ届かない試行の扱いと、確率モデルが「アクセス」を見ていて実配置/エネルギー制約を完全には織り込めていないことが残課題。
+- 次の改善: 5軸向けに、T2加速札の探索価値をさらに重くしつつ、T3到達に必要な「T2で5または4+Daydreamを成立させる」条件を確率モデルに明示する。ライブセット交換側にも「このターン/次ターンの成立条件札を戻さない」保護を追加する。
+
+## 20260803 オートプレイ critical turn mulligan
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py ./loveca_app/core.py ./loveca_autoplay_report.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --root . --recent 3 --trials 200 --seed 29 --turns 4 --trace-trials 5 \
+  --outdir docs/reports/autoplay/decision_trace_20260803g \
+  --summary-csv docs/reports/autoplay/autoplay_current_20260803g.csv \
+  --summary-json docs/reports/autoplay/autoplay_current_20260803g.json \
+  --compare-json docs/reports/autoplay/autoplay_current_20260803f.json \
+  --compare-csv docs/reports/autoplay/autoplay_compare_20260803g_vs_f.csv \
+  --compare-md docs/reports/autoplay/autoplay_compare_20260803g_vs_f.md
+```
+
+確認結果:
+- 根本原因: マリガン評価がT1-T3を合算していたため、5軸で5コスト/Daydream Mermaidを引けていない初手でも、枚数の多い11コストを未来札として残す判断が強く出ていた。
+- 修正: T2の5コスト/Daydream Mermaidのような、欠けると致命的な遅れが出るキー札を検出し、初手に無い場合は全戻し/一部キープ時のキー札到達率をマリガン評価とDecision Traceへ反映した。
+- 修正: 未来ターンのカードでも、デッキ内枚数が十分あるコスト帯は弱点ターン探索を妨げないよう戻しやすくした。採用枚数が少ない到達札は希少札として保持価値を残す。
+- 計算例: 5軸ではキー札を5コストメンバー3枚 + Daydream Mermaid 4枚の7枚として扱う。キー札なし初手では、T2キーアクセス率が全戻し約0.784、2枚キープ約0.698。
+- Decision Trace確認: `docs/reports/autoplay/decision_trace_20260803g/5_deck_1d64365fb7bf71ac7081.md` のTrial 1で `critical focus` が表示され、5/DMなし初手は `keep: none` になった。
+- 比較: 5軸 cumulative はT2 `0.74 -> 0.785`、T3 `0.495 -> 0.52`。combined cumulative はT2 `0.205 -> 0.23`。
+- 比較: 10軸 cumulative はT2 `0.765 -> 0.79`、T3 `0.57 -> 0.595`、T4 `0.445 -> 0.46`。
+- 残観点: 5軸T4 cumulative は `0.425 -> 0.415` と小幅低下。T2/T3重視の副作用として15コスト探索が少し弱くなっている可能性があり、次はT3成立後のT4到達札保護を分離して改善する。
