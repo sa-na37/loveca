@@ -29,5 +29,8 @@ llocg_db_out_full/_http_cache/
 llocg_db_out_full/_update_work/
 llocg_db_out_full/_update_backups/
 _x_preview_probe/
+_codex_outputs/github_release/
+sim_out/
+/sim_trace.txt
 __pycache__/
 *.pyc
