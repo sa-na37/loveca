@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# BUILD_TAG = "autoplay_trace_cli_20260803a"
+# BUILD_TAG = "autoplay_deck_seed_cli_20260803a"
 """Write human-readable autoplay policy reports for model deck testing."""
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from loveca_app.autoplay import build_autoplay_markdown_report
 from loveca_app.core import AppState
 
 
-BUILD_TAG = "autoplay_trace_cli_20260803a"
+BUILD_TAG = "autoplay_deck_seed_cli_20260803a"
 
 
 COMPARE_METRIC_SUFFIXES = (
@@ -64,6 +64,8 @@ def summary_row(deck_path: str, report: dict, trial_result: dict | None, max_tur
         "recommended": rec.get("label", ""),
         "recommended_score": rec.get("score", ""),
         "trials": trial_result.get("trials", "") if trial_result else "",
+        "base_seed": trial_result.get("base_seed", trial_result.get("seed", "")) if trial_result else "",
+        "effective_seed": trial_result.get("effective_seed", trial_result.get("seed", "")) if trial_result else "",
         "seed": trial_result.get("seed", "") if trial_result else "",
         "max_turns": max_turns,
     }

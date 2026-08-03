@@ -3709,7 +3709,8 @@ python3 ./loveca_autoplay_report.py --recent 3 --trials 500 --seed 29 --turns 4 
 - 君ここ系は主目標を `2-2 / 7-2 / 13-2` とし、`7-2-2` / `13-2-2` は `accepted targets` の上振れ代替に表示される。
 - 5軸ミラステはT2の `accepted targets` に `2-5-2 or 2-4-2` が表示される。
 - Daydream Mermaid系のエネルギーブーストは、そのターンにライブセットした場合だけ代替プランとして扱う。
-- 10軸ミラステはT3の `accepted targets` に `2-10-2 or 2-11-2 or 2-13-2` が表示される。
+- 10軸ミラステはT3の `accepted targets` に `2-10-2 or 2-11-2 or 2-13-2` が表示されていた。
+  ※20260803内部確認: ユーザー確認により、この10軸ではT3に13コストを出さないため `2-13-2` は不適切。`autoplay_live_success_coarse_and_target_split_20260803a` で `2-13-2` をaccepted targetから除外し、現行確認では `2-10-2 / 2-11-2` のみ。
 - 各ターンのライブセット1ドローが、メンバー計画前の手札循環として試行に含まれる。
 
 ## 20260729 オートプレイ試行 実デッキ内カード基準の目標生成
@@ -4658,7 +4659,7 @@ python3 ./loveca_autoplay_report.py --root . --recent 3 --trials 200 --seed 29 -
 - 注意: 5軸 cumulative はT2 `0.795 -> 0.755`、T3 `0.52 -> 0.49` とまだ悪化。T2に5/4/Daydreamへ届かない試行の扱いと、確率モデルが「アクセス」を見ていて実配置/エネルギー制約を完全には織り込めていないことが残課題。
 - 次の改善: 5軸向けに、T2加速札の探索価値をさらに重くしつつ、T3到達に必要な「T2で5または4+Daydreamを成立させる」条件を確率モデルに明示する。ライブセット交換側にも「このターン/次ターンの成立条件札を戻さない」保護を追加する。
 
-## 20260803 オートプレイ critical turn mulligan
+## 20260803 オートプレイ bottleneck mulligan
 
 ```bash
 cd /Users/tekitou/Desktop/gsim/loveca
@@ -4670,20 +4671,531 @@ python3 -m py_compile ./loveca_app/autoplay.py ./loveca_app/core.py ./loveca_aut
 cd /Users/tekitou/Desktop/gsim/loveca
 
 python3 ./loveca_autoplay_report.py --root . --recent 3 --trials 200 --seed 29 --turns 4 --trace-trials 5 \
-  --outdir docs/reports/autoplay/decision_trace_20260803g \
-  --summary-csv docs/reports/autoplay/autoplay_current_20260803g.csv \
-  --summary-json docs/reports/autoplay/autoplay_current_20260803g.json \
+  --outdir docs/reports/autoplay/decision_trace_20260803h \
+  --summary-csv docs/reports/autoplay/autoplay_current_20260803h.csv \
+  --summary-json docs/reports/autoplay/autoplay_current_20260803h.json \
   --compare-json docs/reports/autoplay/autoplay_current_20260803f.json \
-  --compare-csv docs/reports/autoplay/autoplay_compare_20260803g_vs_f.csv \
-  --compare-md docs/reports/autoplay/autoplay_compare_20260803g_vs_f.md
+  --compare-csv docs/reports/autoplay/autoplay_compare_20260803h_vs_f.csv \
+  --compare-md docs/reports/autoplay/autoplay_compare_20260803h_vs_f.md
 ```
 
 確認結果:
 - 根本原因: マリガン評価がT1-T3を合算していたため、5軸で5コスト/Daydream Mermaidを引けていない初手でも、枚数の多い11コストを未来札として残す判断が強く出ていた。
-- 修正: T2の5コスト/Daydream Mermaidのような、欠けると致命的な遅れが出るキー札を検出し、初手に無い場合は全戻し/一部キープ時のキー札到達率をマリガン評価とDecision Traceへ反映した。
+- 修正: 構築からT1-T3のaccepted targetを推定し、ターンごとの必要コスト採用枚数と想定ドロー数から到達率を概算するようにした。
+- 修正: 初手に未確保のターンのうち、採用枚数が少ない到達札または進行サポート札を要求するターンをボトルネックとして扱い、全戻し/一部キープ時のターン目標到達率をマリガン評価とDecision Traceへ反映した。
 - 修正: 未来ターンのカードでも、デッキ内枚数が十分あるコスト帯は弱点ターン探索を妨げないよう戻しやすくした。採用枚数が少ない到達札は希少札として保持価値を残す。
-- 計算例: 5軸ではキー札を5コストメンバー3枚 + Daydream Mermaid 4枚の7枚として扱う。キー札なし初手では、T2キーアクセス率が全戻し約0.784、2枚キープ約0.698。
-- Decision Trace確認: `docs/reports/autoplay/decision_trace_20260803g/5_deck_1d64365fb7bf71ac7081.md` のTrial 1で `critical focus` が表示され、5/DMなし初手は `keep: none` になった。
-- 比較: 5軸 cumulative はT2 `0.74 -> 0.785`、T3 `0.495 -> 0.52`。combined cumulative はT2 `0.205 -> 0.23`。
-- 比較: 10軸 cumulative はT2 `0.765 -> 0.79`、T3 `0.57 -> 0.595`、T4 `0.445 -> 0.46`。
-- 残観点: 5軸T4 cumulative は `0.425 -> 0.415` と小幅低下。T2/T3重視の副作用として15コスト探索が少し弱くなっている可能性があり、次はT3成立後のT4到達札保護を分離して改善する。
+- 計算例: 5軸ではT2ボトルネックを5コストメンバー3枚 + Daydream Mermaid 4枚の7枚として扱う。5/DMなし初手では、T2目標到達率が全戻し約0.875、2枚キープ相当約0.746。
+- Decision Trace確認: `docs/reports/autoplay/decision_trace_20260803h/5_deck_1d64365fb7bf71ac7081.md` のTrial 1で `critical focus` が表示され、5/DMなし初手は `keep: none` になった。
+- 比較: 5軸 cumulative はT2 `0.74 -> 0.785`、T3 `0.495 -> 0.525`。combined cumulative はT2 `0.205 -> 0.23`。
+- 比較: 10軸 cumulative はT2 `0.765 -> 0.79`、T3 `0.57 -> 0.59`。combined cumulative はT1 `0.545 -> 0.6`、T2 `0.215 -> 0.245`。
+- 残観点: 5軸T4 cumulative は `0.425 -> 0.42` と小幅低下。T2/T3重視の副作用として15コスト探索が少し弱くなっている可能性があり、次はT3成立後のT4到達札保護を分離して改善する。
+
+## 20260803 オートプレイ deck-specific seed
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py ./loveca_app/core.py ./loveca_autoplay_report.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from pathlib import Path
+from loveca_app.core import AppState, _autoplay_effective_seed
+app=AppState(Path('.'))
+for deck_path in ['llocg_db_out_full/decklists/deck_1d64365fb7bf71ac7081.tsv','llocg_db_out_full/decklists/deck_fcc369ef393b3ed66e43.tsv']:
+    result=app.autoplay_trial_report(deck_path, trials=1, seed=29, max_turns=4, trace_trials=1)
+    trace=result['decision_traces'][0]
+    print('DECK', deck_path)
+    print('base', result.get('base_seed'), 'effective', result.get('effective_seed'), 'helper', _autoplay_effective_seed(29, deck_path))
+    print('initial', ' | '.join(trace.get('initial_hand') or []))
+PY
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --root . --recent 3 --trials 200 --seed 29 --turns 4 --trace-trials 3 \
+  --outdir docs/reports/autoplay/decision_trace_20260803j_seedfix_200 \
+  --summary-csv docs/reports/autoplay/autoplay_current_20260803j_seedfix_200.csv \
+  --summary-json docs/reports/autoplay/autoplay_current_20260803j_seedfix_200.json
+```
+
+確認結果:
+- 根本原因: 5軸/10軸デッキの並びと共通カードがかなり近く、同じseedを各デッキに直接使うと同じシャッフル位置を参照して、初手が同一になることがあった。
+- 修正: base seed と deck path から deterministic な effective seed を作り、デッキごとに異なる乱数列を使うようにした。同じデッキ・同じbase seedでは再現性を保つ。
+- レポートに `base_seed` と `effective_seed` を出力するようにした。
+- 確認: 5軸 base `29` effective `2363877751`、10軸 base `29` effective `1371471730` となり、初手が分離した。
+- seed修正版200回結果: 5軸 T2 cumulative `0.79`、T3 cumulative `0.56`。10軸 T2 cumulative `0.82`、T3 cumulative `0.65`。
+- 注意: seed生成方式を変えたため、過去のseed=29単体比較値とは直接比較しない。今後は固定base seedセットを複数用意して平均・ばらつきを見る。
+
+## 20260803 オートプレイ mulligan user examples
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py ./loveca_app/core.py ./loveca_autoplay_report.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --root . --deck llocg_db_out_full/decklists/deck_1d64365fb7bf71ac7081.tsv --trials 200 --trace-trials 5 --seed 29 --turns 4 \
+  --outdir docs/reports/autoplay/decision_trace_20260803k_5 \
+  --summary-csv docs/reports/autoplay/autoplay_current_20260803k_5.csv \
+  --summary-json docs/reports/autoplay/autoplay_current_20260803k_5.json
+
+python3 ./loveca_autoplay_report.py --root . --deck llocg_db_out_full/decklists/deck_fcc369ef393b3ed66e43.tsv --trials 200 --trace-trials 5 --seed 29 --turns 4 \
+  --outdir docs/reports/autoplay/decision_trace_20260803k_10 \
+  --summary-csv docs/reports/autoplay/autoplay_current_20260803k_10.csv \
+  --summary-json docs/reports/autoplay/autoplay_current_20260803k_10.json
+
+python3 ./loveca_autoplay_report.py --root . --deck llocg_db_out_full/decklists/deck_2d69085d8135c787adcc.tsv --trials 200 --trace-trials 5 --seed 29 --turns 4 \
+  --outdir docs/reports/autoplay/decision_trace_20260803k_kimi \
+  --summary-csv docs/reports/autoplay/autoplay_current_20260803k_kimi.csv \
+  --summary-json docs/reports/autoplay/autoplay_current_20260803k_kimi.json
+```
+
+確認結果:
+- ユーザー提示のマリガン9例を内部検査し、期待キープと全件一致した。
+- 修正: card objectへ `base_hearts_raw` / `required_hearts_raw` を渡し、マリガン評価で要求色と基礎ハートの噛み合いを見られるようにした。
+- 修正: 5軸/10軸/君ここ型を進行shapeから判定し、コスト・ライブスコア・エネルギーブースト・ハート要求で補正する汎用profile adjustmentを追加した。カード番号専用分岐は追加していない。
+- 5軸: 5/DMなし初手は4/2/11を守らず全戻し寄り。5+DM+2が揃う場合は4を代替ルート札として返しやすくした。
+- 10軸: 10コストが見えている場合は10+4+2を守り、13/15の孤立キープを強く抑制した。10が無い場合は4コスト中継札を1枚残し、紫ハートが多い4コストをやや優先する。
+- 君ここ: 7コストが無い初手は全戻し寄り。7がある場合は0スコアドローライブと、その要求色に噛む2コストを保持しやすくした。
+- 200回固定base seed比較（前回 `20260803j_seedfix_200` 比）:
+  - 5軸 cumulative: T2 `0.79 -> 0.865`, T3 `0.56 -> 0.705`, T4 `0.475 -> 0.59`。combined cumulative: T2 `0.27 -> 0.34`, T3 `0.02 -> 0.03`。
+  - 10軸 cumulative: T2 `0.82 -> 0.865`, T3 `0.65 -> 0.745`, T4 `0.505 -> 0.565`。combined cumulative: T2 `0.31 -> 0.405`, T3 `0.045 -> 0.05`。
+  - 君ここ cumulative: T2 `0.90 -> 0.94`, T3 `0.88 -> 0.90`, T4 `0.79 -> 0.83`。combined cumulative: T2 `0.115 -> 0.155`, T3 `0.02 -> 0.035`。
+- 注意: `--all` で200回レポートを開始したところ登録デッキ全体を拾って重くなったため中断した。途中生成物は `docs/reports/autoplay/decision_trace_20260803k_mulligan_examples/` に残っている。比較には上記3デッキ個別実行結果を使用した。
+
+## 20260803 オートプレイ mulligan user examples second pass
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py ./loveca_app/core.py ./loveca_autoplay_report.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --root . --deck llocg_db_out_full/decklists/deck_1d64365fb7bf71ac7081.tsv --trials 200 --trace-trials 5 --seed 29 --turns 4 \
+  --outdir docs/reports/autoplay/decision_trace_20260803l_5 \
+  --summary-csv docs/reports/autoplay/autoplay_current_20260803l_5.csv \
+  --summary-json docs/reports/autoplay/autoplay_current_20260803l_5.json
+
+python3 ./loveca_autoplay_report.py --root . --deck llocg_db_out_full/decklists/deck_fcc369ef393b3ed66e43.tsv --trials 200 --trace-trials 5 --seed 29 --turns 4 \
+  --outdir docs/reports/autoplay/decision_trace_20260803l_10 \
+  --summary-csv docs/reports/autoplay/autoplay_current_20260803l_10.csv \
+  --summary-json docs/reports/autoplay/autoplay_current_20260803l_10.json
+
+python3 ./loveca_autoplay_report.py --root . --deck llocg_db_out_full/decklists/deck_2d69085d8135c787adcc.tsv --trials 200 --trace-trials 5 --seed 29 --turns 4 \
+  --outdir docs/reports/autoplay/decision_trace_20260803l_kimi \
+  --summary-csv docs/reports/autoplay/autoplay_current_20260803l_kimi.csv \
+  --summary-json docs/reports/autoplay/autoplay_current_20260803l_kimi.json
+```
+
+確認結果:
+- ユーザー提示の追加12例と前回9例を合わせた21例を内部検査し、期待キープと全件一致した。
+- 修正: 5軸で5あり/DMなしの場合は2コスト2枚を守り、11以上は返す。DM+4+2+2は2ターン目DM成功ルートとして保持。DMあり4/5なしでは4探索のため2を1枚に絞る。
+- 修正: 10軸で10あり4なしは10+質の高い2を1枚だけ保持。10/DMなしで4が1枚だけなら全戻し、4が複数なら質の高い4を1枚だけ残せるようにした。
+- 修正: 君ここ型で7あり2なしは7単体キープ寄り。7+君ここ+2が3枚以上ある場合のみ2枚目の2を守る。
+- 確認: `PL!-pb1-018` 矢澤にこは `energy_boost` ではなく `low_cost_summon` として検出される。accepted shape の `7-2-2` / `13-2-2` 代替に接続済み。
+- 200回固定base seed比較（前回 `20260803k` 比）:
+  - 5軸 cumulative: T2 `0.865 -> 0.86`, T3 `0.705 -> 0.71`, T4 `0.59 -> 0.59`。combined cumulative: T2 `0.34 -> 0.345`, T3 `0.03 -> 0.03`。
+  - 10軸 cumulative: T2 `0.865 -> 0.855`, T3 `0.745 -> 0.755`, T4 `0.565 -> 0.575`。combined cumulative: T2 `0.405 -> 0.405`, T3 `0.05 -> 0.035`。
+  - 君ここ cumulative: T2 `0.94 -> 0.94`, T3 `0.90 -> 0.90`, T4 `0.83 -> 0.83`。combined cumulative: T2 `0.155 -> 0.15`, T3 `0.035 -> 0.035`。
+- 注意: 10軸は盤面到達率が上がった一方、T3 combined が小幅低下した。次の改善では、10軸の安定キープ後にライブセット交換でDM/スコア札をどう扱うかを分離して検査する。
+
+## 20260803 プレリリースカード効果挙動監査
+
+対象: 現行DBに効果文付きで入っている `bp7` / `sd2` 系57枚。画像manifestのみでDB効果文が未取得のカードは、効果挙動監査対象外としてDB更新完了後に再監査する。
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./llocg_ui/engine.py ./llocg_ui/server.py ./llocg_ui/engine_effect.py ./llocg_ui/effects/*.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+import json,re
+from pathlib import Path
+from llocg_ui.engine import _match_effect_template
+obj=json.loads(Path('llocg_db_out_full/cards_compiled_v7h.json').read_text(encoding='utf-8'))
+rows=[]
+for r in obj.get('cards',[]):
+    cn=str(r.get('cardnumber',''))
+    if not re.search(r'-(?:bp7|sd2)-', cn, re.I):
+        continue
+    for ab in r.get('abilities',[]) or []:
+        for cl in ab.get('clauses',[]) or []:
+            eff=str(cl.get('effect_template') or cl.get('raw') or '').strip()
+            if not eff or eff in {'以下から1つを選ぶ。'}:
+                continue
+            match=_match_effect_template(eff)
+            rows.append((bool(match), cn, r.get('cardname',''), ab.get('trigger',''), eff))
+print('clauses', len(rows), 'match', sum(1 for x in rows if x[0]), 'unmatched', sum(1 for x in rows if not x[0]))
+for ok,cn,name,trig,eff in rows:
+    if not ok:
+        print('UNMATCH', cn, name, trig, eff)
+PY
+```
+
+確認結果:
+- テンプレート到達: 75効果中72到達。開始時の75効果中62到達から改善。
+- 実装: `PL!S-bp7-016` 型の「ステージにメンバーN人以上で複数ハート」、`PL!SP-bp7-013` 型の「指定ユニット/グループ3人でハート+ブレード」、`PL!SP-sd2-004` 型のセンター常時ブレード表示/判定、`PL!SP-bp7-025` 型のライブ開始時指定名メンバーへのブレード付与、`PL!SP-bp7-026` 型の指定名メンバー存在時ドロー/手札破棄、`PL!N-bp7-028` 型の控え室全カードデッキ下戻し+ステージグループ全体アイコン付与を汎用ルートで確認。
+- 実装: エネルギー置き場からエネルギーデッキへ置かれたターンを記録し、`PL!SP-bp7-006` 型のライブ成功時スコア+1、`PL!SP-bp7-005` 型のエネルギー返却誘発を共通フックへ接続。
+- 実装: `PL!SP-bp7-002` 型の「自分エネルギー7枚以上かつ相手より多い」コスト+2は、相手エネルギー値がstateに存在する環境でのみ適用。1デッキUIの標準入力項目は未整備のため、値がない場合は勝手に適用しない。
+- 状態差分確認: `PL!S-bp7-016` はステージ2人でハートなし、3人で赤/緑/青+1。`PL!SP-bp7-013` はKALEIDOSCORE 3人で紫+1/ブレード+1。`PL!SP-sd2-004` はセンターでブレード+4、二重加算なし。`PL!N-bp7-028` は条件達成時pending発生、apply後に控え室全カードがデッキ下へ移動し、ステージの虹ヶ咲メンバーへ桃+1。
+
+残件:
+- `LL-bp7-001`: 手札の指定名3枚を任意コストとして捨て、プレイコストを10にする特殊プレイコスト。プレイUI/コスト支払い経路の拡張が必要。
+- `PL!N-bp7-003`: 控え室コスト17以下の虹ヶ咲メンバーを下に置き、元々持つハートを置いたメンバーのハートと同じにする処理。現行stateは単色置換 `heart_replace_color` 中心で、複数色/複数個の元ハートコピーを保持する構造拡張が必要。
+- `PL!S-bp7-022`: エールをデッキ上ではなくデッキ下から行う常時効果。エール処理の山札参照方向をカード効果で切り替える共通フックが必要。
+- `PL!SP-bp7-005`: 「次のターンのアクティブフェイズにアクティブしない」対象エネルギーは、現行のエネルギーが枚数管理のため個別カード単位の不活性予約までは未実装。現時点ではログ/pending上の確認に留まる。
+
+### 20260803 追記: 残件実装確認
+
+上記残件は `llocg_ui/engine.py` BUILD_TAG `prerelease_effect_generic_routes_20260803b` で再確認。
+
+実装:
+- `LL-bp7-001` 型: BODY常時の「プレイに際し、手札から指定名メンバーカードをそれぞれ1枚ずつ控え室に置いてもよい。そうしたとき、このカードのコストはNになる。」を汎用検出。通常プレイ直前に `optional_named_hand_play_cost` pending を出し、Apply/Skip後は通常の `cmd_play` 経路へ戻す。
+- `PL!N-bp7-003` 型: 「控え室のコストN以下指定グループメンバーをこのメンバーの下に置く。そうしたとき、元々持つハートは下に置いたメンバーが持つハートと同じになる。」を、既存の `green_member_cost_le_group_to_under_self` に後続処理フラグを付けて実装。`StageSlot.heart_replace_hearts` を追加し、undo/snapshot、ライブ終了cleanup、基本ハート集計、現在ハート色別/総数集計へ反映。
+- `PL!S-bp7-022` 型: エールをデッキ下から行うBODY常時は既存runtimeに `_card_replaces_own_yell_with_deck_bottom` / `_yell_uses_deck_bottom` / `_take_yell_card_from_deck` が存在していたため、監査matcherへ `body_always_yell_from_deck_bottom` を追加して到達確認対象に含めた。
+- `PL!SP-bp7-005` 型: 「ウェイト状態で置いたエネルギーは次のアクティブフェイズにアクティブしない」を枚数予約 `energy_no_active_next` として実処理化。次回 `refresh` で予約枚数分をウェイトに残し、予約はそのアクティブフェイズで解除する。
+
+確認コマンド:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./llocg_ui/engine.py ./llocg_ui/server.py ./llocg_ui/engine_effect.py ./llocg_ui/effects/*.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from pathlib import Path
+import json,random
+from llocg_ui.db import load_cards_db
+from llocg_ui import engine
+from llocg_ui.engine import GameState, StageSlot, cmd_play, cmd_resolve_pending, try_apply_effect_template, refresh, owned_base_hearts, _slot_current_heart_color_counts, snapshot_state, restore_state
+cards=load_cards_db(Path('.'), compiled_path=Path('llocg_db_out_full/cards_compiled_v7h.json'), tokv1_path=Path('llocg_db_out_full/cards_min_tokv1.json'))
+
+obj=json.loads(Path('llocg_db_out_full/cards_compiled_v7h.json').read_text(encoding='utf-8'))
+raw=obj.get('cards',{})
+items=raw.items() if isinstance(raw,dict) else [(c.get('cardnumber') or c.get('card_number') or c.get('card_no') or '',c) for c in raw]
+total=matched=0
+un=[]
+for cn,c in items:
+    cn=str(cn or c.get('cardnumber') or '')
+    if not any(x in cn for x in ['bp7','sd2']):
+        continue
+    if str(c.get('card_type') or c.get('type') or '').upper().startswith('ENERGY'):
+        continue
+    for ab in c.get('abilities') or []:
+        for cl in ab.get('clauses') or []:
+            eff=str(cl.get('effect_template') or cl.get('raw') or '').strip()
+            if not eff:
+                continue
+            total += 1
+            matched += 1 if engine._match_effect_template(eff) else 0
+print('bp7/sd2 matcher', matched, '/', total, 'unmatched', total-matched)
+
+gs=GameState(root='.', code='test', seed=1)
+gs.hand=['LL-bp7-001','PL!S-PR-019','PL!N-PR-009','PL!SP-PR-005']
+gs.energy_active=20
+cmd_play(gs,cards,0,'C')
+print('LL-bp7-001 pending', gs.pending[0]['kind'])
+cmd_resolve_pending(gs,cards,0,'apply',random.Random(1))
+print('LL-bp7-001 apply', gs.stage['C'].cardnumber, gs.energy_active, gs.green_room)
+
+gs2=GameState(root='.', code='test', seed=2)
+gs2.stage['C']=StageSlot('PL!N-bp7-003')
+gs2.green_room=['PL!N-PR-003']
+try_apply_effect_template(gs2,random.Random(2),cards,'自分の控え室にあるコスト17以下の『虹ヶ咲』のメンバーカード1枚をこのメンバーの下に置く。そうしたとき、ライブ終了時まで、このメンバーが元々持つハートは、これにより下に置いたメンバーカードが持つハートと同じになる。',{'source_cn':'PL!N-bp7-003','pos':'C'})
+print('PL!N-bp7-003 hearts', gs2.stage['C'].under_cards, gs2.stage['C'].heart_replace_hearts, owned_base_hearts(gs2,cards), _slot_current_heart_color_counts(gs2,cards,'C',gs2.stage['C']))
+
+gs3=GameState(root='.', code='test', seed=3)
+gs3.energy_active=0
+gs3.energy_wait=0
+try_apply_effect_template(gs3,random.Random(3),cards,'自分のエネルギーデッキから、エネルギーカードを2枚ウェイト状態で置く。そのエネルギーカードは、次のターンのアクティブフェイズにアクティブしない。',{'source_cn':'TEST'})
+print('energy reserve before refresh', gs3.energy_active, gs3.energy_wait, gs3.energy_no_active_next)
+gs3.pending=[]
+refresh(gs3)
+print('energy reserve after refresh', gs3.energy_active, gs3.energy_wait, gs3.energy_no_active_next)
+
+snap=snapshot_state(gs2)
+gs2.stage['C'].heart_replace_hearts={}
+restore_state(gs2,snap)
+print('snapshot restore heart_replace_hearts', gs2.stage['C'].heart_replace_hearts)
+PY
+```
+
+確認結果:
+- `py_compile` 通過。
+- `bp7/sd2 matcher 76 / 76 unmatched 0`。
+- `LL-bp7-001` は `optional_named_hand_play_cost` pending発生、Applyで指定名3枚が控え室へ移動し、コスト10として通常プレイ完了。Skip経路も別確認し、通常コスト15でプレイされ指定名カードは手札に残る。
+- `PL!N-bp7-003` は控え室の虹ヶ咲メンバーを下に置き、下に置いたカードの印刷ハート `{pink:1, green:1, purple:1}` がこのメンバーの元ハートとして集計される。
+- `PL!SP-bp7-005` 型はウェイトエネルギー2枚を `energy_no_active_next=2` として予約し、次回refreshで active へ移さず wait に残し、予約を0へ戻す。
+- snapshot/restoreで `heart_replace_hearts` と `energy_no_active_next` が復元される。
+
+残件:
+- 今回確認範囲のプレリリースDB登録済み効果について、matcher未到達残件は0。
+- 画像manifestのみ取得済みでDB本文未取得の新規公開カードは、DB更新完了後に別途再監査が必要。
+
+### 20260803 追記: no-active予約エネルギーの効果アクティブ優先
+
+ユーザー指摘により、「次のターンのアクティブフェイズにアクティブしない」エネルギーがある状態で「エネルギーをアクティブにする効果」を解決した場合、予約中のウェイトエネルギーを優先してアクティブにする仕様へ補正。
+
+実装:
+- `llocg_ui/engine.py` に `_activate_wait_energy` を追加。
+- 効果によるエネルギーアクティブ処理を同ヘルパーへ集約し、`energy_no_active_next` を優先消費するようにした。
+- waitエネルギーをエネルギーデッキへ戻す/メンバー下へ移す場合も、存在しない予約が残らないよう `energy_no_active_next` を減算。
+- 通常アクティブフェイズの `refresh` では従来通り、残った予約分をウェイトに残す。
+
+確認コマンド:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./llocg_ui/engine.py ./llocg_ui/server.py ./llocg_ui/engine_effect.py ./llocg_ui/effects/*.py
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from pathlib import Path
+import random
+from llocg_ui.db import load_cards_db
+from llocg_ui.engine import GameState, try_apply_effect_template, refresh, snapshot_state, restore_state
+cards=load_cards_db(Path('.'), compiled_path=Path('llocg_db_out_full/cards_compiled_v7h.json'), tokv1_path=Path('llocg_db_out_full/cards_min_tokv1.json'))
+
+gs=GameState(root='.', code='test', seed=1)
+gs.energy_active=0
+gs.energy_wait=3
+gs.energy_no_active_next=2
+try_apply_effect_template(gs, random.Random(1), cards, 'エネルギーを1枚アクティブにする。', {'source_cn':'TEST'})
+print(gs.energy_active, gs.energy_wait, gs.energy_no_active_next)
+
+gs2=GameState(root='.', code='test', seed=2)
+gs2.energy_active=0
+gs2.energy_wait=3
+gs2.energy_no_active_next=2
+try_apply_effect_template(gs2, random.Random(2), cards, 'エネルギーを2枚アクティブにする。', {'source_cn':'TEST'})
+print(gs2.energy_active, gs2.energy_wait, gs2.energy_no_active_next)
+
+gs3=GameState(root='.', code='test', seed=3)
+gs3.energy_active=0
+gs3.energy_wait=3
+gs3.energy_no_active_next=2
+try_apply_effect_template(gs3, random.Random(3), cards, 'エネルギーを1枚アクティブにする。', {'source_cn':'TEST'})
+gs3.pending=[]
+refresh(gs3)
+print(gs3.energy_active, gs3.energy_wait, gs3.energy_no_active_next)
+
+s=snapshot_state(gs)
+gs.energy_no_active_next=99
+restore_state(gs,s)
+print(gs.energy_active, gs.energy_wait, gs.energy_no_active_next)
+PY
+```
+
+確認結果:
+- `py_compile` 通過。
+- `wait=3 / energy_no_active_next=2` から効果で1枚アクティブ: `active=1 / wait=2 / energy_no_active_next=1`。
+- 同条件から効果で2枚アクティブ: `active=2 / wait=1 / energy_no_active_next=0`。
+- 効果で1枚だけ起こした後の通常refresh: 残った予約1枚だけがウェイトに残り、通常wait分はアクティブ化。
+- snapshot/restoreで効果解決後の予約数が復元される。
+
+### 20260803 追記: オートプレイのメイン配置→ライブセット順序修正
+
+ユーザー指摘により、オートプレイのターン内処理順序を確認。旧実装では通常ドロー後にライブセット交換を行い、その交換で引いたカードを同じターンのメンバー配置へ使えていた。これは実プレイの「メインフェイズでステージ配置後にライブセットフェイズで交換する」順序と異なるため、ステージ進行率を過大評価していた。
+
+実装:
+- `loveca_app/autoplay.py` の試行順序を、通常ドロー→メイン配置→ライブセット交換へ修正。
+- decision trace の表示順も同じ順序へ修正。
+- ライブセット交換の判断で、ステージ配置後の盤面を参照するようにした。
+- レポート内の `decision_policy` / `effect_assumptions` の説明文も現行順序へ修正。
+
+確認コマンド:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py ./loveca_app/core.py ./loveca_autoplay_report.py
+git diff --check
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 - <<'PY'
+from pathlib import Path
+import json
+from loveca_app.autoplay import _improve_persistent_stage, _choose_live_set_cards
+
+root = Path('.')
+rows = json.loads((root / 'llocg_db_out_full/cards_min_tokv1.json').read_text(encoding='utf-8'))
+by_no = {str(row.get('cardnumber') or row.get('card_no')): row for row in rows}
+
+def card(cn):
+    row = by_no[cn]
+    typ = str(row.get('card_type_norm') or row.get('card_type') or row.get('type') or row.get('card_type_raw') or '')
+    kind = 'member' if typ.upper() == 'MEMBER' or 'メンバー' in typ else 'live'
+    return {
+        'card_no': cn,
+        'name': str(row.get('cardname') or row.get('name') or ''),
+        'kind': kind,
+        'cost': int(float(row.get('cost') or 0)) if kind == 'member' else None,
+        'score': int(float(row.get('score') or 0)) if kind == 'live' and str(row.get('score') or '').strip() else 0,
+        'draw_n': 2 if cn == 'PL!S-bp2-024' else 0,
+        'energy_boost_n': 1 if cn == 'PL!N-bp4-030' else 0,
+        'base_hearts_raw': str(row.get('base_hearts_raw') or ''),
+        'effect_text': str(row.get('effect_text_norm') or row.get('effect_text') or ''),
+        'value': 0,
+    }
+
+def run_case(label, hand_no, targets):
+    hand = [card(cn) for cn in hand_no]
+    stage = [None, None, None]
+    energy = {'active': 4, 'wait': 0, 'deck_remaining': 20}
+    stage = _improve_persistent_stage(stage, hand, targets[0], energy)
+    live, selected = _choose_live_set_cards(
+        hand,
+        any(alt == [2, 4, 2] for alt in targets[0]),
+        [alt for turn in targets[:3] for alt in turn],
+        [card(cn) for cn in hand_no],
+        {},
+        targets[:3],
+        0,
+        stage,
+    )
+    print(label, [c['card_no'] if c else None for c in stage], [c['card_no'] for c in selected], live['card_no'] if live else None)
+
+five_targets = [[[2,2],[4]], [[2,5,2],[2,4,2]], [[2,11,2]]]
+ten_targets = [[[2,2],[4]], [[2,4,2]], [[2,10,2],[2,11,2]]]
+kimi_targets = [[[2,2],[4]], [[7,2],[7,2,2]], [[13,2],[13,2,2]]]
+
+run_case('5A', ['PL!N-bp5-001','PL!SP-sd1-019','PL!S-sd1-015','PL!HS-bp6-017','PL!N-pb1-011','PL!N-bp3-030','PL!N-bp5-027'], five_targets)
+run_case('5B', ['PL!N-bp4-030','PL!HS-PR-022','PL!N-bp4-017','PL!SP-pb1-014','PL!HS-bp6-017','PL!N-pb1-011','PL!N-bp5-027'], five_targets)
+run_case('5C', ['PL!N-bp4-030','PL!SP-sd1-019','PL!N-bp4-017','PL!S-sd1-015','PL!HS-bp6-017','PL!N-pb1-011','PL!N-bp3-030'], five_targets)
+run_case('5D', ['PL!N-bp5-001','PL!N-bp4-030','PL!HS-PR-022','PL!SP-bp2-019','PL!HS-bp6-017','PL!N-pb1-011','PL!N-bp5-027'], five_targets)
+run_case('10E', ['PL!SP-bp5-001','PL!SP-pb1-014','PL!N-bp4-017','PL!-bp5-011','PL!N-pb1-011','PL!N-bp4-030','PL!N-bp3-030'], ten_targets)
+run_case('10F', ['PL!SP-bp5-001','PL!HS-PR-022','PL!SP-pb1-014','PL!N-bp4-030','PL!N-bp3-008','PL!N-pb1-011','PL!N-bp5-027'], ten_targets)
+run_case('10G', ['PL!N-bp4-030','PL!HS-PR-022','PL!SP-pb1-014','PL!N-bp4-017','PL!N-bp3-008','PL!N-pb1-011','PL!N-bp3-030'], ten_targets)
+run_case('10H', ['PL!HS-PR-022','PL!SP-pb1-014','PL!N-bp4-017','PL!-bp5-011','PL!N-bp3-008','PL!N-pb1-011','PL!N-bp3-030'], ten_targets)
+run_case('kimiI', ['PL!N-bp5-007','PL!S-bp2-024','PL!HS-bp2-004','PL!SP-bp2-009','PL!SP-bp5-023','PL!SP-bp2-024','PL!S-sd1-015'], kimi_targets)
+run_case('kimiJ', ['PL!N-bp5-007','PL!HS-bp2-004','PL!S-bp6-014','PL!SP-bp2-009','PL!SP-bp5-023','PL!SP-bp2-024','LL-bp5-001'], kimi_targets)
+run_case('kimiK', ['PL!N-bp5-007','PL!S-bp2-024','PL!SP-bp2-009','PL!SP-bp5-002','PL!SP-bp5-023','PL!SP-bp2-024','LL-bp5-001'], kimi_targets)
+run_case('kimiL', ['PL!S-bp2-024','PL!HS-bp2-004','PL!S-bp6-014','PL!N-bp5-021','PL!SP-bp2-009','PL!SP-bp5-023','PL!SP-bp2-024'], kimi_targets)
+PY
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --recent 1 --deck-name 5 --trials 200 --seed 29 --turns 4 --trace-trials 5 --trace-out docs/reports/autoplay/decision_trace_20260803m_5 --summary-csv docs/reports/autoplay/autoplay_current_20260803m_5.csv --summary-json docs/reports/autoplay/autoplay_current_20260803m_5.json --compare-json docs/reports/autoplay/autoplay_current_20260803l_5.json --compare-csv /tmp/loveca_compare_5.csv --compare-md /tmp/loveca_compare_5.md
+python3 ./loveca_autoplay_report.py --recent 1 --deck-name 10 --trials 200 --seed 29 --turns 4 --trace-trials 5 --trace-out docs/reports/autoplay/decision_trace_20260803m_10 --summary-csv docs/reports/autoplay/autoplay_current_20260803m_10.csv --summary-json docs/reports/autoplay/autoplay_current_20260803m_10.json --compare-json docs/reports/autoplay/autoplay_current_20260803l_10.json --compare-csv /tmp/loveca_compare_10.csv --compare-md /tmp/loveca_compare_10.md
+python3 ./loveca_autoplay_report.py --recent 1 --deck-name 君ここ --trials 200 --seed 29 --turns 4 --trace-trials 5 --trace-out docs/reports/autoplay/decision_trace_20260803m_kimi --summary-csv docs/reports/autoplay/autoplay_current_20260803m_kimi.csv --summary-json docs/reports/autoplay/autoplay_current_20260803m_kimi.json --compare-json docs/reports/autoplay/autoplay_current_20260803l_kimi.json --compare-csv /tmp/loveca_compare_kimi.csv --compare-md /tmp/loveca_compare_kimi.md
+```
+
+確認結果:
+- `py_compile` 通過。
+- `git diff --check` 通過。
+- ユーザー提示のT1開始時7枚手札ケース12件は、すべて期待どおりのステージ配置とライブセット対象に一致。
+- decision trace は `normal_draw` → `main` → `live_set` → `result` の順に出力されることを確認。
+- `20260803l` 以前はライブセット交換ドローを同ターン配置へ利用できる楽観値だったため、`20260803m` を新しい比較基準にする。
+- 200試行/seed 29での `20260803l` 比較では、5軸T3 cumulative `0.71 -> 0.515`、10軸T3 `0.755 -> 0.64`、君ここT3 `0.9 -> 0.775`。低下はモデル劣化というより、同ターン交換ドローを使えなくしたことによる過大評価の補正。
+
+### 20260803 追記: ステージ維持・対策枠need・重複中継札交換の補正
+
+ユーザー指摘:
+- 5軸ログで `PL!N-bp3-008 エマ・ヴェルデ cost=13 need=43.2` となっており、進行に使わない対策枠カードが不当に高評価されていた。
+- `2-2` から `5-2-2` / `4-2-2` へ進む際、空き枠に追加せず2コストを置換してから別2コストを出し直すようなログがあり不自然。
+- 10軸T1で重複した4コストをセットせず2枚だけセットしていた。
+- 10軸T3で成功できそうな `Love U my friends` をライブセットしていなかった。
+
+実装:
+- `loveca_app/autoplay.py` の `BUILD_TAG` を `autoplay_stage_keep_and_sideboard_need_20260803a` へ更新。
+- 空きステージ枠がある間は、メイン配置探索で既存メンバーの置換を候補にしないよう修正。
+- need scoreの「目標より大きいコスト」評価を、目標との差が小さい代替に限定。単に大きいだけの13/15コスト対策枠は過保護にしない。
+- ライブセット交換で、未来ターンに必要なコストでも、ステージ+手札で必要数を超えている重複分は交換候補にできるよう修正。
+- 10軸T3以降で、戦略分岐がメンバーだけで交換枠を埋める前に、手札の有効スコアライブを交換候補へ入れるよう修正。
+
+確認コマンド:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py ./loveca_app/core.py ./loveca_autoplay_report.py
+git diff --check
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --deck llocg_db_out_full/decklists/deck_1d64365fb7bf71ac7081.tsv --trials 200 --seed 29 --turns 4 --trace-trials 5 --outdir docs/reports/autoplay/decision_trace_20260803n_5 --summary-csv docs/reports/autoplay/autoplay_current_20260803n_5.csv --summary-json docs/reports/autoplay/autoplay_current_20260803n_5.json --compare-json docs/reports/autoplay/autoplay_current_20260803m_5.json --compare-csv /tmp/loveca_compare_5_n.csv --compare-md /tmp/loveca_compare_5_n.md
+python3 ./loveca_autoplay_report.py --deck llocg_db_out_full/decklists/deck_fcc369ef393b3ed66e43.tsv --trials 200 --seed 29 --turns 4 --trace-trials 5 --outdir docs/reports/autoplay/decision_trace_20260803o_10 --summary-csv docs/reports/autoplay/autoplay_current_20260803o_10.csv --summary-json docs/reports/autoplay/autoplay_current_20260803o_10.json --compare-json docs/reports/autoplay/autoplay_current_20260803m_10.json --compare-csv /tmp/loveca_compare_10_o.csv --compare-md /tmp/loveca_compare_10_o.md
+```
+
+確認結果:
+- `py_compile` 通過。
+- `git diff --check` 通過。
+- 5軸T1/T2ログで `PL!N-bp3-008 エマ・ヴェルデ` のpre-exchange needが `43.2 -> 0.0` になり、ライブセット交換対象へ回ることを確認。
+- 5軸T2で `2-2 -> 5-2-2` が `main played/replaced in: PL!N-bp5-001 上原歩夢 cost=5` / `main replaced out: none` になり、無駄な2コスト置換が消えた。
+- 10軸T1で重複した4コスト `PL!HS-PR-022 セラス` がライブセット交換対象に入ることを確認。
+- 10軸T2で `2-2 -> 4-2-2` が空き枠追加になり、`main replaced out: none` を確認。
+- 10軸T3で `PL!N-bp3-030 Love U my friends` がライブセット対象に入ることを確認。
+- 200試行/seed 29の比較では、5軸T2 cumulative `0.815 -> 0.865`、10軸T2 cumulative `0.775 -> 0.85`、10軸T3 cumulative `0.64 -> 0.705`。5軸T3 cumulativeは `0.515 -> 0.47` に低下。
+  ※20260803内部確認: 「13/15を11の代替進行札として過保護にしなくなった影響」という説明は不正確。5軸T3は11コストを使うターンであり、13/15はT3進行札ではない。現行方針は、T2目標札が見つかった直後のライブセットから11探索へ切り替えること。
+
+### 20260803 追記: オートプレイ 5軸T2後11探索・10軸T3 13候補除外
+
+ユーザー指摘:
+- 5軸でT2目標札を見つけた後、11コスト探索へ切り替える判断タイミングはライブセット時以外にない。
+- 10軸でT1に4単騎を選ぶ場合は2欠損なので、手札の2コストを全て保持する。
+- 2-2進行済みで手札に2コストが残っている場合、その2コストはライブセット交換へ出してよい。
+- この10軸ではT3に13コストを絶対に出さないため、`2-13-2` をaccepted targetやneed計算へ混ぜない。
+- ライブセット判断は手札交換だけでなく、簡易的な成功見込みも考慮する。
+
+実装:
+- `loveca_app/autoplay.py` の `BUILD_TAG` を `autoplay_live_success_coarse_and_target_split_20260803a` へ更新。
+- 10軸T3の target alternatives から `2-13-2` を除外し、`2-10-2 / 2-11-2` のみにした。
+- 5軸では、T2以降に現在のステージが当該ターン目標を満たしており、次ターンが11を必要とする場合、ライブセット交換を11探索へ寄せるようにした。11コストは交換対象から外し、13以上や低コスト重複、ライブを優先して流す。
+- 10軸では、4単騎で入っている場合は2コストを交換対象にせず保持し、2-2で入れている場合は手札に残る2コストを交換対象にできるよう分岐した。
+- マリガン候補評価で、初期3ターンの目標候補に含まれない13以上コストを「希少だから守る」方向へ寄せない補正を追加。
+- ライブ成功候補は、厳密な基礎ハート充足判定ではなく、DM/LU/ドローライブを粗く候補化する軽量判定へ変更。精密なエール期待値モデルはステージ進行評価が安定してから追加する。
+
+確認コマンド:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 -m py_compile ./loveca_app/autoplay.py ./loveca_app/core.py ./loveca_autoplay_report.py
+git diff --check
+```
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+
+python3 ./loveca_autoplay_report.py --deck llocg_db_out_full/decklists/deck_fcc369ef393b3ed66e43.tsv --trials 200 --seed 29 --turns 4 --trace-trials 5 --outdir docs/reports/autoplay/decision_trace_20260803s_10 --summary-csv docs/reports/autoplay/autoplay_current_20260803s_10.csv --summary-json docs/reports/autoplay/autoplay_current_20260803s_10.json --compare-json docs/reports/autoplay/autoplay_current_20260803o_10.json --compare-csv /tmp/loveca_compare_10_s.csv --compare-md /tmp/loveca_compare_10_s.md
+python3 ./loveca_autoplay_report.py --deck llocg_db_out_full/decklists/deck_1d64365fb7bf71ac7081.tsv --trials 200 --seed 29 --turns 4 --trace-trials 5 --outdir docs/reports/autoplay/decision_trace_20260803s_5 --summary-csv docs/reports/autoplay/autoplay_current_20260803s_5.csv --summary-json docs/reports/autoplay/autoplay_current_20260803s_5.json --compare-json docs/reports/autoplay/autoplay_current_20260803n_5.json --compare-csv /tmp/loveca_compare_5_s.csv --compare-md /tmp/loveca_compare_5_s.md
+```
+
+確認結果:
+- `py_compile` 通過。
+- `git diff --check` 通過。
+- 10軸の `accepted targets` は `2-2 or 4 / 2-4-2 / 2-10-2 or 2-11-2 / 15-4-2 or 15-2-2` となり、`2-13-2` が消えた。
+- 10軸Trial 1では、初手の13エマ/15ミアを返し、2千砂都/4セラス/2千砂都/10かのんをキープすることを確認。
+- 5軸/10軸のT2で、Daydream Mermaidが `live_for_success` になり、`energy_added=1` として扱われるケースを確認。
+- 200試行/seed 29のステージ進行比較では、5軸T3 cumulative `0.47 -> 0.565`、5軸T4 `0.265 -> 0.32`、10軸T2 `0.85 -> 0.87`、10軸T3 `0.705 -> 0.715`。
+- ライブ込み指標は旧比較より低下しているが、これは以前の「交換したライブのうち最高スコアを成功扱いする」過大評価をやめ、実際にlive_for_successとして選んだライブだけを成功候補にした影響。ライブ成功率の精密評価は別途改善対象。

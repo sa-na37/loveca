@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# BUILD_TAG = "loveca_autoplay_trace_report_20260803a"
+# BUILD_TAG = "loveca_preview_only_search_non_energy_20260803a"
 """
 Loveca application launcher (phase 1).
 
@@ -51,7 +51,7 @@ from urllib.error import URLError, HTTPError
 from .autoplay import build_autoplay_deck_report, build_autoplay_markdown_report, simulate_autoplay_trials, suggest_autoplay_action
 
 
-BUILD_TAG = "loveca_autoplay_trace_report_20260803a"
+BUILD_TAG = "loveca_preview_only_search_non_energy_20260803a"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8875
 SESSION_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -67,6 +67,12 @@ CARD_IMAGE_DIRS = (
     "card_images",
 )
 PREVIEW_CARD_IMAGE_DIR = "llocg_db_out_full/preview_card_images"
+
+
+def _autoplay_effective_seed(base_seed: int, deck_identity: str) -> int:
+    digest = hashlib.blake2s(str(deck_identity).encode("utf-8"), digest_size=4).digest()
+    salt = int.from_bytes(digest, "big")
+    return (int(base_seed) ^ salt) & 0xFFFFFFFF
 
 MANUAL_SCRIPT = "run_llocg_ui_web.py"
 DUAL_SCRIPT = "run_llocg_dual_v2.py"
@@ -871,6 +877,44 @@ class AppState:
             or ""
         ).strip()
 
+    @staticmethod
+    def _is_energy_cardnumber(card_no: Any) -> bool:
+        return bool(
+            re.search(
+                r"-(?:bp|pb|sd|cl)\d+-E\d+(?:$|-)",
+                str(card_no or ""),
+                flags=re.IGNORECASE,
+            )
+        )
+
+    def _preview_manifest_records(self) -> dict[str, dict[str, Any]]:
+        path = self.path(PREVIEW_MANIFEST)
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+        cards = payload.get("cards", {}) if isinstance(payload, dict) else {}
+        if not isinstance(cards, dict):
+            return {}
+
+        out: dict[str, dict[str, Any]] = {}
+        for card_no, entries in cards.items():
+            card_no = str(card_no or "").strip()
+            if not card_no or self._is_energy_cardnumber(card_no):
+                continue
+            entry = next((item for item in entries if isinstance(item, dict)), {}) if isinstance(entries, list) else {}
+            name = str(entry.get("cardname_from_post") or entry.get("cardname") or "").strip()
+            out[card_no] = {
+                "cardnumber": card_no,
+                "cardname": name,
+                "product": self._derive_product(card_no),
+                "product_name": self._derive_product(card_no),
+                "card_type_norm": "",
+                "effect_text_norm": "",
+                "_preview_only": True,
+            }
+        return out
+
     def load_card_index(self) -> dict[str, dict[str, Any]]:
         if self._card_index_cache is not None:
             return self._card_index_cache
@@ -886,12 +930,12 @@ class AppState:
         index: dict[str, dict[str, Any]] = {}
         for record in min_records:
             number = self._card_number(record)
-            if number:
+            if number and not self._is_energy_cardnumber(number):
                 index[number] = record
 
         for compiled in compiled_records:
             number = self._card_number(compiled)
-            if not number:
+            if not number or self._is_energy_cardnumber(number):
                 continue
             if number in index:
                 merged = dict(compiled)
@@ -903,6 +947,9 @@ class AppState:
                 index[number] = merged
             else:
                 index[number] = compiled
+
+        for number, record in self._preview_manifest_records().items():
+            index.setdefault(number, record)
 
         self._card_index_cache = index
         return index
@@ -1624,14 +1671,15 @@ class AppState:
 
         # Keep cards searchable even when an image is absent.
         cards_with_images = {variant["card_no"] for variant in variants}
-        for card_no in index:
+        for card_no, record in index.items():
             if card_no not in cards_with_images:
+                preview_only = bool(record.get("_preview_only"))
                 variants.append({
                     "variant_id": f"{card_no}|UNKNOWN|db",
                     "card_no": card_no,
                     "raw_rarity": "",
-                    "is_prerelease": False,
-                    "image_source": "database",
+                    "is_prerelease": preview_only,
+                    "image_source": "preview_manifest" if preview_only else "database",
                     "path": None,
                     "path_text": "",
                 })
@@ -2296,7 +2344,19 @@ class AppState:
         trace_trials: int = 0,
     ) -> dict[str, Any]:
         _metadata, rows = self.read_deck_rows(relative_path)
-        return simulate_autoplay_trials(rows, self.card_record, trials=trials, seed=seed, max_turns=max_turns, trace_trials=trace_trials)
+        effective_seed = _autoplay_effective_seed(seed, relative_path)
+        result = simulate_autoplay_trials(
+            rows,
+            self.card_record,
+            trials=trials,
+            seed=effective_seed,
+            max_turns=max_turns,
+            trace_trials=trace_trials,
+        )
+        result["base_seed"] = int(seed)
+        result["effective_seed"] = int(effective_seed)
+        result["seed_salt"] = relative_path
+        return result
 
     def autoplay_markdown_report(
         self,
