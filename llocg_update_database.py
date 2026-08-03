@@ -21,7 +21,7 @@ BUILD_TAG is intentionally visible for delivery verification.
 
 from __future__ import annotations
 
-BUILD_TAG = "preview_index_freshness_20260729a"
+BUILD_TAG = "preview_only_non_energy_image_targets_20260803a"
 
 import argparse
 import csv
@@ -554,12 +554,17 @@ def split_display_card_and_rarity(value: str) -> Tuple[str, str]:
     return match.group("base").strip(), rarity
 
 
+def is_energy_cardnumber(cardno: str) -> bool:
+    canonical, _rarity = canonical_cardnumber(str(cardno or "").strip())
+    return bool(re.search(r"-(?:bp|pb|sd|cl)\d+-E\d+(?:$|-)", canonical, flags=re.IGNORECASE))
+
+
 def scan_image_cardnumbers(root: Path) -> set[str]:
     """Scan an image tree once and recover canonical cardnumbers from filenames."""
     if not root.is_dir():
         return set()
     pattern = re.compile(
-        r"^(.+-(?:bp|pb|sd|cl)\d+-\d{3}|.+-PR-\d{3})-",
+        r"^(.+-(?:bp|pb|sd|cl)\d+-(?:\d{3}|E\d+)|.+-PR-\d{3})-",
         flags=re.IGNORECASE,
     )
     out: set[str] = set()
@@ -578,7 +583,7 @@ def manifest_cardnumbers(path: Path) -> set[str]:
     out: set[str] = set()
     for cardno0 in cards.keys():
         cardno, _rarity = canonical_cardnumber(str(cardno0 or "").strip())
-        if cardno:
+        if cardno and not is_energy_cardnumber(cardno):
             out.add(cardno)
     return out
 
@@ -587,7 +592,7 @@ def scan_image_rarity_pairs(root: Path) -> set[Tuple[str, str]]:
     if not root.is_dir():
         return set()
     pattern = re.compile(
-        r"^(.+-(?:bp|pb|sd|cl)\d+-\d{3}|.+-PR-\d{3})-([A-Za-z0-9]+)$",
+        r"^(.+-(?:bp|pb|sd|cl)\d+-(?:\d{3}|E\d+)|.+-PR-\d{3})-([A-Za-z0-9]+)$",
         flags=re.IGNORECASE,
     )
     out: set[Tuple[str, str]] = set()
@@ -770,8 +775,9 @@ def changed_manifest_cardnumbers(before_path: Path, after_path: Path) -> set[str
     keys = set(before) | set(after)
     changed: set[str] = set()
     for key in keys:
-        if before.get(key) != after.get(key):
-            changed.add(str(key))
+        cardno, _rarity = canonical_cardnumber(str(key))
+        if cardno and not is_energy_cardnumber(cardno) and before.get(key) != after.get(key):
+            changed.add(cardno)
     return changed
 
 
@@ -1354,7 +1360,7 @@ def main() -> int:
     missing_preview_image_targets = {
         cardno
         for cardno in preview_manifest_cards
-        if cardno in all_cardnumbers and cardno not in preview_image_cards_after_manifest
+        if cardno not in preview_image_cards_after_manifest
     }
 
     # 9. Fetch images only for cards that can have changed in this update.
@@ -1440,7 +1446,7 @@ def main() -> int:
     missing_preview_after_image_fetch = {
         cardno
         for cardno in manifest_cardnumbers(preview_manifest_path)
-        if cardno in all_cardnumbers and cardno not in scan_image_cardnumbers(preview_image_dir)
+        if cardno not in scan_image_cardnumbers(preview_image_dir)
     }
     if missing_preview_after_image_fetch:
         sample = ", ".join(sorted(missing_preview_after_image_fetch)[:30])

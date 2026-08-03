@@ -18,7 +18,7 @@ BUILD_TAG is intentionally visible for delivery verification.
 """
 from __future__ import annotations
 
-BUILD_TAG = "preview_index_freshness_and_missing_db_audit_20260729a"
+BUILD_TAG = "preview_only_non_energy_official_post_cards_20260803a"
 
 import argparse
 import csv
@@ -218,6 +218,35 @@ def product_code_for_cardnumber(cardno: str) -> str:
     if re.search(r"-PR-\d+(?:-|$)", c, flags=re.IGNORECASE):
         return "PR"
     return ""
+
+
+def is_energy_cardnumber(cardno: str) -> bool:
+    canonical, _rarity = canonical_cardnumber(cardno)
+    return bool(re.search(r"-(?:bp|pb|sd|cl)\d+-E\d+(?:$|-)", canonical, flags=re.IGNORECASE))
+
+
+def remove_energy_manifest_entries(manifest: Dict[str, Any]) -> int:
+    cards = manifest.setdefault("cards", {})
+    if not isinstance(cards, dict):
+        manifest["cards"] = {}
+        return 0
+    removed = 0
+    for cardno in list(cards.keys()):
+        if is_energy_cardnumber(str(cardno)):
+            del cards[cardno]
+            removed += 1
+    return removed
+
+
+def cardname_from_index_row(row_text: str, cardnumber: str) -> str:
+    text = re.sub(r"\s+", " ", str(row_text or "")).strip()
+    if not text:
+        return ""
+    text = re.sub(r"^\d{4}/\d{1,2}/\d{1,2}\s*", "", text)
+    text = re.sub(re.escape(cardnumber), "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\b(?:ポスト|post)\b", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s+", " ", text).strip(" 　-_/｜|")
+    return text[:120]
 
 
 def load_product_registry(path: Path) -> Dict[str, ProductInfo]:
@@ -729,30 +758,6 @@ def process_direct_index_entries(
         product_code = product_code_for_cardnumber(entry.cardnumber)
         if product_code not in active_products:
             continue
-        if entry.cardnumber not in known_cardnumbers:
-            audits.append(
-                MatchAudit(
-                    tweet_id=entry.tweet_id,
-                    post_url=entry.post_url,
-                    source="wiki_official_posts_index",
-                    created_at="",
-                    product_code=product_code,
-                    candidate_products=product_code,
-                    keyword_present=False,
-                    product_text_present=True,
-                    rarity=entry.rarity_norm,
-                    matched_cardname="",
-                    cardname_matches="",
-                    candidate_cardnumbers=entry.cardnumber,
-                    selected_cardnumber="",
-                    media_count=0,
-                    status="INDEX_CARD_NOT_IN_DB",
-                    reason="aggregate official-post page references a card not yet in current DB",
-                    text=entry.row_text,
-                )
-            )
-            continue
-
         tweet = tweets.get(entry.tweet_id)
         if tweet is None:
             audits.append(
@@ -790,8 +795,15 @@ def process_direct_index_entries(
             status = "AMBIGUOUS_MEDIA"
             reason = f"expected one photo; got {media_count}"
         else:
-            status = "MATCHED_WIKI_OFFICIAL_POST_INDEX"
-            reason = "cardnumber and post URL directly paired by WIKIWIKI 公式ポスト index"
+            if entry.cardnumber in known_cardnumbers:
+                status = "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+                reason = "cardnumber and post URL directly paired by WIKIWIKI 公式ポスト index"
+            else:
+                status = "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+                reason = (
+                    "cardnumber and post URL directly paired by WIKIWIKI 公式ポスト index; "
+                    "card is not in local DB yet, so only preview image metadata is registered"
+                )
             manifest_entry = {
                 "folder": product_code,
                 "rarity_norm": entry.rarity_norm,
@@ -800,7 +812,7 @@ def process_direct_index_entries(
                 "post_url": entry.post_url,
                 "tweet_id": entry.tweet_id,
                 "posted_at": tweet.created_at,
-                "cardname_from_post": "",
+                "cardname_from_post": cardname_from_index_row(entry.row_text, entry.cardnumber),
                 "match_status": status,
             }
             if add_manifest_entry(manifest, entry.cardnumber, manifest_entry):
@@ -969,11 +981,13 @@ def main() -> int:
         + " ".join(f"{key}={value}" for key, value in index_stats.items())
     )
 
-    relevant_entries = [
+    active_entries = [
         entry
         for entry in entries
         if product_code_for_cardnumber(entry.cardnumber) in active_products
     ]
+    energy_entries = [entry for entry in active_entries if is_energy_cardnumber(entry.cardnumber)]
+    relevant_entries = [entry for entry in active_entries if not is_energy_cardnumber(entry.cardnumber)]
     known_relevant = [entry for entry in relevant_entries if entry.cardnumber in known_cardnumbers]
     missing_db = [entry for entry in relevant_entries if entry.cardnumber not in known_cardnumbers]
     print(
@@ -981,7 +995,8 @@ def main() -> int:
         f"active_products={len(active_products)} "
         f"relevant_entries={len(relevant_entries)} "
         f"known_db_entries={len(known_relevant)} "
-        f"index_cards_not_in_db={len(missing_db)}"
+        f"index_cards_not_in_db={len(missing_db)} "
+        f"energy_card_entries_skipped={len(energy_entries)}"
     )
     if missing_db:
         sample = ", ".join(
@@ -997,13 +1012,13 @@ def main() -> int:
             f"sample={sample} "
             "reason=official-post index has prerelease rows that are not in the local DB yet"
         )
-    if args.require_discovered_posts and not known_relevant:
+    if args.require_discovered_posts and not relevant_entries:
         raise SystemExit(
             "ERROR: no prerelease card/post mappings discovered on WIKIWIKI 公式ポスト index"
         )
 
     tweets = load_tweet_cache(tweet_cache_path)
-    requested_ids = list(dict.fromkeys(entry.tweet_id for entry in known_relevant))
+    requested_ids = list(dict.fromkeys(entry.tweet_id for entry in relevant_entries))
     new_tweets = 0
     fetch_failures: Dict[str, str] = {}
     for tweet_id in requested_ids:
@@ -1024,6 +1039,7 @@ def main() -> int:
     save_tweet_cache(tweet_cache_path, tweets)
 
     manifest = load_manifest(manifest_path)
+    removed_energy_manifest = remove_energy_manifest_entries(manifest)
     audits, added = process_direct_index_entries(
         entries=relevant_entries,
         active_products=active_products,
@@ -1058,6 +1074,7 @@ def main() -> int:
         f"tweet_fetch_failures={len(fetch_failures)}"
     )
     print(f"manifest_added={added}")
+    print(f"manifest_energy_removed={removed_energy_manifest}")
     for status, count in sorted(counts.items()):
         print(f"{status}: {count}")
     print(f"official_posts_cache={index_cache_path}")
@@ -1076,7 +1093,11 @@ def main() -> int:
         print(f"[STRICT] unresolved={len(unresolved)}", file=sys.stderr)
         return 2
     if args.require_discovered_posts and not any(
-        row.status == "MATCHED_WIKI_OFFICIAL_POST_INDEX" for row in audits
+        row.status in {
+            "MATCHED_WIKI_OFFICIAL_POST_INDEX",
+            "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY",
+        }
+        for row in audits
     ):
         raise SystemExit("ERROR: prerelease post mappings were found but no usable preview image was matched")
     return 0

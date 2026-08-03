@@ -147,6 +147,38 @@ python3 ./check_loveca_db_integrity_20260527.py \
   --expect-min 990
 ```
 
+## 2026-08-03 追記: 公式Xプレリリース画像とE番号カードの扱い
+
+- 公式ポスト一覧に出る `PL!N-bp7-E01` など、通し番号部分が `E` で始まるカードはエネルギーカードとして扱い、シミュレータ用DB・検索・preview manifest・画像取得対象から除外する。
+- `official_preview_image_manifest.json` は、DB未収録でも公式ポスト一覧でカード番号と画像URLが直接対応している非E番号カードを `MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY` として登録する。
+- カード検索エンジンは、DB本体に未収録の非E番号preview-onlyカードもmanifest由来の仮カードとして検索候補に入れる。画像ファイルが既にあればプレリリース画像として表示される。
+- 過去に取得済みのE番号画像ファイルは削除しなくてよい。今後のmanifest生成・欠落判定・検索索引では無視する。
+
+## 2026-08-03 追記: プレリリース商品ページのキャッシュ再取得
+
+- `llocg_db_tool_v7.py` の差分更新では、発売前商品を `prerelease_product` として再確認対象にしていたが、実際の `fetch()` 呼び出しで長期商品ページキャッシュを返していた。
+- このため、wikiの商品ページに新しいカードページリンクが追加されても、ローカルDB更新では古い商品ページHTMLを読み続け、DB本体へ取り込めないことがあった。
+- 修正後は、発売前商品ページのみ `force_refresh=True` でHTTP再取得する。安定済み発売済み商品の長期キャッシュ再利用は維持する。
+- 2026-08-03時点のBP07 preview-only 27件の内訳:
+  - 22件: 商品ページ上で既存カードページリンクあり。WIKIWIKI 429が落ち着いた状態で通常遅延のDB更新を実行すればDB本体へ取り込み対象になる。
+  - 5件: 商品ページ上でも `?` の新規作成リンク。wikiカードページ未作成のため、引き続きpreview-only扱い。
+
+## 2026-08-03 追記: プレリリース公式X公開カードの preview-only 取得
+
+原因:
+
+- BP07 / NSD02 のプレリリース期間中、WIKIWIKI `公式ポスト` 集約ページには公式X投稿とカード番号が出ているが、商品ページ側にはまだ全カードがリンクされていない。
+- 旧処理では `公式ポスト` 集約ページ上のカード番号がローカルDBに存在しない場合、`INDEX_CARD_NOT_IN_DB` として preview manifest 登録対象から外していた。
+- さらに画像fetch側も、preview manifest にカードがあっても `cards_min_tokv1` / compiled DB に存在するカードだけを処理対象にしていた。
+- そのため、2026-08-03時点ではプレリリース対象86件中、DB既存31件だけが取得対象になり、DB未掲載55件は公式Xに出ていても取得できなかった。
+
+修正後の方針:
+
+- `llocg_build_preview_manifest_from_x.py` は、公式ポスト集約ページでカード番号とX投稿URLが直接対応している場合、DB未掲載カードも `MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY` として `official_preview_image_manifest.json` に登録する。
+- `llocg_update_database.py` は、preview manifest 上のカードをDB本体の存在有無で除外せず、preview画像fetch対象に含める。
+- `llocg_fetch_all_card_images.py` は、`--cardnumber-file` に指定されたカードがDB本体に無くても、preview manifest に存在すれば `preview_manifest_only` の一時ターゲットとして処理する。
+- この経路は preview image 用であり、カード本文・効果テキストの正本DB行を捏造しない。商品ページまたはカードページから本文が取れるようになった時点で通常DB行へ入る。
+
 この段階で 823 枚のままなら、正本へのコピー漏れ。`llocg_db_update_work_YYYYMMDD` から `llocg_db_out_full` へ再コピーする。
 
 ### 6. 画像 fetch

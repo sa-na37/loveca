@@ -19,7 +19,7 @@ Deps:
 
 from __future__ import annotations
 
-BUILD_TAG = "wiki_printings_image_manifest_20260722a"
+BUILD_TAG = "prerelease_product_force_refresh_20260803a"
 
 import argparse
 import csv
@@ -1395,10 +1395,11 @@ def fetch(
     stage: str = "unknown",
     fetch_state: Optional[FetchState] = None,
     cache_ttl_sec: Optional[float] = None,
+    force_refresh: bool = False,
 ) -> str:
     cache_dir.mkdir(parents=True, exist_ok=True)
     p = sha_path(cache_dir, url)
-    if p.exists():
+    if p.exists() and not force_refresh:
         effective_cache_ttl_sec = (
             max(0.0, float(cache_ttl_sec))
             if cache_ttl_sec is not None
@@ -3159,6 +3160,14 @@ def cmd_scrape(
                 product_fetch_count += 1
                 product_fetch_reasons[reason] += 1
                 try:
+                    if fresh:
+                        product_cache_ttl_sec = None
+                    elif reason == "prerelease_product":
+                        product_cache_ttl_sec = 0.0
+                    elif reason in {"new_product", "recently_released_product"}:
+                        product_cache_ttl_sec = max(0.0, float(CONFIG.get("cache_ttl_sec", 0.0)))
+                    else:
+                        product_cache_ttl_sec = product_long_cache_ttl_sec
                     h = fetch(
                         pu,
                         cache_dir,
@@ -3166,7 +3175,8 @@ def cmd_scrape(
                         user_agent=user_agent,
                         stage="product_page",
                         fetch_state=fetch_state,
-                        cache_ttl_sec=None if fresh else product_long_cache_ttl_sec,
+                        cache_ttl_sec=product_cache_ttl_sec,
+                        force_refresh=(reason == "prerelease_product"),
                     )
                     card_urls.update(extract_card_links_from_product(h))
                     product_registry_entries.append(

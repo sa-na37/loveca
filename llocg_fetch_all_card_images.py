@@ -23,7 +23,7 @@ Runtime contract:
 """
 from __future__ import annotations
 
-BUILD_TAG = "official_pr_exact_image_fetch_20260722a"
+BUILD_TAG = "preview_only_non_energy_fetch_20260803a"
 
 import argparse
 import datetime as dt
@@ -201,6 +201,10 @@ def _norm_cardno_for_filename(cardno: str) -> str:
     if last.isdigit():
         parts[-1] = last.zfill(3)
     return "-".join(parts)
+
+
+def is_energy_cardnumber(cardno: str) -> bool:
+    return bool(re.search(r"-(?:bp|pb|sd|cl)\d+-E\d+(?:$|-)", str(cardno or ""), flags=re.IGNORECASE))
 
 
 def _card_prefix(cardno: str) -> str:
@@ -536,7 +540,7 @@ def load_official_manifest(root: Path) -> Dict[str, List[Dict[str, Any]]]:
     out: Dict[str, List[Dict[str, Any]]] = {}
     if isinstance(cards, dict):
         for cn, entries in cards.items():
-            if isinstance(cn, str) and isinstance(entries, list):
+            if isinstance(cn, str) and isinstance(entries, list) and not is_energy_cardnumber(cn):
                 out[_norm_cardno_for_filename(cn)] = [e for e in entries if isinstance(e, dict)]
     return out
 
@@ -980,6 +984,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     as_of = _parse_iso_date(args.as_of, label="--as-of") if args.as_of else dt.date.today()
     outdir.mkdir(parents=True, exist_ok=True)
     preview_outdir.mkdir(parents=True, exist_ok=True)
+    preview_manifest = load_preview_manifest(preview_manifest_path)
 
     global_rarities = load_rarities(root, outdir, args.rarities)
     global_rarities = _uniq_keep_order(_sanitize_rarities(global_rarities)) or list(DEFAULT_RARITIES)
@@ -989,6 +994,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         args.cardnumber_file.resolve() if args.cardnumber_file else None
     )
     if cardnumber_filter is not None:
+        energy_requested = {cardno for cardno in cardnumber_filter if is_energy_cardnumber(cardno)}
+        if energy_requested:
+            cardnumber_filter = set(cardnumber_filter) - energy_requested
+            requested_rarities_by_card = {
+                cardno: rarities
+                for cardno, rarities in requested_rarities_by_card.items()
+                if cardno not in energy_requested
+            }
         before_count = len(target_records)
         target_records = [
             rec
@@ -996,9 +1009,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if _norm_cardno_for_filename(str(rec.get("cardnumber", "") or "").strip())
             in cardnumber_filter
         ]
+        matched_cardnumbers = {
+            _norm_cardno_for_filename(str(rec.get("cardnumber", "") or "").strip())
+            for rec in target_records
+        }
+        preview_only_cardnumbers = [
+            cardno
+            for cardno in sorted(cardnumber_filter - matched_cardnumbers)
+            if cardno in preview_manifest
+        ]
+        target_records.extend(
+            {"cardnumber": cardno, "source": "preview_manifest_only"}
+            for cardno in preview_only_cardnumbers
+        )
         _log(
             f"[TARGET-FILTER] requested={len(cardnumber_filter)} "
-            f"matched={len(target_records)} db_total={before_count}"
+            f"matched={len(target_records)} db_total={before_count} "
+            f"preview_only={len(preview_only_cardnumbers)} "
+            f"energy_skipped={len(energy_requested)}"
         )
     if not target_records:
         if cardnumber_filter is not None:
@@ -1010,7 +1038,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 2
 
     manifest = load_official_manifest(root)
-    preview_manifest = load_preview_manifest(preview_manifest_path)
     reprint_cache_index = _cached_reprint_image_index(
         root,
         [
