@@ -1,9 +1,14 @@
 {
   "schema_version": 1,
-  "player_id": "sana",
+  "player_id": "CodexTest",
+  "player_nickname": "CodexTest",
   "remote_key_length": 4,
-  "active_deck": "llocg_db_out_full/decklists/deck_W42B.tsv",
+  "active_deck": "llocg_db_out_full/decklists/deck_1RCBL.tsv",
   "ui_scale_percent": 100,
   "control_size": "compact",
-  "updated_at": "2026-07-21T12:50:41+09:00"
+  "auto_update_on_startup": true,
+  "startup_update_prompt_last_choice_at": "2026-07-29T12:34:36+09:00",
+  "startup_update_prompt_last_choice": "accepted",
+  "startup_update_prompt_interval_days": 7,
+  "updated_at": "2026-07-29T12:34:36+09:00"
 }
