@@ -149,6 +149,8 @@ python3 ./check_loveca_db_integrity_20260527.py \
 
 ## 2026-08-03 追記: 公式Xプレリリース画像とE番号カードの扱い
 
+- Codex作業時の429再発防止ルールは `docs/codex_knowledge/wiki_rate_limit_prevention_20260827.md` を先に確認する。
+
 - 公式ポスト一覧に出る `PL!N-bp7-E01` など、通し番号部分が `E` で始まるカードはエネルギーカードとして扱い、シミュレータ用DB・検索・preview manifest・画像取得対象から除外する。
 - `official_preview_image_manifest.json` は、DB未収録でも公式ポスト一覧でカード番号と画像URLが直接対応している非E番号カードを `MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY` として登録する。
 - カード検索エンジンは、DB本体に未収録の非E番号preview-onlyカードもmanifest由来の仮カードとして検索候補に入れる。画像ファイルが既にあればプレリリース画像として表示される。
@@ -158,7 +160,9 @@ python3 ./check_loveca_db_integrity_20260527.py \
 
 - `llocg_db_tool_v7.py` の差分更新では、発売前商品を `prerelease_product` として再確認対象にしていたが、実際の `fetch()` 呼び出しで長期商品ページキャッシュを返していた。
 - このため、wikiの商品ページに新しいカードページリンクが追加されても、ローカルDB更新では古い商品ページHTMLを読み続け、DB本体へ取り込めないことがあった。
-- 修正後は、発売前商品ページのみ `force_refresh=True` でHTTP再取得する。安定済み発売済み商品の長期キャッシュ再利用は維持する。
+- 2026-08-26再調整: 発売前商品ページをすべて `force_refresh=True` にはしない。前回の商品ページ監査で「カード個別ページから公式X投稿へのリンク」が検知された商品だけを `prerelease_active_product` として毎回HTTP再取得する。
+- 未発売商品の中で最も発売日が近い商品は `prerelease_nearest_probe` として短TTLで商品ページを再確認し、商品自身のカード番号に絞って個別ページ上の公式Xリンクを確認する。その他の未発売商品は `prerelease_dormant_reused` として前回registryを再利用する。安定済み発売済み商品の長期キャッシュ再利用は維持する。
+- WIKIWIKI個別カードページが429で落ちる場合でも、公式ポスト集約ページ経由のpreview manifest更新は継続する。2026-08-26確認ではPBLL02の公式ツイート対応13件、preview-only 11件、preview画像13件を取得済み。
 - 2026-08-03時点のBP07 preview-only 27件の内訳:
   - 22件: 商品ページ上で既存カードページリンクあり。WIKIWIKI 429が落ち着いた状態で通常遅延のDB更新を実行すればDB本体へ取り込み対象になる。
   - 5件: 商品ページ上でも `?` の新規作成リンク。wikiカードページ未作成のため、引き続きpreview-only扱い。

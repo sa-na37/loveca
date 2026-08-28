@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: referenced_cards_popup_scroll_20260723a
+# BUILD_TAG: stage_blade_loss_no_active_detail_20260825a
 from __future__ import annotations
 
 """llocg_ui.server
@@ -2618,6 +2618,8 @@ class App:
                         "can_activate": can_activate_in_state(self.gs, self.cards_db, k),
                         # 一時的なブレード/ハート増加（UIアイコン表示用）
                         "temp_blade": int(getattr(v, "temp_blade", 0) or 0),
+                        "blade_loss": int(getattr(v, "blade_loss", 0) or 0),
+                        "no_active_next_turn": bool(getattr(v, "no_active_next_turn", False)),
                         "temp_hearts": dict(getattr(v, "temp_hearts", {}) or {}),
                         "success_zone_hearts_bonus": dict(self._success_zone_hearts_bonus_for(k) or {}),
                         "always_hearts_bonus": dict(self._always_hearts_bonus_for(k, v) or {}),
@@ -5193,7 +5195,7 @@ HTML = r'''<!doctype html>
     const det = sd ? (sd[slotKey] || {}) : {};
     const baseBlade = cardBladeFor(cn);
     const baseHearts = sumNumericMap(baseHeartCountsForCard(cn));
-    const bonusBlade = Number(det.temp_blade || 0) + Number(det.always_blade_bonus || 0);
+    const bonusBlade = Number(det.temp_blade || 0) + Number(det.always_blade_bonus || 0) - Number(det.blade_loss || 0);
     const bonusHearts =
       sumNumericMap(det.temp_hearts || {}) +
       sumNumericMap(det.success_zone_hearts_bonus || {}) +
@@ -6758,6 +6760,7 @@ inner.appendChild(card);
       const det = sd ? sd[slotKey] : null;
       if(det){
         const tmpBlade  = Number(det.temp_blade      || 0);
+        const bladeLoss = Number(det.blade_loss      || 0);
         const alwBlade0 = Number(det.always_blade_bonus || 0);
         const alwScore  = Number(det.always_score_bonus || 0);
         const baseCost = Number(det.base_cost || 0);
@@ -6781,7 +6784,7 @@ inner.appendChild(card);
             }
           }
         }catch(e){}
-        const totalBlade = tmpBlade + alwBlade;
+        const totalBlade = tmpBlade + alwBlade - bladeLoss;
 
         const hasBonus = showCostBadge || totalBlade !== 0 || alwScore !== 0 || Object.keys(alwHearts).some(k=>Number(alwHearts[k])!==0) || Object.keys(successHearts).some(k=>Number(successHearts[k])!==0) || Object.keys(tmpHearts).some(k=>Number(tmpHearts[k])!==0);
         if(hasBonus){

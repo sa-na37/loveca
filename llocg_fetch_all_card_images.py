@@ -23,7 +23,7 @@ Runtime contract:
 """
 from __future__ import annotations
 
-BUILD_TAG = "preview_only_non_energy_fetch_20260803a"
+BUILD_TAG = "sd_numbered_rarity_image_fetch_20260817a"
 
 import argparse
 import datetime as dt
@@ -54,7 +54,8 @@ BASE_URL = "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist
 PRODUCT_RELEASE_REGISTRY_FILENAME = "product_release_registry.json"
 
 DEFAULT_RARITIES = [
-    "SD", "CL", "N", "R", "R2", "L", "L2", "PR", "PR2", "P", "P2",
+    "SD", "SD1", "SD2", "SD3", "SD4", "SD5", "SD6", "SD7", "SD8", "SD9",
+    "CL", "N", "R", "R2", "L", "L2", "PR", "PR2", "P", "P2",
     "SEC", "SEC2", "SECL", "SRL", "DUO", "AR", "RM", "RE", "PE", "PE2", "SECE", "LLE",
 ]
 
@@ -418,7 +419,9 @@ def family_rarities(cardno: str, global_rarities: Sequence[str], manifest_entrie
         manifest_rs = _sanitize_rarities(manifest_rs)
     fam = _product_family(cardno)
     if fam == "sd":
-        fam_order = ["SD"]
+        m = SD_RE.search(cardno)
+        numbered = f"SD{int(m.group(1))}" if m else ""
+        fam_order = [numbered, "SD"] if numbered else ["SD"]
     elif fam == "pr":
         # PR family is intentionally narrow.
         # In current local validation, PR cards are covered by PR / PR2 only;

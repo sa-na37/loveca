@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# BUILD_TAG = "autoplay_live_success_coarse_and_target_split_20260803a"
+# BUILD_TAG = "autoplay_early_plan_slot_gate_20260827a"
 """Autoplay planning primitives for Loveca Application.
 
 This module is intentionally side-effect free.  It evaluates a deck's cost
@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 
-BUILD_TAG = "autoplay_live_success_coarse_and_target_split_20260803a"
+BUILD_TAG = "autoplay_early_plan_slot_gate_20260827a"
 
 
 CardLookup = Callable[[str], dict[str, Any]]
@@ -220,10 +220,25 @@ def _expanded_card_objects(rows: list[dict[str, str]], card_lookup: CardLookup) 
             or ""
         )
         draw_n = _effect_draw_count(effect_text)
+        enter_draw_n = _timed_effect_draw_count(effect_text, "登場")
+        live_success_draw_n = _timed_effect_draw_count(effect_text, "ライブ成功時")
+        activated_draw_n = _timed_effect_draw_count(effect_text, "起動")
         energy_boost_n = _effect_energy_boost_count(effect_text)
+        enter_energy_boost_n = _timed_effect_energy_boost_count(effect_text, "登場")
+        live_success_energy_boost_n = _timed_effect_energy_boost_count(effect_text, "ライブ成功時")
         energy_activate_n = _effect_energy_activate_count(effect_text)
+        activated_energy_activate_n = _timed_effect_energy_activate_count(effect_text, "起動")
+        enter_energy_activate_n = _timed_effect_energy_activate_count(effect_text, "登場")
+        member_recovery_n = _effect_member_recovery_count(effect_text)
+        live_success_member_recovery_n = _timed_effect_member_recovery_count(effect_text, "ライブ成功時")
         low_cost_summon_n = _effect_low_cost_stage_summon_count(effect_text)
+        enter_top_stack_n = _timed_effect_top_stack_count(effect_text, "登場")
+        enter_top_search = _timed_effect_top_search_profile(effect_text, "登場")
+        recovery_kind = _effect_recovery_kind(effect_text)
+        activated_recovery_kind = _timed_effect_recovery_kind(effect_text, "起動")
+        activated_self_to_green_cost = _timed_effect_has_self_stage_to_green_cost(effect_text, "起動")
         cost_reduction = _has_cost_reduction_signal(effect_text)
+        cost_reduction_n = _effect_cost_reduction_amount(effect_text)
         free_member_play = _has_free_member_play_signal(effect_text)
         overcost_member_play = _has_overcost_member_play_signal(effect_text)
         progression_support_tags = _progression_support_tags(effect_text)
@@ -236,16 +251,36 @@ def _expanded_card_objects(rows: list[dict[str, str]], card_lookup: CardLookup) 
                 "card_no": card_no,
                 "name": _card_name(record, card_no),
                 "kind": kind,
+                "group": str(record.get("group") or ""),
+                "unit": str(record.get("unit") or ""),
+                "work_title": str(record.get("work_title") or ""),
                 "cost": cost,
                 "score": score,
                 "base_hearts_raw": str(base_hearts_raw or ""),
                 "required_hearts_raw": str(required_hearts_raw or ""),
+                "blade_heart_raw": str(record.get("blade_heart_raw") or ""),
+                "blade_heart_total": _first_int(record.get("blade_heart_total")) or 0,
                 "effect_text": effect_text,
                 "draw_n": draw_n,
+                "enter_draw_n": enter_draw_n,
+                "live_success_draw_n": live_success_draw_n,
+                "activated_draw_n": activated_draw_n,
                 "energy_boost_n": energy_boost_n,
+                "enter_energy_boost_n": enter_energy_boost_n,
+                "live_success_energy_boost_n": live_success_energy_boost_n,
                 "energy_activate_n": energy_activate_n,
+                "activated_energy_activate_n": activated_energy_activate_n,
+                "enter_energy_activate_n": enter_energy_activate_n,
+                "member_recovery_n": member_recovery_n,
+                "live_success_member_recovery_n": live_success_member_recovery_n,
                 "low_cost_summon_n": low_cost_summon_n,
+                "enter_top_stack_n": enter_top_stack_n,
+                "enter_top_search": dict(enter_top_search),
+                "recovery_kind": recovery_kind,
+                "activated_recovery_kind": activated_recovery_kind,
+                "activated_self_to_green_cost": activated_self_to_green_cost,
                 "cost_reduction": cost_reduction,
+                "cost_reduction_n": cost_reduction_n,
                 "free_member_play": free_member_play,
                 "overcost_member_play": overcost_member_play,
                 "progression_support_tags": list(progression_support_tags),
@@ -270,17 +305,37 @@ def _card_object_from_number(card_no: str, card_lookup: CardLookup, *, seq: int 
         "card_no": card_no,
         "name": _card_name(record, card_no),
         "kind": kind,
+        "group": str(record.get("group") or ""),
+        "unit": str(record.get("unit") or ""),
+        "work_title": str(record.get("work_title") or ""),
         "cost": cost,
         "score": score,
         "base_hearts_raw": str(record.get("base_hearts_raw") or record.get("hearts") or ""),
         "required_hearts_raw": str(record.get("required_hearts_raw") or record.get("required_hearts") or ""),
+        "blade_heart_raw": str(record.get("blade_heart_raw") or ""),
+        "blade_heart_total": _first_int(record.get("blade_heart_total")) or 0,
         "value": int(cost or score or 0),
         "effect_text": effect_text,
         "draw_n": _effect_draw_count(effect_text),
+        "enter_draw_n": _timed_effect_draw_count(effect_text, "登場"),
+        "live_success_draw_n": _timed_effect_draw_count(effect_text, "ライブ成功時"),
+        "activated_draw_n": _timed_effect_draw_count(effect_text, "起動"),
         "energy_boost_n": _effect_energy_boost_count(effect_text),
+        "enter_energy_boost_n": _timed_effect_energy_boost_count(effect_text, "登場"),
+        "live_success_energy_boost_n": _timed_effect_energy_boost_count(effect_text, "ライブ成功時"),
         "energy_activate_n": _effect_energy_activate_count(effect_text),
+        "activated_energy_activate_n": _timed_effect_energy_activate_count(effect_text, "起動"),
+        "enter_energy_activate_n": _timed_effect_energy_activate_count(effect_text, "登場"),
+        "member_recovery_n": _effect_member_recovery_count(effect_text),
+        "live_success_member_recovery_n": _timed_effect_member_recovery_count(effect_text, "ライブ成功時"),
         "low_cost_summon_n": _effect_low_cost_stage_summon_count(effect_text),
+        "enter_top_stack_n": _timed_effect_top_stack_count(effect_text, "登場"),
+        "enter_top_search": _timed_effect_top_search_profile(effect_text, "登場"),
+        "recovery_kind": _effect_recovery_kind(effect_text),
+        "activated_recovery_kind": _timed_effect_recovery_kind(effect_text, "起動"),
+        "activated_self_to_green_cost": _timed_effect_has_self_stage_to_green_cost(effect_text, "起動"),
         "cost_reduction": _has_cost_reduction_signal(effect_text),
+        "cost_reduction_n": _effect_cost_reduction_amount(effect_text),
         "free_member_play": _has_free_member_play_signal(effect_text),
         "overcost_member_play": _has_overcost_member_play_signal(effect_text),
         "progression_support_tags": _progression_support_tags(effect_text),
@@ -296,6 +351,75 @@ def _effect_draw_count(effect_text: str) -> int:
     for match in re.finditer(r"カードを1枚引", text):
         best = max(best, 1)
     return best
+
+
+def _effect_sections(effect_text: str) -> dict[str, str]:
+    text = str(effect_text or "")
+    sections: dict[str, list[str]] = {}
+    current = "全体"
+    sections.setdefault(current, [])
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        header = re.fullmatch(r"<([^<>]+)>", line)
+        if header:
+            label = header.group(1).strip()
+            if label in {"登場", "起動", "ライブ開始時", "ライブ成功時", "常時", "自動"}:
+                current = label
+                sections.setdefault(current, [])
+                continue
+        sections.setdefault(current, []).append(line)
+    return {key: "\n".join(value).strip() for key, value in sections.items()}
+
+
+def _timed_effect_text(effect_text: str, timing: str) -> str:
+    return _effect_sections(effect_text).get(str(timing or ""), "")
+
+
+def _timed_effect_draw_count(effect_text: str, timing: str) -> int:
+    return _effect_draw_count(_timed_effect_text(effect_text, timing))
+
+
+def _timed_effect_energy_boost_count(effect_text: str, timing: str) -> int:
+    return _effect_energy_boost_count(_timed_effect_text(effect_text, timing))
+
+
+def _timed_effect_energy_activate_count(effect_text: str, timing: str) -> int:
+    return _effect_energy_activate_count(_timed_effect_text(effect_text, timing))
+
+
+def _timed_effect_member_recovery_count(effect_text: str, timing: str) -> int:
+    return _effect_member_recovery_count(_timed_effect_text(effect_text, timing))
+
+
+def _effect_recovery_kind(effect_text: str) -> str:
+    text = str(effect_text or "")
+    if "控え室" not in text or "手札に加え" not in text:
+        return ""
+    if "ライブカード" in text:
+        return "live"
+    if "メンバーカード" in text or "メンバー" in text:
+        return "member"
+    if "カード" in text:
+        return "card"
+    return ""
+
+
+def _timed_effect_recovery_kind(effect_text: str, timing: str) -> str:
+    return _effect_recovery_kind(_timed_effect_text(effect_text, timing))
+
+
+def _effect_has_self_stage_to_green_cost(effect_text: str) -> bool:
+    text = str(effect_text or "")
+    return "このメンバーをステージから控え室" in text
+
+
+def _timed_effect_has_self_stage_to_green_cost(effect_text: str, timing: str) -> bool:
+    return _effect_has_self_stage_to_green_cost(_timed_effect_text(effect_text, timing))
+
+
+def _timed_effect_has_condition(effect_text: str, timing: str) -> bool:
+    text = _timed_effect_text(effect_text, timing)
+    return bool(re.search(r"場合|なら|かぎり|そうした場合|枚以上|同じ場合", text))
 
 
 def _effect_energy_boost_count(effect_text: str) -> int:
@@ -326,6 +450,23 @@ def _effect_energy_activate_count(effect_text: str) -> int:
     return best
 
 
+def _effect_member_recovery_count(effect_text: str) -> int:
+    text = str(effect_text or "")
+    if "相手" in text and "自分と相手" not in text:
+        return 0
+    if "控え室" not in text or "手札に加える" not in text:
+        return 0
+    if "メンバーカード" not in text and "メンバー" not in text:
+        return 0
+    match = re.search(r"メンバーカードを(\d+)枚", text)
+    if match:
+        return max(1, int(match.group(1)))
+    match = re.search(r"メンバーを(\d+)枚", text)
+    if match:
+        return max(1, int(match.group(1)))
+    return 1
+
+
 def _effect_low_cost_stage_summon_count(effect_text: str) -> int:
     text = str(effect_text or "")
     if "コスト2以下" in text and "メンバー" in text and "登場させる" in text:
@@ -333,9 +474,61 @@ def _effect_low_cost_stage_summon_count(effect_text: str) -> int:
     return 0
 
 
+def _effect_top_stack_count(effect_text: str) -> int:
+    text = str(effect_text or "")
+    if "デッキの上から" not in text or "見る" not in text:
+        return 0
+    if "好きな枚数" not in text or "好きな順番" not in text or "残りを控え室" not in text:
+        return 0
+    match = re.search(r"デッキの上からカードを?(\d+)枚見る", text)
+    return int(match.group(1)) if match else 0
+
+
+def _timed_effect_top_stack_count(effect_text: str, timing: str) -> int:
+    return _effect_top_stack_count(_timed_effect_text(effect_text, timing))
+
+
+def _effect_top_search_profile(effect_text: str) -> dict[str, Any]:
+    text = str(effect_text or "")
+    if "デッキの上から" not in text or "見る" not in text or "手札に加え" not in text:
+        return {}
+    match = re.search(r"デッキの上からカードを?(\d+)枚見る", text)
+    if not match:
+        return {}
+    group_match = re.search(r"『([^』]+)』", text)
+    return {
+        "look_n": int(match.group(1)),
+        "member_only": "メンバーカード" in text or "メンバー" in text,
+        "no_blade_heart": "ブレードハートを持たない" in text,
+        "group": group_match.group(1) if group_match else "",
+        "discard_hand_cost_n": 1 if "手札を1枚控え室" in text else 0,
+    }
+
+
+def _timed_effect_top_search_profile(effect_text: str, timing: str) -> dict[str, Any]:
+    return _effect_top_search_profile(_timed_effect_text(effect_text, timing))
+
+
 def _has_cost_reduction_signal(effect_text: str) -> bool:
     text = str(effect_text or "")
     return bool(re.search(r"コスト.*(?:減|少なく|軽減)|(?:減|少なく|軽減).*コスト", text))
+
+
+def _effect_cost_reduction_amount(effect_text: str) -> int:
+    text = str(effect_text or "")
+    if not _has_cost_reduction_signal(text):
+        return 0
+    best = 0
+    for pattern in (
+        r"コスト(?:は|を)?(\d+)減る",
+        r"コスト(?:は|を)?(\d+)少なく",
+        r"(\d+)減る",
+    ):
+        for match in re.finditer(pattern, text):
+            if "コスト" not in text[max(0, match.start() - 18):match.end() + 18]:
+                continue
+            best = max(best, int(match.group(1)))
+    return best or 2
 
 
 def _has_free_member_play_signal(effect_text: str) -> bool:
@@ -360,6 +553,8 @@ def _progression_support_tags(effect_text: str) -> list[str]:
         tags.append("energy_boost")
     if _effect_energy_activate_count(effect_text) > 0:
         tags.append("energy_activate")
+    if _effect_member_recovery_count(effect_text) > 0:
+        tags.append("member_recovery")
     if _has_cost_reduction_signal(effect_text):
         tags.append("cost_reduction")
     if _has_free_member_play_signal(effect_text):
@@ -394,6 +589,8 @@ def build_deck_curve(rows: list[dict[str, str]], card_lookup: CardLookup) -> dic
         "cost_reduction": [],
         "free_member_play": [],
         "overcost_member_play": [],
+        "member_recovery": [],
+        "live_member_recovery": [],
         "low_cost_summon": [],
         "special_baton": [],
         "high_cost_anchor": [],
@@ -422,6 +619,8 @@ def build_deck_curve(rows: list[dict[str, str]], card_lookup: CardLookup) -> dic
                 special_signals["cost_reduction"].append(signal_item)
             if _effect_energy_activate_count(effect_text) > 0 and len(special_signals["energy_activate"]) < 8:
                 special_signals["energy_activate"].append(signal_item)
+            if _effect_member_recovery_count(effect_text) > 0 and len(special_signals["member_recovery"]) < 8:
+                special_signals["member_recovery"].append(signal_item)
             if _has_free_member_play_signal(effect_text) and len(special_signals["free_member_play"]) < 8:
                 special_signals["free_member_play"].append(signal_item)
             if _has_overcost_member_play_signal(effect_text) and len(special_signals["overcost_member_play"]) < 8:
@@ -450,6 +649,8 @@ def build_deck_curve(rows: list[dict[str, str]], card_lookup: CardLookup) -> dic
             signal_item = {"card_no": card_no, "name": _card_name(record, card_no), "count": count, "score": score}
             if _effect_energy_boost_count(effect_text) > 0 and len(special_signals["energy_boost"]) < 8:
                 special_signals["energy_boost"].append(signal_item)
+            if _effect_member_recovery_count(effect_text) > 0 and len(special_signals["live_member_recovery"]) < 8:
+                special_signals["live_member_recovery"].append(signal_item)
             live_scores[score] += count
             live_examples.setdefault(score, [])
             if len(live_examples[score]) < 4:
@@ -482,6 +683,71 @@ def _progression_needs(template: CostProgressionTemplate) -> Counter[int]:
     return needs
 
 
+def _signal_costs(signals: dict[str, Any], key: str) -> set[int]:
+    return {
+        int(item.get("cost") or 0)
+        for item in signals.get(key, []) or []
+        if isinstance(item, dict) and item.get("cost") is not None
+    }
+
+
+def _progression_energy_profile(
+    turns: tuple[tuple[int, ...], ...],
+    special_signals: dict[str, Any],
+) -> dict[str, Any]:
+    active = 3
+    wait = 0
+    deck_remaining = 9
+    stage_costs: list[int] = []
+    energy_activate_costs = _signal_costs(special_signals, "energy_activate")
+    cost_reduction_costs = _signal_costs(special_signals, "cost_reduction")
+    direct_turns = 0
+    bridge_turns = 0
+    shortfall = 0
+    details: list[str] = []
+    has_energy_boost = bool(special_signals.get("energy_boost"))
+    for turn_index, turn in enumerate(turns, start=1):
+        active += wait
+        wait = 0
+        if deck_remaining > 0:
+            active += 1
+            deck_remaining -= 1
+        if any(cost in energy_activate_costs for cost in stage_costs):
+            active += 1
+        needed = _min_active_needed_to_reach_shape_from_costs(
+            stage_costs,
+            list(turn),
+            cost_reduction_costs=cost_reduction_costs,
+            reduction_enabled=bool(set(stage_costs) & energy_activate_costs),
+        )
+        if needed <= active:
+            direct_turns += 1
+            active -= needed
+            wait += needed
+            details.append(f"T{turn_index}:direct need={needed}")
+        elif turn_index > 1 and has_energy_boost and needed <= active + 1 and deck_remaining > 0:
+            bridge_turns += 1
+            deck_remaining -= 1
+            active = active + 1 - needed
+            wait += needed
+            details.append(f"T{turn_index}:boost need={needed}")
+        else:
+            gap = max(0, needed - active)
+            shortfall += gap
+            wait += max(0, active)
+            active = 0
+            details.append(f"T{turn_index}:short need={needed} gap={gap}")
+        stage_costs = sorted([int(value) for value in turn], reverse=True)
+    score = (direct_turns * 8.0) - (bridge_turns * 4.0) - (shortfall * 12.0)
+    return {
+        "score": round(score, 2),
+        "direct_turns": direct_turns,
+        "bridge_turns": bridge_turns,
+        "shortfall": shortfall,
+        "details": details,
+    }
+
+
 def evaluate_progression(
     curve: dict[str, Any],
     template: CostProgressionTemplate,
@@ -512,8 +778,20 @@ def evaluate_progression(
         late_bonus = min(1.0, float(cost_bands.get("high_15_plus", 0) or 0) / 8.0) * 14.0
     if template.phase == "late_special":
         special_bonus += min(1.0, len(special_signals.get("special_baton", []) or []) / 2.0) * 10.0
+    if template.phase == "dynamic_energy_activate":
+        special_bonus += 34.0
     if special_signals.get("cost_reduction"):
         special_bonus += 3.0
+    energy_profile = _progression_energy_profile(template.turns, special_signals)
+    early_scarcity_penalty = 0.0
+    for turn in template.turns[:3]:
+        for cost, needed in Counter(int(value) for value in turn).items():
+            if cost < 5:
+                continue
+            have = int(member_costs.get(cost, 0) or 0)
+            desired_copies = max(3, int(needed) * 3)
+            if have < desired_copies:
+                early_scarcity_penalty += (desired_copies - have) * 4.0
     coverage = sum(coverage_parts) / max(1, len(coverage_parts))
     score = round(
         (coverage * 72.0)
@@ -521,6 +799,8 @@ def evaluate_progression(
         + mid_curve_bonus
         + late_bonus
         + special_bonus
+        + float(energy_profile.get("score") or 0.0)
+        - early_scarcity_penalty
         - max(0, hand_pressure - 5) * 2.0,
         2,
     )
@@ -530,14 +810,226 @@ def evaluate_progression(
         "label": template.label,
         "intent": template.intent,
         "phase": template.phase,
+        "source": "dynamic" if str(template.key).startswith("dynamic_") else "template",
         "turns": [list(turn) for turn in template.turns],
         "score": score,
         "coverage": round(coverage, 3),
+        "energy_path": energy_profile,
+        "early_scarcity_penalty": round(early_scarcity_penalty, 2),
         "missing_costs": missing,
         "unavailable_costs": unavailable,
         "strengths": list(template.strengths),
         "risks": list(template.risks),
     }
+
+
+def _dynamic_template_key(turns: tuple[tuple[int, ...], ...]) -> str:
+    return "dynamic_" + "_".join("-".join(str(value) for value in sorted(turn, reverse=True)) for turn in turns)
+
+
+def _normalized_turns(turns: tuple[tuple[int, ...], ...]) -> tuple[tuple[int, ...], ...]:
+    return tuple(tuple(sorted((int(value) for value in turn), reverse=True)) for turn in turns)
+
+
+def _cost_count(member_costs: Counter[int], cost: int) -> int:
+    return int(member_costs.get(int(cost), 0) or 0)
+
+
+def _best_cost_at_least(member_costs: Counter[int], minimum: int, maximum: int | None = None) -> int | None:
+    candidates = [
+        int(cost)
+        for cost, count in member_costs.items()
+        if int(count or 0) > 0
+        and int(cost) >= int(minimum)
+        and (maximum is None or int(cost) <= int(maximum))
+    ]
+    if not candidates:
+        return None
+    return min(candidates, key=lambda cost: (abs(cost - minimum), -_cost_count(member_costs, cost), cost))
+
+
+def _best_cost_in_band(member_costs: Counter[int], low: int, high: int) -> int | None:
+    candidates = [
+        int(cost)
+        for cost, count in member_costs.items()
+        if int(count or 0) > 0 and int(low) <= int(cost) <= int(high)
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda cost: (_cost_count(member_costs, cost), -abs(cost - ((low + high) // 2)), -cost))
+
+
+def _energy_activate_member_costs_from_cards(cards: list[dict[str, Any]]) -> list[int]:
+    return sorted({
+        int(card.get("cost") or 0)
+        for card in cards
+        if card.get("kind") == "member"
+        and card.get("cost") is not None
+        and int(card.get("energy_activate_n") or 0) > 0
+    })
+
+
+def _cost_reduction_high_costs_from_cards(cards: list[dict[str, Any]]) -> list[int]:
+    return sorted({
+        int(card.get("cost") or 0)
+        for card in cards
+        if card.get("kind") == "member"
+        and card.get("cost") is not None
+        and int(card.get("cost") or 0) >= 15
+        and bool(card.get("cost_reduction"))
+    })
+
+
+def _energy_activate_curve_shape_set(deck_cards: list[dict[str, Any]]) -> dict[str, Any]:
+    costs = _member_cost_counts(deck_cards)
+    activators = [cost for cost in _energy_activate_member_costs_from_cards(deck_cards) if 7 <= cost <= 11]
+    high_costs = _cost_reduction_high_costs_from_cards(deck_cards)
+    if not activators or not high_costs or costs.get(4, 0) <= 0 or costs.get(2, 0) <= 0:
+        return {}
+    accel = activators[0]
+    high = high_costs[-1]
+    late_mid_candidates = [
+        cost for cost, count in sorted(costs.items())
+        if int(count or 0) > 0 and 12 <= int(cost) < high
+    ]
+    if costs.get(13, 0) > 0:
+        late_mid = 13
+    else:
+        late_mid = late_mid_candidates[-1] if late_mid_candidates else high
+    return {
+        "accelerator_cost": accel,
+        "high_cost": high,
+        "late_mid_cost": late_mid,
+        "t1": [2, 2],
+        "t2": [4, 2, 2],
+        "t3": [accel, 4, 2],
+        "t3_alt_high": [11, 2, 2] if costs.get(11, 0) > 0 and costs.get(2, 0) >= 2 else [],
+        "t3_alt_single": [high, 2] if costs.get(high, 0) > 0 and costs.get(2, 0) > 0 else [],
+        "t4": [high, accel, 2],
+        "t5": [high, late_mid, 2],
+        "t5_alt": [high, high, 2] if costs.get(high, 0) >= 2 and costs.get(2, 0) > 0 else [],
+    }
+
+
+def _dynamic_progression_templates(curve: dict[str, Any]) -> list[CostProgressionTemplate]:
+    member_costs = Counter({int(k): int(v) for k, v in dict(curve.get("member_costs") or {}).items()})
+    signals = curve.get("special_signals") if isinstance(curve.get("special_signals"), dict) else {}
+    has_energy_boost = bool(signals.get("energy_boost"))
+    has_cost_skip = any(bool(signals.get(key)) for key in ("cost_reduction", "free_member_play", "overcost_member_play", "energy_activate"))
+    low_twos = _cost_count(member_costs, 2)
+    fours = _cost_count(member_costs, 4)
+    templates: list[CostProgressionTemplate] = []
+    t1_shapes: list[tuple[int, ...]] = []
+    if low_twos >= 8:
+        t1_shapes.append((2, 2))
+    if fours >= 2:
+        t1_shapes.append((4,))
+    if not t1_shapes:
+        first = _best_cost_in_band(member_costs, 2, 4)
+        if first is not None:
+            t1_shapes.append((first,))
+    mid_candidates = [
+        cost for cost, count in sorted(member_costs.items())
+        if 5 <= int(cost) <= 8 and int(count or 0) > 0
+    ]
+    if fours >= 2 and has_energy_boost:
+        mid_candidates = [4] + mid_candidates
+    for t1 in t1_shapes:
+        for mid in mid_candidates:
+            mid = int(mid)
+            t2_shapes: list[tuple[int, ...]] = []
+            if t1 == (2, 2) and low_twos >= 8 and mid >= 5:
+                if mid <= 5:
+                    t2_shapes.append(tuple(sorted((2, mid, 2), reverse=True)))
+                else:
+                    t2_shapes.append(tuple(sorted((mid, 2), reverse=True)))
+            if fours >= 2 and low_twos >= 8 and (has_energy_boost or mid in {4, 5, 10, 11}):
+                t2_shapes.append((4, 2, 2))
+            if t1 == (4,) and mid >= 5:
+                t2_shapes.append(tuple(sorted((mid, 2), reverse=True)) if low_twos >= 4 and mid <= 7 else (mid,))
+            for t2 in list(dict.fromkeys(t2_shapes)):
+                if mid == 4:
+                    desired = 10
+                elif mid <= 5:
+                    desired = 11
+                elif mid <= 7:
+                    desired = 13
+                elif mid <= 9:
+                    desired = 15
+                else:
+                    desired = 10
+                high = _best_cost_at_least(member_costs, desired, 16)
+                if high is None and has_cost_skip:
+                    high = _best_cost_at_least(member_costs, desired, None)
+                if high is None:
+                    continue
+                if low_twos >= 8:
+                    t3 = tuple(sorted((2, high, 2), reverse=True))
+                else:
+                    t3 = (high,)
+                turns = _normalized_turns((tuple(t1), tuple(t2), tuple(t3)))
+                label = "dynamic " + " -> ".join("-".join(str(value) for value in turn) for turn in turns)
+                strengths = ["デッキ内のコスト分布から生成"]
+                if has_energy_boost:
+                    strengths.append("エネルギー追加ライブを進行補助として考慮")
+                if has_cost_skip:
+                    strengths.append("軽減/踏み倒し/エネルギー起動系の採用を考慮")
+                templates.append(CostProgressionTemplate(
+                    key=_dynamic_template_key(turns),
+                    label=label,
+                    turns=turns,
+                    intent="デッキ構築から動的に推定したステージ進行",
+                    phase="dynamic",
+                    strengths=tuple(strengths),
+                    risks=("実カード効果の発動条件は軽量評価",),
+                ))
+    signal_cards: list[dict[str, Any]] = []
+    for key in ("energy_activate", "cost_reduction"):
+        for item in signals.get(key, []) or []:
+            if isinstance(item, dict):
+                signal_cards.extend([{
+                    "kind": "member",
+                    "cost": item.get("cost"),
+                    "energy_activate_n": 1 if key == "energy_activate" else 0,
+                    "cost_reduction": key == "cost_reduction",
+                }] * max(1, int(item.get("count") or 1)))
+    curve_shapes = _energy_activate_curve_shape_set(signal_cards + [
+        {"kind": "member", "cost": cost}
+        for cost, count in member_costs.items()
+        for _ in range(max(0, int(count)))
+    ])
+    if curve_shapes:
+        turns = _normalized_turns((
+            tuple(curve_shapes["t1"]),
+            tuple(curve_shapes["t2"]),
+            tuple(curve_shapes["t3"]),
+            tuple(curve_shapes["t4"]),
+            tuple(curve_shapes["t5"]),
+        ))
+        templates.append(CostProgressionTemplate(
+            key=_dynamic_template_key(turns),
+            label=(
+                "dynamic energy-activate "
+                + " -> ".join("-".join(str(value) for value in turn) for turn in turns)
+            ),
+            turns=turns,
+            intent="エネルギーアクティブ化メンバーを盤面に残して高コストへ伸ばす進行",
+            phase="dynamic_energy_activate",
+            strengths=(
+                "9前後のエネルギーアクティブ化メンバーを加速札として考慮",
+                "17前後の軽減持ち高コストを後続到達先として考慮",
+            ),
+            risks=("加速札の起動条件とウェイト状態管理は軽量評価",),
+        ))
+    out: list[CostProgressionTemplate] = []
+    seen: set[tuple[tuple[int, ...], ...]] = set()
+    for template in sorted(templates, key=lambda item: (_normalized_turns(item.turns), item.key)):
+        normalized = _normalized_turns(template.turns)
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        out.append(template)
+    return out
 
 
 def _best_member_for_cost(hand: list[dict[str, Any]], target_cost: int, max_cost: int | None = None) -> dict[str, Any] | None:
@@ -606,6 +1098,30 @@ def _shape_meets_target(costs: list[int], target_shape: list[int]) -> bool:
     targets = sorted([int(cost) for cost in target_shape], reverse=True)
     for target in targets:
         match_index = next((index for index, cost in enumerate(available) if cost >= target), None)
+        if match_index is None:
+            return False
+        available.pop(match_index)
+    return True
+
+
+def _shape_meets_early_plan_slots(costs: list[int], target_shape: list[int]) -> bool:
+    """Conservative visible-card check for mulligan T1/T2 plan security.
+
+    General stage evaluation allows over-target placement, but using a 17-cost
+    card to satisfy an opening 4-cost slot makes mulligan decisions unstable.
+    For early planning, low/mid slots require the actual slot cost or the next
+    cost band only; high slots keep the normal over-target rule.
+    """
+    available = sorted([int(cost) for cost in costs], reverse=True)
+    targets = sorted([int(cost) for cost in target_shape], reverse=True)
+    for target in targets:
+        if target <= 10:
+            match_index = next(
+                (index for index, cost in enumerate(available) if target <= cost <= target + 1),
+                None,
+            )
+        else:
+            match_index = next((index for index, cost in enumerate(available) if cost >= target), None)
         if match_index is None:
             return False
         available.pop(match_index)
@@ -698,19 +1214,53 @@ def _stage_slots_to_replace(stage: list[dict[str, Any] | None], target_shape: li
     if not stage:
         return []
     empty = [index for index, card in enumerate(stage) if card is None]
-    if empty:
-        return empty
     replace = [index for index, card in enumerate(stage) if card is not None]
     replace.sort(key=lambda index: int((stage[index] or {}).get("cost") or 0))
-    return replace
+    return empty + replace
 
 
-def _member_play_cost_for_slot(card: dict[str, Any], old_card: dict[str, Any] | None) -> int:
+def _cost_reduction_available_for_stage(stage: list[dict[str, Any] | None] | None) -> bool:
+    return any(
+        bool(card)
+        and card.get("kind") == "member"
+        and int(card.get("activated_energy_activate_n") or 0) > 0
+        for card in stage or []
+    )
+
+
+def _member_play_cost_for_slot(
+    card: dict[str, Any],
+    old_card: dict[str, Any] | None,
+    stage: list[dict[str, Any] | None] | None = None,
+) -> int:
     cost = max(0, int(card.get("cost") or 0))
+    if bool(card.get("cost_reduction")) and _cost_reduction_available_for_stage(stage):
+        cost = max(0, cost - max(1, int(card.get("cost_reduction_n") or 2)))
     if old_card is None:
         return cost
     old_cost = max(0, int(old_card.get("cost") or 0))
     return max(0, cost - old_cost)
+
+
+def _slot_satisfies_nonreplaceable_target(
+    stage: list[dict[str, Any] | None],
+    slot: int,
+    target_shape: list[int],
+) -> bool:
+    if slot >= len(stage):
+        return False
+    old_card = stage[slot]
+    if not old_card or old_card.get("kind") != "member" or old_card.get("cost") is None:
+        return False
+    old_cost = int(old_card.get("cost") or 0)
+    target_need = Counter(int(value) for value in target_shape)
+    if target_need.get(old_cost, 0) <= 0:
+        return False
+    current_count = sum(
+        1 for card in stage
+        if card and card.get("kind") == "member" and int(card.get("cost") or 0) == old_cost
+    )
+    return current_count <= int(target_need.get(old_cost, 0) or 0)
 
 
 def _improve_persistent_stage(
@@ -718,10 +1268,11 @@ def _improve_persistent_stage(
     hand: list[dict[str, Any]],
     alternatives: list[list[int]],
     energy_state: dict[str, int] | None = None,
+    planning_alternatives: list[list[int]] | None = None,
 ) -> list[dict[str, Any] | None]:
     if len(stage) < 3:
         stage.extend([None] * (3 - len(stage)))
-    best_shape = _best_target_shape_for_stage(stage, alternatives)
+    best_shape = _best_target_shape_for_stage(stage, planning_alternatives or alternatives)
     if not best_shape:
         return stage
     start_active = None if energy_state is None else max(0, int(energy_state.get("active", 0) or 0))
@@ -749,12 +1300,19 @@ def _improve_persistent_stage(
             for alternative in alternatives
         )
         current_score = _stage_score(cur_stage, best_shape)
+        has_empty_slot = any(slot_card is None for slot_card in cur_stage)
         for slot in _stage_slots_to_replace(cur_stage, best_shape):
+            if _slot_satisfies_nonreplaceable_target(cur_stage, slot, best_shape):
+                continue
             old_card = cur_stage[slot]
             for idx, card in enumerate(cur_hand):
                 if card.get("kind") != "member" or card.get("cost") is None:
                     continue
-                pay_cost = _member_play_cost_for_slot(card, old_card)
+                if old_card is not None and has_empty_slot:
+                    full_play_cost = _member_play_cost_for_slot(card, None, cur_stage)
+                    if active is None or full_play_cost <= active:
+                        continue
+                pay_cost = _member_play_cost_for_slot(card, old_card, cur_stage)
                 if active is not None and pay_cost > active:
                     continue
                 trial_stage = list(cur_stage)
@@ -775,6 +1333,11 @@ def _improve_persistent_stage(
                 trial_hand.pop(idx)
                 next_active = None if active is None else active - pay_cost
                 next_wait = wait + pay_cost
+                enter_activate = int(card.get("enter_energy_activate_n") or 0)
+                if next_active is not None and enter_activate > 0 and next_wait > 0:
+                    activated = min(enter_activate, next_wait)
+                    next_active += activated
+                    next_wait -= activated
                 walk(trial_stage, trial_hand, next_active, next_wait, depth + 1)
 
     walk(list(stage), list(hand), start_active, start_wait, 0)
@@ -786,6 +1349,72 @@ def _improve_persistent_stage(
         energy_state["active"] = 0 if start_active is None else int(best_result[6])
         energy_state["wait"] = int(best_result[7])
     return stage
+
+
+def _apply_stage_energy_activation_support(
+    stage: list[dict[str, Any] | None],
+    hand: list[dict[str, Any]],
+    deck_cards: list[dict[str, Any]],
+    alternatives: list[list[int]],
+    energy_state: dict[str, int],
+    future_alternatives_by_turn: list[list[list[int]]] | None,
+    *,
+    start_turn_index: int = 0,
+) -> dict[str, Any]:
+    original_active = max(0, int(energy_state.get("active", 0) or 0))
+    active = original_active
+    wait = max(0, int(energy_state.get("wait", 0) or 0))
+    if not hand or not alternatives:
+        return {"activated": [], "discarded": [], "energy_before": active, "energy_after": active}
+    useful_gap = 0
+    for slot_card in stage:
+        for card in hand:
+            if card.get("kind") != "member" or card.get("cost") is None:
+                continue
+            pay_cost = _member_play_cost_for_slot(card, slot_card, stage)
+            if pay_cost <= active:
+                continue
+            trial_stage = list(stage)
+            try:
+                slot = stage.index(slot_card)
+            except ValueError:
+                continue
+            trial_stage[slot] = card
+            trial_costs = _stage_costs_with_virtual_low_summons(trial_stage)
+            if any(_shape_meets_target(trial_costs, sorted(alternative, reverse=True)) for alternative in alternatives):
+                useful_gap = max(useful_gap, pay_cost - active)
+    if useful_gap <= 0:
+        return {"activated": [], "discarded": [], "energy_before": active, "energy_after": active}
+    activated: list[dict[str, Any]] = []
+    discarded: list[dict[str, Any]] = []
+    for card in stage:
+        if not card:
+            continue
+        activate_n = int(card.get("energy_activate_n") or 0)
+        if activate_n <= 0:
+            continue
+        activated.append(card)
+        active += activate_n
+        effect_text = str(card.get("effect_text") or "")
+        if "手札を1枚控え室" in _timed_effect_text(effect_text, "起動") and hand:
+            discard = _discard_after_effect_draw(
+                hand,
+                deck_cards,
+                future_alternatives_by_turn,
+                start_turn_index=start_turn_index,
+            )
+            if discard is not None:
+                discarded.append(discard)
+        if active >= original_active + useful_gap:
+            break
+    energy_state["active"] = active
+    energy_state["wait"] = wait
+    return {
+        "activated": activated,
+        "discarded": discarded,
+        "energy_before": original_active,
+        "energy_after": active,
+    }
 
 
 def _card_need_score(card: dict[str, Any], target_turns: list[list[int]], deck_cards: list[dict[str, Any]]) -> float:
@@ -876,12 +1505,223 @@ def _card_need_score_by_turn(
     return 0.0
 
 
+def _early_target_costs(target_alternatives_by_turn: list[list[list[int]]], max_turns: int = 3) -> set[int]:
+    return {
+        int(value)
+        for alternatives in target_alternatives_by_turn[:max_turns]
+        for shape in alternatives or []
+        for value in shape
+    }
+
+
+def _card_need_profile(
+    card: dict[str, Any],
+    target_alternatives_by_turn: list[list[list[int]]],
+    deck_cards: list[dict[str, Any]],
+    *,
+    start_turn_index: int = 0,
+) -> dict[str, float | list[str]]:
+    future_play_value = _card_need_score_by_turn(
+        card,
+        target_alternatives_by_turn,
+        deck_cards,
+        start_turn_index=start_turn_index,
+    )
+    keep_value = float(future_play_value)
+    exchange_cost = float(future_play_value)
+    dig_target_value = 0.0
+    recovery_value = 0.0
+    sideboard_like = 0.0
+    tags: list[str] = []
+    early_costs = _early_target_costs(target_alternatives_by_turn)
+    if card.get("kind") == "member" and card.get("cost") is not None:
+        cost = int(card.get("cost") or 0)
+        deck_count = max(1, _member_cost_counts(deck_cards).get(cost, 1))
+        exact_offsets = [
+            offset
+            for offset, alternatives in enumerate(target_alternatives_by_turn[:4])
+            if any(cost in [int(value) for value in shape] for shape in alternatives or [])
+        ]
+        if exact_offsets:
+            first_offset = min(exact_offsets)
+            dig_target_value = max(0.0, (4 - first_offset) * (8.0 / deck_count))
+            tags.append(f"target_t+{first_offset}")
+        if cost >= 13 and cost not in early_costs:
+            sideboard_like = 1.0
+            keep_value *= 0.25
+            exchange_cost *= 0.2
+            tags.append("sideboard_like")
+        if cost == 2 and deck_count >= 12:
+            exchange_cost *= 0.75
+            tags.append("replaceable_low")
+        if int(card.get("low_cost_summon_n") or 0) > 0:
+            recovery_value += 8.0
+            keep_value += 4.0
+            exchange_cost += 4.0
+            tags.append("low_cost_summon")
+        if int(card.get("member_recovery_n") or 0) > 0:
+            recovery_value += 7.0
+            keep_value += 2.0
+            exchange_cost += 2.0
+            tags.append("member_recovery")
+        if bool(card.get("overcost_member_play")) or "overcost_member_play" in set(card.get("progression_support_tags") or []):
+            recovery_value += 4.0
+            tags.append("overcost_play")
+    elif card.get("kind") == "live":
+        if int(card.get("energy_boost_n") or 0) > 0:
+            dig_target_value += 12.0
+            keep_value += 8.0
+            exchange_cost += 6.0
+            tags.append("energy_boost_live")
+        if int(card.get("live_success_member_recovery_n") or card.get("member_recovery_n") or 0) > 0:
+            recovery_value += 8.0
+            keep_value += 3.0
+            exchange_cost += 3.0
+            tags.append("member_recovery_live")
+        if int(card.get("draw_n") or 0) > 0:
+            recovery_value += 3.0
+            keep_value += 1.0
+            tags.append("draw_live")
+        if int(card.get("score") or 0) >= 5 and not target_alternatives_by_turn:
+            exchange_cost *= 0.8
+    total = max(0.0, keep_value + dig_target_value * 0.2 + recovery_value * 0.25 - sideboard_like * 8.0)
+    return {
+        "total": round(total, 3),
+        "keep_value": round(max(0.0, keep_value), 3),
+        "exchange_cost": round(max(0.0, exchange_cost), 3),
+        "future_play_value": round(max(0.0, future_play_value), 3),
+        "dig_target_value": round(max(0.0, dig_target_value), 3),
+        "recovery_value": round(max(0.0, recovery_value), 3),
+        "sideboard_like": round(sideboard_like, 3),
+        "tags": tags,
+    }
+
+
 def _has_energy_bridge_route(target_alternatives_by_turn: list[list[list[int]]]) -> bool:
     for alternatives in target_alternatives_by_turn:
         for shape in alternatives or []:
             if sorted(int(value) for value in shape) == [2, 2, 4]:
                 return True
     return False
+
+
+def _energy_boost_amount(card: dict[str, Any] | None) -> int:
+    if not card or card.get("kind") != "live":
+        return 0
+    return max(0, int(card.get("live_success_energy_boost_n") or card.get("energy_boost_n") or 0))
+
+
+def _max_available_energy_boost(hand: list[dict[str, Any]] | None) -> int:
+    return max((_energy_boost_amount(card) for card in hand or []), default=0)
+
+
+def _next_turn_active_energy_after_live(energy_state: dict[str, int] | None) -> int | None:
+    if energy_state is None:
+        return None
+    active = max(0, int(energy_state.get("active", 0) or 0))
+    wait = max(0, int(energy_state.get("wait", 0) or 0))
+    deck_remaining = max(0, int(energy_state.get("deck_remaining", 1) or 0))
+    normal_energy = 1 if deck_remaining > 0 else 0
+    return active + wait + normal_energy
+
+
+def _min_active_needed_to_reach_shape_from_costs(
+    stage_costs: list[int],
+    target_shape: list[int],
+    *,
+    cost_reduction_costs: set[int] | None = None,
+    cost_reduction_amounts: dict[int, int] | None = None,
+    reduction_enabled: bool = False,
+) -> int:
+    available = sorted([max(0, int(cost or 0)) for cost in stage_costs], reverse=True)
+    required = 0
+    for target in sorted([max(0, int(cost or 0)) for cost in target_shape], reverse=True):
+        effective_target = target
+        if reduction_enabled and target in (cost_reduction_costs or set()):
+            effective_target = max(0, target - max(1, int((cost_reduction_amounts or {}).get(target, 2))))
+        if not available:
+            required += effective_target
+            continue
+        affordable_matches = [(index, cost) for index, cost in enumerate(available) if cost <= target]
+        if affordable_matches:
+            index, cost = max(affordable_matches, key=lambda item: item[1])
+        else:
+            index, cost = min(enumerate(available), key=lambda item: item[1])
+        required += max(0, effective_target - cost)
+        available.pop(index)
+    return required
+
+
+def _energy_bridge_plan_for_next_turn(
+    stage: list[dict[str, Any] | None] | None,
+    future_alternatives_by_turn: list[list[list[int]]] | None,
+    energy_state: dict[str, int] | None,
+    hand: list[dict[str, Any]] | None,
+) -> dict[str, Any]:
+    next_alternatives = (future_alternatives_by_turn or [])[1] if len(future_alternatives_by_turn or []) > 1 else []
+    boost_n = _max_available_energy_boost(hand)
+    base_active = _next_turn_active_energy_after_live(energy_state)
+    if not next_alternatives or base_active is None or boost_n <= 0:
+        return {
+            "needed": False,
+            "reason": "no next target or boost card",
+            "base_active_next": base_active,
+            "boosted_active_next": None if base_active is None else base_active + boost_n,
+            "boost_n": boost_n,
+            "min_required": None,
+            "next_target": "",
+        }
+    stage_costs = _stage_costs(stage or [])
+    reduction_enabled = _cost_reduction_available_for_stage(stage)
+    cost_reduction_costs = {
+        int(card.get("cost") or 0)
+        for card in (hand or [])
+        if card.get("kind") == "member"
+        and card.get("cost") is not None
+        and bool(card.get("cost_reduction"))
+    }
+    cost_reduction_amounts = {
+        int(card.get("cost") or 0): max(1, int(card.get("cost_reduction_n") or 2))
+        for card in (hand or [])
+        if card.get("kind") == "member"
+        and card.get("cost") is not None
+        and bool(card.get("cost_reduction"))
+    }
+    required_options = [
+        (
+            _min_active_needed_to_reach_shape_from_costs(
+                stage_costs,
+                list(shape),
+                cost_reduction_costs=cost_reduction_costs,
+                cost_reduction_amounts=cost_reduction_amounts,
+                reduction_enabled=reduction_enabled,
+            ),
+            _shape_trace_label(list(shape)),
+        )
+        for shape in next_alternatives or []
+    ]
+    if not required_options:
+        return {
+            "needed": False,
+            "reason": "no next target",
+            "base_active_next": base_active,
+            "boosted_active_next": base_active + boost_n,
+            "boost_n": boost_n,
+            "min_required": None,
+            "next_target": "",
+        }
+    min_required, target_label = min(required_options, key=lambda item: item[0])
+    boosted_active = base_active + boost_n
+    needed = base_active < min_required <= boosted_active
+    return {
+        "needed": needed,
+        "reason": "boost bridges next target" if needed else "base energy already enough or boost still short",
+        "base_active_next": base_active,
+        "boosted_active_next": boosted_active,
+        "boost_n": boost_n,
+        "min_required": min_required,
+        "next_target": target_label,
+    }
 
 
 def _upcoming_max_target_cost(target_alternatives_by_turn: list[list[list[int]]]) -> int:
@@ -1004,6 +1844,421 @@ def _live_basic_success_candidate(stage: list[dict[str, Any] | None] | None, liv
         colored_required = sum(int(need or 0) for color, need in required.items() if color not in {"任意", "ALL", "all"})
         return total_available - colored_required >= colorless_required
     return True
+
+
+def _live_effect_play_value(
+    live_card: dict[str, Any] | None,
+    future_alternatives_by_turn: list[list[list[int]]],
+    *,
+    start_turn_index: int = 0,
+    prefer_energy_boost: bool = False,
+) -> float:
+    if not live_card or live_card.get("kind") != "live":
+        return 0.0
+    score = 0.0
+    upcoming_max = _upcoming_max_target_cost(future_alternatives_by_turn[:3])
+    energy_bridge = _has_energy_bridge_route(future_alternatives_by_turn[:2])
+    draw_n = int(live_card.get("live_success_draw_n") or live_card.get("draw_n") or 0)
+    energy_n = int(live_card.get("live_success_energy_boost_n") or live_card.get("energy_boost_n") or 0)
+    if energy_n > 0:
+        score += 36.0 if (prefer_energy_boost or energy_bridge) else 14.0
+        if upcoming_max >= 10:
+            score += 10.0
+        score += min(2, energy_n) * 3.0
+    if draw_n > 0:
+        # Draw effects are strongest before the next bottleneck turn, because
+        # they convert a live success into extra looks at the target card.
+        score += min(3, draw_n) * (5.0 if start_turn_index <= 1 else 3.0)
+        if upcoming_max >= 10:
+            score += 3.0
+    live_score = int(live_card.get("score") or 0)
+    if live_score >= 5:
+        score += 2.0
+    if live_score == 0 and draw_n >= 2:
+        score += 8.0
+    return score
+
+
+def _card_effect_play_value(card: dict[str, Any] | None) -> float:
+    if not card:
+        return 0.0
+    value = 0.0
+    draw_n = max(
+        int(card.get("draw_n") or 0),
+        int(card.get("enter_draw_n") or 0),
+        int(card.get("live_success_draw_n") or 0),
+        int(card.get("activated_draw_n") or 0),
+    )
+    energy_n = max(
+        int(card.get("energy_boost_n") or 0),
+        int(card.get("enter_energy_boost_n") or 0),
+        int(card.get("live_success_energy_boost_n") or 0),
+    )
+    if draw_n > 0:
+        value += min(3, draw_n) * 2.0
+    if energy_n > 0:
+        value += min(2, energy_n) * 5.0
+    if int(card.get("energy_activate_n") or 0) > 0:
+        value += min(2, int(card.get("energy_activate_n") or 0)) * 4.0
+    if int(card.get("low_cost_summon_n") or 0) > 0:
+        value += 5.0
+    if bool(card.get("cost_reduction")):
+        value += 4.0
+    if bool(card.get("free_member_play")) or bool(card.get("overcost_member_play")):
+        value += 5.0
+    return value
+
+
+def _discard_after_effect_draw(
+    hand: list[dict[str, Any]],
+    deck_cards: list[dict[str, Any]],
+    future_alternatives_by_turn: list[list[list[int]]] | None,
+    *,
+    start_turn_index: int = 0,
+) -> dict[str, Any] | None:
+    if not hand:
+        return None
+    alternatives = future_alternatives_by_turn or []
+
+    def discard_rank(card: dict[str, Any]) -> tuple[float, float, int, str]:
+        profile = _card_need_profile(
+            card,
+            alternatives,
+            deck_cards,
+            start_turn_index=start_turn_index,
+        )
+        keep_value = float(profile.get("keep_value") or 0.0)
+        future_value = float(profile.get("future_play_value") or 0.0)
+        effect_value = _card_effect_play_value(card)
+        sideboard = float(profile.get("sideboard_like") or 0.0)
+        return (
+            keep_value + future_value * 0.35 + effect_value * 0.6 - sideboard * 10.0,
+            effect_value,
+            int(card.get("value") or 0),
+            str(card.get("card_no") or ""),
+        )
+
+    discard = min(hand, key=discard_rank)
+    hand.remove(discard)
+    return discard
+
+
+def _card_matches_top_search(card: dict[str, Any], profile: dict[str, Any]) -> bool:
+    if not profile:
+        return False
+    if profile.get("member_only") and card.get("kind") != "member":
+        return False
+    if profile.get("no_blade_heart") and _search_condition_blade_heart_total(card) > 0:
+        return False
+    group = str(profile.get("group") or "")
+    if group and group not in str(card.get("group") or ""):
+        return False
+    return True
+
+
+def _search_condition_blade_heart_total(card: dict[str, Any]) -> int:
+    """Return the DB-normalized blade-heart presence for card text filters."""
+    return int(card.get("blade_heart_total") or 0)
+
+
+def _topdeck_effect_card_value(
+    card: dict[str, Any],
+    deck_cards: list[dict[str, Any]],
+    future_alternatives_by_turn: list[list[list[int]]] | None,
+    *,
+    start_turn_index: int = 0,
+    stage: list[dict[str, Any] | None] | None = None,
+) -> float:
+    profile = _card_need_profile(
+        card,
+        future_alternatives_by_turn or [],
+        deck_cards,
+        start_turn_index=start_turn_index,
+    )
+    value = (
+        float(profile.get("keep_value") or 0.0)
+        + float(profile.get("future_play_value") or 0.0) * 0.45
+        + float(profile.get("dig_target_value") or 0.0) * 0.25
+        + _card_effect_play_value(card) * 0.7
+        + int(card.get("score") or 0) * 0.15
+    )
+    if card.get("kind") == "member" and card.get("cost") is not None:
+        cost = int(card.get("cost") or 0)
+        if stage is not None and future_alternatives_by_turn:
+            stage_costs = _stage_costs_with_virtual_low_summons(stage)
+            current_alternatives = future_alternatives_by_turn[0] or []
+            max_slots = max((len(shape) for shape in current_alternatives), default=0)
+            slot_preserving_alternatives = [
+                list(shape) for shape in current_alternatives
+                if len(shape) == max_slots
+            ] or current_alternatives
+            best_current_shape = _best_target_shape_for_stage(stage, slot_preserving_alternatives)
+            current_missing = {int(value) for value in _missing_for_shape(stage_costs, list(best_current_shape))}
+            if cost in current_missing:
+                value += 86.0
+            if cost >= 13 and any(3 <= missing <= 11 for missing in current_missing):
+                value -= 54.0
+            current_target_costs = {
+                int(value)
+                for shape in current_alternatives
+                for value in shape
+            }
+            if (
+                3 <= cost <= 11
+                and cost in current_target_costs
+                and cost not in stage_costs
+                and int(card.get("energy_activate_n") or 0) > 0
+            ):
+                value += 124.0
+        for offset, alternatives in enumerate((future_alternatives_by_turn or [])[:3]):
+            if any(cost in [int(value) for value in shape] for shape in alternatives or []):
+                value += {0: 64.0, 1: 28.0, 2: 10.0}.get(offset, 0.0)
+                if cost >= 13 and offset <= 1:
+                    value += 4.0
+                break
+        if cost in {9, 17} and int(card.get("energy_activate_n") or 0) > 0:
+            value += 6.0
+        if cost >= 15 and bool(card.get("cost_reduction")):
+            value += 5.0
+    return value
+
+
+def _playable_recovered_target_now(
+    target: dict[str, Any],
+    trial_stage: list[dict[str, Any] | None],
+    trial_hand: list[dict[str, Any]],
+) -> bool:
+    if target.get("kind") == "member":
+        return target not in trial_hand and any(card is target for card in trial_stage if card)
+    if target.get("kind") == "live":
+        return target in trial_hand and _live_basic_success_candidate(trial_stage, target)
+    return False
+
+
+def _apply_enter_topdeck_effects(
+    played_cards: list[dict[str, Any]],
+    stage: list[dict[str, Any] | None],
+    hand: list[dict[str, Any]],
+    deck: list[dict[str, Any]],
+    draw_index: int,
+    green: list[dict[str, Any]],
+    deck_cards: list[dict[str, Any]],
+    future_alternatives_by_turn: list[list[list[int]]] | None,
+    *,
+    start_turn_index: int = 0,
+) -> tuple[int, list[dict[str, Any]]]:
+    logs: list[dict[str, Any]] = []
+    for source in played_cards:
+        if source.get("kind") != "member":
+            continue
+        stack_n = int(source.get("enter_top_stack_n") or 0)
+        if stack_n > 0 and draw_index < len(deck):
+            visible = list(deck[draw_index: min(len(deck), draw_index + stack_n)])
+            if visible:
+                ranked = sorted(
+                    visible,
+                    key=lambda card: _topdeck_effect_card_value(
+                        card,
+                        deck_cards,
+                        future_alternatives_by_turn,
+                        start_turn_index=start_turn_index,
+                        stage=stage,
+                    ),
+                    reverse=True,
+                )
+                keep = [
+                    card for card in ranked
+                    if _topdeck_effect_card_value(
+                        card,
+                        deck_cards,
+                        future_alternatives_by_turn,
+                        start_turn_index=start_turn_index,
+                        stage=stage,
+                    ) > 0
+                ][:stack_n]
+                if not keep and ranked:
+                    keep = [ranked[0]]
+                bottom_out = [card for card in visible if card not in keep]
+                deck[draw_index: draw_index + len(visible)] = keep
+                green.extend(bottom_out)
+                logs.append({
+                    "source": _card_trace_label(source),
+                    "kind": "top_stack",
+                    "looked": [_card_trace_label(card) for card in visible],
+                    "kept_on_top": [_card_trace_label(card) for card in keep],
+                    "moved_to_green": [_card_trace_label(card) for card in bottom_out],
+                })
+        search = source.get("enter_top_search")
+        if isinstance(search, dict) and int(search.get("look_n") or 0) > 0 and draw_index < len(deck):
+            look_n = int(search.get("look_n") or 0)
+            visible = list(deck[draw_index: min(len(deck), draw_index + look_n)])
+            candidates = [card for card in visible if _card_matches_top_search(card, search)]
+            chosen = None
+            discarded = None
+            if candidates:
+                chosen = max(
+                    candidates,
+                    key=lambda card: _topdeck_effect_card_value(
+                        card,
+                        deck_cards,
+                        future_alternatives_by_turn,
+                        start_turn_index=start_turn_index,
+                        stage=stage,
+                    ),
+                )
+                if int(search.get("discard_hand_cost_n") or 0) > 0:
+                    discarded = _discard_after_effect_draw(
+                        hand,
+                        deck_cards,
+                        future_alternatives_by_turn,
+                        start_turn_index=start_turn_index,
+                    )
+                    if discarded is None:
+                        chosen = None
+            if chosen is None:
+                logs.append({
+                    "source": _card_trace_label(source),
+                    "kind": "top_search",
+                    "looked": [_card_trace_label(card) for card in visible],
+                    "selected": "none",
+                    "discarded_cost": _card_trace_label(discarded),
+                    "moved_to_green": [],
+                })
+                continue
+            deck[draw_index: draw_index + len(visible)] = []
+            hand.append(chosen)
+            moved = [card for card in visible if card is not chosen]
+            green.extend(moved)
+            logs.append({
+                "source": _card_trace_label(source),
+                "kind": "top_search",
+                "looked": [_card_trace_label(card) for card in visible],
+                "selected": _card_trace_label(chosen),
+                "discarded_cost": _card_trace_label(discarded),
+                "moved_to_green": [_card_trace_label(card) for card in moved],
+            })
+    return draw_index, logs
+
+
+def _card_matches_recovery_kind(card: dict[str, Any], recovery_kind: str) -> bool:
+    if recovery_kind == "card":
+        return True
+    if recovery_kind == "member":
+        return card.get("kind") == "member"
+    if recovery_kind == "live":
+        return card.get("kind") == "live"
+    return False
+
+
+def _apply_stage_recovery_support(
+    stage: list[dict[str, Any] | None],
+    hand: list[dict[str, Any]],
+    green: list[dict[str, Any]],
+    deck_cards: list[dict[str, Any]],
+    alternatives: list[list[int]],
+    energy_state: dict[str, int],
+    future_alternatives_by_turn: list[list[list[int]]] | None,
+    *,
+    planning_alternatives: list[list[int]] | None = None,
+    start_turn_index: int = 0,
+) -> dict[str, Any]:
+    if not green or not alternatives:
+        return {"used": False}
+    best_shape = _best_target_shape_for_stage(stage, planning_alternatives or alternatives)
+    current_costs = _stage_costs_with_virtual_low_summons(stage)
+    current_meets = any(_shape_meets_target(current_costs, sorted(alternative, reverse=True)) for alternative in alternatives)
+    current_score = _stage_score(stage, best_shape)
+    current_total = sum(_stage_costs(stage))
+    best: tuple[Any, ...] | None = None
+    for slot, source in enumerate(stage):
+        if not source or source.get("kind") != "member":
+            continue
+        if not bool(source.get("activated_self_to_green_cost")):
+            continue
+        recovery_kind = str(source.get("activated_recovery_kind") or source.get("recovery_kind") or "")
+        if not recovery_kind:
+            continue
+        stage_without = list(stage)
+        stage_without[slot] = None
+        without_costs = _stage_costs_with_virtual_low_summons(stage_without)
+        surplus_ok = current_meets and any(
+            _shape_meets_target(without_costs, sorted(alternative, reverse=True))
+            for alternative in alternatives
+        )
+        for target_index, target in enumerate(list(green)):
+            if target is source or not _card_matches_recovery_kind(target, recovery_kind):
+                continue
+            trial_stage = list(stage_without)
+            trial_hand = list(hand) + [target]
+            trial_green = [card for index, card in enumerate(green) if index != target_index]
+            trial_green.append(source)
+            trial_energy = dict(energy_state)
+            _improve_persistent_stage(
+                trial_stage,
+                trial_hand,
+                alternatives,
+                trial_energy,
+                planning_alternatives=planning_alternatives,
+            )
+            trial_costs = _stage_costs_with_virtual_low_summons(trial_stage)
+            trial_meets = any(_shape_meets_target(trial_costs, sorted(alternative, reverse=True)) for alternative in alternatives)
+            trial_score = _stage_score(trial_stage, best_shape)
+            trial_total = sum(_stage_costs(trial_stage))
+            playable_now = _playable_recovered_target_now(target, trial_stage, trial_hand)
+            if not playable_now:
+                continue
+            future_value = _topdeck_effect_card_value(
+                target,
+                deck_cards,
+                future_alternatives_by_turn,
+                start_turn_index=start_turn_index,
+            )
+            score_gain = trial_score - current_score
+            total_gain = trial_total - current_total
+            reason = ""
+            if surplus_ok and target.get("kind") == "live" and future_value > 0:
+                reason = "surplus target met; recover live playable this turn"
+            elif trial_meets and (not current_meets or score_gain >= 0):
+                reason = "recover and play target this turn while keeping progression"
+            elif not current_meets and (score_gain > 0 or total_gain > 0):
+                reason = "current progression miss; recovery plays target this turn"
+            if not reason:
+                continue
+            rank = (
+                2 if surplus_ok else 1,
+                1 if trial_meets else 0,
+                score_gain,
+                total_gain,
+                future_value,
+                int(target.get("cost") or target.get("score") or 0),
+                str(target.get("card_no") or ""),
+                slot,
+                target_index,
+                reason,
+                trial_stage,
+                trial_hand,
+                trial_green,
+                trial_energy,
+                source,
+                target,
+            )
+            if best is None or rank[:7] > best[:7]:
+                best = rank
+    if best is None:
+        return {"used": False}
+    stage[:] = best[10]
+    hand[:] = best[11]
+    green[:] = best[12]
+    energy_state.clear()
+    energy_state.update(best[13])
+    return {
+        "used": True,
+        "reason": best[9],
+        "source": _card_trace_label(best[14]),
+        "recovered": _card_trace_label(best[15]),
+        "after_stage": _stage_text(stage),
+        "energy_after": dict(energy_state),
+    }
 
 
 def _mulligan_profile_adjustment(
@@ -1154,6 +2409,10 @@ def _mulligan_profile_adjustment(
                 score -= cost_count(4) * 8.0
             score -= cost_count(2) * 3.5
             score += min(len(kept_energy_lives), 1) * (12.0 if first_kept_cost(4) else 4.0)
+            if kept_energy_lives and first_kept_cost(4):
+                # DM系+4から入る10軸は、T2の2面補完を見て低コストを2枚まで残す。
+                score += min(cost_count(2), 2) * 7.0
+                score -= max(0, cost_count(2) - 2) * 3.0
             if not initial_energy_lives:
                 score -= cost_count(2) * 7.0
                 if initial_cost4_count < 2:
@@ -1258,6 +2517,8 @@ def _access_probability_for_alternatives(
     deck_cards: list[dict[str, Any]],
     alternatives: list[list[int]],
     draws: int,
+    *,
+    early_plan_slots: bool = False,
 ) -> float:
     if not alternatives:
         return 0.0
@@ -1272,7 +2533,8 @@ def _access_probability_for_alternatives(
         combined = Counter(kept_counts)
         combined.update(drawn_counts)
         costs = _member_cost_list_from_counts(combined)
-        if any(_shape_meets_target(costs, list(shape)) for shape in alternatives):
+        matcher = _shape_meets_early_plan_slots if early_plan_slots else _shape_meets_target
+        if any(matcher(costs, list(shape)) for shape in alternatives):
             probability += chance
     return min(1.0, max(0.0, probability))
 
@@ -1407,11 +2669,246 @@ def _probability_find_key_by_draws(
     return 1.0 - (comb(total - key_count, draws) / comb(total, draws))
 
 
+def _mulligan_candidate_diagnostics(
+    kept_cards: list[dict[str, Any]],
+    initial_hand: list[dict[str, Any]],
+    deck_cards: list[dict[str, Any]],
+    target_alternatives_by_turn: list[list[list[int]]],
+    windows: list[int],
+) -> dict[str, Any]:
+    kept_costs = _member_cost_counts_from_cards(kept_cards)
+    out: dict[str, Any] = {
+        "kept_twos": int(kept_costs.get(2, 0) or 0),
+        "redraws": max(0, 6 - len(kept_cards)),
+    }
+    if len(target_alternatives_by_turn) >= 2:
+        turn_two = target_alternatives_by_turn[1] or []
+        out["t2_need_twos"] = max((Counter(int(value) for value in shape).get(2, 0) for shape in turn_two), default=0)
+        out["t2_targets"] = _alternatives_trace_label(turn_two)
+    if len(target_alternatives_by_turn) >= 3:
+        turn_three = target_alternatives_by_turn[2] or []
+        turn_three_targets = sorted({
+            int(value)
+            for shape in turn_three
+            for value in shape
+            if int(value) > 2
+        })
+        draws = windows[2] if len(windows) > 2 else windows[-1] if windows else 0
+        out["t3_targets"] = turn_three_targets
+        out["t3_access"] = round(_access_probability_for_alternatives(kept_cards, initial_hand, deck_cards, turn_three, draws), 3)
+        out["t3_draws"] = draws
+    return out
+
+
+def _progression_plan_label(plan: list[list[int]]) -> str:
+    return " -> ".join(_shape_trace_label(list(shape)) for shape in plan) if plan else "none"
+
+
+def _early_progression_plan_options(
+    target_alternatives_by_turn: list[list[list[int]]],
+    *,
+    max_turns: int = 3,
+    max_options_per_turn: int = 5,
+) -> list[list[list[int]]]:
+    turns = [
+        [list(shape) for shape in alternatives[:max_options_per_turn]]
+        for alternatives in target_alternatives_by_turn[:max_turns]
+        if alternatives
+    ]
+    if not turns:
+        return []
+    plans: list[list[list[int]]] = [[]]
+    for alternatives in turns:
+        next_plans: list[list[list[int]]] = []
+        for plan in plans:
+            for shape in alternatives:
+                next_plans.append(plan + [list(shape)])
+        plans = next_plans[:125]
+    unique: list[list[list[int]]] = []
+    seen: set[tuple[tuple[int, ...], ...]] = set()
+    for plan in plans:
+        key = tuple(tuple(int(value) for value in shape) for shape in plan)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(plan)
+    return unique
+
+
+def _plan_access_score(
+    kept_cards: list[dict[str, Any]],
+    initial_hand: list[dict[str, Any]],
+    deck_cards: list[dict[str, Any]],
+    plan: list[list[int]],
+    windows: list[int],
+) -> dict[str, Any]:
+    probabilities: list[float] = []
+    prefix = 1.0
+    score = 0.0
+    weights = [22.0, 18.0, 13.0]
+    kept_costs = _member_cost_list_from_counts(_member_cost_counts_from_cards(kept_cards))
+    for index, shape in enumerate(plan[:3]):
+        draws = windows[index] if index < len(windows) else windows[-1] if windows else 0
+        probability = _access_probability_for_alternatives(
+            kept_cards,
+            initial_hand,
+            deck_cards,
+            [shape],
+            draws,
+            early_plan_slots=index < 2,
+        )
+        probabilities.append(probability)
+        prefix *= probability
+        score += weights[index] * prefix
+        score += weights[index] * 0.2 * probability
+        if _shape_meets_early_plan_slots(kept_costs, list(shape)):
+            score += max(0.0, 3.0 - index)
+    return {
+        "label": _progression_plan_label(plan),
+        "score": score,
+        "probabilities": probabilities,
+        "prefix": prefix,
+    }
+
+
+def _choose_early_progression_plans(
+    initial_hand: list[dict[str, Any]],
+    deck_cards: list[dict[str, Any]],
+    target_alternatives_by_turn: list[list[list[int]]],
+) -> dict[str, Any]:
+    windows = _mulligan_draw_windows(0, min(3, len(target_alternatives_by_turn)))
+    options = _early_progression_plan_options(target_alternatives_by_turn)
+    ranked: list[dict[str, Any]] = []
+    for plan in options:
+        ranked.append({
+            "plan": plan,
+            **_plan_access_score(initial_hand, initial_hand, deck_cards, plan, [0, 0, 0]),
+            "redraw_score": _plan_access_score([], initial_hand, deck_cards, plan, windows),
+        })
+    ranked.sort(
+        key=lambda item: (
+            float(item.get("score") or 0.0),
+            float((item.get("redraw_score") or {}).get("score") or 0.0),
+            item.get("label") or "",
+        ),
+        reverse=True,
+    )
+    main = ranked[0] if ranked else {}
+    sub = ranked[1] if len(ranked) > 1 else {}
+    return {
+        "main_plan": main.get("plan") or [],
+        "main_label": main.get("label") or "none",
+        "main_initial_probabilities": list(main.get("probabilities") or []),
+        "sub_plan": sub.get("plan") or [],
+        "sub_label": sub.get("label") or "none",
+        "sub_initial_probabilities": list(sub.get("probabilities") or []),
+        "ranked": ranked[:5],
+    }
+
+
+def _is_progression_live_support(card: dict[str, Any], plan: list[list[int]]) -> bool:
+    if card.get("kind") != "live":
+        return False
+    plan_costs = [int(value) for shape in plan for value in shape]
+    high_goal = max(plan_costs, default=0) >= 10
+    if _energy_boost_amount(card) > 0:
+        return high_goal or any(sum(shape) >= 8 for shape in plan)
+    tags = set(card.get("progression_support_tags") or [])
+    if "cost_reduction" in tags or bool(card.get("cost_reduction")):
+        return high_goal
+    if "overcost_member_play" in tags or bool(card.get("overcost_member_play")):
+        return high_goal
+    if int(card.get("live_success_member_recovery_n") or card.get("member_recovery_n") or 0) > 0:
+        return high_goal
+    return False
+
+
+def _mulligan_visible_plan_card_adjustment(
+    kept_cards: list[dict[str, Any]],
+    initial_hand: list[dict[str, Any]],
+    plan: list[list[int]],
+    *,
+    weight_scale: float = 1.0,
+) -> float:
+    if not plan:
+        return 0.0
+    score = 0.0
+    kept_counts = _member_cost_counts_from_cards(kept_cards)
+    initial_counts = _member_cost_counts_from_cards(initial_hand)
+    turn_weights = [18.0, 13.0, 8.0]
+    for turn_index, shape in enumerate(plan[:3]):
+        weight = turn_weights[turn_index] if turn_index < len(turn_weights) else 5.0
+        needed = Counter(int(value) for value in shape)
+        for cost, needed_count in needed.items():
+            visible = int(initial_counts.get(cost, 0) or 0)
+            if visible <= 0:
+                continue
+            kept = min(int(kept_counts.get(cost, 0) or 0), int(needed_count))
+            missing_visible = min(int(needed_count), visible) - kept
+            score += kept * weight * weight_scale
+            if missing_visible > 0:
+                score -= missing_visible * weight * 1.35 * weight_scale
+        # Do not double count the same exact low-cost slots too harshly across
+        # turns, but still make T1/T2 visible cards matter.
+        if turn_index >= 1:
+            score *= 0.98
+    support_lives = [card for card in initial_hand if _is_progression_live_support(card, plan)]
+    kept_support_lives = [card for card in kept_cards if _is_progression_live_support(card, plan)]
+    if support_lives:
+        support_weight = 11.0 if max((int(value) for shape in plan for value in shape), default=0) >= 10 else 7.0
+        score += min(len(kept_support_lives), 1) * support_weight * weight_scale
+        if not kept_support_lives:
+            score -= min(len(support_lives), 1) * support_weight * 0.85 * weight_scale
+        score -= max(0, len(kept_support_lives) - 1) * 3.0 * weight_scale
+    return score
+
+
+def _mulligan_late_card_before_early_secured_penalty(
+    kept_cards: list[dict[str, Any]],
+    plan: list[list[int]],
+) -> float:
+    if not plan:
+        return 0.0
+    kept_costs = _member_cost_list_from_counts(_member_cost_counts_from_cards(kept_cards))
+    earliest_miss = None
+    for turn_index, shape in enumerate(plan[:3]):
+        if not _shape_meets_early_plan_slots(kept_costs, list(shape)):
+            earliest_miss = turn_index
+            break
+    if earliest_miss is None or earliest_miss > 1:
+        return 0.0
+    early_costs = {
+        int(value)
+        for shape in plan[: earliest_miss + 1]
+        for value in shape
+    }
+    future_costs = {
+        int(value)
+        for shape in plan[earliest_miss + 1:3]
+        for value in shape
+    }
+    penalty = 0.0
+    for card in kept_cards:
+        if card.get("kind") == "member":
+            cost = int(card.get("cost") or 0)
+            if cost >= 10 and cost in future_costs and cost not in early_costs:
+                penalty += 44.0 if earliest_miss == 0 else 22.0
+            elif cost >= 13 and cost not in early_costs:
+                penalty += 36.0 if earliest_miss == 0 else 16.0
+        elif card.get("kind") == "live" and not _is_progression_live_support(card, plan):
+            score = int(card.get("score") or 0)
+            if score >= 4:
+                penalty += 18.0 if earliest_miss == 0 else 8.0
+    return penalty
+
+
 def _mulligan_subset_score(
     kept_cards: list[dict[str, Any]],
     initial_hand: list[dict[str, Any]],
     deck_cards: list[dict[str, Any]],
     target_alternatives_by_turn: list[list[list[int]]],
+    focus: dict[str, Any] | None = None,
+    plan_focus: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     windows = _mulligan_draw_windows(len(kept_cards), min(3, len(target_alternatives_by_turn)))
     probabilities: list[float] = []
@@ -1432,9 +2929,25 @@ def _mulligan_subset_score(
     if len(target_alternatives_by_turn) >= 2:
         if any(_shape_meets_target(kept_costs, list(shape)) for shape in target_alternatives_by_turn[1] or []):
             score += 2.0
+    plan_score: dict[str, Any] = {}
+    if plan_focus:
+        main_plan = plan_focus.get("main_plan") if isinstance(plan_focus.get("main_plan"), list) else []
+        sub_plan = plan_focus.get("sub_plan") if isinstance(plan_focus.get("sub_plan"), list) else []
+        if main_plan:
+            main_metrics = _plan_access_score(kept_cards, initial_hand, deck_cards, main_plan, windows)
+            score += float(main_metrics.get("score") or 0.0) * 1.25
+            score += _mulligan_visible_plan_card_adjustment(kept_cards, initial_hand, main_plan, weight_scale=1.0)
+            score -= _mulligan_late_card_before_early_secured_penalty(kept_cards, main_plan)
+            plan_score["main_label"] = main_metrics.get("label") or ""
+            plan_score["main_probabilities"] = list(main_metrics.get("probabilities") or [])
+        if sub_plan:
+            sub_metrics = _plan_access_score(kept_cards, initial_hand, deck_cards, sub_plan, windows)
+            score += float(sub_metrics.get("score") or 0.0) * 0.45
+            score += _mulligan_visible_plan_card_adjustment(kept_cards, initial_hand, sub_plan, weight_scale=0.35)
+            plan_score["sub_label"] = sub_metrics.get("label") or ""
+            plan_score["sub_probabilities"] = list(sub_metrics.get("probabilities") or [])
     score -= _mulligan_duplicate_penalty(kept_cards, target_alternatives_by_turn)
     score += _mulligan_profile_adjustment(kept_cards, initial_hand, target_alternatives_by_turn)
-    focus = _mulligan_bottleneck_focus(initial_hand, deck_cards, target_alternatives_by_turn)
     if focus:
         redraws = 6 - len(kept_cards)
         focus_turn_index = int(focus.get("turn_index") or 0)
@@ -1467,9 +2980,11 @@ def _mulligan_subset_score(
         "score": score,
         "probabilities": probabilities,
         "draw_windows": windows,
+        "diagnostics": _mulligan_candidate_diagnostics(kept_cards, initial_hand, deck_cards, target_alternatives_by_turn, windows),
         "critical_focus": {
             key: value for key, value in focus.items() if key != "is_key"
         } if focus else {},
+        "plan_focus": plan_score,
     }
 
 
@@ -1491,9 +3006,14 @@ def _choose_mulligan_plan(
         target_alternatives_by_turn = [[list(turn)] for turn in target_turns]
     best: tuple[float, float, int, list[dict[str, Any]], dict[str, Any]] | None = None
     candidates: list[dict[str, Any]] = []
+    focus = _mulligan_bottleneck_focus(hand, deck_cards, target_alternatives_by_turn)
+    plan_focus = _choose_early_progression_plans(hand, deck_cards, target_alternatives_by_turn)
     for kept_cards in _all_keep_subsets(hand):
-        metrics = _mulligan_subset_score(kept_cards, hand, deck_cards, target_alternatives_by_turn)
-        keep_need_score = sum(_card_need_score_by_turn(card, target_alternatives_by_turn, deck_cards) for card in kept_cards)
+        metrics = _mulligan_subset_score(kept_cards, hand, deck_cards, target_alternatives_by_turn, focus, plan_focus)
+        keep_need_score = sum(
+            float(_card_need_profile(card, target_alternatives_by_turn, deck_cards).get("keep_value") or 0.0)
+            for card in kept_cards
+        )
         tie = (float(metrics["score"]), keep_need_score, 6 - len(kept_cards), kept_cards, metrics)
         candidates.append({
             "kept": kept_cards,
@@ -1513,6 +3033,7 @@ def _choose_mulligan_plan(
         "probabilities": list(best[4].get("probabilities") or []),
         "draw_windows": list(best[4].get("draw_windows") or []),
         "critical_focus": dict(best[4].get("critical_focus") or {}),
+        "plan_focus": plan_focus,
         "candidates": ranked,
     }
 
@@ -1545,11 +3066,11 @@ def _apply_hand_smoothing(hand: list[dict[str, Any]], deck: list[dict[str, Any]]
 def _best_energy_boost_live(hand: list[dict[str, Any]]) -> dict[str, Any] | None:
     candidates = [
         card for card in hand
-        if card.get("kind") == "live" and int(card.get("energy_boost_n") or 0) > 0
+        if _energy_boost_amount(card) > 0
     ]
     if not candidates:
         return None
-    return max(candidates, key=lambda card: (int(card.get("energy_boost_n") or 0), int(card.get("score") or 0)))
+    return max(candidates, key=lambda card: (_energy_boost_amount(card), int(card.get("score") or 0)))
 
 
 def _choose_live_set_cards(
@@ -1561,12 +3082,13 @@ def _choose_live_set_cards(
     future_alternatives_by_turn: list[list[list[int]]] | None = None,
     start_turn_index: int = 0,
     stage: list[dict[str, Any] | None] | None = None,
+    current_recovery_alternatives: list[list[int]] | None = None,
 ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
     def member_cost(card: dict[str, Any]) -> int:
         return int(card.get("cost") or 0)
 
     def is_energy_live(card: dict[str, Any]) -> bool:
-        return card.get("kind") == "live" and int(card.get("energy_boost_n") or 0) > 0
+        return _energy_boost_amount(card) > 0
 
     def is_setup_draw_live(card: dict[str, Any]) -> bool:
         return card.get("kind") == "live" and int(card.get("score") or 0) == 0 and int(card.get("draw_n") or 0) >= 2
@@ -1590,8 +3112,53 @@ def _choose_live_set_cards(
         if card is not None and card in hand and card not in out and len(out) < 3:
             out.append(card)
 
+    def target_score_live(cards: list[dict[str, Any]]) -> dict[str, Any] | None:
+        if not isinstance(live_score_target, dict):
+            return None
+        if live_score_target.get("score_priority_mode") != "finale_pressure":
+            return None
+        accepted_scores = {
+            int(score)
+            for score in live_score_target.get("accepted_scores", []) or []
+        }
+        if not accepted_scores:
+            return None
+        candidates = [
+            card for card in cards
+            if _live_basic_success_candidate(stage, card)
+            and card.get("kind") == "live"
+            and card.get("score") is not None
+            and int(card.get("score") or 0) in accepted_scores
+        ]
+        if not candidates:
+            return None
+        return max(candidates, key=lambda card: (
+            int(card.get("score") or 0),
+            int(card.get("draw_n") or 0),
+            str(card.get("card_no") or ""),
+        ))
+
     def selected_live_for_success(cards: list[dict[str, Any]]) -> dict[str, Any] | None:
-        return next((card for card in cards if _live_basic_success_candidate(stage, card)), None)
+        score_live = target_score_live(cards)
+        if score_live is not None:
+            return score_live
+        candidates = [
+            card for card in cards
+            if _live_basic_success_candidate(stage, card)
+        ]
+        if not candidates:
+            return None
+        return max(candidates, key=lambda card: (
+            _live_effect_play_value(
+                card,
+                future_alternatives_by_turn or [],
+                start_turn_index=start_turn_index,
+                prefer_energy_boost=prefer_energy_boost,
+            ),
+            int(card.get("score") or 0),
+            int(card.get("draw_n") or 0),
+            str(card.get("card_no") or ""),
+        ))
 
     def has_shape(shape: list[int]) -> bool:
         wanted = sorted(int(value) for value in shape)
@@ -1600,6 +3167,25 @@ def _choose_live_set_cards(
                 if sorted(int(value) for value in alternative) == wanted:
                     return True
         return False
+
+    def future_exact_need(cost: int, *, min_offset: int = 1, max_offset: int = 3) -> int:
+        need = 0
+        for alternatives in (future_alternatives_by_turn or [])[min_offset:max_offset + 1]:
+            for shape in alternatives or []:
+                need = max(need, int(Counter(int(value) for value in shape).get(int(cost), 0) or 0))
+        return need
+
+    def total_available_cost_count(cost: int) -> int:
+        return sum(1 for item in stage_costs if int(item) == int(cost)) + sum(1 for item in hand_costs if int(item) == int(cost))
+
+    def future_anchor_protected(card: dict[str, Any]) -> bool:
+        if card.get("kind") != "member" or card.get("cost") is None:
+            return False
+        cost = int(card.get("cost") or 0)
+        if cost < 10:
+            return False
+        need = future_exact_need(cost)
+        return need > 0 and total_available_cost_count(cost) <= need
 
     def best_two(cards: list[dict[str, Any]]) -> dict[str, Any] | None:
         twos = [card for card in cards if card.get("kind") == "member" and member_cost(card) == 2]
@@ -1618,6 +3204,16 @@ def _choose_live_set_cards(
     hand_members = [card for card in hand if card.get("kind") == "member" and card.get("cost") is not None]
     hand_costs = [member_cost(card) for card in hand_members]
     combined_costs = sorted(stage_costs + hand_costs, reverse=True)
+    current_alternatives = future_alternatives_by_turn[0] if future_alternatives_by_turn else []
+    stage_hits_current = bool(current_alternatives) and any(
+        _shape_meets_target(stage_costs, list(shape))
+        for shape in current_alternatives
+    )
+    stage_hits_recovery = bool(current_recovery_alternatives) and any(
+        _shape_meets_target(stage_costs, list(shape))
+        for shape in current_recovery_alternatives or []
+    )
+    recovery_rescue_mode = bool(stage_hits_recovery and not stage_hits_current)
     next_alternatives = future_alternatives_by_turn[1] if len(future_alternatives_by_turn) > 1 else (future_alternatives_by_turn[0] if future_alternatives_by_turn else [])
     next_reachable = bool(next_alternatives) and any(_shape_meets_target(combined_costs, list(shape)) for shape in next_alternatives)
     five_axis = has_shape([2, 5, 2])
@@ -1633,19 +3229,15 @@ def _choose_live_set_cards(
         has_two = any(cost == 2 for cost in hand_costs)
         stage_or_hand_has_mid = any(cost in {4, 5} for cost in stage_costs + hand_costs)
         stage_or_hand_has_two = any(cost == 2 for cost in stage_costs + hand_costs)
-        current_alternatives = future_alternatives_by_turn[0] if future_alternatives_by_turn else []
         next_alternatives_for_search = future_alternatives_by_turn[1] if len(future_alternatives_by_turn) > 1 else []
-        stage_hits_current = bool(current_alternatives) and any(
-            _shape_meets_target(stage_costs, list(shape))
-            for shape in current_alternatives
-        )
         next_needs_eleven = any(11 in [int(value) for value in shape] for shape in next_alternatives_for_search or [])
-        if start_turn_index >= 1 and stage_hits_current and next_needs_eleven:
+        if start_turn_index >= 1 and (stage_hits_current or stage_hits_recovery) and next_needs_eleven:
             if prefer_energy_boost:
                 add_unique(strategic, next((card for card in hand if is_energy_live(card)), None))
             exchange_members = [
                 card for card in hand_members
                 if member_cost(card) != 11
+                and not future_anchor_protected(card)
             ]
             for card in sorted(exchange_members, key=lambda item: (
                 0 if member_cost(item) >= 13 else 1,
@@ -1684,11 +3276,12 @@ def _choose_live_set_cards(
             add_unique(strategic, next((card for card in hand_members if member_cost(card) >= 13), None))
             add_unique(strategic, lowest_score_live(hand))
         elif has_ten and not stage_or_hand_has_two:
-            for card in sorted((card for card in hand_members if member_cost(card) >= 13), key=lambda item: member_cost(item)):
+            for card in sorted((card for card in hand_members if member_cost(card) >= 13 and not future_anchor_protected(card)), key=lambda item: member_cost(item)):
                 add_unique(strategic, card)
             add_unique(strategic, highest_score_live(hand))
         elif not has_ten and has_energy and has_four:
-            for card in sorted((card for card in hand_members if member_cost(card) >= 13), key=lambda item: member_cost(item)):
+            add_unique(strategic, next((card for card in hand if is_energy_live(card)), None))
+            for card in sorted((card for card in hand_members if member_cost(card) >= 13 and member_cost(card) != 11 and not future_anchor_protected(card)), key=lambda item: member_cost(item)):
                 add_unique(strategic, card)
         elif not has_ten and not has_energy:
             if start_turn_index >= 2:
@@ -1701,7 +3294,7 @@ def _choose_live_set_cards(
             elif not stage_has_four:
                 extra_twos = [card for card in hand_members if member_cost(card) == 2]
                 add_unique(strategic, extra_twos[0] if extra_twos else None)
-            for card in sorted((card for card in hand_members if member_cost(card) >= 13), key=lambda item: member_cost(item)):
+            for card in sorted((card for card in hand_members if member_cost(card) >= 13 and not future_anchor_protected(card)), key=lambda item: member_cost(item)):
                 add_unique(strategic, card)
         if strategic:
             return selected_live_for_success(strategic), strategic
@@ -1720,21 +3313,45 @@ def _choose_live_set_cards(
         if strategic:
             return selected_live_for_success(strategic), strategic
 
+    if recovery_rescue_mode and next_alternatives:
+        next_cost_needs: Counter[int] = Counter()
+        for shape in next_alternatives:
+            for cost, count in Counter(int(value) for value in shape).items():
+                next_cost_needs[cost] = max(next_cost_needs[cost], count)
+        for card in sorted(hand_members, key=lambda item: (
+            0 if int(item.get("cost") or 0) >= 13 and not next_cost_needs.get(int(item.get("cost") or 0), 0) else 1,
+            0 if int(item.get("cost") or 0) not in next_cost_needs else 1,
+            int(item.get("cost") or 0),
+            str(item.get("card_no") or ""),
+        )):
+            cost = member_cost(card)
+            if future_anchor_protected(card):
+                continue
+            if next_cost_needs.get(cost, 0) and total_available_cost_count(cost) <= int(next_cost_needs.get(cost, 0)):
+                continue
+            add_unique(strategic, card)
+        add_unique(strategic, highest_score_live(hand))
+        if strategic:
+            return selected_live_for_success(strategic), strategic
+
     selected: list[dict[str, Any]] = []
     live_for_success: dict[str, Any] | None = None
     if prefer_energy_boost:
         energy_lives = [
             card for card in hand
-            if card.get("kind") == "live" and int(card.get("energy_boost_n") or 0) > 0
+            if _energy_boost_amount(card) > 0
         ]
         if energy_lives:
-            live_for_success = max(energy_lives, key=lambda card: (int(card.get("energy_boost_n") or 0), int(card.get("score") or 0)))
+            live_for_success = max(energy_lives, key=lambda card: (_energy_boost_amount(card), int(card.get("score") or 0)))
             selected.append(live_for_success)
 
     score_live = _best_live_for_score_target(hand, live_score_target, protect_energy_boost=not prefer_energy_boost)
     if score_live is not None and score_live not in selected:
         selected.append(score_live)
-    if score_live is not None and live_for_success is None:
+    if score_live is not None and (
+        live_for_success is None
+        or (isinstance(live_score_target, dict) and live_score_target.get("score_priority_mode") == "finale_pressure")
+    ):
         live_for_success = score_live
 
     candidates = [card for card in hand if card not in selected]
@@ -1749,6 +3366,11 @@ def _choose_live_set_cards(
         for shape in alternatives or []:
             for cost, count in Counter(int(value) for value in shape).items():
                 protect_counts[cost] = max(int(protect_counts.get(cost, 0) or 0), int(count))
+    for alternatives in future_alternatives_by_turn[2:3]:
+        for shape in alternatives or []:
+            for cost, count in Counter(int(value) for value in shape).items():
+                if int(cost) >= 10:
+                    protect_counts[cost] = max(int(protect_counts.get(cost, 0) or 0), int(count))
     exchange_budget_by_cost: Counter[int] = Counter()
     for cost, hand_count in hand_cost_counts.items():
         deck_count = _member_cost_counts(deck_cards).get(cost, 0)
@@ -1763,12 +3385,12 @@ def _choose_live_set_cards(
         (
             (
                 card,
-                _card_need_score_by_turn(
+                float(_card_need_profile(
                     card,
                     future_alternatives_by_turn,
                     deck_cards,
                     start_turn_index=start_turn_index,
-                ),
+                ).get("exchange_cost") or 0.0),
             )
             for card in candidates
         ),
@@ -1778,7 +3400,7 @@ def _choose_live_set_cards(
     for card, score in scored:
         if len(selected) >= 3:
             break
-        if card.get("kind") == "live" and int(card.get("energy_boost_n") or 0) > 0 and not prefer_energy_boost:
+        if _energy_boost_amount(card) > 0 and not prefer_energy_boost:
             continue
         adjusted_score = float(score)
         cost = None
@@ -1793,15 +3415,7 @@ def _choose_live_set_cards(
             if cost is not None:
                 exchanged_by_cost[cost] += 1
     if live_for_success is None:
-        live_for_success = next(
-            (
-                card for card in selected
-                if card.get("kind") == "live"
-                and int(card.get("draw_n") or 0) > 0
-                and _live_basic_success_candidate(stage, card)
-            ),
-            None,
-        )
+        live_for_success = selected_live_for_success(selected)
     return live_for_success, selected
 
 
@@ -1816,6 +3430,7 @@ def _live_set_exchange(
     future_alternatives_by_turn: list[list[list[int]]] | None = None,
     start_turn_index: int = 0,
     stage: list[dict[str, Any] | None] | None = None,
+    current_recovery_alternatives: list[list[int]] | None = None,
 ) -> tuple[dict[str, Any] | None, int, list[dict[str, Any]]]:
     live_for_success, selected = _choose_live_set_cards(
         hand,
@@ -1826,6 +3441,7 @@ def _live_set_exchange(
         future_alternatives_by_turn,
         start_turn_index,
         stage,
+        current_recovery_alternatives,
     )
 
     for card in selected:
@@ -1871,14 +3487,31 @@ def _alternatives_trace_label(alternatives: list[list[int]]) -> str:
 def _need_score_trace(cards: list[dict[str, Any]], alternatives: list[list[list[int]]], deck_cards: list[dict[str, Any]], limit: int = 6) -> str:
     scored = sorted(
         (
-            (card, _card_need_score_by_turn(card, alternatives, deck_cards))
+            (card, _card_need_profile(card, alternatives, deck_cards))
             for card in cards
         ),
-        key=lambda item: (-item[1], str(item[0].get("card_no") or "")),
+        key=lambda item: (-float(item[1].get("total") or 0.0), str(item[0].get("card_no") or "")),
     )[:limit]
     if not scored:
         return "none"
-    return "; ".join(f"{_card_trace_label(card)} need={round(score, 2)}" for card, score in scored)
+    parts: list[str] = []
+    for card, profile in scored:
+        tags = profile.get("tags") if isinstance(profile.get("tags"), list) else []
+        tag_text = "" if not tags else " flags=" + ",".join(str(tag) for tag in tags)
+        parts.append(
+            "{} need={} keep={} exch={} future={} dig={} rec={} side={}{}".format(
+                _card_trace_label(card),
+                round(float(profile.get("total") or 0.0), 2),
+                round(float(profile.get("keep_value") or 0.0), 2),
+                round(float(profile.get("exchange_cost") or 0.0), 2),
+                round(float(profile.get("future_play_value") or 0.0), 2),
+                round(float(profile.get("dig_target_value") or 0.0), 2),
+                round(float(profile.get("recovery_value") or 0.0), 2),
+                round(float(profile.get("sideboard_like") or 0.0), 2),
+                tag_text,
+            )
+        )
+    return "; ".join(parts)
 
 
 def _mulligan_candidate_trace(candidates: list[dict[str, Any]], limit: int = 5) -> list[str]:
@@ -1886,28 +3519,60 @@ def _mulligan_candidate_trace(candidates: list[dict[str, Any]], limit: int = 5) 
     for candidate in candidates[:limit]:
         kept = candidate.get("kept", []) if isinstance(candidate.get("kept"), list) else []
         probabilities = candidate.get("probabilities", []) if isinstance(candidate.get("probabilities"), list) else []
+        diagnostics = candidate.get("diagnostics", {}) if isinstance(candidate.get("diagnostics"), dict) else {}
+        plan_focus = candidate.get("plan_focus", {}) if isinstance(candidate.get("plan_focus"), dict) else {}
         probability_text = "/".join(str(round(float(value), 3)) for value in probabilities)
+        main_probs = plan_focus.get("main_probabilities", []) if isinstance(plan_focus.get("main_probabilities"), list) else []
+        main_prob_text = "/".join(str(round(float(value), 3)) for value in main_probs) if main_probs else "n/a"
         lines.append(
-            "score={} p(T1/T2/T3)={} keep={}".format(
+            "score={} p(T1/T2/T3)={} main_plan={} main_p={} kept2={}/{} redraws={} t3_targets={} t3_access={} t3_draws={} keep={}".format(
                 round(float(candidate.get("score") or 0), 3),
                 probability_text,
+                plan_focus.get("main_label") or "none",
+                main_prob_text,
+                int(diagnostics.get("kept_twos") or 0),
+                int(diagnostics.get("t2_need_twos") or 0),
+                int(diagnostics.get("redraws") or 0),
+                diagnostics.get("t3_targets") or [],
+                diagnostics.get("t3_access") if diagnostics.get("t3_access") is not None else "n/a",
+                diagnostics.get("t3_draws") if diagnostics.get("t3_draws") is not None else "n/a",
                 _cards_trace_label(kept),
             )
         )
     return lines
 
 
-def _apply_live_success_smoothing(hand: list[dict[str, Any]], deck: list[dict[str, Any]], draw_index: int, live: dict[str, Any] | None) -> int:
-    if not live or int(live.get("draw_n") or 0) <= 0:
-        return draw_index
-    draw_n = min(int(live.get("draw_n") or 0), max(0, len(deck) - draw_index))
+def _apply_live_success_smoothing(
+    hand: list[dict[str, Any]],
+    deck: list[dict[str, Any]],
+    draw_index: int,
+    live: dict[str, Any] | None,
+    deck_cards: list[dict[str, Any]],
+    future_alternatives_by_turn: list[list[list[int]]] | None = None,
+    *,
+    start_turn_index: int = 0,
+) -> tuple[int, list[dict[str, Any]], dict[str, Any] | None]:
+    if not live:
+        return draw_index, [], None
+    live_draw_n = int(live.get("live_success_draw_n") or live.get("draw_n") or 0)
+    if live_draw_n <= 0:
+        return draw_index, [], None
+    draw_n = min(live_draw_n, max(0, len(deck) - draw_index))
+    drawn: list[dict[str, Any]] = []
     for _ in range(draw_n):
-        hand.append(deck[draw_index])
+        card = deck[draw_index]
+        hand.append(card)
+        drawn.append(card)
         draw_index += 1
+    discarded = None
     if draw_n >= 2 and hand:
-        discard = min(hand, key=lambda card: (int(card.get("value") or 0), 0 if card.get("kind") == "other" else 1))
-        hand.remove(discard)
-    return draw_index
+        discarded = _discard_after_effect_draw(
+            hand,
+            deck_cards,
+            future_alternatives_by_turn,
+            start_turn_index=start_turn_index,
+        )
+    return draw_index, drawn, discarded
 
 
 def _has_energy_boost_live(cards: list[dict[str, Any]]) -> bool:
@@ -1922,6 +3587,24 @@ def _target_alternatives_for_turn(target_shape: list[int], deck_cards: list[dict
     alternatives = [list(target_shape)] if _shape_costs_available(target_shape, deck_cards) else []
     if target_shape == [2, 2] and _shape_costs_available([4], deck_cards):
         alternatives.append([4])
+    curve_shapes = _energy_activate_curve_shape_set(deck_cards)
+    if curve_shapes:
+        normalized_target = sorted((int(value) for value in target_shape), reverse=True)
+        if normalized_target == sorted(curve_shapes.get("t2", []), reverse=True):
+            accel_single = [int(curve_shapes["accelerator_cost"])]
+            if _shape_costs_available(accel_single, deck_cards):
+                alternatives.append(accel_single)
+        if normalized_target == sorted(curve_shapes.get("t3", []), reverse=True):
+            for shape in (
+                curve_shapes.get("t3_alt_high", []),
+                curve_shapes.get("t3_alt_single", []),
+            ):
+                if shape and _shape_costs_available(list(shape), deck_cards):
+                    alternatives.append(list(shape))
+        if normalized_target == sorted(curve_shapes.get("t5", []), reverse=True):
+            alt = curve_shapes.get("t5_alt", [])
+            if alt and _shape_costs_available(list(alt), deck_cards):
+                alternatives.append(list(alt))
     has_energy = _has_energy_boost_live(deck_cards)
     if target_shape == [2, 5, 2] and has_energy and _shape_costs_available([2, 4, 2], deck_cards):
         alternatives.append([2, 4, 2])
@@ -1954,6 +3637,65 @@ def _target_alternatives_for_turn(target_shape: list[int], deck_cards: list[dict
     return alternatives
 
 
+def _unique_shapes(shapes: list[list[int]]) -> list[list[int]]:
+    out: list[list[int]] = []
+    seen: set[tuple[int, ...]] = set()
+    for shape in shapes:
+        normalized = tuple(sorted((int(value) for value in shape), reverse=True))
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        out.append(list(normalized))
+    return out
+
+
+def _has_member_recovery_route(deck_cards: list[dict[str, Any]]) -> bool:
+    return any(
+        int(card.get("member_recovery_n") or 0) > 0
+        or int(card.get("live_success_member_recovery_n") or 0) > 0
+        for card in deck_cards
+    )
+
+
+def _recovery_compromise_shapes(accepted_shapes: list[list[int]], deck_cards: list[dict[str, Any]]) -> list[list[int]]:
+    if not _has_member_recovery_route(deck_cards):
+        return []
+    accepted_keys = {tuple(sorted((int(value) for value in shape), reverse=True)) for shape in accepted_shapes}
+    candidates: list[list[int]] = []
+    available_costs = _member_cost_counts(deck_cards)
+    for shape in accepted_shapes:
+        normalized = sorted((int(value) for value in shape), reverse=True)
+        if len(normalized) < 3:
+            continue
+        low_indexes = [index for index, value in enumerate(normalized) if value <= 2]
+        if low_indexes:
+            for index in reversed(low_indexes):
+                candidate = [value for pos, value in enumerate(normalized) if pos != index]
+                if candidate:
+                    candidates.append(candidate)
+        if len(normalized) == 3 and normalized[-1] <= 2:
+            high_mid = [normalized[0], normalized[1]]
+            if high_mid:
+                candidates.append(high_mid)
+        if len(normalized) == 3 and 5 in normalized and available_costs.get(4, 0) > 0:
+            candidate = [4 if value == 5 else value for value in normalized]
+            candidates.append(candidate)
+            low_indexes = [index for index, value in enumerate(candidate) if value <= 2]
+            if low_indexes:
+                candidates.append([value for pos, value in enumerate(candidate) if pos != low_indexes[-1]])
+    return [
+        shape for shape in _unique_shapes(candidates)
+        if tuple(shape) not in accepted_keys and _shape_costs_available(shape, deck_cards)
+    ]
+
+
+def _planning_shapes_for_goal(goal_plan: dict[str, Any]) -> list[list[int]]:
+    accepted = [list(shape) for shape in goal_plan.get("accepted_shapes", []) or [] if isinstance(shape, list)]
+    recovery = [list(shape) for shape in goal_plan.get("recovery_shapes", []) or [] if isinstance(shape, list)]
+    primary = list(goal_plan.get("primary_shape", []))
+    return _unique_shapes(accepted + recovery + ([primary] if primary else []))
+
+
 def _stage_goal_plans(base_turns: list[list[int]], deck_cards: list[dict[str, Any]], max_turns: int) -> list[dict[str, Any]]:
     seed_turns = _deck_dynamic_target_turns(base_turns, deck_cards, max_turns)
     plans: list[dict[str, Any]] = []
@@ -1962,11 +3704,14 @@ def _stage_goal_plans(base_turns: list[list[int]], deck_cards: list[dict[str, An
         if not accepted_shapes and seed_shape:
             accepted_shapes = [list(seed_shape)]
         primary_shape = list(accepted_shapes[0]) if accepted_shapes else list(seed_shape)
+        recovery_shapes = _recovery_compromise_shapes(accepted_shapes, deck_cards)
         plans.append({
             "turn": turn_index,
             "seed_shape": list(seed_shape),
             "primary_shape": primary_shape,
             "accepted_shapes": [list(shape) for shape in accepted_shapes],
+            "recovery_shapes": [list(shape) for shape in recovery_shapes],
+            "planning_shapes": _unique_shapes([list(shape) for shape in accepted_shapes] + [list(shape) for shape in recovery_shapes]),
         })
     return plans
 
@@ -2042,6 +3787,8 @@ def _shape_goal_cards(shape: list[int], deck_cards: list[dict[str, Any]]) -> lis
 def _goal_route_text(card: dict[str, Any], deck_cards: list[dict[str, Any]]) -> str:
     cost = int(card.get("cost") or 0)
     parts = ["手札から通常登場"]
+    if int(card.get("energy_activate_n") or 0) > 0:
+        parts.append("エネルギーアクティブ化で後続到達を補助")
     if cost >= 15 and bool(card.get("cost_reduction")):
         parts.append("自身のコスト軽減で到達候補")
     if int(card.get("low_cost_summon_n") or 0) > 0:
@@ -2059,6 +3806,15 @@ def _stage_goal_summary(stage_goal_plans: list[dict[str, Any]], deck_cards: list
                     "cards": _shape_goal_cards(shape, deck_cards),
                 }
                 for shape in plan.get("accepted_shapes", []) or []
+                if isinstance(shape, list)
+            ],
+            "recovery_alternatives": [
+                {
+                    "shape": list(shape),
+                    "cards": _shape_goal_cards(shape, deck_cards),
+                    "route": "回収・ドロー・エネルギー加速で次ターン以降の復帰を狙う妥協進行",
+                }
+                for shape in plan.get("recovery_shapes", []) or []
                 if isinstance(shape, list)
             ],
         }
@@ -2157,6 +3913,7 @@ def build_autoplay_policy_context(
     deck_cards = _expanded_card_objects(rows, card_lookup)
     stage_goal_plans = _stage_goal_plans(base_turns, deck_cards, max_turns)
     target_alternatives = [list(plan.get("accepted_shapes", [])) for plan in stage_goal_plans]
+    planning_alternatives = [_planning_shapes_for_goal(plan) for plan in stage_goal_plans]
     return {
         "report": report,
         "recommended_early": recommended_early,
@@ -2165,6 +3922,7 @@ def build_autoplay_policy_context(
         "stage_goal_plans": stage_goal_plans,
         "target_turns": [list(plan.get("primary_shape", [])) for plan in stage_goal_plans],
         "target_alternatives": target_alternatives,
+        "planning_alternatives": planning_alternatives,
         "target_goal_summary": _stage_goal_summary(stage_goal_plans, deck_cards),
         "live_score_targets": _live_score_targets(deck_cards, max_turns),
     }
@@ -2222,6 +3980,72 @@ def _cpu_turn_index(state: dict[str, Any], max_turns: int) -> int:
     raw_turn = _first_int(state.get("turn"))
     turn = int(raw_turn or 1)
     return max(0, min(max_turns - 1, turn - 1))
+
+
+def _list_count(value: Any) -> int:
+    if isinstance(value, list):
+        return len(value)
+    if isinstance(value, dict):
+        return len([item for item in value.values() if item])
+    try:
+        return max(0, int(value or 0))
+    except Exception:
+        return 0
+
+
+def _opponent_public_context(state: dict[str, Any]) -> dict[str, Any]:
+    own_success = _list_count(state.get("success"))
+    if not own_success:
+        own_success = _list_count(state.get("success_count"))
+    opponent_success = _list_count(state.get("opponent_success_count"))
+    opponent_wait = _list_count(state.get("opponent_wait_count"))
+    known_hand = _list_count(state.get("opponent_public_hand")) + _list_count(state.get("opponent_revealed_hand"))
+    pressure = "even"
+    if opponent_success > own_success:
+        pressure = "behind"
+    elif own_success > opponent_success:
+        pressure = "ahead"
+    tempo = "normal"
+    if opponent_wait >= 2:
+        tempo = "opponent_slow"
+    elif opponent_wait <= 0 and pressure != "ahead":
+        tempo = "opponent_ready"
+    return {
+        "own_success": own_success,
+        "opponent_success": opponent_success,
+        "opponent_finale": opponent_success >= 2,
+        "opponent_wait": opponent_wait,
+        "known_opponent_hand": known_hand,
+        "pressure": pressure,
+        "tempo": tempo,
+    }
+
+
+def _adjust_live_target_for_public_pressure(
+    live_target: dict[str, Any] | None,
+    hand: list[dict[str, Any]],
+    public_context: dict[str, Any],
+) -> dict[str, Any] | None:
+    if not isinstance(live_target, dict):
+        return live_target
+    lives = [card for card in hand if card.get("kind") == "live" and card.get("score") is not None]
+    if not lives:
+        return live_target
+    out = dict(live_target)
+    scores = sorted({int(card.get("score") or 0) for card in lives if int(card.get("score") or 0) > 0})
+    if not scores:
+        return out
+    if public_context.get("opponent_finale"):
+        preferred = scores[-1]
+        out["target_score"] = max(int(out.get("target_score") or 0), preferred)
+        out["accepted_scores"] = [score for score in scores if score >= int(out["target_score"])]
+        out["score_priority_mode"] = "finale_pressure"
+        out["public_pressure_adjustment"] = "相手が千秋楽のため、手札内で狙える高スコアライブを優先"
+    elif public_context.get("pressure") == "behind" or public_context.get("tempo") == "opponent_ready":
+        out["public_pressure_adjustment"] = "相手は先行/動けそうだが千秋楽ではないため、進行を崩さずステージ目標を優先"
+    elif public_context.get("pressure") == "ahead" and public_context.get("tempo") == "opponent_slow":
+        out["public_pressure_adjustment"] = "こちらが先行し相手が遅れているため、ステージ進行と手札整備を優先"
+    return out
 
 
 def _pending_options(pending: dict[str, Any]) -> list[str]:
@@ -2361,7 +4185,9 @@ def _cpu_main_action(
     hand = _state_indexed_cards(state.get("hand"), card_lookup)
     stage = _state_stage_cards(state, card_lookup)
     alternatives = list(goal_plan.get("accepted_shapes", [])) or [list(goal_plan.get("primary_shape", []))]
-    best_shape = _best_target_shape_for_stage(stage, alternatives)
+    primary_shape = list(goal_plan.get("primary_shape", []))
+    planning_alternatives = [primary_shape] if primary_shape else alternatives
+    best_shape = _best_target_shape_for_stage(stage, planning_alternatives)
     if not best_shape:
         return None
     best_score = _stage_score(stage, best_shape)
@@ -2372,12 +4198,14 @@ def _cpu_main_action(
     slot_names = ["L", "C", "R"]
     candidates: list[tuple[int, int, int, int, dict[str, Any], int]] = []
     for slot in _stage_slots_to_replace(stage, best_shape):
+        if _slot_satisfies_nonreplaceable_target(stage, slot, best_shape):
+            continue
         old_card = stage[slot] if slot < len(stage) else None
         for card in hand:
             if card.get("kind") != "member" or card.get("cost") is None:
                 continue
             cost = int(card.get("cost") or 0)
-            pay_cost = _member_play_cost_for_slot(card, old_card)
+            pay_cost = _member_play_cost_for_slot(card, old_card, stage)
             if pay_cost > active_energy:
                 continue
             trial_stage = list(stage)
@@ -2395,7 +4223,7 @@ def _cpu_main_action(
         "command": "play",
         "payload": {"hand_idx": int(card.get("state_index", 0)), "pos": slot_names[slot]},
         "confidence": "medium",
-        "reason": "accepted target {} に対するstage score gain +{}（active energy {} / pay {} で実行可能、目標超過を優先評価）".format(
+            "reason": "primary target {} に対するstage score gain +{}（active energy {} / pay {} で実行可能、代替達成より本命進行を優先）".format(
             "-".join(str(v) for v in best_shape),
             gain,
             active_energy,
@@ -2413,6 +4241,8 @@ def _cpu_main_completion_action(
     stage = _state_stage_cards(state, card_lookup)
     costs = _stage_costs(stage)
     alternatives = list(goal_plan.get("accepted_shapes", [])) or [list(goal_plan.get("primary_shape", []))]
+    recovery_alternatives = [list(shape) for shape in goal_plan.get("recovery_shapes", []) or [] if isinstance(shape, list)]
+    planning_alternatives = _planning_shapes_for_goal(goal_plan)
     best_shape = _best_target_shape_for_stage(stage, alternatives)
     matched_shape = next((shape for shape in alternatives if _shape_meets_target(costs, shape)), [])
     if matched_shape:
@@ -2428,6 +4258,21 @@ def _cpu_main_completion_action(
             "stage_costs": costs,
             "target_shape": matched_shape,
         }
+    recovery_shape = next((shape for shape in recovery_alternatives if _shape_meets_target(costs, shape)), [])
+    if recovery_shape:
+        return {
+            "kind": "main_recovery_complete",
+            "command": "NEXT",
+            "payload": {},
+            "confidence": "medium",
+            "reason": "MAIN通常目標は未達だが復帰可能形: stage {} meets recovery target {} / accepted miss {}".format(
+                _stage_text(stage),
+                "-".join(str(v) for v in recovery_shape),
+                _miss_reason(costs, alternatives),
+            ),
+            "stage_costs": costs,
+            "target_shape": recovery_shape,
+        }
     return {
         "kind": "main_pass",
         "command": "NEXT",
@@ -2435,7 +4280,7 @@ def _cpu_main_completion_action(
         "confidence": "low",
         "reason": "MAIN追加登場で改善できる候補なし: stage {} / best target {} / {}".format(
             _stage_text(stage),
-            "-".join(str(v) for v in best_shape) if best_shape else "none",
+            "-".join(str(v) for v in (best_shape or _best_target_shape_for_stage(stage, planning_alternatives))) if (best_shape or planning_alternatives) else "none",
             _miss_reason(costs, alternatives),
         ),
         "stage_costs": costs,
@@ -2454,6 +4299,7 @@ def suggest_autoplay_action(
     turn_index = _cpu_turn_index(state, max_turns)
     goal_plan = context["stage_goal_plans"][turn_index] if turn_index < len(context["stage_goal_plans"]) else {}
     phase = str(state.get("phase") or "").upper()
+    public_context = _opponent_public_context(state)
     pending_action = _cpu_pending_action(state)
     if pending_action is not None:
         pending_action["turn"] = turn_index + 1
@@ -2491,14 +4337,31 @@ def suggest_autoplay_action(
         hand = _state_indexed_cards(state.get("hand"), card_lookup)
         stage = _state_stage_cards(state, card_lookup)
         alternatives = list(goal_plan.get("accepted_shapes", [])) or [list(goal_plan.get("primary_shape", []))]
-        prefer_energy_boost = any(alternative == [2, 4, 2] for alternative in alternatives)
+        recovery_alternatives = [list(shape) for shape in goal_plan.get("recovery_shapes", []) or [] if isinstance(shape, list)]
         future_targets = [
             alternative
             for future_alternatives in context["target_alternatives"][turn_index: min(len(context["target_alternatives"]), turn_index + 3)]
             for alternative in future_alternatives
         ]
         future_alternatives_by_turn = context["target_alternatives"][turn_index: min(len(context["target_alternatives"]), turn_index + 3)]
+        energy_state_for_bridge = {
+            "active": int(state.get("energy_active", 0) or 0),
+            "wait": int(state.get("energy_wait", 0) or 0),
+            "deck_remaining": int(state.get("energy_deck_remaining", state.get("energy_deck_count", 1)) or 1),
+        }
+        energy_bridge_plan = _energy_bridge_plan_for_next_turn(
+            stage,
+            future_alternatives_by_turn,
+            energy_state_for_bridge,
+            hand,
+        )
+        prefer_energy_boost = any(alternative == [2, 4, 2] for alternative in alternatives) or bool(energy_bridge_plan.get("needed"))
         live_target = context["live_score_targets"][turn_index] if turn_index < len(context["live_score_targets"]) else {}
+        live_target = _adjust_live_target_for_public_pressure(
+            live_target if isinstance(live_target, dict) else None,
+            hand,
+            public_context,
+        ) or {}
         live_for_success, selected = _choose_live_set_cards(
             hand,
             prefer_energy_boost,
@@ -2508,6 +4371,7 @@ def suggest_autoplay_action(
             future_alternatives_by_turn,
             turn_index,
             stage,
+            recovery_alternatives,
         )
         indices = [int(card.get("state_index", 0)) for card in selected]
         target_score = None
@@ -2522,7 +4386,16 @@ def suggest_autoplay_action(
         if live_for_success is not None:
             reason_parts.append("selected live {} score {}".format(live_for_success.get("card_no"), live_score if live_score is not None else "none"))
         if prefer_energy_boost:
-            reason_parts.append("energy bridge候補ターン")
+            reason_parts.append(
+                "energy bridge候補ターン next={} need={} base={} boost={}".format(
+                    energy_bridge_plan.get("next_target") or "?",
+                    energy_bridge_plan.get("min_required"),
+                    energy_bridge_plan.get("base_active_next"),
+                    energy_bridge_plan.get("boosted_active_next"),
+                )
+            )
+        if isinstance(live_target, dict) and live_target.get("public_pressure_adjustment"):
+            reason_parts.append(str(live_target.get("public_pressure_adjustment")))
         confidence = "medium"
         if live_score is not None and accepted_scores and live_score in set(accepted_scores):
             confidence = "high"
@@ -2534,6 +4407,28 @@ def suggest_autoplay_action(
             "phase": phase,
             "confidence": confidence,
             "reason": " / ".join(reason_parts),
+            "public_context": public_context,
+            "live_target": {
+                "target_score": target_score,
+                "accepted_scores": accepted_scores,
+                "score_priority_mode": live_target.get("score_priority_mode") if isinstance(live_target, dict) else None,
+            },
+            "recovery_rescue_mode": bool(
+                recovery_alternatives
+                and not any(_shape_meets_target(_stage_costs(stage), shape) for shape in alternatives)
+                and any(_shape_meets_target(_stage_costs(stage), shape) for shape in recovery_alternatives)
+            ),
+            "energy_bridge_plan": energy_bridge_plan,
+            "live_for_success": (
+                {
+                    "card_no": live_for_success.get("card_no"),
+                    "name": live_for_success.get("name"),
+                    "kind": live_for_success.get("kind"),
+                    "score": live_for_success.get("score"),
+                    "cost": live_for_success.get("cost"),
+                }
+                if live_for_success is not None else None
+            ),
             "selected_cards": [
                 {"card_no": card.get("card_no"), "name": card.get("name"), "kind": card.get("kind"), "score": card.get("score"), "cost": card.get("cost")}
                 for card in selected
@@ -2576,11 +4471,14 @@ def simulate_autoplay_trials(
     stage_goal_plans = context["stage_goal_plans"]
     target_turns = context["target_turns"]
     target_alternatives = context["target_alternatives"]
+    planning_alternatives = context["planning_alternatives"]
     target_goal_summary = context["target_goal_summary"]
     live_score_targets = context["live_score_targets"]
     rng = random.Random(seed)
     turn_hits = [0 for _ in range(max_turns)]
     cumulative_hits = [0 for _ in range(max_turns)]
+    recovery_hits = [0 for _ in range(max_turns)]
+    recovery_cumulative_hits = [0 for _ in range(max_turns)]
     live_score_hits = [0 for _ in range(max_turns)]
     live_score_cumulative_hits = [0 for _ in range(max_turns)]
     combined_cumulative_hits = [0 for _ in range(max_turns)]
@@ -2611,8 +4509,19 @@ def simulate_autoplay_trials(
         kept = list(mulligan_plan.get("keep") or [])
         mulliganed = [card for card in initial_hand if card not in kept]
         if trace is not None:
+            plan_focus = mulligan_plan.get("plan_focus", {}) if isinstance(mulligan_plan.get("plan_focus"), dict) else {}
             trace["mulligan"] = {
                 "targets": _alternatives_trace_label(mulligan_targets),
+                "main_plan": plan_focus.get("main_label") or "none",
+                "main_plan_initial_probabilities": [
+                    round(float(value), 3)
+                    for value in (plan_focus.get("main_initial_probabilities") or [])
+                ] if isinstance(plan_focus.get("main_initial_probabilities"), list) else [],
+                "sub_plan": plan_focus.get("sub_label") or "none",
+                "sub_plan_initial_probabilities": [
+                    round(float(value), 3)
+                    for value in (plan_focus.get("sub_initial_probabilities") or [])
+                ] if isinstance(plan_focus.get("sub_initial_probabilities"), list) else [],
                 "kept": [_card_trace_label(card) for card in kept],
                 "returned": [_card_trace_label(card) for card in mulliganed],
                 "top_need_scores": _need_score_trace(initial_hand, target_alternatives[:3], deck_cards),
@@ -2634,10 +4543,15 @@ def simulate_autoplay_trials(
         if trace is not None:
             trace["mulligan"]["redrawn"] = [_card_trace_label(card) for card in redrawn_cards]
             trace["mulligan"]["post_mulligan_hand"] = [_card_trace_label(card) for card in hand]
+            post_plan_focus = _choose_early_progression_plans(hand, deck_cards, target_alternatives[:3])
+            trace["mulligan"]["post_main_plan"] = post_plan_focus.get("main_label") or "none"
+            trace["mulligan"]["post_sub_plan"] = post_plan_focus.get("sub_label") or "none"
         energy_state = {"active": 3, "wait": 0, "deck_remaining": 9}
         stage: list[dict[str, Any] | None] = [None, None, None]
+        green: list[dict[str, Any]] = []
         trial_shapes: list[str] = []
         prefix_success = True
+        recovery_prefix_success = True
         live_score_prefix_success = True
         combined_prefix_success = True
         for turn_index, goal_plan in enumerate(stage_goal_plans):
@@ -2648,6 +4562,7 @@ def simulate_autoplay_trials(
                     "turn": turn_index + 1,
                     "target": _shape_trace_label(target_shape),
                     "accepted": _alternatives_trace_label(list(goal_plan.get("accepted_shapes", [])) or [target_shape]),
+                    "recovery": _alternatives_trace_label(list(goal_plan.get("recovery_shapes", []))),
                     "start_stage": _stage_text(stage),
                     "start_hand": [_card_trace_label(card) for card in hand],
                     "start_energy": dict(energy_state),
@@ -2667,18 +4582,59 @@ def simulate_autoplay_trials(
             elif turn_trace is not None:
                 turn_trace["normal_draw"] = "none"
             alternatives = list(goal_plan.get("accepted_shapes", [])) or [target_shape]
-            prefer_energy_boost = any(alternative == [2, 4, 2] for alternative in alternatives)
+            recovery_alternatives = [list(shape) for shape in goal_plan.get("recovery_shapes", []) or [] if isinstance(shape, list)]
+            planning_shapes = _planning_shapes_for_goal(goal_plan)
             future_targets = [
                 alternative
                 for future_alternatives in target_alternatives[turn_index: min(len(target_alternatives), turn_index + 3)]
                 for alternative in future_alternatives
             ]
             future_alternatives_by_turn = target_alternatives[turn_index: min(len(target_alternatives), turn_index + 3)]
+            prefer_energy_boost = any(alternative == [2, 4, 2] for alternative in alternatives)
             live_target = live_score_targets[turn_index] if turn_index < len(live_score_targets) else {}
+            activation_support = _apply_stage_energy_activation_support(
+                stage,
+                hand,
+                deck_cards,
+                alternatives,
+                energy_state,
+                future_alternatives_by_turn,
+                start_turn_index=turn_index,
+            )
             before_stage = list(stage)
             before_main_hand = list(hand)
             before_main_energy = dict(energy_state)
-            stage = _improve_persistent_stage(stage, hand, alternatives, energy_state)
+            primary_planning = [target_shape] if target_shape else planning_shapes
+            stage = _improve_persistent_stage(
+                stage,
+                hand,
+                alternatives,
+                energy_state,
+                planning_alternatives=primary_planning,
+            )
+            entered_cards = [card for card in stage if card and card not in before_stage]
+            draw_index, enter_topdeck_effects = _apply_enter_topdeck_effects(
+                entered_cards,
+                stage,
+                hand,
+                deck,
+                draw_index,
+                green,
+                deck_cards,
+                future_alternatives_by_turn,
+                start_turn_index=turn_index,
+            )
+            recovery_support = _apply_stage_recovery_support(
+                stage,
+                hand,
+                green,
+                deck_cards,
+                alternatives,
+                energy_state,
+                future_alternatives_by_turn,
+                planning_alternatives=primary_planning,
+                start_turn_index=turn_index,
+            )
             if turn_trace is not None:
                 played = [card for card in stage if card and card not in before_stage]
                 removed = [card for card in before_stage if card and card not in stage]
@@ -2687,11 +4643,32 @@ def simulate_autoplay_trials(
                     "after_stage": _stage_text(stage),
                     "played_or_replaced_in": [_card_trace_label(card) for card in played],
                     "replaced_out": [_card_trace_label(card) for card in removed],
+                    "activation_support": {
+                        "activated": [_card_trace_label(card) for card in activation_support.get("activated", [])],
+                        "discarded": [_card_trace_label(card) for card in activation_support.get("discarded", [])],
+                        "energy_before": activation_support.get("energy_before"),
+                        "energy_after": activation_support.get("energy_after"),
+                    },
+                    "enter_topdeck_effects": enter_topdeck_effects,
+                    "recovery_support": recovery_support,
                     "energy_before": before_main_energy,
                     "energy_after": dict(energy_state),
                     "remaining_hand_top_need": _need_score_trace(before_main_hand, future_alternatives_by_turn, deck_cards),
                 }
             before_live_hand = list(hand)
+            stage_costs_before_live = _stage_costs(stage)
+            energy_bridge_plan = _energy_bridge_plan_for_next_turn(
+                stage,
+                future_alternatives_by_turn,
+                energy_state,
+                hand,
+            )
+            prefer_energy_boost = prefer_energy_boost or bool(energy_bridge_plan.get("needed"))
+            recovery_rescue_mode = bool(
+                recovery_alternatives
+                and not any(_shape_meets_target(stage_costs_before_live, shape) for shape in alternatives)
+                and any(_shape_meets_target(stage_costs_before_live, shape) for shape in recovery_alternatives)
+            )
             live_set_card, draw_index, _live_set_cards = _live_set_exchange(
                 hand,
                 deck,
@@ -2703,11 +4680,14 @@ def simulate_autoplay_trials(
                 future_alternatives_by_turn,
                 turn_index,
                 stage,
+                recovery_alternatives,
             )
             if turn_trace is not None:
                 turn_trace["live_set"] = {
                     "prefer_energy_boost": prefer_energy_boost,
                     "live_score_target": live_target.get("target_score") if isinstance(live_target, dict) else None,
+                    "recovery_rescue_mode": recovery_rescue_mode,
+                    "energy_bridge_plan": energy_bridge_plan,
                     "selected": [_card_trace_label(card) for card in _live_set_cards],
                     "live_for_success": _card_trace_label(live_set_card),
                     "exchanged_count": len(_live_set_cards),
@@ -2722,16 +4702,28 @@ def simulate_autoplay_trials(
                         bonus_costs.append(2)
             costs = _stage_costs(stage)
             costs_with_bonus = sorted(costs + bonus_costs, reverse=True)
-            draw_index = _apply_live_success_smoothing(hand, deck, draw_index, live_set_card)
+            draw_index, success_drawn_cards, success_discarded_card = _apply_live_success_smoothing(
+                hand,
+                deck,
+                draw_index,
+                live_set_card,
+                deck_cards,
+                future_alternatives_by_turn,
+                start_turn_index=turn_index,
+            )
             placed_energy = 0
             if live_set_card is not None:
-                boost_n = max(0, int(live_set_card.get("energy_boost_n") or 0))
+                boost_n = max(0, int(live_set_card.get("live_success_energy_boost_n") or live_set_card.get("energy_boost_n") or 0))
                 if boost_n > 0 and energy_state["deck_remaining"] > 0:
                     placed = min(boost_n, energy_state["deck_remaining"])
                     energy_state["wait"] += placed
                     energy_state["deck_remaining"] -= placed
                     placed_energy = placed
             turn_success = any(_shape_meets_target(costs_with_bonus, sorted(alternative, reverse=True)) for alternative in alternatives)
+            recovery_success = turn_success or any(
+                _shape_meets_target(costs_with_bonus, sorted(alternative, reverse=True))
+                for alternative in recovery_alternatives
+            )
             if turn_success:
                 turn_hits[turn_index] += 1
             else:
@@ -2739,6 +4731,11 @@ def simulate_autoplay_trials(
             prefix_success = prefix_success and turn_success
             if prefix_success:
                 cumulative_hits[turn_index] += 1
+            if recovery_success:
+                recovery_hits[turn_index] += 1
+            recovery_prefix_success = recovery_prefix_success and recovery_success
+            if recovery_prefix_success:
+                recovery_cumulative_hits[turn_index] += 1
             accepted_scores = live_target.get("accepted_scores", []) if isinstance(live_target, dict) else []
             live_score_card = live_set_card if live_set_card is not None and live_set_card.get("kind") == "live" else None
             live_score_success = live_score_card is not None and int(live_score_card.get("score") or 0) in set(int(v) for v in accepted_scores)
@@ -2757,8 +4754,15 @@ def simulate_autoplay_trials(
                 turn_trace["result"] = {
                     "stage_costs": shape_text,
                     "turn_success": turn_success,
+                    "recovery_success": recovery_success,
+                    "recovery_match": _alternatives_trace_label([
+                        shape for shape in recovery_alternatives
+                        if _shape_meets_target(costs_with_bonus, sorted(shape, reverse=True))
+                    ]),
                     "miss_reason": "" if turn_success else _miss_reason(costs_with_bonus, alternatives),
                     "live_score_success": live_score_success,
+                    "live_success_drawn": [_card_trace_label(card) for card in success_drawn_cards],
+                    "live_success_discarded": _card_trace_label(success_discarded_card),
                     "energy_added_by_live_success_model": placed_energy,
                     "end_energy": dict(energy_state),
                     "end_hand_count": len(hand),
@@ -2777,34 +4781,44 @@ def simulate_autoplay_trials(
         "trials": trials,
         "seed": seed,
         "max_turns": max_turns,
-        "mulligan_policy": "maximize turn 1-3 target access; keep scarce target members and redraw replaceable low-priority cards",
+        "mulligan_policy": "choose main/sub progression plans from the opening six, then maximize the probability of keeping stage progression on plan before considering live success",
         "success_definition": "turn hit checks only that turn's current stage shape; cumulative requires all previous turn targets to have been met in sequence",
         "decision_policy": [
             "Initial hand is six cards from the shuffled deck.",
-            "Mulligan scores cards against accepted turn 1-3 targets; scarce target costs such as a 3-copy 10-cost member are kept more strongly.",
+            "Mulligan first chooses a main progression plan and a sub progression plan from the opening six, then scores every keep subset by the chance that turn 1-3 stage progression stays on those plans.",
+            "The broad accepted targets are still used as fallback, but the main plan's consecutive stage-progression probability has the highest mulligan weight.",
             "Abundant 2-cost members are kept only up to the near-term need because extra copies are comparatively easy to redraw.",
             "Live cards with energy-boost text are kept when they are needed for a bridge route, but are protected from live-set exchange before that route.",
             "Cards with low turn 1-3 target value are redrawn back to six cards.",
             "Each turn performs active, energy, normal draw, member placement, then live-set exchange in that order.",
             "During live set, up to three cards may be exchanged, including non-live cards.",
             "Live set exchanges low-priority or replaceable cards to dig toward the nearest target; it does not automatically set every live card.",
+            "When multiple live cards are exchange candidates, the live card to actually resolve is chosen by practical effect value: energy acceleration for bridge turns first, then draw/search value, then live score.",
             "Live score targets are inferred from live cards actually present in the deck; the hit check uses the highest-score live card selected during that turn's live-set exchange.",
-            "If the turn has a Daydream-like 2-4-2 bridge, an energy-boost live is preferred as the live-set card for that turn only.",
-            "Member placement tracks active/wait energy, pays active energy for normal plays, applies baton reduction for replacements, then scores feasible lines as higher than target first, exact target second, then the largest available fallback.",
+            "If the next turn's target is reachable only after an energy-boost live succeeds, the boost live is preferred as the live-set card for that turn.",
+            "Member placement tracks active/wait energy, pays active energy for normal plays, applies baton and effect-based cost reduction for replacements, then scores feasible lines as higher than target first, exact target second, then the largest available fallback.",
+            "If a staged member has a once-per-turn style energy-activation effect and active energy is the blocker for the current target, the model uses that effect before member placement and discards the lowest future-use card when a hand cost is visible.",
+            "When a played member has an entry effect that readies energy, that ready effect is modeled immediately after the play and can support later plays in the same main phase.",
             "Extra members beyond the accepted target slot count are not played only for occupancy; the persistent stage keeps existing cards unless replacing them improves the current target.",
-            "After live success, draw effects on the live-set card are modeled as hand smoothing for the following turn; energy-boost lives place energy into wait for the next active phase.",
+            "After live success, draw effects on the live-set card are modeled as hand smoothing for the following turn; discard choice protects near-future target cards and progression-support effects.",
+            "Energy-boost lives place energy into wait for the next active phase.",
         ],
         "effect_assumptions": [
             "up to three cards are live-set exchanged after member planning, and each exchanged card draws one replacement",
             "the normal draw step is modeled once per turn, including turn 1",
             "live draw effects are modeled as hand smoothing after each turn",
-            "Daydream-like energy boost live cards count as the 2-4-2 alternative bridge only when selected as the live-set card and succeeding; the added energy becomes usable from the next turn",
+            "when live-success draw effects discard a card, the discarded card is the lowest practical future-use card, not simply the lowest cost/score card",
+            "member activation effects that ready energy are modeled only when they directly unblock the current stage target; detailed active/wait member state is not fully simulated yet",
+            "member cost reduction amounts are parsed from effect text and included in member play cost and next-turn energy bridge estimates",
+            "entry effects that ready energy are modeled as same-main-phase active energy after the member enters",
+            "Energy-boost live cards are modeled as next-turn bridge cards when the current stage plus normal energy is short of the next target but succeeds with the boost; the added energy becomes usable from the next turn",
             "low-cost stage summon effects add an extra virtual 2-cost member for progression matching",
         ],
         "recommended_early": recommended_early,
         "recommended_late": recommended_late,
         "target_turns": target_turns,
         "target_alternatives": target_alternatives,
+        "planning_alternatives": planning_alternatives,
         "stage_goal_plans": stage_goal_plans,
         "target_goal_summary": target_goal_summary,
         "live_score_targets": live_score_targets,
@@ -2815,6 +4829,14 @@ def simulate_autoplay_trials(
         "cumulative_hit_rates": [
             round(hit / max(1, trials), 4)
             for hit in cumulative_hits
+        ],
+        "recovery_hit_rates": [
+            round(hit / max(1, trials), 4)
+            for hit in recovery_hits
+        ],
+        "recovery_cumulative_hit_rates": [
+            round(hit / max(1, trials), 4)
+            for hit in recovery_cumulative_hits
         ],
         "live_score_hit_rates": [
             round(hit / max(1, trials), 4)
@@ -2875,7 +4897,19 @@ def build_autoplay_markdown_report(report: dict[str, Any], trial_result: dict[st
         turns = " / ".join("-".join(str(v) for v in turn) for turn in item.get("turns", []))
         missing = item.get("missing_costs") if isinstance(item.get("missing_costs"), dict) else {}
         missing_text = "なし" if not missing else ", ".join(f"{k}コストx{v}" for k, v in sorted(missing.items(), key=lambda part: int(part[0])))
-        lines.append(f"- {item.get('label')}: score={item.get('score')} coverage={item.get('coverage')} turns={turns} missing={missing_text}")
+        energy = item.get("energy_path") if isinstance(item.get("energy_path"), dict) else {}
+        energy_text = (
+            "direct={} boost={} short={}".format(
+                energy.get("direct_turns", ""),
+                energy.get("bridge_turns", ""),
+                energy.get("shortfall", ""),
+            )
+            if energy else "none"
+        )
+        lines.append(
+            f"- {item.get('label')}: score={item.get('score')} coverage={item.get('coverage')} "
+            f"energy={energy_text} scarce_penalty={item.get('early_scarcity_penalty', 0)} turns={turns} missing={missing_text}"
+        )
     lines.extend(["", "## Special Signals", ""])
     for key, label in (
         ("energy_boost", "エネルギー追加ライブ"),
@@ -2884,6 +4918,8 @@ def build_autoplay_markdown_report(report: dict[str, Any], trial_result: dict[st
         ("free_member_play", "エネルギー支払いなし登場"),
         ("overcost_member_play", "支払い以上の登場"),
         ("low_cost_summon", "低コスト追加登場"),
+        ("member_recovery", "メンバー回収"),
+        ("live_member_recovery", "ライブ成功時メンバー回収"),
         ("special_baton", "特殊バトンタッチ"),
         ("high_cost_anchor", "15+高コスト"),
     ):
@@ -2922,6 +4958,14 @@ def build_autoplay_markdown_report(report: dict[str, Any], trial_result: dict[st
                 alt_texts.append(" or ".join("-".join(str(v) for v in alt) for alt in alternatives if isinstance(alt, list)))
             if alt_texts:
                 lines.append(f"- accepted targets: {' / '.join(alt_texts)}")
+        recovery_texts: list[str] = []
+        for plan in trial_result.get("stage_goal_plans", []) or []:
+            if not isinstance(plan, dict):
+                continue
+            recovery_shapes = plan.get("recovery_shapes", []) if isinstance(plan.get("recovery_shapes"), list) else []
+            recovery_texts.append(" or ".join("-".join(str(v) for v in shape) for shape in recovery_shapes if isinstance(shape, list)))
+        if any(recovery_texts):
+            lines.append(f"- recovery targets: {' / '.join(text or 'none' for text in recovery_texts)}")
         assumptions = trial_result.get("effect_assumptions", []) if isinstance(trial_result.get("effect_assumptions"), list) else []
         if assumptions:
             lines.extend(["", "### Effect Assumptions", ""])
@@ -2951,18 +4995,34 @@ def build_autoplay_markdown_report(report: dict[str, Any], trial_result: dict[st
                         if isinstance(card, dict)
                     )
                     lines.append(f"  - {shape}: {card_text or '該当カードなし'}")
+                recovery_alternatives = turn.get("recovery_alternatives", []) if isinstance(turn.get("recovery_alternatives"), list) else []
+                for alternative in recovery_alternatives:
+                    if not isinstance(alternative, dict):
+                        continue
+                    shape = "-".join(str(v) for v in alternative.get("shape", []) or [])
+                    cards = alternative.get("cards", []) if isinstance(alternative.get("cards"), list) else []
+                    card_text = " / ".join(
+                        "{} {} route={}".format(card.get("card_no"), card.get("name"), card.get("route"))
+                        for card in cards
+                        if isinstance(card, dict)
+                    )
+                    lines.append(f"  - recovery {shape}: {card_text or '該当カードなし'} / {alternative.get('route', '')}")
         hit_rates = trial_result.get("turn_hit_rates", []) or []
+        recovery_rates = trial_result.get("recovery_hit_rates", []) or []
+        recovery_cumulative_rates = trial_result.get("recovery_cumulative_hit_rates", []) or []
         averages = trial_result.get("average_stage_costs", []) or []
         lines.extend(["", "### Turn Summary", ""])
-        lines.append("- `hit_rate` はそのターン単独の盤面形達成率、`cumulative` はT1からそのターンまで連続で達成した率。主に比較する値は `cumulative`。")
+        lines.append("- `hit_rate` はそのターン単独の通常盤面形達成率、`cumulative` はT1からそのターンまで連続で通常達成した率。`recovery_cumulative` は回収・加速で復帰可能な妥協形も含む補助指標。")
         combined_rates = trial_result.get("combined_cumulative_hit_rates", []) or []
         for index, target in enumerate(trial_result.get("target_turns", []) or [], start=1):
             hit = hit_rates[index - 1] if index - 1 < len(hit_rates) else ""
             cumulative_rates = trial_result.get("cumulative_hit_rates", []) or []
             cumulative = cumulative_rates[index - 1] if index - 1 < len(cumulative_rates) else ""
+            recovery = recovery_rates[index - 1] if index - 1 < len(recovery_rates) else ""
+            recovery_cumulative = recovery_cumulative_rates[index - 1] if index - 1 < len(recovery_cumulative_rates) else ""
             combined = combined_rates[index - 1] if index - 1 < len(combined_rates) else ""
             avg = averages[index - 1] if index - 1 < len(averages) else ""
-            lines.append(f"- T{index}: target={'-'.join(str(v) for v in target)} hit_rate={hit} cumulative={cumulative} combined_cumulative={combined} avg_stage_cost={avg}")
+            lines.append(f"- T{index}: target={'-'.join(str(v) for v in target)} hit_rate={hit} cumulative={cumulative} recovery_hit={recovery} recovery_cumulative={recovery_cumulative} combined_cumulative={combined} avg_stage_cost={avg}")
         live_targets = trial_result.get("live_score_targets", []) if isinstance(trial_result.get("live_score_targets"), list) else []
         live_rates = trial_result.get("live_score_hit_rates", []) or []
         live_cumulative_rates = trial_result.get("live_score_cumulative_hit_rates", []) or []
@@ -3013,6 +5073,14 @@ def build_autoplay_markdown_report(report: dict[str, Any], trial_result: dict[st
                     kept = mulligan.get("kept", []) if isinstance(mulligan.get("kept"), list) else []
                     returned = mulligan.get("returned", []) if isinstance(mulligan.get("returned"), list) else []
                     lines.append(f"- mulligan target: {mulligan.get('targets', '')}")
+                    lines.append(
+                        "- mulligan plans: main={} initial_p={} / sub={} initial_p={}".format(
+                            mulligan.get("main_plan", "none"),
+                            mulligan.get("main_plan_initial_probabilities", []),
+                            mulligan.get("sub_plan", "none"),
+                            mulligan.get("sub_plan_initial_probabilities", []),
+                        )
+                    )
                     lines.append(f"- mulligan score: {mulligan.get('score', '')} p(T1/T2/T3)={mulligan.get('probabilities', '')} draw_windows={mulligan.get('draw_windows', '')}")
                     focus = mulligan.get("critical_focus") if isinstance(mulligan.get("critical_focus"), dict) else {}
                     if focus:
@@ -3033,6 +5101,7 @@ def build_autoplay_markdown_report(report: dict[str, Any], trial_result: dict[st
                     post_hand = mulligan.get("post_mulligan_hand", []) if isinstance(mulligan.get("post_mulligan_hand"), list) else []
                     lines.append(f"- redraw: {' | '.join(str(item) for item in redrawn) if redrawn else 'none'}")
                     lines.append(f"- post mulligan hand: {' | '.join(str(item) for item in post_hand) if post_hand else 'none'}")
+                    lines.append(f"- post mulligan plans: main={mulligan.get('post_main_plan', 'none')} / sub={mulligan.get('post_sub_plan', 'none')}")
                     lines.append(f"- hand need score: {mulligan.get('top_need_scores', 'none')}")
                     top_candidates = mulligan.get("top_candidates", []) if isinstance(mulligan.get("top_candidates"), list) else []
                     if top_candidates:
@@ -3042,7 +5111,7 @@ def build_autoplay_markdown_report(report: dict[str, Any], trial_result: dict[st
                 for turn in trace.get("turns", []) or []:
                     if not isinstance(turn, dict):
                         continue
-                    lines.extend(["", f"#### T{turn.get('turn')} target {turn.get('target')} accepted {turn.get('accepted')}"])
+                    lines.extend(["", f"#### T{turn.get('turn')} target {turn.get('target')} accepted {turn.get('accepted')} recovery {turn.get('recovery', '')}"])
                     lines.append(f"- start stage: {turn.get('start_stage')}")
                     lines.append(f"- start energy: {turn.get('start_energy')}")
                     lines.append(f"- normal draw: {turn.get('normal_draw', 'none')}")
@@ -3053,31 +5122,88 @@ def build_autoplay_markdown_report(report: dict[str, Any], trial_result: dict[st
                         lines.append(f"- main stage: {main.get('before_stage')} -> {main.get('after_stage')}")
                         lines.append(f"- main played/replaced in: {' | '.join(str(item) for item in played) if played else 'none'}")
                         lines.append(f"- main replaced out: {' | '.join(str(item) for item in removed) if removed else 'none'}")
+                        enter_effects = main.get("enter_topdeck_effects", []) if isinstance(main.get("enter_topdeck_effects"), list) else []
+                        for effect in enter_effects:
+                            if not isinstance(effect, dict):
+                                continue
+                            lines.append(
+                                "- enter topdeck effect: source={} kind={} looked={} selected={} kept_on_top={} moved_to_green={} discarded_cost={}".format(
+                                    effect.get("source"),
+                                    effect.get("kind"),
+                                    " | ".join(str(item) for item in effect.get("looked", []) if item) if isinstance(effect.get("looked"), list) else "none",
+                                    effect.get("selected", "none"),
+                                    " | ".join(str(item) for item in effect.get("kept_on_top", []) if item) if isinstance(effect.get("kept_on_top"), list) else "none",
+                                    " | ".join(str(item) for item in effect.get("moved_to_green", []) if item) if isinstance(effect.get("moved_to_green"), list) else "none",
+                                    effect.get("discarded_cost", "none"),
+                                )
+                            )
+                        recovery = main.get("recovery_support") if isinstance(main.get("recovery_support"), dict) else {}
+                        if recovery.get("used"):
+                            lines.append(
+                                "- stage recovery support: source={} recovered={} reason={} after_stage={} energy_after={}".format(
+                                    recovery.get("source"),
+                                    recovery.get("recovered"),
+                                    recovery.get("reason"),
+                                    recovery.get("after_stage"),
+                                    recovery.get("energy_after"),
+                                )
+                            )
+                        activation = main.get("activation_support") if isinstance(main.get("activation_support"), dict) else {}
+                        if activation and activation.get("activated"):
+                            activated = activation.get("activated", []) if isinstance(activation.get("activated"), list) else []
+                            discarded = activation.get("discarded", []) if isinstance(activation.get("discarded"), list) else []
+                            lines.append(
+                                "- main activated effect: {} energy {} -> {} discard={}".format(
+                                    " | ".join(str(item) for item in activated) if activated else "none",
+                                    activation.get("energy_before"),
+                                    activation.get("energy_after"),
+                                    " | ".join(str(item) for item in discarded) if discarded else "none",
+                                )
+                            )
                         lines.append(f"- main energy: {main.get('energy_before')} -> {main.get('energy_after')}")
                     live_set = turn.get("live_set") if isinstance(turn.get("live_set"), dict) else {}
                     if live_set:
                         selected = live_set.get("selected", []) if isinstance(live_set.get("selected"), list) else []
                         lines.append(f"- live set selected: {' | '.join(str(item) for item in selected) if selected else 'none'}")
+                        bridge_plan = live_set.get("energy_bridge_plan") if isinstance(live_set.get("energy_bridge_plan"), dict) else {}
                         lines.append(
-                            "- live set reason: prefer_energy_boost={} target_score={} live_for_success={}".format(
+                            "- live set reason: prefer_energy_boost={} recovery_rescue_mode={} target_score={} live_for_success={} bridge={}".format(
                                 live_set.get("prefer_energy_boost"),
+                                live_set.get("recovery_rescue_mode"),
                                 live_set.get("live_score_target"),
                                 live_set.get("live_for_success"),
+                                "next {} need {} base {} boosted {} ({})".format(
+                                    bridge_plan.get("next_target") or "?",
+                                    bridge_plan.get("min_required"),
+                                    bridge_plan.get("base_active_next"),
+                                    bridge_plan.get("boosted_active_next"),
+                                    bridge_plan.get("reason") or "none",
+                                ) if bridge_plan else "none",
                             )
                         )
                         lines.append(f"- pre-exchange need score: {live_set.get('top_need_scores_before_exchange', 'none')}")
                     result = turn.get("result") if isinstance(turn.get("result"), dict) else {}
                     if result:
                         lines.append(
-                            "- result: stage={} stage_hit={} live_score_hit={} miss={} energy_added={} end_energy={}".format(
+                            "- result: stage={} stage_hit={} recovery_hit={} recovery_match={} live_score_hit={} miss={} energy_added={} end_energy={}".format(
                                 result.get("stage_costs"),
                                 result.get("turn_success"),
+                                result.get("recovery_success"),
+                                result.get("recovery_match"),
                                 result.get("live_score_success"),
                                 result.get("miss_reason") or "none",
                                 result.get("energy_added_by_live_success_model"),
                                 result.get("end_energy"),
                             )
                         )
+                        drawn = result.get("live_success_drawn", []) if isinstance(result.get("live_success_drawn"), list) else []
+                        if drawn or result.get("live_success_discarded"):
+                            lines.append(
+                                "- live success effect: drawn={} discarded={}".format(
+                                    " | ".join(str(item) for item in drawn) if drawn else "none",
+                                    result.get("live_success_discarded") or "none",
+                                )
+                            )
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -3086,19 +5212,43 @@ def build_autoplay_deck_report(
     card_lookup: CardLookup,
 ) -> dict[str, Any]:
     curve = build_deck_curve(rows, card_lookup)
+    dynamic_templates = _dynamic_progression_templates(curve)
+    templates: list[CostProgressionTemplate] = []
+    seen_keys: set[str] = set()
+    seen_turns: set[tuple[tuple[int, ...], ...]] = set()
+    for template in list(COST_PROGRESSIONS) + list(dynamic_templates):
+        normalized = _normalized_turns(template.turns)
+        if template.key in seen_keys or normalized in seen_turns:
+            continue
+        seen_keys.add(template.key)
+        seen_turns.add(normalized)
+        templates.append(template)
     progressions = [
         evaluate_progression(curve, template)
-        for template in COST_PROGRESSIONS
+        for template in templates
     ]
     progressions = [
         item for item in progressions
         if not item.get("unavailable_costs")
     ]
-    progressions.sort(key=lambda item: (-float(item.get("score") or 0), str(item.get("key") or "")))
+    progressions.sort(key=lambda item: (
+        -(float(item.get("score") or 0) - (1.0 if item.get("source") == "dynamic" else 0.0)),
+        1 if item.get("source") == "dynamic" else 0,
+        str(item.get("key") or ""),
+    ))
     return {
         "schema_version": 1,
         "model_stage": "stage1_policy_template",
         "curve": curve,
+        "dynamic_progressions": [
+            {
+                "key": item.key,
+                "label": item.label,
+                "turns": [list(turn) for turn in item.turns],
+                "intent": item.intent,
+            }
+            for item in dynamic_templates
+        ],
         "progressions": progressions,
         "recommended_progression": progressions[0] if progressions else {},
         "goal_type_presets": list(GOAL_TYPE_PRESETS),

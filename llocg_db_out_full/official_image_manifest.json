@@ -4,12 +4,12 @@
   "generated_from": {
     "mode": "incremental_merge",
     "base_manifest": "/Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full/official_image_manifest.json",
-    "delta_manifest": ""
+    "delta_manifest": "/Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full/_update_work/run_20260817_161821/image_manifest_delta/official_image_manifest.json"
   },
   "base_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist",
-  "cards_total_in_db": 1060,
+  "cards_total_in_db": 1146,
   "cards_with_manifest": 986,
-  "cards_missing_manifest": 74,
+  "cards_missing_manifest": 160,
   "reprint_enrichment": {
     "enabled": false,
     "target_limit": 120,
@@ -236,7 +236,7 @@
       ]
     },
     "BP07": {
-      "cards_wanted": 31,
+      "cards_wanted": 48,
       "pages_fetched": 2,
       "max_page": 1,
       "variants": [
@@ -280,7 +280,7 @@
       ]
     },
     "NSD02": {
-      "cards_wanted": 1,
+      "cards_wanted": 26,
       "pages_fetched": 2,
       "max_page": 1,
       "variants": [
@@ -492,25 +492,11 @@
       ]
     },
     "PR_EXACT_ALL": {
-      "cards_wanted": 26,
-      "pages_fetched": 15,
-      "max_page": 15,
+      "cards_wanted": 74,
+      "pages_fetched": 1,
+      "max_page": 1,
       "variants": [
-        "https://llofficial-cardgame.com/cardlist/searchresults/?expansion=PR&view=image&sort=new :: items=0 max_page=15",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=PR&view=image&page=2 :: items=0",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=PR&view=image&page=3 :: items=0",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=PR&view=image&page=4 :: items=0",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=PR&view=image&page=5 :: items=0",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=PR&view=image&page=6 :: items=0",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=PR&view=image&page=7 :: items=0",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=PR&view=image&page=8 :: items=0",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=PR&view=image&page=9 :: items=0",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=PR&view=image&page=10 :: items=0",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=PR&view=image&page=11 :: items=0",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=PR&view=image&page=12 :: items=0",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=PR&view=image&page=13 :: items=0",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=PR&view=image&page=14 :: items=0",
-        "https://llofficial-cardgame.com/cardlist/cardsearch_ex?expansion=PR&view=image&page=15 :: items=0"
+        "https://llofficial-cardgame.com/cardlist/searchresults/?expansion=PR&view=image&sort=new :: items=0 max_page=1"
       ],
       "entries_added": 0
     }

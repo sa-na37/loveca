@@ -1,0 +1,927 @@
+{
+  "cards": {
+    "PL!N-bp7-019": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "N",
+        "image_url": "https://pbs.twimg.com/media/HLZiMU1aEAAKIx4.png",
+        "source": "official_x",
+        "post_url": "https://x.com/LL_cardgame/status/2069722200169714044",
+        "tweet_id": "2069722200169714044",
+        "posted_at": "2026-06-24T10:00:00.000Z",
+        "cardname_from_post": "優木せつ菜",
+        "match_status": "MATCHED_N_LATE_BLOCK"
+      }
+    ],
+    "LL-bp7-001": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "",
+        "image_url": "https://pbs.twimg.com/media/HLKc5VCasAAErRM.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2069344711211376833",
+        "tweet_id": "2069344711211376833",
+        "posted_at": "2026-06-23T09:00:00.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!S-bp7-016": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "N",
+        "image_url": "https://pbs.twimg.com/media/HLZhwcGbEAAYSMT.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2069707101870477434",
+        "tweet_id": "2069707101870477434",
+        "posted_at": "2026-06-24T09:00:01.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!SP-bp7-014": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "N",
+        "image_url": "https://pbs.twimg.com/media/HLZiiuEasAAxGu3.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2069729748256018549",
+        "tweet_id": "2069729748256018549",
+        "posted_at": "2026-06-24T10:30:00.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!N-bp7-005": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "P",
+        "image_url": "https://pbs.twimg.com/media/HLZk3SWa4AAdIXb.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2070069500951617754",
+        "tweet_id": "2070069500951617754",
+        "posted_at": "2026-06-25T09:00:03.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!S-bp7-002": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "P",
+        "image_url": "https://pbs.twimg.com/media/HLZrvJ1aUAAvKg-.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2070431882978746468",
+        "tweet_id": "2070431882978746468",
+        "posted_at": "2026-06-26T09:00:02.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!N-bp7-009": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "P",
+        "image_url": "https://pbs.twimg.com/media/HLpC_RCaUAAs14K.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2071081153360986461",
+        "tweet_id": "2071081153360986461",
+        "posted_at": "2026-06-28T04:00:00.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!N-bp7-004": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "P",
+        "image_url": "https://pbs.twimg.com/media/HLtEm79bYAAXMlu.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2071534145646584299",
+        "tweet_id": "2071534145646584299",
+        "posted_at": "2026-06-29T10:00:02.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!SP-bp7-004": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "P",
+        "image_url": "https://pbs.twimg.com/media/HMBj2W9aAAAvEGn.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2072258912858902646",
+        "tweet_id": "2072258912858902646",
+        "posted_at": "2026-07-01T10:00:00.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!N-bp7-007": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "SEC",
+        "image_url": "https://pbs.twimg.com/media/HMBlH6bbQAAw_6k.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2072621301999747384",
+        "tweet_id": "2072621301999747384",
+        "posted_at": "2026-07-02T10:00:00.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!SP-bp7-005": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "SEC",
+        "image_url": "https://pbs.twimg.com/media/HMBmidtaEAAApVd.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2072983688556462547",
+        "tweet_id": "2072983688556462547",
+        "posted_at": "2026-07-03T10:00:00.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!S-bp7-003": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "SEC",
+        "image_url": "https://pbs.twimg.com/media/HMBncchacAASqIw.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2073255481049776544",
+        "tweet_id": "2073255481049776544",
+        "posted_at": "2026-07-04T04:00:00.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!S-bp7-020": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "SECL",
+        "image_url": "https://pbs.twimg.com/media/HMBnqwjbMAEuxQp.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2073300783899283480",
+        "tweet_id": "2073300783899283480",
+        "posted_at": "2026-07-04T07:00:01.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!S-bp7-005": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "SEC",
+        "image_url": "https://pbs.twimg.com/media/HMBn-Faa0AAI8GK.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2073617870634758470",
+        "tweet_id": "2073617870634758470",
+        "posted_at": "2026-07-05T04:00:00.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!S-bp7-022": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "SECL",
+        "image_url": "https://pbs.twimg.com/media/HMBoK9EbcAAslA4.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2073648070512767455",
+        "tweet_id": "2073648070512767455",
+        "posted_at": "2026-07-05T06:00:01.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!SP-bp7-007": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "SEC",
+        "image_url": "https://pbs.twimg.com/media/HMlpC19b0AAB-Fa.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2074425692218179899",
+        "tweet_id": "2074425692218179899",
+        "posted_at": "2026-07-07T09:30:00.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!N-bp7-003": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "SEC",
+        "image_url": "https://pbs.twimg.com/media/HMmCJ-abEAAf8-c.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2074788079999611178",
+        "tweet_id": "2074788079999611178",
+        "posted_at": "2026-07-08T09:30:00.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!S-bp7-019": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "L",
+        "image_url": "https://pbs.twimg.com/media/HMsfw7ibMAEBlE8.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2075505316242821517",
+        "tweet_id": "2075505316242821517",
+        "posted_at": "2026-07-10T09:00:03.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!N-bp7-027": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "L",
+        "image_url": "https://pbs.twimg.com/media/HMsgiToaMAAcG9i.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2075512854107840681",
+        "tweet_id": "2075512854107840681",
+        "posted_at": "2026-07-10T09:30:00.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!S-bp7-021": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "L",
+        "image_url": "https://pbs.twimg.com/media/HM3GU4TbsAE-Ok3.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2076169682416210381",
+        "tweet_id": "2076169682416210381",
+        "posted_at": "2026-07-12T05:00:00.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!S-bp7-015": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "N",
+        "image_url": "https://pbs.twimg.com/media/HM3HEMWbMAAlKT5.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2076592473934319829",
+        "tweet_id": "2076592473934319829",
+        "posted_at": "2026-07-13T09:00:01.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!S-bp7-006": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "P",
+        "image_url": "https://pbs.twimg.com/media/HM3I1_AaEAA5uUJ.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2076607573269393701",
+        "tweet_id": "2076607573269393701",
+        "posted_at": "2026-07-13T10:00:01.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!SP-bp7-025": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "L",
+        "image_url": "https://pbs.twimg.com/media/HNJmsMjbUAA9p1J.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2076969963605151901",
+        "tweet_id": "2076969963605151901",
+        "posted_at": "2026-07-14T10:00:02.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!SP-bp7-006": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "SEC",
+        "image_url": "https://pbs.twimg.com/media/HMNj8YVaMAANvnO.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2074063304751030353",
+        "tweet_id": "2074063304751030353",
+        "posted_at": "2026-07-06T09:30:00.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!N-bp7-006": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "SEC",
+        "image_url": "https://pbs.twimg.com/media/HMsegYhaIAA2Ejj.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2075150467466764570",
+        "tweet_id": "2075150467466764570",
+        "posted_at": "2026-07-09T09:30:00.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!S-bp7-004": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "P",
+        "image_url": "https://pbs.twimg.com/media/HNJnNmfaUAA6lU1.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2077332350959268084",
+        "tweet_id": "2077332350959268084",
+        "posted_at": "2026-07-15T10:00:02.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!N-bp7-028": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "L",
+        "image_url": "https://pbs.twimg.com/media/HNT8I89bMAAYOZS.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2077694742843072937",
+        "tweet_id": "2077694742843072937",
+        "posted_at": "2026-07-16T10:00:03.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!SP-bp7-013": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "N",
+        "image_url": "https://pbs.twimg.com/media/HNT9iKGbEAAGeku.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2078042026936033382",
+        "tweet_id": "2078042026936033382",
+        "posted_at": "2026-07-17T09:00:02.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!SP-bp7-002": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "P",
+        "image_url": "https://pbs.twimg.com/media/HNT-Tila0AAxZ-s.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2078057127214772726",
+        "tweet_id": "2078057127214772726",
+        "posted_at": "2026-07-17T10:00:02.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!SP-bp7-026": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "L",
+        "image_url": "https://pbs.twimg.com/media/HNVCucCbYAA6thm.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2078781897501819133",
+        "tweet_id": "2078781897501819133",
+        "posted_at": "2026-07-19T10:00:00.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!SP-bp7-028": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "L",
+        "image_url": "https://pbs.twimg.com/media/HNVEOkNaQAA62Cx.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2079144295710302558",
+        "tweet_id": "2079144295710302558",
+        "posted_at": "2026-07-20T10:00:03.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!SP-bp7-001": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "P",
+        "image_url": "https://pbs.twimg.com/media/HM3FIo0bUAAJCLr.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2075822397765120251",
+        "tweet_id": "2075822397765120251",
+        "posted_at": "2026-07-11T06:00:01.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!N-bp7-031": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "L",
+        "image_url": "https://pbs.twimg.com/media/HNVB69XbYAAsDFj.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2078419515898028408",
+        "tweet_id": "2078419515898028408",
+        "posted_at": "2026-07-18T10:00:02.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!N-bp7-030": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "L",
+        "image_url": "https://pbs.twimg.com/media/HNp5Aj6bgAEgB6X.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2079491581959356777",
+        "tweet_id": "2079491581959356777",
+        "posted_at": "2026-07-21T09:00:02.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!S-bp7-023": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "L",
+        "image_url": "https://pbs.twimg.com/media/HNp5aJka8AAKyqE.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2079506676345118820",
+        "tweet_id": "2079506676345118820",
+        "posted_at": "2026-07-21T10:00:01.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!S-bp7-025": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "L",
+        "image_url": "https://pbs.twimg.com/media/HNp7rbdaAAA7hp2.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2079853973251428544",
+        "tweet_id": "2079853973251428544",
+        "posted_at": "2026-07-22T09:00:03.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!SP-bp7-027": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "L",
+        "image_url": "https://pbs.twimg.com/media/HN0QplfbIAAewbl.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2079861511950864677",
+        "tweet_id": "2079861511950864677",
+        "posted_at": "2026-07-22T09:30:01.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!SP-bp7-008": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "P",
+        "image_url": "https://pbs.twimg.com/media/HN5SoWvaUAAQyLT.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2080231449521959303",
+        "tweet_id": "2080231449521959303",
+        "posted_at": "2026-07-23T10:00:01.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!S-bp7-024": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "L",
+        "image_url": "https://pbs.twimg.com/media/HN5uJLkb0AEut8n.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2080593840071983178",
+        "tweet_id": "2080593840071983178",
+        "posted_at": "2026-07-24T10:00:01.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!N-bp7-008": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "P",
+        "image_url": "https://pbs.twimg.com/media/HN500CXaoAARhZg.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2080956228696756248",
+        "tweet_id": "2080956228696756248",
+        "posted_at": "2026-07-25T10:00:01.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!N-bp7-029": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "L",
+        "image_url": "https://pbs.twimg.com/media/HN52e1wbgAAgS5l.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2081318620387324126",
+        "tweet_id": "2081318620387324126",
+        "posted_at": "2026-07-26T10:00:02.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!N-bp7-001": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "P",
+        "image_url": "https://pbs.twimg.com/media/HN53mKfbwAE8kIK.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2081665904233099523",
+        "tweet_id": "2081665904233099523",
+        "posted_at": "2026-07-27T09:00:01.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!N-bp7-010": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "P",
+        "image_url": "https://pbs.twimg.com/media/HN54wENbEAAAQ0k.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2081681000367894600",
+        "tweet_id": "2081681000367894600",
+        "posted_at": "2026-07-27T10:00:00.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!SP-bp7-009": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "P",
+        "image_url": "https://pbs.twimg.com/media/HN55DcHaoAAN6W5.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2081696100696858862",
+        "tweet_id": "2081696100696858862",
+        "posted_at": "2026-07-27T11:00:01.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!SP-bp7-011": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "P",
+        "image_url": "https://pbs.twimg.com/media/HOMmGtKaAAA4K8k.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2082028290076971427",
+        "tweet_id": "2082028290076971427",
+        "posted_at": "2026-07-28T09:00:01.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!S-bp7-009": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "P",
+        "image_url": "https://pbs.twimg.com/media/HOMmpwqaUAA267r.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2082043394441007257",
+        "tweet_id": "2082043394441007257",
+        "posted_at": "2026-07-28T10:00:02.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!N-bp7-002": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "P",
+        "image_url": "https://pbs.twimg.com/media/HOMqK8tbUAAejEn.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2082390677606846484",
+        "tweet_id": "2082390677606846484",
+        "posted_at": "2026-07-29T09:00:01.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!S-bp7-008": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "P",
+        "image_url": "https://pbs.twimg.com/media/HOMqvvIbYAAAHv0.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2082405783141032411",
+        "tweet_id": "2082405783141032411",
+        "posted_at": "2026-07-29T10:00:02.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!SP-bp7-010": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "P",
+        "image_url": "https://pbs.twimg.com/media/HOMr9k0bEAA05Db.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2082420874343567405",
+        "tweet_id": "2082420874343567405",
+        "posted_at": "2026-07-29T11:00:00.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!N-bp7-011": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "SEC",
+        "image_url": "https://pbs.twimg.com/media/HOMsexOb0AA3x2Q.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2082753075291263477",
+        "tweet_id": "2082753075291263477",
+        "posted_at": "2026-07-30T09:00:03.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!N-bp7-025": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "SECL",
+        "image_url": "https://pbs.twimg.com/media/HOYoMpKbwAAHN0W.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2082768171803840534",
+        "tweet_id": "2082768171803840534",
+        "posted_at": "2026-07-30T10:00:02.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!N-bp7-026": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "SECL",
+        "image_url": "https://pbs.twimg.com/media/HOYoUpZbsAAGxvD.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2082783263958163944",
+        "tweet_id": "2082783263958163944",
+        "posted_at": "2026-07-30T11:00:01.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!S-bp7-007": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "SEC",
+        "image_url": "https://pbs.twimg.com/media/HOYqq3fbgAAUkef.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2083115452142600507",
+        "tweet_id": "2083115452142600507",
+        "posted_at": "2026-07-31T09:00:00.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!SP-bp7-023": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "SECL",
+        "image_url": "https://pbs.twimg.com/media/HOYs0pJaYAALoVR.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2083130548869046667",
+        "tweet_id": "2083130548869046667",
+        "posted_at": "2026-07-31T10:00:00.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!S-bp7-010": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "N",
+        "image_url": "https://pbs.twimg.com/media/HOiyi1YbEAASG0Y.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2083372145267085740",
+        "tweet_id": "2083372145267085740",
+        "posted_at": "2026-08-01T02:00:01.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!S-bp7-001": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "P",
+        "image_url": "https://pbs.twimg.com/media/HOiy6lqaAAAaAOD.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2083462738920055283",
+        "tweet_id": "2083462738920055283",
+        "posted_at": "2026-08-01T08:00:00.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!SP-bp7-003": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "SEC",
+        "image_url": "https://pbs.twimg.com/media/HOizRvsacAAQst0.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2083734529987039400",
+        "tweet_id": "2083734529987039400",
+        "posted_at": "2026-08-02T02:00:00.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!SP-bp7-024": [
+      {
+        "folder": "BP07",
+        "rarity_norm": "SECL",
+        "image_url": "https://pbs.twimg.com/media/HOizjvNboAA9Hym.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2083794932196946431",
+        "tweet_id": "2083794932196946431",
+        "posted_at": "2026-08-02T06:00:01.000Z",
+        "cardname_from_post": "",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!-pb2-000": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "DUO",
+        "image_url": "https://pbs.twimg.com/media/HP92rTvbcAAGWtr.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2089653533725585583",
+        "tweet_id": "2089653533725585583",
+        "posted_at": "2026-08-18T10:00:00.000Z",
+        "cardname_from_post": "8月18日(火) -DUO 星空凛＆小泉花陽",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!-pb2-001": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "PP",
+        "image_url": "https://pbs.twimg.com/media/HP927b1agAApxX7.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2089661080264126510",
+        "tweet_id": "2089661080264126510",
+        "posted_at": "2026-08-18T10:30:00.000Z",
+        "cardname_from_post": "PP 高坂穂乃果",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!-pb2-002": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "PP",
+        "image_url": "https://pbs.twimg.com/media/HP95MWdbsAA2XVl.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2090019693423984642",
+        "tweet_id": "2090019693423984642",
+        "posted_at": "2026-08-19T10:15:00.000Z",
+        "cardname_from_post": "PP 絢瀬絵里",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!-pb2-007": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "PP",
+        "image_url": "https://pbs.twimg.com/media/HP95g8aaEAAr6I2.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2090023471426261151",
+        "tweet_id": "2090023471426261151",
+        "posted_at": "2026-08-19T10:30:01.000Z",
+        "cardname_from_post": "PP 東條希",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!-pb2-006": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "PP",
+        "image_url": "https://pbs.twimg.com/media/HP97p6-aMAAT-dj.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2090382081142751734",
+        "tweet_id": "2090382081142751734",
+        "posted_at": "2026-08-20T10:15:00.000Z",
+        "cardname_from_post": "PP 西木野真姫",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!-pb2-009": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "PP",
+        "image_url": "https://pbs.twimg.com/media/HP98kfgasAAyE8Z.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2090385857845006419",
+        "tweet_id": "2090385857845006419",
+        "posted_at": "2026-08-20T10:30:00.000Z",
+        "cardname_from_post": "PP 矢澤にこ",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!-pb2-003": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "PP",
+        "image_url": "https://pbs.twimg.com/media/HP-I-c4boAAU7pS.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2090740695393038684",
+        "tweet_id": "2090740695393038684",
+        "posted_at": "2026-08-21T10:00:00.000Z",
+        "cardname_from_post": "PP 南ことり",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!-pb2-004": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "PP",
+        "image_url": "https://pbs.twimg.com/media/HP-JRK1bYAAEWfP.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2090748245064765449",
+        "tweet_id": "2090748245064765449",
+        "posted_at": "2026-08-21T10:30:00.000Z",
+        "cardname_from_post": "PP 園田海未",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!-pb2-008": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "PP",
+        "image_url": "https://pbs.twimg.com/media/HP-NWxjaQAAqkjt.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2091103087465218519",
+        "tweet_id": "2091103087465218519",
+        "posted_at": "2026-08-22T10:00:01.000Z",
+        "cardname_from_post": "PP 小泉花陽",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!-pb2-005": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "PP",
+        "image_url": "https://pbs.twimg.com/media/HQUYbogbAAAYq7B.jpg",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2091104469652255179",
+        "tweet_id": "2091104469652255179",
+        "posted_at": "2026-08-22T10:05:31.000Z",
+        "cardname_from_post": "PP 星空凛",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!-pb2-019": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "N",
+        "image_url": "https://pbs.twimg.com/media/HQI7M5WbgAAtlxP.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2091457921272176717",
+        "tweet_id": "2091457921272176717",
+        "posted_at": "2026-08-23T09:30:00.000Z",
+        "cardname_from_post": "N 高坂穂乃果",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!-pb2-030": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "N",
+        "image_url": "https://pbs.twimg.com/media/HQN3-QCbAAAbS2y.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2091820310794551297",
+        "tweet_id": "2091820310794551297",
+        "posted_at": "2026-08-24T09:30:00.000Z",
+        "cardname_from_post": "8月24日(月) -N 南ことり",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!-pb2-022": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "N",
+        "image_url": "https://pbs.twimg.com/media/HQiC66oacAAc17_.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2092182699561648252",
+        "tweet_id": "2092182699561648252",
+        "posted_at": "2026-08-25T09:30:01.000Z",
+        "cardname_from_post": "N 園田海未",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ]
+  }
+}

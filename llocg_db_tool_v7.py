@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# BUILD_TAG: prerelease_official_post_probe_limit_20260826a
 """
 LL-OCG DB Tool (single-file) v7
 
@@ -19,7 +20,7 @@ Deps:
 
 from __future__ import annotations
 
-BUILD_TAG = "prerelease_product_force_refresh_20260803a"
+BUILD_TAG = "prerelease_official_post_probe_limit_20260826a"
 
 import argparse
 import csv
@@ -52,7 +53,7 @@ CONFIG = {
     "cache_ttl_sec": 21600.0,
     "checkpoint_every": 50,
     "max_fail": 500,
-    "max_429": 3,
+    "max_429": 6,
     "user_agent": "LL-OCG-DB-Build/1.0 (polite crawler; contact: your_email@example.com)",
     "normalize_suffix": "_tokv1",
     "manual_overrides": "manual_overrides/loveca_card_text_overrides.json",
@@ -227,6 +228,19 @@ BUILTIN_CARD_TEXT_OVERRIDES: Dict[str, Dict[str, str]] = {
     },
 }
 
+CARD_OVERRIDE_FIELDS = {
+    "effect_text_raw",
+    "effect_text_norm",
+    "blade_heart_raw",
+    "blade_heart_counts_json",
+    "blade_heart_total",
+    "blade_heart_tags_json",
+    "blade_heart_special_counts_json",
+    "blade_heart_draw_n",
+    "blade_heart_score_n",
+    "blade_heart_colorless_n",
+}
+
 def load_card_text_overrides(path: Optional[Path]) -> Dict[str, Dict[str, str]]:
     overrides: Dict[str, Dict[str, str]] = {k: dict(v) for k, v in BUILTIN_CARD_TEXT_OVERRIDES.items()}
     if path and path.exists():
@@ -251,17 +265,21 @@ def _apply_card_text_override_to_record(rec: Dict[str, Any], overrides: Dict[str
         return False
     ov = overrides[cn]
     changed = False
-    for key in ("effect_text_raw", "effect_text_norm"):
+    text_changed = False
+    for key in CARD_OVERRIDE_FIELDS:
         if key in ov and str(ov[key]) != str(rec.get(key, "") or ""):
             rec[key] = str(ov[key])
             changed = True
-    if changed:
+            if key in {"effect_text_raw", "effect_text_norm"}:
+                text_changed = True
+    if text_changed:
         raw = str(rec.get("effect_text_raw", "") or "")
         norm = str(rec.get("effect_text_norm", "") or "") or normalize_effect_text(raw)
         rec["effect_text_norm"] = norm
         rec["effect_text_status"] = classify_effect_text_status(raw, norm)
         rec["effect_text_is_no_ability"] = 1 if rec["effect_text_status"] == "NO_ABILITY" else 0
         rec["effect_tokens_json"] = json.dumps(extract_effect_tokens(norm), ensure_ascii=False)
+    if changed:
         rec["manual_override_applied"] = 1
         rec["manual_override_reason"] = str(ov.get("reason", ""))
     return changed
@@ -674,7 +692,7 @@ def parse_official_cardlist_items(
 ) -> List[Dict[str, Any]]:
     soup = BeautifulSoup(html, "lxml")
     items: List[Dict[str, Any]] = []
-    seen: Set[Tuple[str, str, str]] = set()
+    seen: Set[Tuple[str, str]] = set()
 
     # The official site has changed wrapper classes several times.  The stable
     # signals are the `card` attribute and a card image inside the item.
@@ -893,7 +911,7 @@ def parse_cached_official_reprint_items(
     if not cache_dir.is_dir():
         return items
     needles = tuple(f"-{rarity}.png" for rarity in OFFICIAL_CACHED_IMAGE_SCAN_RARITIES)
-    seen: Set[Tuple[str, str, str]] = set()
+    seen: Set[Tuple[str, str]] = set()
     for path in sorted(cache_dir.glob("*.html")):
         try:
             html = path.read_text(encoding="utf-8", errors="ignore")
@@ -1409,7 +1427,7 @@ def fetch(
             cache_age_sec = max(0.0, time.time() - p.stat().st_mtime)
         except OSError:
             cache_age_sec = effective_cache_ttl_sec + 1.0
-        if effective_cache_ttl_sec <= 0.0 or cache_age_sec <= effective_cache_ttl_sec:
+        if effective_cache_ttl_sec > 0.0 and cache_age_sec <= effective_cache_ttl_sec:
             if fetch_state is not None:
                 fetch_state.clear_failure(url, stage)
             return p.read_text(encoding="utf-8", errors="ignore")
@@ -1476,11 +1494,68 @@ def fetch(
                 throttle_before, throttle_after = fetch_state.note_rate_limit()
                 total_rate_limit_events = fetch_state.rate_limit_events
 
+            if p.exists():
+                msg = (
+                    f"HTTP 429 cache fallback "
+                    f"(consecutive={consecutive_429}, max_429={max_429}) "
+                    f"stage={stage} url={url}"
+                )
+                if fetch_state is not None:
+                    fetch_state.record_failure(
+                        url=url,
+                        stage=stage,
+                        status_code=status,
+                        error_type="HTTP429StaleCacheFallback",
+                        attempts=attempts,
+                        last_error=msg,
+                    )
+                print(
+                    f"[RATE-LIMIT][CACHE] using stale cache after HTTP 429 "
+                    f"stage={stage} url={url}"
+                )
+                return p.read_text(encoding="utf-8", errors="ignore")
+
+            if stage in {"product_page", "card_page"}:
+                msg = (
+                    f"HTTP 429 skipped uncached page "
+                    f"(consecutive={consecutive_429}, max_429={max_429}) "
+                    f"stage={stage} url={url}"
+                )
+                if fetch_state is not None:
+                    fetch_state.record_failure(
+                        url=url,
+                        stage=stage,
+                        status_code=status,
+                        error_type="HTTP429PageSkipped",
+                        attempts=attempts,
+                        last_error=msg,
+                    )
+                print(
+                    f"[RATE-LIMIT][SKIP] skipping uncached page after HTTP 429 "
+                    f"stage={stage} url={url}"
+                )
+                raise RuntimeError(msg)
+
             if consecutive_429 >= max_429:
                 msg = (
                     f"HTTP 429 repeated {consecutive_429} times "
                     f"(max_429={max_429}) stage={stage} url={url}"
                 )
+                if p.exists():
+                    if fetch_state is not None:
+                        fetch_state.record_failure(
+                            url=url,
+                            stage=stage,
+                            status_code=status,
+                            error_type="HTTP429StaleCacheFallback",
+                            attempts=attempts,
+                            last_error=msg,
+                        )
+                    print(
+                        f"[RATE-LIMIT][CACHE] using stale cache after repeated "
+                        f"HTTP 429 stage={stage} url={url}"
+                    )
+                    return p.read_text(encoding="utf-8", errors="ignore")
                 if fetch_state is not None:
                     fetch_state.record_failure(
                         url=url,
@@ -2424,6 +2499,136 @@ def extract_card_links_from_product(html: str) -> List[str]:
     return sorted(urls)
 
 
+def extract_unresolved_card_rows_from_product(html: str) -> List[Dict[str, str]]:
+    """Return product-table rows that look like cards but lack canonical card numbers.
+
+    Prerelease wiki pages may list rows such as ``PL!-pb2-???`` before the
+    final sequence number is known.  Those rows cannot safely enter the runtime
+    card DB because cardnumber is the primary key, but silently dropping them
+    makes update reachability look successful.  Keep them as product audit rows
+    until the wiki page is renamed with a concrete number.
+    """
+    soup = BeautifulSoup(html, "lxml")
+    rows: List[Dict[str, str]] = []
+    seen: Set[Tuple[str, str, str]] = set()
+    unknown_re = re.compile(
+        r"(?<![A-Za-z0-9])(?P<cardno>[A-Z]{1,4}(?:!(?:[A-Z0-9]{0,8})?)?-[A-Za-z0-9]+-\?{2,}(?:-[A-Za-z0-9]+)?)"
+    )
+    for tr in soup.find_all("tr"):
+        text = " ".join(tr.get_text(" ", strip=True).split())
+        if not text:
+            continue
+        candidates_by_cardno: Dict[str, Tuple[str, str]] = {}
+        for a in tr.find_all("a", href=True):
+            u = norm_url(a.get("href", ""))
+            if not u or "/::cmd/" in u:
+                continue
+            cardno, name = cardno_name_from_url(u)
+            if unknown_re.match(cardno or ""):
+                candidates_by_cardno[cardno] = (name, u)
+        for m in unknown_re.finditer(text):
+            cardno = str(m.group("cardno") or "").strip()
+            if cardno not in candidates_by_cardno:
+                name = text.replace(cardno, "", 1).strip(" -:：\t")
+                name = re.sub(r"^(?:メンバー|ライブ|エネルギー|カード)\s+", "", name).strip()
+                candidates_by_cardno[cardno] = (name, "")
+        for cardno, (name, url) in candidates_by_cardno.items():
+            key = (cardno, text)
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append({
+                "cardnumber": cardno,
+                "name": name,
+                "url": url,
+                "row_text": text,
+                "reason": "cardnumber_unconfirmed",
+            })
+    return rows
+
+
+def extract_official_tweet_links_from_card_html(html: str) -> List[str]:
+    soup = BeautifulSoup(html, "lxml")
+    urls: Set[str] = set()
+    status_re = re.compile(
+        r"https?://(?:x|twitter)\.com/LL_cardgame/status/(?P<id>[0-9]+)",
+        re.IGNORECASE,
+    )
+    for a in soup.find_all("a", href=True):
+        href = str(a.get("href", "") or "")
+        m = status_re.search(href)
+        if m:
+            urls.add(f"https://x.com/LL_cardgame/status/{m.group('id')}")
+    for m in status_re.finditer(str(html or "")):
+        urls.add(f"https://x.com/LL_cardgame/status/{m.group('id')}")
+    return sorted(urls)
+
+
+def probe_product_card_official_post_links(
+    product_card_links: Iterable[str],
+    *,
+    cache_dir: Path,
+    delay: float,
+    user_agent: str,
+    fetch_state: Optional[FetchState],
+    cache_ttl_sec: float,
+    product_code: str = "",
+    max_pages: int = 5,
+    stop_after_first: bool = True,
+) -> Dict[str, Any]:
+    cardnumbers: Set[str] = set()
+    post_urls: Set[str] = set()
+    checked = 0
+    failed = 0
+    product_code = str(product_code or "").strip().upper()
+    filtered_links: List[str] = []
+    for card_url in sorted({str(x).strip() for x in product_card_links if str(x).strip()}):
+        cardno, _name = cardno_name_from_url(card_url)
+        canonical, _rarity = split_cardnumber_rarity_suffix(cardno)
+        if product_code and official_expansion_from_cardno(canonical) != product_code:
+            continue
+        filtered_links.append(card_url)
+    if not filtered_links:
+        filtered_links = sorted({str(x).strip() for x in product_card_links if str(x).strip()})
+    for card_url in filtered_links:
+        if checked >= max(0, int(max_pages)):
+            break
+        checked += 1
+        try:
+            html = fetch(
+                card_url,
+                cache_dir,
+                delay=delay,
+                user_agent=user_agent,
+                stage="card_page",
+                fetch_state=fetch_state,
+                cache_ttl_sec=cache_ttl_sec,
+                force_refresh=False,
+            )
+        except FetchSafetyStop:
+            raise
+        except Exception:
+            failed += 1
+            continue
+        links = extract_official_tweet_links_from_card_html(html)
+        if not links:
+            continue
+        cardno, _name = cardno_name_from_url(card_url)
+        canonical, _rarity = split_cardnumber_rarity_suffix(cardno)
+        if canonical:
+            cardnumbers.add(canonical)
+        post_urls.update(links)
+        if stop_after_first and post_urls:
+            break
+    return {
+        "official_post_probe_checked": checked,
+        "official_post_probe_failed": failed,
+        "official_post_link_count": len(post_urls),
+        "official_post_cardnumbers": sorted(cardnumbers),
+        "official_post_urls": sorted(post_urls),
+    }
+
+
 def parse_card_page(url: str, html: str, key_set: Set[str], do_normalize: bool) -> Dict[str, Any]:
     soup = BeautifulSoup(html, "lxml")
     title = soup.find("title").get_text(strip=True) if soup.find("title") else ""
@@ -2771,8 +2976,11 @@ def build_product_registry_entry(
     html: str,
     *,
     previous_entries_by_url: Optional[Dict[str, Dict[str, Any]]] = None,
+    today: Optional[date] = None,
+    official_post_probe: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     card_links = extract_card_links_from_product(html)
+    unresolved_card_rows = extract_unresolved_card_rows_from_product(html)
     cardnumbers: List[str] = []
     code_counts: Counter[str] = Counter()
     for url in card_links:
@@ -2797,6 +3005,20 @@ def build_product_registry_entry(
         previous_entries_by_url=previous_entries_by_url,
     )
 
+    prev = (
+        previous_entries_by_url.get(product_url, {})
+        if previous_entries_by_url is not None
+        else {}
+    )
+    regular_checked_on = str(prev.get("regular_checked_on", "") or "").strip()
+    if today is not None and release_date:
+        try:
+            release_day = date.fromisoformat(release_date)
+        except ValueError:
+            release_day = None
+        if release_day is not None and release_day <= today:
+            regular_checked_on = today.isoformat()
+
     return {
         "product_code": product_code,
         "release_date": release_date,
@@ -2807,6 +3029,16 @@ def build_product_registry_entry(
         "card_link_count": len(cardnumbers),
         "product_code_counts": dict(sorted(code_counts.items())),
         "sample_cardnumbers": sorted(set(cardnumbers))[:20],
+        "cardnumbers": sorted(set(cardnumbers)),
+        "card_urls": sorted(set(card_links)),
+        "unresolved_card_row_count": len(unresolved_card_rows),
+        "unresolved_card_rows": unresolved_card_rows,
+        "official_post_link_count": int((official_post_probe or {}).get("official_post_link_count", 0) or 0),
+        "official_post_cardnumbers": list((official_post_probe or {}).get("official_post_cardnumbers", []) or []),
+        "official_post_urls": list((official_post_probe or {}).get("official_post_urls", []) or []),
+        "official_post_probe_checked": int((official_post_probe or {}).get("official_post_probe_checked", 0) or 0),
+        "official_post_probe_failed": int((official_post_probe or {}).get("official_post_probe_failed", 0) or 0),
+        "regular_checked_on": regular_checked_on,
     }
 
 
@@ -2834,8 +3066,17 @@ def write_product_release_registry(
             "title": entry.get("title", ""),
             "source_url": entry.get("source_url", ""),
             "card_link_count": entry.get("card_link_count", 0),
+            "unresolved_card_row_count": entry.get("unresolved_card_row_count", 0),
+            "unresolved_card_rows": entry.get("unresolved_card_rows", []),
+            "official_post_link_count": entry.get("official_post_link_count", 0),
+            "official_post_cardnumbers": entry.get("official_post_cardnumbers", []),
+            "official_post_urls": entry.get("official_post_urls", []),
+            "official_post_probe_checked": entry.get("official_post_probe_checked", 0),
+            "official_post_probe_failed": entry.get("official_post_probe_failed", 0),
             "product_code_counts": entry.get("product_code_counts", {}),
             "sample_cardnumbers": entry.get("sample_cardnumbers", []),
+            "cardnumbers": entry.get("cardnumbers", []),
+            "regular_checked_on": entry.get("regular_checked_on", ""),
         }
         if code not in products:
             products[code] = candidate
@@ -2910,7 +3151,14 @@ def write_product_release_registry(
         "status",
         "reason",
         "card_link_count",
+        "unresolved_card_row_count",
+        "official_post_link_count",
+        "official_post_cardnumbers",
+        "official_post_urls",
+        "official_post_probe_checked",
+        "official_post_probe_failed",
         "product_code_counts",
+        "unresolved_card_rows",
         "source_url",
     ]
     with audit_path.open("w", encoding="utf-8", newline="") as f:
@@ -2920,6 +3168,21 @@ def write_product_release_registry(
             row = {key: entry.get(key, "") for key in fields}
             row["product_code_counts"] = json.dumps(
                 entry.get("product_code_counts", {}),
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+            row["unresolved_card_rows"] = json.dumps(
+                entry.get("unresolved_card_rows", []),
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+            row["official_post_cardnumbers"] = json.dumps(
+                entry.get("official_post_cardnumbers", []),
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+            row["official_post_urls"] = json.dumps(
+                entry.get("official_post_urls", []),
                 ensure_ascii=False,
                 sort_keys=True,
             )
@@ -2995,6 +3258,14 @@ def load_existing_product_registry_entries(
                         "card_link_count": card_link_count,
                         "product_code_counts": counts_obj if isinstance(counts_obj, dict) else {},
                         "sample_cardnumbers": [],
+                        "cardnumbers": [],
+                        "card_urls": [],
+                        "official_post_link_count": 0,
+                        "official_post_cardnumbers": [],
+                        "official_post_urls": [],
+                        "official_post_probe_checked": 0,
+                        "official_post_probe_failed": 0,
+                        "regular_checked_on": "",
                         "source_url": source_url,
                     }
         except OSError:
@@ -3024,6 +3295,22 @@ def load_existing_product_registry_entries(
             "sample_cardnumbers": raw.get("sample_cardnumbers", [])
             if isinstance(raw.get("sample_cardnumbers"), list)
             else [],
+            "cardnumbers": raw.get("cardnumbers", [])
+            if isinstance(raw.get("cardnumbers"), list)
+            else [],
+            "card_urls": raw.get("card_urls", [])
+            if isinstance(raw.get("card_urls"), list)
+            else [],
+            "official_post_link_count": int(raw.get("official_post_link_count", 0) or 0),
+            "official_post_cardnumbers": raw.get("official_post_cardnumbers", [])
+            if isinstance(raw.get("official_post_cardnumbers"), list)
+            else [],
+            "official_post_urls": raw.get("official_post_urls", [])
+            if isinstance(raw.get("official_post_urls"), list)
+            else [],
+            "official_post_probe_checked": int(raw.get("official_post_probe_checked", 0) or 0),
+            "official_post_probe_failed": int(raw.get("official_post_probe_failed", 0) or 0),
+            "regular_checked_on": str(raw.get("regular_checked_on", "") or "").strip(),
             "source_url": source_url,
         }
     return out
@@ -3035,6 +3322,7 @@ def should_fetch_product_page_incremental(
     previous_entries_by_url: Dict[str, Dict[str, Any]],
     today: date,
     released_product_grace_days: int,
+    nearest_unreleased_urls: Optional[Set[str]] = None,
 ) -> Tuple[bool, Optional[Dict[str, Any]], str]:
     old = previous_entries_by_url.get(str(product_url).strip())
     if not old:
@@ -3057,13 +3345,60 @@ def should_fetch_product_page_incremental(
         # becoming a permanent per-run HTTP fetch target.
         return False, old, "release_date_invalid_reused"
 
-    grace_start = today - timedelta(days=max(0, int(released_product_grace_days)))
-    if release_day >= grace_start:
-        if release_day > today:
-            return True, old, "prerelease_product"
-        return True, old, "recently_released_product"
+    if release_day > today:
+        if _product_prerelease_activity_started(old):
+            return True, old, "prerelease_active_product"
+        if str(product_url).strip() in set(nearest_unreleased_urls or set()):
+            return True, old, "prerelease_nearest_probe"
+        return False, old, "prerelease_dormant_reused"
+
+    regular_checked_on = str(old.get("regular_checked_on", "") or "").strip()
+    if not regular_checked_on:
+        return True, old, "post_release_regular_update"
 
     return False, old, "stable_released_product"
+
+
+def _product_release_day(entry: Dict[str, Any]) -> Optional[date]:
+    raw = str((entry or {}).get("release_date", "") or "").strip()
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        return None
+
+
+def _product_prerelease_activity_started(entry: Dict[str, Any]) -> bool:
+    """Return True once card pages for a prerelease product link official posts.
+
+    Product pages may get placeholder/card-effect rows before image reveals.
+    Treat the product as active only after individual card pages expose official
+    LL_cardgame post links.
+    """
+    try:
+        if int((entry or {}).get("official_post_link_count", 0) or 0) > 0:
+            return True
+    except Exception:
+        pass
+    urls = (entry or {}).get("official_post_urls", [])
+    return isinstance(urls, list) and bool(urls)
+
+
+def nearest_unreleased_product_urls(
+    previous_entries_by_url: Dict[str, Dict[str, Any]],
+    *,
+    today: date,
+) -> Set[str]:
+    future: List[Tuple[date, str]] = []
+    for url, entry in dict(previous_entries_by_url or {}).items():
+        release_day = _product_release_day(entry)
+        if release_day is not None and release_day > today:
+            future.append((release_day, str(url).strip()))
+    if not future:
+        return set()
+    nearest_day = min(day for day, _url in future)
+    return {url for day, url in future if day == nearest_day and url}
 
 
 def cmd_scrape(
@@ -3121,8 +3456,9 @@ def cmd_scrape(
 
         # Existing card URLs are already represented by resume records. In
         # incremental mode only product pages that may reveal new cards are
-        # fetched: new products, prerelease products, and recently released
-        # products. Stable old released products reuse the previous registry.
+        # fetched: new products, prerelease pages with visible card rows,
+        # the nearest unreleased product as a short-TTL probe, and the first
+        # post-release regular check. Stable or dormant pages reuse the registry.
         card_urls: Set[str] = set(resume_urls)
         product_registry_entries: List[Dict[str, Any]] = []
         previous_registry = (
@@ -3137,6 +3473,10 @@ def cmd_scrape(
         product_long_cache_ttl_sec = max(0.0, float(product_page_cache_ttl_days)) * 86400.0
         product_fetch_reasons: Counter[str] = Counter()
         today = date.today()
+        nearest_unreleased_urls = nearest_unreleased_product_urls(
+            previous_registry,
+            today=today,
+        )
 
         for i, pu in enumerate(product_urls, 1):
             should_fetch = True
@@ -3149,6 +3489,7 @@ def cmd_scrape(
                         previous_entries_by_url=previous_registry,
                         today=today,
                         released_product_grace_days=released_product_grace_days,
+                        nearest_unreleased_urls=nearest_unreleased_urls,
                     )
                 )
 
@@ -3162,9 +3503,15 @@ def cmd_scrape(
                 try:
                     if fresh:
                         product_cache_ttl_sec = None
-                    elif reason == "prerelease_product":
+                    elif reason == "prerelease_active_product":
                         product_cache_ttl_sec = 0.0
-                    elif reason in {"new_product", "recently_released_product"}:
+                    elif reason == "prerelease_nearest_probe":
+                        product_cache_ttl_sec = max(0.0, float(CONFIG.get("cache_ttl_sec", 0.0)))
+                    elif reason in {
+                        "new_product",
+                        "recently_released_product",
+                        "post_release_regular_update",
+                    }:
                         product_cache_ttl_sec = max(0.0, float(CONFIG.get("cache_ttl_sec", 0.0)))
                     else:
                         product_cache_ttl_sec = product_long_cache_ttl_sec
@@ -3176,16 +3523,35 @@ def cmd_scrape(
                         stage="product_page",
                         fetch_state=fetch_state,
                         cache_ttl_sec=product_cache_ttl_sec,
-                        force_refresh=(reason == "prerelease_product"),
+                        force_refresh=(reason == "prerelease_active_product"),
                     )
-                    card_urls.update(extract_card_links_from_product(h))
-                    product_registry_entries.append(
-                        build_product_registry_entry(
-                            pu,
-                            h,
-                            previous_entries_by_url=previous_registry,
+                    product_card_links = extract_card_links_from_product(h)
+                    card_urls.update(product_card_links)
+                    official_post_probe: Optional[Dict[str, Any]] = None
+                    product_entry = build_product_registry_entry(
+                        pu,
+                        h,
+                        previous_entries_by_url=previous_registry,
+                        today=today,
+                    )
+                    if reason in {"prerelease_nearest_probe", "prerelease_active_product"}:
+                        official_post_probe = probe_product_card_official_post_links(
+                            product_card_links,
+                            cache_dir=cache_dir,
+                            delay=delay,
+                            user_agent=user_agent,
+                            fetch_state=fetch_state,
+                            cache_ttl_sec=max(0.0, float(CONFIG.get("cache_ttl_sec", 0.0))),
+                            product_code=str(product_entry.get("product_code", "") or ""),
                         )
-                    )
+                        product_entry.update({
+                            "official_post_link_count": int(official_post_probe.get("official_post_link_count", 0) or 0),
+                            "official_post_cardnumbers": list(official_post_probe.get("official_post_cardnumbers", []) or []),
+                            "official_post_urls": list(official_post_probe.get("official_post_urls", []) or []),
+                            "official_post_probe_checked": int(official_post_probe.get("official_post_probe_checked", 0) or 0),
+                            "official_post_probe_failed": int(official_post_probe.get("official_post_probe_failed", 0) or 0),
+                        })
+                    product_registry_entries.append(product_entry)
                 except FetchSafetyStop:
                     raise
                 except Exception as e:
@@ -3205,7 +3571,7 @@ def cmd_scrape(
             "[PRODUCT-SCAN] "
             f"total={len(product_urls)} fetch={product_fetch_count} "
             f"reuse={product_reuse_count} "
-            f"released_grace_days={max(0, int(released_product_grace_days))} "
+            "released_update=first_post_release_check "
             f"reasons={dict(sorted(product_fetch_reasons.items()))}"
         )
 
@@ -3621,7 +3987,10 @@ def split_trigger_blocks(effect_text_norm: str) -> List[Dict[str, Any]]:
     def parse_header_line(ln: str) -> Optional[str]:
         m = header_angle.match(ln)
         if m and not ln.startswith("<("):  # exclude icons like <(桃)>
-            return m.group(1).strip()
+            h = m.group(1).strip()
+            if is_known_structural_header(h):
+                return h
+            return None
         m = header_kakko.match(ln)
         if m:
             return m.group(1).strip()
@@ -3713,7 +4082,8 @@ def split_cost_effect_clauses(block_text: str) -> List[Dict[str, Any]]:
             return s
         return s.lstrip("、。,.，・ ")
 
-    merge_tail = ("から", "を", "に", "へ", "の", "と", "して", "または", "および", "及び")
+    merge_tail = ("から", "を", "に", "へ", "の", "と", "して", "または", "および", "及び", "、")
+    merge_head = ("を", "が", "は", "、")
     merged: List[str] = []
     for ln in raw_lines:
         if not merged:
@@ -3722,10 +4092,28 @@ def split_cost_effect_clauses(block_text: str) -> List[Dict[str, Any]]:
         prev = merged[-1]
         has_sep_prev = ("：" in prev) or (":" in prev)
         has_sep_ln = ("：" in ln) or (":" in ln)
-        if (not has_sep_prev) and (not has_sep_ln) and any(prev.endswith(t) for t in merge_tail) and not ln.startswith("<"):
+        if (not has_sep_prev) and (not has_sep_ln) and (
+            any(prev.endswith(t) for t in merge_tail)
+            or any(ln.startswith(t) for t in merge_head)
+        ):
             merged[-1] = prev + ln
         else:
             merged.append(ln)
+
+    # Some card texts share a leading condition subject across consecutive icon
+    # conditions:
+    #   自分の成功ライブカード置き場にある『G』のカードの中に、<スコア+1>を持つ...
+    #   <ALL>を持つ...
+    # The second and later sentences are not standalone templates unless the
+    # shared subject is restored.
+    subject_prefix = ""
+    for i, ln in enumerate(list(merged)):
+        m_ctx = re.match(r"^(自分の成功ライブカード置き場にある『[^』]+』のカードの中に、)<[^<>]+>を持つカードがある場合、", ln)
+        if m_ctx:
+            subject_prefix = m_ctx.group(1)
+            continue
+        if subject_prefix and re.match(r"^<[^<>]+>を持つカードがある場合、", ln):
+            merged[i] = subject_prefix + ln
 
     clauses: List[Dict[str, Any]] = []
     for ln in merged:
@@ -4443,8 +4831,8 @@ def build_parser() -> argparse.ArgumentParser:
     ps.add_argument(
         "--released-product-grace-days",
         type=int,
-        default=7,
-        help="incremental mode: refetch product pages until this many days after release",
+        default=0,
+        help="deprecated compatibility option; released products now use a recorded first post-release regular update",
     )
     ps.add_argument(
         "--product-page-cache-ttl-days",
@@ -4528,8 +4916,8 @@ def build_parser() -> argparse.ArgumentParser:
     pall.add_argument(
         "--released-product-grace-days",
         type=int,
-        default=7,
-        help="incremental mode: refetch product pages until this many days after release",
+        default=0,
+        help="deprecated compatibility option; released products now use a recorded first post-release regular update",
     )
     pall.add_argument(
         "--product-page-cache-ttl-days",

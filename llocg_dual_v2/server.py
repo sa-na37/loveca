@@ -25,7 +25,7 @@ from llocg_ui.server import App, HTML as SINGLE_HTML
 from llocg_ui.views import make_view_state
 from .core import ENERGY_DECK_SIZE, DualMatchEngine, Phase, discover_data_root
 
-BUILD_TAG = "llocg_dual_v2_cpu_decision_trace_20260730a"
+BUILD_TAG = "llocg_dual_v2_opponent_wait_no_active_bridge_20260825b"
 
 
 @dataclass
@@ -1505,6 +1505,7 @@ class LegacyUIAdapter:
         return None, ""
 
     def _calculate_live_score(self, rt: PlayerViewRuntime) -> Tuple[int, str]:
+        self._apply_dual_front_blade_loss_continuous()
         gs = rt.app.gs
         attempt = getattr(rt.app, "_dual_live_attempt_succeeded", None)
         if attempt is False:
@@ -1646,6 +1647,7 @@ class LegacyUIAdapter:
             "effect_text": str(item.get("effect_text", "") or item.get("text", "") or ""),
             "text": str(item.get("text", "") or ""),
             "max_delta": max_delta,
+            "no_active_next": bool(item.get("no_active_next", False)),
         }
 
     @staticmethod
@@ -1746,16 +1748,69 @@ class LegacyUIAdapter:
             slot = dict(getattr(other.app.gs, "stage", {}) or {}).get(pos)
             if slot is not None:
                 setattr(slot, "active", False)
+                if bool(request.get("no_active_next", False)):
+                    setattr(slot, "no_active_next_turn", True)
         src = str(request.get("source_cn", "") or "?")
+        suffix = " no-active-next" if bool(request.get("no_active_next", False)) else ""
         other.app.gs.log.append(
-            f"[DUAL EFFECT][OPPONENT WAIT] {src}: {picked if picked else 'none'} -> WAIT "
+            f"[DUAL EFFECT][OPPONENT WAIT] {src}: {picked if picked else 'none'} -> WAIT{suffix} "
             f"(requested={requested}, candidates={candidates})"
         )
         rt.app.gs.log.append(
-            f"[DUAL EFFECT][OPPONENT WAIT] {src}: opponent {other.key} {picked if picked else 'none'} -> WAIT "
+            f"[DUAL EFFECT][OPPONENT WAIT] {src}: opponent {other.key} {picked if picked else 'none'} -> WAIT{suffix} "
             f"(requested={requested}, applied={pick_n})"
         )
         self._sync_view_to_core(other)
+
+    @staticmethod
+    def _front_position_for_opponent(pos: str) -> str:
+        return {"L": "R", "C": "C", "R": "L"}.get(str(pos or "").upper(), "")
+
+    def _front_blade_loss_cost_limit(self, rt: PlayerViewRuntime, cn: str) -> Optional[int]:
+        payload = self.card_info_payload(rt.key, cn) or {}
+        text = "\n".join(
+            str(x or "") for x in [
+                payload.get("effect", ""),
+                payload.get("effect_text_raw", ""),
+                payload.get("effect_text_norm", ""),
+                "\n".join(list(payload.get("abilities", []) or [])),
+            ]
+        )
+        normalized = re.sub(r"<BODY>|【BODY】|BODY", "", text)
+        m = re.search(r"このメンバーの正面のエリアにいるコスト\s*(\d+)\s*以下のメンバーは、<\(ブレード\)>を失う。", normalized)
+        if not m:
+            return None
+        return int(m.group(1))
+
+    def _apply_dual_front_blade_loss_continuous(self) -> None:
+        changes: List[str] = []
+        for rt in self.players.values():
+            for slot in dict(getattr(rt.app.gs, "stage", {}) or {}).values():
+                if slot is not None:
+                    setattr(slot, "blade_loss", 0)
+        for rt in self.players.values():
+            other = self.runtime("p2" if rt.key == "p1" else "p1")
+            for pos, slot in dict(getattr(rt.app.gs, "stage", {}) or {}).items():
+                src_cn = self._slot_cardnumber(slot)
+                if not src_cn:
+                    continue
+                cost_lim = self._front_blade_loss_cost_limit(rt, src_cn)
+                if cost_lim is None:
+                    continue
+                target_pos = self._front_position_for_opponent(pos)
+                target = dict(getattr(other.app.gs, "stage", {}) or {}).get(target_pos)
+                target_cn = self._slot_cardnumber(target)
+                if not target_cn:
+                    continue
+                if self._card_numeric_field(other, target_cn, "cost") > cost_lim:
+                    continue
+                before = max(0, int(getattr(target, "blade_loss", 0) or 0))
+                setattr(target, "blade_loss", before + 1)
+                changes.append(f"P{rt.player_id + 1}:{pos}->{other.key}:{target_pos}")
+        signature = ",".join(changes)
+        if signature and signature != str(getattr(self, "_front_blade_loss_signature", "") or ""):
+            self.engine.state.log.append(f"[DUAL EFFECT][OPPONENT FRONT BLADE LOSS] {signature}")
+        setattr(self, "_front_blade_loss_signature", signature)
 
     def _pending_item_for_command(
         self,

@@ -38,7 +38,7 @@ from llocg_dual_v2.server import (
     _transparent_png_bytes,
 )
 
-BUILD_TAG = "llocg_dual_v2_opponent_hand_position_bridge_tests_20260721a"
+BUILD_TAG = "llocg_dual_v2_opponent_wait_no_active_bridge_tests_20260825b"
 
 
 def deck(prefix: str):
@@ -50,6 +50,8 @@ class FakeSlot:
     cardnumber: str
     active: bool = True
     energy_under: int = 0
+    blade_loss: int = 0
+    no_active_next_turn: bool = False
 
 
 class FakeApp:
@@ -635,6 +637,52 @@ class LegacyAdapterTransactionTests(unittest.TestCase):
         a.action("UNDO", {})
         self.assertTrue(p2.gs.stage["C"].active)
         self.assertTrue(p2.gs.stage["R"].active)
+
+    def test_opponent_wait_notify_updates_real_opponent_stage_no_active_next_and_undo(self):
+        a = self.make_adapter()
+        self.enter_first_main(a)
+        p1 = a.runtime("p1").app
+        p2 = a.runtime("p2").app
+        p2.cards_db["B-001"]["cost"] = 2
+        p2.cards_db["B-002"]["cost"] = 9
+        p2.gs.stage["C"] = FakeSlot("B-001", active=True)
+        p2.gs.stage["R"] = FakeSlot("B-002", active=True)
+        p1.gs.pending.append({
+            "kind": "opponent_wait_notify",
+            "source_cn": "A-SRC",
+            "effect_text": "コスト4以下のメンバーを2人までウェイトにする。そのメンバーは次のターンのアクティブフェイズにアクティブしない",
+            "options": ["0", "1", "2"],
+            "max_delta": 2,
+            "no_active_next": True,
+        })
+        out = a.player_command("p1", "resolve_pending", {"idx": 0, "choice": "2"})
+        self.assertTrue(out.get("dual_transaction_committed"))
+        self.assertFalse(p2.gs.stage["C"].active)
+        self.assertTrue(p2.gs.stage["C"].no_active_next_turn)
+        self.assertTrue(p2.gs.stage["R"].active)
+        a.action("UNDO", {})
+        self.assertTrue(p2.gs.stage["C"].active)
+        self.assertFalse(p2.gs.stage["C"].no_active_next_turn)
+        self.assertTrue(p2.gs.stage["R"].active)
+
+    def test_opponent_front_blade_loss_body_recomputes_from_real_opponent_stage(self):
+        a = self.make_adapter()
+        p1 = a.runtime("p1").app
+        p2 = a.runtime("p2").app
+        p1.cards_db["A-SRC"] = {
+            "cardnumber": "A-SRC",
+            "cost": 3,
+            "effect_text_raw": "<BODY>\nこのメンバーの正面のエリアにいるコスト4以下のメンバーは、<(ブレード)>を失う。",
+        }
+        p2.cards_db["B-001"].update({"cost": 4, "blade": 1})
+        p2.cards_db["B-002"].update({"cost": 5, "blade": 1})
+        p1.gs.stage["L"] = FakeSlot("A-SRC", active=True)
+        p2.gs.stage["R"] = FakeSlot("B-001", active=True)
+        p2.gs.stage["C"] = FakeSlot("B-002", active=True)
+
+        a._apply_dual_front_blade_loss_continuous()
+        self.assertEqual(p2.gs.stage["R"].blade_loss, 1)
+        self.assertEqual(p2.gs.stage["C"].blade_loss, 0)
 
     def test_opponent_energy_ack_updates_real_opponent_energy_and_undo(self):
         a = self.make_adapter()

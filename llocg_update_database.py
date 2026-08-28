@@ -21,7 +21,7 @@ BUILD_TAG is intentionally visible for delivery verification.
 
 from __future__ import annotations
 
-BUILD_TAG = "preview_only_non_energy_image_targets_20260803a"
+BUILD_TAG = "release_checkpoint_incremental_hub_scan_20260817a"
 
 import argparse
 import csv
@@ -827,13 +827,13 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument(
         "--max-429",
         type=int,
-        default=6,
+        default=8,
         help="Maximum consecutive HTTP 429 responses before the DB scraper stops safely",
     )
     ap.add_argument(
         "--http-cache-ttl-hours",
         type=float,
-        default=24.0,
+        default=6.0,
         help="Freshness window for cached WIKIWIKI product/card pages used by the DB scraper",
     )
     ap.add_argument(
@@ -852,8 +852,8 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument(
         "--released-product-grace-days",
         type=int,
-        default=7,
-        help="Recheck product pages until this many days after release; stable older products reuse registry data",
+        default=0,
+        help="Deprecated compatibility option; released products now use a recorded first post-release regular update",
     )
     ap.add_argument(
         "--product-page-cache-ttl-days",
@@ -902,6 +902,11 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--image-timeout", type=float, default=20.0)
     ap.add_argument("--image-sleep", type=float, default=0.05)
     ap.add_argument("--image-jitter", type=float, default=0.05)
+    ap.add_argument(
+        "--skip-image-fetch",
+        action="store_true",
+        help="Update DB/manifest files but skip downloading local card images",
+    )
     ap.add_argument(
         "--skip-preview-posts",
         "--skip-x",
@@ -1027,6 +1032,12 @@ def main() -> int:
     # source URLs. Product pages are still checked to discover newly listed cards
     # and rebuild the release registry. Existing card pages are only rescanned
     # when --full-refresh is explicitly requested.
+    db_scrape_delay = max(1.0, float(args.delay))
+    if db_scrape_delay > float(args.delay):
+        print(
+            f"[RATE-LIMIT] DB scrape delay raised from {args.delay:.2f}s "
+            f"to {db_scrape_delay:.2f}s to reduce WIKIWIKI 429 responses"
+        )
     scrape_cmd = [
         python_exe,
         str(db_tool),
@@ -1036,7 +1047,7 @@ def main() -> int:
         "--cache",
         str(cache_dir),
         "--delay",
-        str(args.delay),
+        str(db_scrape_delay),
         "--max-429",
         str(max(1, int(args.max_429))),
         "--cache-ttl-sec",
@@ -1394,7 +1405,12 @@ def main() -> int:
             f"preview_manifest_cards_without_local_image={len(missing_preview_image_targets)} "
             f"sample={sample}"
         )
-    if image_fetch_targets:
+    if args.skip_image_fetch:
+        print(
+            "[IMAGE-FETCH] skipped by --skip-image-fetch; "
+            "local image completeness checks are also skipped"
+        )
+    elif image_fetch_targets:
         image_target_file = write_cardnumber_file(
             work_root / "image_fetch_targets.txt",
             image_fetch_targets,
@@ -1427,37 +1443,38 @@ def main() -> int:
     else:
         print("[IMAGE-FETCH] no changed card targets; skipped")
 
-    missing_after_image_fetch = missing_released_image_targets(
-        cardnumbers=all_cardnumbers,
-        image_root=dbdir / "card_images",
-        release_dates=release_dates,
-        as_of=today,
-    )
-    if missing_after_image_fetch:
-        sample = ", ".join(sorted(missing_after_image_fetch)[:30])
-        print(
-            "[IMAGE-FETCH-ERROR] "
-            f"missing released card images after fetch: {len(missing_after_image_fetch)}"
+    if not args.skip_image_fetch:
+        missing_after_image_fetch = missing_released_image_targets(
+            cardnumbers=all_cardnumbers,
+            image_root=dbdir / "card_images",
+            release_dates=release_dates,
+            as_of=today,
         )
-        print(f"[IMAGE-FETCH-ERROR] sample={sample}")
-        raise SystemExit(
-            "[ERROR] card image update incomplete; retry the update after confirming network access"
-        )
-    missing_preview_after_image_fetch = {
-        cardno
-        for cardno in manifest_cardnumbers(preview_manifest_path)
-        if cardno not in scan_image_cardnumbers(preview_image_dir)
-    }
-    if missing_preview_after_image_fetch:
-        sample = ", ".join(sorted(missing_preview_after_image_fetch)[:30])
-        print(
-            "[IMAGE-FETCH-ERROR] "
-            f"missing preview card images after fetch: {len(missing_preview_after_image_fetch)}"
-        )
-        print(f"[IMAGE-FETCH-ERROR] preview_sample={sample}")
-        raise SystemExit(
-            "[ERROR] preview card image update incomplete; retry the update after confirming network access"
-        )
+        if missing_after_image_fetch:
+            sample = ", ".join(sorted(missing_after_image_fetch)[:30])
+            print(
+                "[IMAGE-FETCH-ERROR] "
+                f"missing released card images after fetch: {len(missing_after_image_fetch)}"
+            )
+            print(f"[IMAGE-FETCH-ERROR] sample={sample}")
+            raise SystemExit(
+                "[ERROR] card image update incomplete; retry the update after confirming network access"
+            )
+        missing_preview_after_image_fetch = {
+            cardno
+            for cardno in manifest_cardnumbers(preview_manifest_path)
+            if cardno not in scan_image_cardnumbers(preview_image_dir)
+        }
+        if missing_preview_after_image_fetch:
+            sample = ", ".join(sorted(missing_preview_after_image_fetch)[:30])
+            print(
+                "[IMAGE-FETCH-ERROR] "
+                f"missing preview card images after fetch: {len(missing_preview_after_image_fetch)}"
+            )
+            print(f"[IMAGE-FETCH-ERROR] preview_sample={sample}")
+            raise SystemExit(
+                "[ERROR] preview card image update incomplete; retry the update after confirming network access"
+            )
 
     # 10. Final strict generation audit.
     run(

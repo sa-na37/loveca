@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "updated": "2026-06-08",
-  "purpose": "Manual card text corrections for known upstream/wiki typos. These overrides are applied by llocg_db_tool_v7.py during scrape/normalize so future DB refreshes do not reintroduce the typo.",
+  "updated": "2026-08-25",
+  "purpose": "Manual card text and normalized field corrections for known upstream/wiki/card-image mismatches. These overrides are applied by llocg_db_tool_v7.py during scrape/normalize so future DB refreshes do not reintroduce the typo.",
   "cards": {
     "PL!S-bp5-020": {
       "cardname": "Landing action Yeah!!",
@@ -14,6 +14,54 @@
       "reason": "20260715 local manual correction: source page/card image audit indicates PL!SP-pb2-008 timing is ライブ成功時, not ライブ開始時.",
       "effect_text_raw": "<ライブ成功時>\nエールにより公開された自分のカードの中にあるブレードハートを持たない『Liella!』のメンバーカード2枚につき、ライブの合計スコアを+1する。この能力では合計スコアは2までしか増えない。",
       "effect_text_norm": "<ライブ成功時>\nエールにより公開された自分のカードの中にあるブレードハートを持たない『Liella!』のメンバーカード2枚につき、ライブの合計スコアを+1する。この能力では合計スコアは2までしか増えない。"
+    },
+    "PL!N-pb1-006": {
+      "cardname": "近江彼方",
+      "reason": "20260826 local card image correction: this 9-cost member does not have a blade heart. The upstream/raw blade_heart field was populated from ordinary printed heart color data.",
+      "blade_heart_raw": "なし",
+      "blade_heart_counts_json": "{}",
+      "blade_heart_total": "0",
+      "blade_heart_tags_json": "[]",
+      "blade_heart_special_counts_json": "{\"draw\": 0, \"score\": 0, \"colorless\": 0}",
+      "blade_heart_draw_n": "0",
+      "blade_heart_score_n": "0",
+      "blade_heart_colorless_n": "0"
+    },
+    "PL!SP-bp7-019": {
+      "cardname": "若菜四季",
+      "reason": "20260826 local card image correction: 5-10 cost members normally do not have blade hearts; bp1 R+ Shizuku is the known exception. This 7-cost member is not that exception.",
+      "blade_heart_raw": "なし",
+      "blade_heart_counts_json": "{}",
+      "blade_heart_total": "0",
+      "blade_heart_tags_json": "[]",
+      "blade_heart_special_counts_json": "{\"draw\": 0, \"score\": 0, \"colorless\": 0}",
+      "blade_heart_draw_n": "0",
+      "blade_heart_score_n": "0",
+      "blade_heart_colorless_n": "0"
+    },
+    "PL!S-bp7-005": {
+      "cardname": "渡辺曜",
+      "reason": "20260817 local manual correction: wiki text has typo '貸し枯れている'; card text context requires '置かれている'.",
+      "effect_text_raw": "<登場>\n自分の控え室にあるメンバーカード1枚を、自分のステージにいるメンバー1人の下に置く。\n<常時>\n自分のステージにいる、メンバーカードが下に置かれている『Aqours』のメンバーは、\n<(ブレード)>\nを得る。\n<起動>\n<センター>\n<ターン1回>\n手札を2枚控え室に置く：このメンバーと自分のステージにいるほかの『Aqours』のメンバー1人を選ぶ。それらが持つ\n<登場>\n能力それぞれ1つ発動させる。",
+      "effect_text_norm": "<登場>\n自分の控え室にあるメンバーカード1枚を、自分のステージにいるメンバー1人の下に置く。\n<常時>\n自分のステージにいる、メンバーカードが下に置かれている『Aqours』のメンバーは、\n<(ブレード)>\nを得る。\n<起動>\n<センター>\n<ターン1回>\n手札を2枚控え室に置く：このメンバーと自分のステージにいるほかの『Aqours』のメンバー1人を選ぶ。それらが持つ\n<登場>\n能力それぞれ1つ発動させる。"
+    },
+    "PL!N-sd2-015": {
+      "cardname": "桜坂しずく",
+      "reason": "20260817 local manual correction: wiki/source text is missing the closing parenthesis in the reminder note.",
+      "effect_text_raw": "<起動>\n<ターン1回>\nこのメンバーをウェイトにし、手札を1枚控え室に置く：カードを1枚引く。\n（ウェイト状態のメンバーが持つ\n<(ブレード)>\nは、エールで公開する枚数を増やさない。）",
+      "effect_text_norm": "<起動>\n<ターン1回>\nこのメンバーをウェイトにし、手札を1枚控え室に置く：カードを1枚引く。\n（ウェイト状態のメンバーが持つ\n<(ブレード)>\nは、エールで公開する枚数を増やさない。）"
+    },
+    "PL!SP-bp7-005": {
+      "cardname": "葉月恋",
+      "reason": "20260817 local manual correction: wiki text has typo 'エネロキーデッキ'; intended text is 'エネルギーデッキ'.",
+      "effect_text_raw": "<自動>\n<ターン1回>\nこのメンバーが登場するか、自分のエネルギーがエネルギー置き場からエネルギーデッキに置かれたとき、自分のエネルギーデッキから、エネルギーカードを1枚ウェイト状態で置く。そのエネルギーカードは、次のターンのアクティブフェイズにアクティブしない。\n<自動>\n<ターン2回>\n自分のカードの効果によって、自分のエネルギー置き場にエネルギーが置かれたとき、ライブ終了時まで、\n<(ブレード)>\nを得る。",
+      "effect_text_norm": "<自動>\n<ターン1回>\nこのメンバーが登場するか、自分のエネルギーがエネルギー置き場からエネルギーデッキに置かれたとき、自分のエネルギーデッキから、エネルギーカードを1枚ウェイト状態で置く。そのエネルギーカードは、次のターンのアクティブフェイズにアクティブしない。\n<自動>\n<ターン2回>\n自分のカードの効果によって、自分のエネルギー置き場にエネルギーが置かれたとき、ライブ終了時まで、\n<(ブレード)>\nを得る。"
+    },
+    "PL!S-bp7-025": {
+      "cardname": "Guilty Night, Guilty Kiss!",
+      "reason": "20260825 local card image correction: wiki/DB text says 'アクティブにする', but the card image says 'ウェイトにする'.",
+      "effect_text_raw": "<ライブ成功時>\n以下から1つを選ぶ。\n・相手のステージにいるコスト4以下のメンバーを2人までウェイトにする。そのメンバーは次のターンのアクティブフェイズにアクティブしない。\n・カードを1枚引く。",
+      "effect_text_norm": "<ライブ成功時>\n以下から1つを選ぶ。\n・相手のステージにいるコスト4以下のメンバーを2人までウェイトにする。そのメンバーは次のターンのアクティブフェイズにアクティブしない。\n・カードを1枚引く。"
     }
   }
 }

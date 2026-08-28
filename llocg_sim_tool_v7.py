@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# BUILD_TAG: compile_icon_condition_split_repair_20260817a
 """
 LLOCG Sim Tool (v7) — compile + TODO mining (paren/icon stitching + trigger-context fixes)
 
@@ -202,7 +203,10 @@ def split_trigger_blocks(effect_text_norm: str) -> List[Dict[str, Any]]:
     def parse_header_line(ln: str) -> Optional[str]:
         m = header_angle.match(ln)
         if m and not ln.startswith("<("):
-            return m.group(1).strip()
+            h = m.group(1).strip()
+            if is_known_structural_header(h):
+                return h
+            return None
         m = header_kakko.match(ln)
         if m:
             return m.group(1).strip()
@@ -394,7 +398,8 @@ def split_cost_effect_clauses(block_text: str) -> List[Dict[str, Any]]:
         pre3.append(ln)
 
     # --- Existing heuristic merges ---
-    merge_tail = ("から", "を", "に", "へ", "の", "と", "して", "または", "および", "及び")
+    merge_tail = ("から", "を", "に", "へ", "の", "と", "して", "または", "および", "及び", "、")
+    merge_head = ("を", "が", "は", "、")
     merged1: List[str] = []
     for ln in pre3:
         if not merged1:
@@ -403,7 +408,10 @@ def split_cost_effect_clauses(block_text: str) -> List[Dict[str, Any]]:
         prev = merged1[-1]
         has_sep_prev = ("：" in prev) or (":" in prev)
         has_sep_ln = ("：" in ln) or (":" in ln)
-        if (not has_sep_prev) and (not has_sep_ln) and any(prev.endswith(t) for t in merge_tail) and not ln.startswith("<"):
+        if (not has_sep_prev) and (not has_sep_ln) and (
+            any(prev.endswith(t) for t in merge_tail)
+            or any(ln.startswith(t) for t in merge_head)
+        ):
             merged1[-1] = prev + ln
         else:
             merged1.append(ln)
@@ -468,6 +476,15 @@ def split_cost_effect_clauses(block_text: str) -> List[Dict[str, Any]]:
 
         merged2.append(ln)
         i += 1
+
+    subject_prefix = ""
+    for j, ln in enumerate(list(merged2)):
+        m_ctx = re.match(r"^(自分の成功ライブカード置き場にある『[^』]+』のカードの中に、)<[^<>]+>を持つカードがある場合、", ln)
+        if m_ctx:
+            subject_prefix = m_ctx.group(1)
+            continue
+        if subject_prefix and re.match(r"^<[^<>]+>を持つカードがある場合、", ln):
+            merged2[j] = subject_prefix + ln
 
     clauses: List[Dict[str, Any]] = []
     for ln in merged2:

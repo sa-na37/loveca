@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: stage_cost_lower_draw2_top_20260624b
+# BUILD_TAG: generic_green_any_card_recovery_20260817a
 # PATCH_TAG: effect_registry_generic_green_recovery_20260629z
 from __future__ import annotations
 
@@ -739,6 +739,15 @@ def _try_match_generic_green_recovery(effect_text: str):
             'effect_text': t,
         }
         return ({'id': 'generic_green_live_required_heart_threshold_one', 'op': '__ext__', 'ext_key': 'green_pick_filtered_to_hand'}, gd)
+
+    # 自分の控え室からカードを1枚手札に加える。
+    m = _re.match(r'^自分の控え室(?:から|にある)、?カード(?:を1枚|1枚を)手札に加える。?$', t)
+    if m:
+        gd = {
+            'source_name': '控え室回収',
+            'effect_text': t,
+        }
+        return ({'id': 'generic_green_any_card_one', 'op': '__ext__', 'ext_key': 'green_pick_filtered_to_hand'}, gd)
 
     # 自分の控え室にあるライブカードを1枚手札に加える。
     # 自分の控え室から『Liella!』のライブカードを1枚手札に加える。

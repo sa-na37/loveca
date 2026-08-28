@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# BUILD_TAG = "loveca_preview_only_search_non_energy_20260803a"
+# BUILD_TAG = "loveca_sd_numbered_image_variants_20260817a"
 """
 Loveca application launcher (phase 1).
 
@@ -317,7 +317,8 @@ class JobState:
 class AppState:
     # Shared rarity catalogue for selectors and image-variant handling.
     BASE_RARITY_CATALOG = (
-        "SD", "CL", "N", "R", "R＋", "L", "PR", "PR＋",
+        "SD", "SD1", "SD2", "SD3", "SD4", "SD5", "SD6", "SD7", "SD8", "SD9",
+        "CL", "N", "R", "R＋", "L", "PR", "PR＋",
     )
     PARALLEL_RARITY_CATALOG = (
         "L＋", "P", "P＋", "SEC", "SEC＋", "SECL", "SRL", "DUO",
@@ -1508,7 +1509,8 @@ class AppState:
             return text, ""
         rarity = cls._normalize_rarity(match.group("rarity"))
         known = {
-            "SD", "CL", "N", "R", "R＋", "L", "L＋", "PR", "PR＋",
+            "SD", "SD1", "SD2", "SD3", "SD4", "SD5", "SD6", "SD7", "SD8", "SD9",
+            "CL", "N", "R", "R＋", "L", "L＋", "PR", "PR＋",
             "P", "P＋", "SEC", "SEC＋", "SECL", "SRL", "DUO", "AR",
             "RM", "RE", "PE", "PE＋", "SECE", "LLE", "PP", "SR", "UR", "SP",
         }
@@ -1569,7 +1571,9 @@ class AppState:
         known = (
             "PARALLEL", "SECL", "SRL", "SEC2", "SEC", "DUO", "ALT", "UR",
             "SR", "SP", "PE2", "PE+", "PE", "PR2", "P2", "R2", "L2",
-            "PR+", "P+", "R+", "L+", "AR", "RM", "SD", "PR", "CL",
+            "PR+", "P+", "R+", "L+", "AR", "RM",
+            "SD9", "SD8", "SD7", "SD6", "SD5", "SD4", "SD3", "SD2", "SD1", "SD",
+            "PR", "CL",
             "N", "R", "L", "P",
         )
         for wanted in known:
@@ -1596,7 +1600,9 @@ class AppState:
             return (0, rarity)
         rank = {
             "N": 10, "R": 11, "R＋": 12, "L": 13,
-            "SD": 14, "PR": 15, "CL": 16,
+            "SD": 14, "SD1": 14, "SD2": 14, "SD3": 14, "SD4": 14,
+            "SD5": 14, "SD6": 14, "SD7": 14, "SD8": 14, "SD9": 14,
+            "PR": 15, "CL": 16,
         }
         if rarity in rank:
             return (rank[rarity], rarity)
