@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# BUILD_TAG = "autoplay_early_plan_slot_gate_20260827a"
+# BUILD_TAG = "autoplay_high_impact_stage_alternatives_20260901a"
 """Autoplay planning primitives for Loveca Application.
 
 This module is intentionally side-effect free.  It evaluates a deck's cost
@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 
-BUILD_TAG = "autoplay_early_plan_slot_gate_20260827a"
+BUILD_TAG = "autoplay_high_impact_stage_alternatives_20260901a"
 
 
 CardLookup = Callable[[str], dict[str, Any]]
@@ -232,6 +232,7 @@ def _expanded_card_objects(rows: list[dict[str, str]], card_lookup: CardLookup) 
         member_recovery_n = _effect_member_recovery_count(effect_text)
         live_success_member_recovery_n = _timed_effect_member_recovery_count(effect_text, "ライブ成功時")
         low_cost_summon_n = _effect_low_cost_stage_summon_count(effect_text)
+        live_success_low_cost_summon_n = _effect_live_success_under_low_cost_summon_count(effect_text)
         enter_top_stack_n = _timed_effect_top_stack_count(effect_text, "登場")
         enter_top_search = _timed_effect_top_search_profile(effect_text, "登場")
         recovery_kind = _effect_recovery_kind(effect_text)
@@ -241,6 +242,7 @@ def _expanded_card_objects(rows: list[dict[str, str]], card_lookup: CardLookup) 
         cost_reduction_n = _effect_cost_reduction_amount(effect_text)
         free_member_play = _has_free_member_play_signal(effect_text)
         overcost_member_play = _has_overcost_member_play_signal(effect_text)
+        progression_accel_value = _effect_progression_accel_value(effect_text)
         progression_support_tags = _progression_support_tags(effect_text)
         base_hearts_raw = record.get("base_hearts_raw") or record.get("hearts") or ""
         required_hearts_raw = record.get("required_hearts_raw") or record.get("required_hearts") or ""
@@ -274,6 +276,7 @@ def _expanded_card_objects(rows: list[dict[str, str]], card_lookup: CardLookup) 
                 "member_recovery_n": member_recovery_n,
                 "live_success_member_recovery_n": live_success_member_recovery_n,
                 "low_cost_summon_n": low_cost_summon_n,
+                "live_success_low_cost_summon_n": live_success_low_cost_summon_n,
                 "enter_top_stack_n": enter_top_stack_n,
                 "enter_top_search": dict(enter_top_search),
                 "recovery_kind": recovery_kind,
@@ -283,6 +286,7 @@ def _expanded_card_objects(rows: list[dict[str, str]], card_lookup: CardLookup) 
                 "cost_reduction_n": cost_reduction_n,
                 "free_member_play": free_member_play,
                 "overcost_member_play": overcost_member_play,
+                "progression_accel_value": progression_accel_value,
                 "progression_support_tags": list(progression_support_tags),
                 "value": int(cost or score or 0),
             })
@@ -329,6 +333,7 @@ def _card_object_from_number(card_no: str, card_lookup: CardLookup, *, seq: int 
         "member_recovery_n": _effect_member_recovery_count(effect_text),
         "live_success_member_recovery_n": _timed_effect_member_recovery_count(effect_text, "ライブ成功時"),
         "low_cost_summon_n": _effect_low_cost_stage_summon_count(effect_text),
+        "live_success_low_cost_summon_n": _effect_live_success_under_low_cost_summon_count(effect_text),
         "enter_top_stack_n": _timed_effect_top_stack_count(effect_text, "登場"),
         "enter_top_search": _timed_effect_top_search_profile(effect_text, "登場"),
         "recovery_kind": _effect_recovery_kind(effect_text),
@@ -338,6 +343,7 @@ def _card_object_from_number(card_no: str, card_lookup: CardLookup, *, seq: int 
         "cost_reduction_n": _effect_cost_reduction_amount(effect_text),
         "free_member_play": _has_free_member_play_signal(effect_text),
         "overcost_member_play": _has_overcost_member_play_signal(effect_text),
+        "progression_accel_value": _effect_progression_accel_value(effect_text),
         "progression_support_tags": _progression_support_tags(effect_text),
         "special_baton": _is_special_baton_signal(effect_text, int(cost or 0)),
     }
@@ -456,12 +462,17 @@ def _effect_member_recovery_count(effect_text: str) -> int:
         return 0
     if "控え室" not in text or "手札に加える" not in text:
         return 0
-    if "メンバーカード" not in text and "メンバー" not in text:
+    recovery_text = ""
+    for match in re.finditer(r"控え室から(?P<body>[^。:：]*?)手札に加える", text):
+        recovery_text += match.group("body")
+    if not recovery_text:
         return 0
-    match = re.search(r"メンバーカードを(\d+)枚", text)
+    if "メンバーカード" not in recovery_text and "メンバー" not in recovery_text:
+        return 0
+    match = re.search(r"メンバーカードを(\d+)枚", recovery_text)
     if match:
         return max(1, int(match.group(1)))
-    match = re.search(r"メンバーを(\d+)枚", text)
+    match = re.search(r"メンバーを(\d+)枚", recovery_text)
     if match:
         return max(1, int(match.group(1)))
     return 1
@@ -472,6 +483,35 @@ def _effect_low_cost_stage_summon_count(effect_text: str) -> int:
     if "コスト2以下" in text and "メンバー" in text and "登場させる" in text:
         return 1
     return 0
+
+
+def _effect_live_success_under_low_cost_summon_count(effect_text: str) -> int:
+    text = str(effect_text or "")
+    if (
+        "ライブ成功時" in text
+        and "このメンバーの下" in text
+        and "コスト2以下" in text
+        and "メンバー" in text
+        and "登場させ" in text
+    ):
+        return 1
+    return 0
+
+
+def _effect_progression_accel_value(effect_text: str) -> int:
+    """Energy-equivalent progression value for deck-axis setup effects."""
+    text = str(effect_text or "")
+    value = 0
+    value = max(value, _effect_energy_boost_count(text))
+    value = max(value, _effect_energy_activate_count(text))
+    value = max(value, _effect_cost_reduction_amount(text))
+    if _has_free_member_play_signal(text) or _has_overcost_member_play_signal(text):
+        value = max(value, 2)
+    if _effect_low_cost_stage_summon_count(text) > 0:
+        value = max(value, 2)
+    if _effect_live_success_under_low_cost_summon_count(text) > 0:
+        value = max(value, 2)
+    return max(0, int(value))
 
 
 def _effect_top_stack_count(effect_text: str) -> int:
@@ -549,6 +589,8 @@ def _has_overcost_member_play_signal(effect_text: str) -> bool:
 
 def _progression_support_tags(effect_text: str) -> list[str]:
     tags: list[str] = []
+    if _effect_progression_accel_value(effect_text) >= 2:
+        tags.append("major_acceleration")
     if _effect_energy_boost_count(effect_text) > 0:
         tags.append("energy_boost")
     if _effect_energy_activate_count(effect_text) > 0:
@@ -563,6 +605,8 @@ def _progression_support_tags(effect_text: str) -> list[str]:
         tags.append("overcost_member_play")
     if _effect_low_cost_stage_summon_count(effect_text) > 0:
         tags.append("low_cost_summon")
+    if _effect_live_success_under_low_cost_summon_count(effect_text) > 0:
+        tags.append("live_success_low_cost_summon")
     return tags
 
 
@@ -584,6 +628,7 @@ def build_deck_curve(rows: list[dict[str, str]], card_lookup: CardLookup) -> dic
     live_examples: dict[int, list[dict[str, Any]]] = {}
     totals = {"member": 0, "live": 0, "other": 0, "cards": 0}
     special_signals: dict[str, list[dict[str, Any]]] = {
+        "major_acceleration": [],
         "energy_boost": [],
         "energy_activate": [],
         "cost_reduction": [],
@@ -592,6 +637,7 @@ def build_deck_curve(rows: list[dict[str, str]], card_lookup: CardLookup) -> dic
         "member_recovery": [],
         "live_member_recovery": [],
         "low_cost_summon": [],
+        "live_success_low_cost_summon": [],
         "special_baton": [],
         "high_cost_anchor": [],
     }
@@ -613,6 +659,9 @@ def build_deck_curve(rows: list[dict[str, str]], card_lookup: CardLookup) -> dic
                 or ""
             )
             signal_item = {"card_no": card_no, "name": _card_name(record, card_no), "count": count, "cost": cost}
+            accel_value = _effect_progression_accel_value(effect_text)
+            if accel_value >= 2 and len(special_signals["major_acceleration"]) < 12:
+                special_signals["major_acceleration"].append({**signal_item, "accel_value": accel_value})
             if cost >= 15 and len(special_signals["high_cost_anchor"]) < 8:
                 special_signals["high_cost_anchor"].append(signal_item)
             if _has_cost_reduction_signal(effect_text) and len(special_signals["cost_reduction"]) < 8:
@@ -627,6 +676,8 @@ def build_deck_curve(rows: list[dict[str, str]], card_lookup: CardLookup) -> dic
                 special_signals["overcost_member_play"].append(signal_item)
             if _effect_low_cost_stage_summon_count(effect_text) > 0 and len(special_signals["low_cost_summon"]) < 8:
                 special_signals["low_cost_summon"].append(signal_item)
+            if _effect_live_success_under_low_cost_summon_count(effect_text) > 0 and len(special_signals["live_success_low_cost_summon"]) < 8:
+                special_signals["live_success_low_cost_summon"].append(signal_item)
             if _is_special_baton_signal(effect_text, cost) and len(special_signals["special_baton"]) < 8:
                 special_signals["special_baton"].append(signal_item)
             member_examples.setdefault(cost, [])
@@ -647,6 +698,9 @@ def build_deck_curve(rows: list[dict[str, str]], card_lookup: CardLookup) -> dic
                 or ""
             )
             signal_item = {"card_no": card_no, "name": _card_name(record, card_no), "count": count, "score": score}
+            accel_value = _effect_progression_accel_value(effect_text)
+            if accel_value >= 2 and len(special_signals["major_acceleration"]) < 12:
+                special_signals["major_acceleration"].append({**signal_item, "accel_value": accel_value})
             if _effect_energy_boost_count(effect_text) > 0 and len(special_signals["energy_boost"]) < 8:
                 special_signals["energy_boost"].append(signal_item)
             if _effect_member_recovery_count(effect_text) > 0 and len(special_signals["live_member_recovery"]) < 8:
@@ -782,6 +836,9 @@ def evaluate_progression(
         special_bonus += 34.0
     if special_signals.get("cost_reduction"):
         special_bonus += 3.0
+    major_accel_count = len(special_signals.get("major_acceleration", []) or [])
+    if major_accel_count:
+        special_bonus += min(1.0, major_accel_count / 4.0) * 18.0
     energy_profile = _progression_energy_profile(template.turns, special_signals)
     early_scarcity_penalty = 0.0
     for turn in template.turns[:3]:
@@ -1478,6 +1535,11 @@ def _card_need_score_by_turn(
         support_tags = set(card.get("progression_support_tags") or [])
         if int(card.get("energy_activate_n") or 0) > 0:
             score += 8.0 + (5.0 if upcoming_max_cost >= 10 else 0.0)
+        accel_value = int(card.get("progression_accel_value") or 0)
+        if accel_value >= 2:
+            score += 18.0 + min(3, accel_value) * 6.0
+            if upcoming_max_cost >= 10:
+                score += 8.0
         if "cost_reduction" in support_tags:
             score += 6.0 + (8.0 if upcoming_max_cost >= max(10, cost) else 0.0)
         if "free_member_play" in support_tags:
@@ -1486,6 +1548,8 @@ def _card_need_score_by_turn(
             score += 10.0 + (6.0 if upcoming_max_cost >= 10 else 0.0)
         if int(card.get("low_cost_summon_n") or 0) > 0:
             score += 8.0
+        if int(card.get("live_success_low_cost_summon_n") or 0) > 0:
+            score += 14.0 + (8.0 if upcoming_max_cost >= 10 else 0.0)
         if bool(card.get("special_baton")):
             score += 8.0
         return score
@@ -1501,6 +1565,12 @@ def _card_need_score_by_turn(
             else:
                 score += 7.0
             score += min(2, int(card.get("energy_boost_n") or 0)) * 2.0
+        support_tags = set(card.get("progression_support_tags") or [])
+        accel_value = int(card.get("progression_accel_value") or 0)
+        if accel_value >= 2 or "major_acceleration" in support_tags:
+            score += 20.0 + min(3, accel_value) * 6.0
+            if upcoming_max_cost >= 13:
+                score += 10.0
         return score
     return 0.0
 
@@ -1559,6 +1629,11 @@ def _card_need_profile(
             keep_value += 4.0
             exchange_cost += 4.0
             tags.append("low_cost_summon")
+        if int(card.get("live_success_low_cost_summon_n") or 0) > 0:
+            recovery_value += 10.0
+            keep_value += 12.0
+            exchange_cost += 14.0
+            tags.append("live_success_low_cost_summon")
         if int(card.get("member_recovery_n") or 0) > 0:
             recovery_value += 7.0
             keep_value += 2.0
@@ -1567,6 +1642,12 @@ def _card_need_profile(
         if bool(card.get("overcost_member_play")) or "overcost_member_play" in set(card.get("progression_support_tags") or []):
             recovery_value += 4.0
             tags.append("overcost_play")
+        accel_value = int(card.get("progression_accel_value") or 0)
+        if accel_value >= 2 or "major_acceleration" in set(card.get("progression_support_tags") or []):
+            keep_value += 18.0 + min(3, accel_value) * 5.0
+            exchange_cost += 20.0 + min(3, accel_value) * 5.0
+            recovery_value += 10.0
+            tags.append("major_acceleration")
     elif card.get("kind") == "live":
         if int(card.get("energy_boost_n") or 0) > 0:
             dig_target_value += 12.0
@@ -1582,6 +1663,13 @@ def _card_need_profile(
             recovery_value += 3.0
             keep_value += 1.0
             tags.append("draw_live")
+        accel_value = int(card.get("progression_accel_value") or 0)
+        if accel_value >= 2 or "major_acceleration" in set(card.get("progression_support_tags") or []):
+            dig_target_value += 16.0
+            keep_value += 18.0 + min(3, accel_value) * 5.0
+            exchange_cost += 18.0 + min(3, accel_value) * 5.0
+            recovery_value += 8.0
+            tags.append("major_acceleration_live")
         if int(card.get("score") or 0) >= 5 and not target_alternatives_by_turn:
             exchange_cost *= 0.8
     total = max(0.0, keep_value + dig_target_value * 0.2 + recovery_value * 0.25 - sideboard_like * 8.0)
@@ -1865,6 +1953,12 @@ def _live_effect_play_value(
         if upcoming_max >= 10:
             score += 10.0
         score += min(2, energy_n) * 3.0
+    accel_value = int(live_card.get("progression_accel_value") or 0)
+    support_tags = set(live_card.get("progression_support_tags") or [])
+    if accel_value >= 2 or "major_acceleration" in support_tags:
+        score += 30.0 + min(3, accel_value) * 8.0
+        if upcoming_max >= 13:
+            score += 12.0
     if draw_n > 0:
         # Draw effects are strongest before the next bottleneck turn, because
         # they convert a live success into extra looks at the target card.
@@ -1897,15 +1991,20 @@ def _card_effect_play_value(card: dict[str, Any] | None) -> float:
     if draw_n > 0:
         value += min(3, draw_n) * 2.0
     if energy_n > 0:
-        value += min(2, energy_n) * 5.0
+        value += min(3, energy_n) * 8.0
     if int(card.get("energy_activate_n") or 0) > 0:
-        value += min(2, int(card.get("energy_activate_n") or 0)) * 4.0
+        value += min(3, int(card.get("energy_activate_n") or 0)) * 7.0
     if int(card.get("low_cost_summon_n") or 0) > 0:
-        value += 5.0
+        value += 10.0
+    if int(card.get("live_success_low_cost_summon_n") or 0) > 0:
+        value += 16.0
     if bool(card.get("cost_reduction")):
-        value += 4.0
+        value += max(8.0, float(int(card.get("cost_reduction_n") or 2) * 5))
     if bool(card.get("free_member_play")) or bool(card.get("overcost_member_play")):
-        value += 5.0
+        value += 14.0
+    accel_value = int(card.get("progression_accel_value") or 0)
+    if accel_value >= 2 or "major_acceleration" in set(card.get("progression_support_tags") or []):
+        value += 18.0 + min(3, accel_value) * 6.0
     return value
 
 
@@ -2814,6 +2913,8 @@ def _is_progression_live_support(card: dict[str, Any], plan: list[list[int]]) ->
     if _energy_boost_amount(card) > 0:
         return high_goal or any(sum(shape) >= 8 for shape in plan)
     tags = set(card.get("progression_support_tags") or [])
+    if int(card.get("progression_accel_value") or 0) >= 2 or "major_acceleration" in tags:
+        return high_goal or any(sum(shape) >= 8 for shape in plan)
     if "cost_reduction" in tags or bool(card.get("cost_reduction")):
         return high_goal
     if "overcost_member_play" in tags or bool(card.get("overcost_member_play")):
@@ -3583,6 +3684,10 @@ def _has_low_cost_stage_summon(cards: list[dict[str, Any]]) -> bool:
     return any(card.get("kind") == "member" and int(card.get("low_cost_summon_n") or 0) > 0 for card in cards)
 
 
+def _has_live_success_low_cost_summon(cards: list[dict[str, Any]]) -> bool:
+    return any(int(card.get("live_success_low_cost_summon_n") or 0) > 0 for card in cards)
+
+
 def _target_alternatives_for_turn(target_shape: list[int], deck_cards: list[dict[str, Any]]) -> list[list[int]]:
     alternatives = [list(target_shape)] if _shape_costs_available(target_shape, deck_cards) else []
     if target_shape == [2, 2] and _shape_costs_available([4], deck_cards):
@@ -3613,6 +3718,15 @@ def _target_alternatives_for_turn(target_shape: list[int], deck_cards: list[dict
         for late_shape in ([15, 5, 2], [15, 4, 2], [15, 2, 2]):
             if _shape_costs_available(late_shape, deck_cards):
                 alternatives.append(list(late_shape))
+    if target_shape == [15]:
+        if _has_live_success_low_cost_summon(deck_cards):
+            for tempo_shape in ([15, 2], [17, 4]):
+                if _shape_costs_available(tempo_shape, deck_cards):
+                    alternatives.append(list(tempo_shape))
+    if target_shape in ([2, 17, 9], [17, 9], [2, 15, 9], [15, 9]):
+        for late_shape in ([2, 17, 9], [17, 9], [2, 15, 17], [2, 17, 17], [2, 15, 9], [15, 9], [13, 9, 4]):
+            if _shape_costs_available(late_shape, deck_cards):
+                alternatives.append(list(late_shape))
     if target_shape == [2, 10, 2]:
         for upside in ([2, 11, 2],):
             if _shape_costs_available(upside, deck_cards):
@@ -3634,7 +3748,7 @@ def _target_alternatives_for_turn(target_shape: list[int], deck_cards: list[dict
             upside = [13, high, 2]
             if _shape_costs_available(upside, deck_cards):
                 alternatives.append(upside)
-    return alternatives
+    return _unique_shapes(alternatives)
 
 
 def _unique_shapes(shapes: list[list[int]]) -> list[list[int]]:
@@ -3750,12 +3864,24 @@ def _deck_dynamic_target_turns(base_turns: list[list[int]], deck_cards: list[dic
     return target_turns[:max_turns]
 
 
+def _primary_high_anchor_cost(costs: Counter[int]) -> int:
+    high_counts = {int(cost): int(count) for cost, count in costs.items() if int(cost) >= 15 and int(count) > 0}
+    if not high_counts:
+        available = sorted((int(cost) for cost, count in costs.items() if int(count) > 0), reverse=True)
+        return available[0] if available else 0
+    return max(high_counts, key=lambda cost: (high_counts[cost], cost))
+
+
 def _late_target_shape_from_deck(costs: Counter[int], turn_number: int) -> list[int]:
     available = sorted((cost for cost, count in costs.items() if count > 0), reverse=True)
     if not available:
         return []
-    high = next((cost for cost in available if cost >= 15), available[0])
+    high = _primary_high_anchor_cost(costs) or next((cost for cost in available if cost >= 15), available[0])
     low_count = costs.get(2, 0)
+    if turn_number >= 4 and high >= 15 and costs.get(9, 0) >= 3:
+        if low_count >= 8:
+            return [2, high, 9]
+        return [high, 9]
     if turn_number >= 4 and low_count >= 2 and high >= 15:
         return [2, high, 2]
     return [high]
@@ -4700,6 +4826,20 @@ def simulate_autoplay_trials(
                 for _ in range(int(card.get("low_cost_summon_n") or 0)):
                     if len(_stage_costs(stage)) + len(bonus_costs) < 3:
                         bonus_costs.append(2)
+            if live_set_card is not None and _live_basic_success_candidate(stage, live_set_card):
+                has_low_cost_in_hand = any(
+                    card.get("kind") == "member"
+                    and card.get("cost") is not None
+                    and int(card.get("cost") or 0) <= 2
+                    for card in hand
+                )
+                if has_low_cost_in_hand:
+                    for card in stage:
+                        if not card:
+                            continue
+                        for _ in range(int(card.get("live_success_low_cost_summon_n") or 0)):
+                            if len(_stage_costs(stage)) + len(bonus_costs) < 3:
+                                bonus_costs.append(2)
             costs = _stage_costs(stage)
             costs_with_bonus = sorted(costs + bonus_costs, reverse=True)
             draw_index, success_drawn_cards, success_discarded_card = _apply_live_success_smoothing(
@@ -4789,6 +4929,7 @@ def simulate_autoplay_trials(
             "The broad accepted targets are still used as fallback, but the main plan's consecutive stage-progression probability has the highest mulligan weight.",
             "Abundant 2-cost members are kept only up to the near-term need because extra copies are comparatively easy to redraw.",
             "Live cards with energy-boost text are kept when they are needed for a bridge route, but are protected from live-set exchange before that route.",
+            "High-impact progression effects worth two or more energy-equivalent tempo are protected and prioritized as deck-axis engines, not treated as ordinary utility cards.",
             "Cards with low turn 1-3 target value are redrawn back to six cards.",
             "Each turn performs active, energy, normal draw, member placement, then live-set exchange in that order.",
             "During live set, up to three cards may be exchanged, including non-live cards.",
@@ -4812,6 +4953,7 @@ def simulate_autoplay_trials(
             "member cost reduction amounts are parsed from effect text and included in member play cost and next-turn energy bridge estimates",
             "entry effects that ready energy are modeled as same-main-phase active energy after the member enters",
             "Energy-boost live cards are modeled as next-turn bridge cards when the current stage plus normal energy is short of the next target but succeeds with the boost; the added energy becomes usable from the next turn",
+            "two-or-more energy-equivalent acceleration, cost reduction, free/overcost member play, and low-cost stage-summon effects receive additional keep/play priority as major progression effects",
             "low-cost stage summon effects add an extra virtual 2-cost member for progression matching",
         ],
         "recommended_early": recommended_early,
@@ -4890,6 +5032,18 @@ def build_autoplay_markdown_report(report: dict[str, Any], trial_result: dict[st
         ("high_15_plus", "15+"),
     ):
         lines.append(f"- {label}: {bands.get(key, 0)}")
+    major_accel = signals.get("major_acceleration", []) if isinstance(signals, dict) else []
+    if major_accel:
+        lines.extend(["", "## Major Progression Effects", ""])
+        for item in major_accel[:12]:
+            if not isinstance(item, dict):
+                continue
+            value = item.get("accel_value", "")
+            base = item.get("cost", item.get("score", ""))
+            lines.append(
+                f"- {item.get('card_no', '')} {item.get('name', '')} "
+                f"base={base} count={item.get('count', '')} accel_value={value}"
+            )
     lines.extend(["", "## Progressions", ""])
     for item in report.get("progressions", []) or []:
         if not isinstance(item, dict):
@@ -4918,6 +5072,7 @@ def build_autoplay_markdown_report(report: dict[str, Any], trial_result: dict[st
         ("free_member_play", "エネルギー支払いなし登場"),
         ("overcost_member_play", "支払い以上の登場"),
         ("low_cost_summon", "低コスト追加登場"),
+        ("live_success_low_cost_summon", "ライブ成功時低コスト登場"),
         ("member_recovery", "メンバー回収"),
         ("live_member_recovery", "ライブ成功時メンバー回収"),
         ("special_baton", "特殊バトンタッチ"),

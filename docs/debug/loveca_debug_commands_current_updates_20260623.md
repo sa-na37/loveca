@@ -6055,3 +6055,27 @@ python3 ./loveca_autoplay_report.py \
 残件:
 - 実試行での発動頻度が低いため、控え室相当の必要札、ステージ上の回収札、active energy の噛み合いを集計する診断ログが必要。
 - ライブカード回収はライブ成功率・エネルギーブリッジ側に効くため、次にライブセット判断へ接続する。
+
+## 2026-09-01 PL!-pb2 新規カード取得・効果接続確認
+
+詳細メモ: `docs/debug/loveca_pb2_new_card_effect_connection_20260901.md`
+
+実行:
+
+```bash
+cd /Users/tekitou/Desktop/gsim/loveca
+python3 ./llocg_update_database.py --preview-index-cache-minutes 15 --image-sleep 0.25 --keep-work
+python3 -m py_compile llocg_ui/engine.py llocg_dual_v2/server.py
+```
+
+確認結果:
+- DB更新で新規13件を取得。
+- 新規13件の全効果テンプレートを matcher 確認し、未接続0件。
+- 未接続だったPB2系文型をカード番号専用分岐ではなく汎用 route / resolver として接続。
+- 直接state確認で、園田海未の成功置き場<スコア+1>常時ブレード、園田海未の追加エール、南ことりの確認UI経由<黄>付与、西木野真姫の相手ウェイト人数入力、Shangri-La Shower のエール公開メンバー回収 pending を確認。
+- 2デッキ側では、相手ウェイト通知の元々ハート数条件抽出と、絢瀬絵里型の正面登場時ウェイト化を接続。
+
+要観察:
+- DB更新中、南ことりの個別wikiページ取得でHTTP 429が1件発生。DB更新自体は完了。
+- 絢瀬絵里の正面登場時ウェイト強制は実装済みだが、実ブラウザで相手が正面へ登場した瞬間のログと表示は追加目視対象。
+- 南ことりの相手<ライブ成功時>能力無効化は、2デッキ側の実カード単位状態管理まで追加確認が必要。

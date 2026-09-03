@@ -32,5 +32,6 @@ _x_preview_probe/
 _codex_outputs/github_release/
 sim_out/
 /sim_trace.txt
+docs/reports/
 __pycache__/
 *.pyc

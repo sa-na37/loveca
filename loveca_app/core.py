@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# BUILD_TAG = "loveca_sd_numbered_image_variants_20260817a"
+# BUILD_TAG = "loveca_dual_first_player_select_20260901a"
 """
 Loveca application launcher (phase 1).
 
@@ -51,7 +51,7 @@ from urllib.error import URLError, HTTPError
 from .autoplay import build_autoplay_deck_report, build_autoplay_markdown_report, simulate_autoplay_trials, suggest_autoplay_action
 
 
-BUILD_TAG = "loveca_preview_only_search_non_energy_20260803a"
+BUILD_TAG = "loveca_dual_cpu_random_first_20260828a"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8875
 SESSION_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -3728,7 +3728,7 @@ class AppState:
             })
         return True, "2デッキシミュレータを終了しました。"
 
-    def start_dual(self, deck1_path: str, deck2_path: str, *, cpu_mode: bool = False) -> tuple[bool, str]:
+    def start_dual(self, deck1_path: str, deck2_path: str, *, cpu_mode: bool = False, first_player: str = "") -> tuple[bool, str]:
         script = self.path(DUAL_SCRIPT)
         if not script.exists():
             return False, "{} が見つかりません。".format(DUAL_SCRIPT)
@@ -3755,6 +3755,10 @@ class AppState:
                 simulator_host = DEFAULT_HOST
                 simulator_port = reserve_free_local_port(simulator_host)
                 simulator_url = "http://{}:{}/dual".format(simulator_host, simulator_port)
+                default_first = "random" if cpu_mode else "p1"
+                first_player_mode = str(first_player or default_first).strip().lower()
+                if first_player_mode not in {"p1", "p2", "random"}:
+                    first_player_mode = default_first
                 launch_command = [
                     sys.executable,
                     str(script),
@@ -3770,6 +3774,8 @@ class AppState:
                     simulator_host,
                     "--port",
                     str(simulator_port),
+                    "--first-player",
+                    first_player_mode,
                 ]
                 if cpu_mode:
                     launch_command.extend(["--cpu-ui", "--cpu-auto-default"])
@@ -3800,6 +3806,7 @@ class AppState:
                     "progress_percent": 20,
                     "stage": "プロセス起動",
                     "mode": "cpu" if cpu_mode else "manual",
+                    "first_player": first_player_mode,
                 }
                 threading.Thread(target=self._read_dual_output, args=(self.dual_process,), daemon=True).start()
                 threading.Thread(target=self._detect_dual_window, args=(simulator_url, self.dual_process), daemon=True).start()

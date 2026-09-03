@@ -4,12 +4,12 @@
   "generated_from": {
     "mode": "incremental_merge",
     "base_manifest": "/Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full/official_image_manifest.json",
-    "delta_manifest": "/Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full/_update_work/run_20260817_161821/image_manifest_delta/official_image_manifest.json"
+    "delta_manifest": ""
   },
   "base_url": "https://llofficial-cardgame.com/wordpress/wp-content/images/cardlist",
-  "cards_total_in_db": 1146,
+  "cards_total_in_db": 1159,
   "cards_with_manifest": 986,
-  "cards_missing_manifest": 160,
+  "cards_missing_manifest": 173,
   "reprint_enrichment": {
     "enabled": false,
     "target_limit": 120,

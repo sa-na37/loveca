@@ -1,4 +1,4 @@
-# BUILD_TAG = "loveca_dual_manual_cpu_entrypoints_20260730a"
+# BUILD_TAG = "loveca_dual_first_player_select_20260901a"
 """Loveca local web UI and HTTP routing."""
 from __future__ import annotations
 
@@ -1055,7 +1055,12 @@ class Handler(BaseHTTPRequestHandler):
             form = self.read_form()
             try:
                 cpu_mode = str(form.get("mode") or "").lower() == "cpu"
-                ok, message = self.app.start_dual(form.get("deck1_path", ""), form.get("deck2_path", ""), cpu_mode=cpu_mode)
+                ok, message = self.app.start_dual(
+                    form.get("deck1_path", ""),
+                    form.get("deck2_path", ""),
+                    cpu_mode=cpu_mode,
+                    first_player=form.get("first_player", ""),
+                )
                 self.send_json({"ok": ok, "message": message}, HTTPStatus.OK if ok else HTTPStatus.CONFLICT)
             except ValueError as exc:
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
@@ -1572,7 +1577,7 @@ async function shutdownLovecaApp() {{
         mode = "cpu" if cpu_mode else "manual"
         running_mode = "cpu" if str(state.get("mode") or "manual") == "cpu" else "manual"
         title = "CPUオート2デッキを起動" if cpu_mode else "手動2デッキ対戦を起動"
-        lead = "2つの60枚デッキを選び、片側CPU・両側CPUを切り替えられる対戦画面を起動します。" if cpu_mode else "2つの60枚デッキを選び、一人で交互に操作する完全手動の対戦画面を起動します。"
+        lead = "自分の60枚デッキとCPUの60枚デッキを選び、先手後手を指定またはランダムにして対戦画面を起動します。画面内で片側CPU・両側CPUを切り替えられます。" if cpu_mode else "2つの60枚デッキを選び、一人で交互に操作する完全手動の対戦画面を起動します。"
         button_label = "CPUオート2デッキを起動" if cpu_mode else "手動2デッキ対戦を起動"
         progress_title = "CPU2デッキ起動準備" if cpu_mode else "手動2デッキ起動準備"
         progress_body = "CPU操作付きの対戦画面を起動しています。" if cpu_mode else "手動2デッキシミュレータを起動しています。"
@@ -1609,6 +1614,18 @@ async function shutdownLovecaApp() {{
         )
         if not options:
             options = "<option value=''>使用可能なデッキがありません</option>"
+        if cpu_mode:
+            first_player_options = """
+      <option value="random" selected>ランダム</option>
+      <option value="p1">自分が先攻</option>
+      <option value="p2">CPUが先攻</option>
+"""
+        else:
+            first_player_options = """
+      <option value="p1" selected>プレイヤー1が先攻</option>
+      <option value="p2">プレイヤー2が先攻</option>
+      <option value="random">ランダム</option>
+"""
         disabled = "disabled" if (not decks or state.get("running")) else ""
         running_note = "<p class='status'>別の2デッキ画面を起動する場合は、現在の2デッキシミュレータを終了してください。</p>" if state.get("running") else ""
         return running_panel + """
@@ -1617,11 +1634,14 @@ async function shutdownLovecaApp() {{
 <p class="status">{lead}</p>
 {running_note}
 <div class="row">
-  <label>プレイヤー1
+  <label>{deck1_label}
     <select id="dualDeck1" {disabled}>{options}</select>
   </label>
-  <label>プレイヤー2
+  <label>{deck2_label}
     <select id="dualDeck2" {disabled}>{options}</select>
+  </label>
+  <label>先攻
+    <select id="dualFirstPlayer" {disabled}>{first_player_options}</select>
   </label>
 </div>
 <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
@@ -1635,10 +1655,11 @@ async function startDual() {{
   const box=document.getElementById('dualStatus');
   const deck1=document.getElementById('dualDeck1').value;
   const deck2=document.getElementById('dualDeck2').value;
+  const firstPlayer=document.getElementById('dualFirstPlayer').value;
   if(!deck1||!deck2) {{ box.className='status bad'; box.textContent='デッキを2つ選択してください。'; return; }}
   box.className='status'; box.textContent='2デッキシミュレータを起動しています...';
   showLaunchProgress('{progress_title}', 12, 'デッキを確認しています。');
-  const body=new URLSearchParams({{deck1_path:deck1,deck2_path:deck2,mode:'{mode}'}});
+  const body=new URLSearchParams({{deck1_path:deck1,deck2_path:deck2,mode:'{mode}',first_player:firstPlayer}});
   try {{
     const res=await fetch('/api/dual/start',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},body}});
     const data=await res.json();
@@ -1671,9 +1692,12 @@ async function stopDualOnPage() {{
 </script>
 """.format(
             options=options,
+            first_player_options=first_player_options,
             disabled=disabled,
             title=html.escape(title),
             lead=html.escape(lead),
+            deck1_label=html.escape("自分のデッキ" if cpu_mode else "プレイヤー1"),
+            deck2_label=html.escape("CPUのデッキ" if cpu_mode else "プレイヤー2"),
             button_label=html.escape(button_label),
             running_note=running_note,
             progress_title=progress_title,

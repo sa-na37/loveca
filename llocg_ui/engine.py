@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# BUILD_TAG: sppb2_generic_routes_20260825a
+# BUILD_TAG: pb2_newcard_generic_routes_20260901a
 from __future__ import annotations
 """llocg_ui.engine
 UI から呼ばれるゲーム状態とコマンド処理（手動UI用の最小実装）。
@@ -61,6 +61,7 @@ _EFFECT_RULES = [
     {"id": "draw_if_excess_heart_gte", "pattern": r"^自分が余剰ハートを(?P<count>\d+)つ以上持っている場合、カードを(?P<n>\d+)枚引く。$", "op": "draw_if_excess_heart_gte"},
     {"id": "draw_if_live_zone_group_exists", "pattern": r"^自分のライブカード置き場に『(?P<group>[^』]+)』のカードがある場合、カードを(?P<n>\d+)枚引く。$", "op": "draw_if_live_zone_group_exists"},
     {"id": "retrieve_group_live_if_live_zone_count_gte", "pattern": r"^自分のライブカード置き場にカードが(?P<count>\d+)枚以上ある場合、自分の控え室から『(?P<group>[^』]+)』のライブカードを(?P<n>\d+)枚手札に加える。$", "op": "retrieve_group_live_if_live_zone_count_gte"},
+    {"id": "retrieve_group_live_then_energy_per_success_group_card", "pattern": r"^自分の控え室から『(?P<group>[^』]+)』のライブカード(?P<n>\d+)枚を手札に加える。その後、自分の成功ライブカード置き場にある『(?P=group)』のカード1枚につき、エネルギーを1枚アクティブにする。$", "op": "retrieve_group_live_then_energy_per_success_group_card"},
     {"id": "retrieve_live_then_energy_activate_if_success_score_gte", "pattern": r"^自分の控え室から『(?P<group>[^』]+)』のライブカードを(?P<n>\d+)枚手札に加える。自分の成功ライブカード置き場にあるカードのスコアの合計が(?P<score>\d+)以上の場合、エネルギーを(?P<energy_n>\d+)枚アクティブにする。$", "op": "retrieve_live_then_energy_activate_if_success_score_gte"},
     {"id": "retrieve_live_then_energy_activate_if_picked_group_score_gte", "pattern": r"^自分の控え室からライブカードを(?P<n>\d+)枚手札に加える。それがスコア(?P<score>\d+)以上の『(?P<group>[^』]+)』のライブカードの場合、エネルギーを(?P<energy_n>\d+)枚アクティブにする。$", "op": "retrieve_live_then_energy_activate_if_picked_group_score_gte"},
     {"id": "draw_then_draw_if_success_zone_group_exists", "pattern": r"^カードを(?P<n>\d+)枚引く。自分の成功ライブ(?:カード)?置き場に『(?P<group>[^』]+)』のカードがあるなら、さらにカードを(?P<bonus_n>\d+)枚引く。$", "op": "draw_then_draw_if_success_zone_group_exists"},
@@ -246,6 +247,8 @@ _EFFECT_RULES = [
     {"id": "live_success_stage_current_heart_gt_original_exists_draw", "pattern": r"^自分のステージに、元々持つハートの数より多い数のハートを持つメンバーがいる場合、カードを(?P<n>\d+)枚引く。$", "op": "live_success_stage_current_heart_gt_original_exists_draw"},
     {"id": "live_success_revealed_group_member_count_score", "pattern": r"^エールにより公開された自分のカードの中に『(?P<group>[^』]+)』のメンバーカードが(?P<count>\d+)枚以上ある場合、このカードのスコアを\+(?P<delta>\d+)する。$", "op": "live_success_revealed_group_member_count_score"},
     {"id": "live_success_all_revealed_group_cards_score", "pattern": r"^エールにより公開された自分のカードがすべて『(?P<group>[^』]+)』の場合、このカードのスコアを\+(?P<delta>\d+)する。$", "op": "live_success_all_revealed_group_cards_score"},
+    {"id": "live_success_all_revealed_members_same_one_of_groups_retrieve_member", "pattern": r"^エールにより公開された自分のメンバーカードがすべて(?P<groups>『[^』]+』(?:か、?『[^』]+』)*)のいずれかの場合、エールにより公開された自分のカードの中からメンバーカードを(?P<n>\d+)枚手札に加える。$", "op": "live_success_all_revealed_members_same_one_of_groups_retrieve_member"},
+    {"id": "live_success_all_revealed_members_same_one_of_groups_retrieve_member_each_sutete", "pattern": r"^エールにより公開された自分のメンバーカードが(?P<groups>すべて『[^』]+』(?:か、?すべて『[^』]+』)*)のいずれかの場合、エールにより公開された自分のカードの中からメンバーカードを(?P<n>\d+)枚手札に加える。$", "op": "live_success_all_revealed_members_same_one_of_groups_retrieve_member"},
     {"id": "live_success_stage_member_count_retrieve_live_score_le", "pattern": r"^自分のステージにメンバーが(?P<count>\d+)人以上いる場合、自分の控え室からスコア(?P<score>\d+)以下のライブカードを(?P<n>\d+)枚手札に加える。$", "op": "live_success_stage_member_count_retrieve_live_score_le"},
     {"id": "live_success_score_gt_opponent_stage_group_put_wait_energy", "pattern": r"^ライブの合計スコアが相手より高く、かつ自分のステージに『(?P<group>[^』]+)』のメンバーがいる場合、自分のエネルギーデッキから、エネルギーカードを(?P<n>\d+)枚ウェイト状態で置く。$", "op": "live_success_score_gt_opponent_stage_group_put_wait_energy"},
     {"id": "live_success_score_gt_opponent_apply", "pattern": r"^ライブの合計スコアが相手より高い場合、(?P<inner>.+)$", "op": "live_success_score_gt_opponent_apply"},
@@ -472,6 +475,7 @@ _EFFECT_RULES = [
     {"id": "success_score_one_or_five_score", "pattern": r"^自分の成功ライブカード置き場にスコアが(?P<score1>\d+)か(?P<score2>\d+)のカードがある場合、このカードのスコアを[\+＋](?P<delta1>\d+)する。それらが両方ある場合、代わりにスコアを[\+＋](?P<delta2>\d+)する。$", "op": "success_score_one_or_five_score"},
     {"id": "success_group_tag_live_total_score", "pattern": r"^自分の成功ライブカード置き場にある『(?P<group>[^』]+)』のカードの中に、?<(?P<tag>[^<>]+)>を持つカードがある場合、ライブ終了時まで、(?:『|「)?(?:<常時>)?ライブの合計スコアを[\+＋](?P<delta>\d+)する。(?:』|」)?を得る。$", "op": "success_group_tag_live_total_score"},
     {"id": "success_group_tag_self_gain_icons", "pattern": r"^自分の成功ライブカード置き場にある『(?P<group>[^』]+)』のカードの中に、?<(?P<tag>[^<>]+)>を持つカードがある場合、ライブ終了時まで、(?P<icons>(?:<(?:\([^)]+\)|[^<>]+)>)+)を得る。$", "op": "success_group_tag_self_gain_icons"},
+    {"id": "success_score_tag_group_exists_stage_group_blade_body", "pattern": r"^自分の成功ライブカード置き場にある<(?P<tag>スコア\+1)>を持つ『(?P<group>[^』]+)』のカードがある場合、ライブ終了時まで、『<常時>自分のステージにいる『(?P=group)』のメンバーは、(?P<blades>(?:<\(ブレード\)>)+)を得る。』を得る。$", "op": "success_score_tag_group_exists_stage_group_blade_body"},
     {"id": "success_group_tag_retrieve_group_any", "pattern": r"^自分の成功ライブカード置き場にある『(?P<group>[^』]+)』のカードの中に、?<(?P<tag>[^<>]+)>を持つカードがある場合、自分の控え室から『(?P<retrieve_group>[^』]+)』のカードを1枚手札に加える。$", "op": "success_group_tag_retrieve_group_any"},
     {"id": "success_named_card_count_score_required_any_increase", "pattern": r"^自分の成功ライブカード置き場にあるカード名が「(?P<name>[^」]+)」のカード1枚につき、このカードのスコアを[\+＋](?P<delta>\d+)、成功させるための必要ハートを(?P<anys>(?:<任意>|<\(任意\)>)+)増やす。$", "op": "success_named_card_count_score_required_any_increase"},
     {"id": "success_empty_stage_only_group_score", "pattern": r"^自分の成功ライブカード置き場のカードが(?P<count>\d+)枚で、かつ自分のステージ(?:に)?いるメンバーが『(?P<group>[^』]+)』のみの場合、このカードのスコアを[\+＋](?P<delta>\d+)する。$", "op": "success_empty_stage_only_group_score"},
@@ -521,6 +525,7 @@ _EFFECT_RULES = [
     {"id": "opponent_wait_original_blade_relative_manual", "pattern": r"^相手のステージにいる元々持つ<\(ブレード\)>の数がこれよりウェイトにしたメンバーが元々持つ<\(ブレード\)>の数より(?P<diff>\d+)つ以上少ないメンバー(?P<n>\d+)人をウェイトにする。$", "op": "opponent_wait_manual_text"},
     {"id": "pay_energy_or_discard_hand", "pattern": r"^<\(E\)><\(E\)>を支払わないかぎり、自分の手札を(?P<discard_n>\d+)枚控え室に置く。$", "op": "pay_energy_or_discard_hand"},
     {"id": "leave_baton_no_bladeheart_nijigasaki_energy_draw", "pattern": r"^このメンバーがコスト(?P<cost1>\d+)以上のブレードハートを持たない『(?P<group1>[^』]+)』のメンバーとバトンタッチしていた場合、エネルギーを(?P<energy_n>\d+)枚アクティブにする。コスト(?P<cost2>\d+)以上のブレードハートを持たない『(?P<group2>[^』]+)』のメンバーの場合、さらにカードを(?P<draw_n>\d+)枚引く。$", "op": "leave_baton_no_bladeheart_nijigasaki_energy_draw"},
+    {"id": "stage_leave_baton_new_group_cost_energy_activate", "pattern": r"^このメンバーがステージから控え室に置かれたとき、このメンバーがコスト(?P<cost>\d+)以上の『(?P<group>[^』]+)』のメンバーとバトンタッチしていた場合、エネルギーを(?P<energy_n>\d+)枚アクティブにする。$", "op": "stage_leave_baton_new_group_cost_energy_activate"},
     # Fixed-color hearts (and mixed hearts+blades): e.g. "ライブ終了時まで、<(黄)><(黄)>を得る。"
     # Must come AFTER gain_blade_until_end_live so pure-blade still matches first.
     {"id": "gain_icons_until_end_live", "pattern": r"^ライブ終了時まで、(?P<icons>(?:<(?:\([^)]+\)|[^<>]+)>)+)を得る。$", "op": "gain_icons_until_end_live"},
@@ -535,6 +540,9 @@ _EFFECT_RULES = [
     {"id": "body_always_energy_gte_cost", "pattern": r"^自分のエネルギーが(?P<n>\d+)枚以上ある場合、ステージにいるこのメンバーのコストを\+(?P<cost_n>\d+)する。$", "op": "body_always_noop"},
     {"id": "body_always_success_score_gte_icons", "pattern": r"^自分の成功ライブカード置き場にあるカードのスコアの合計が(?P<n>\d+)以上であるかぎり、(?P<icons>(?:<(?:\([^)]+\)|[^<>]+)>)+)を得る。$", "op": "body_always_noop"},
     {"id": "body_always_success_score_gte_member_cost", "pattern": r"^自分の成功ライブカード置き場にあるカードのスコアの合計が(?P<n>\d+)以上である限り、ステージにいるこのメンバーのコストを\+(?P<cost_n>\d+)する。$", "op": "body_always_noop"},
+    {"id": "body_always_success_score_tag_group_card_blade_per", "pattern": r"^自分の成功ライブカード置き場にある<スコア\+1>を持つ『(?P<group>[^』]+)』のカード1枚につき、(?P<blades>(?:<\(ブレード\)>)+)を得る。$", "op": "body_always_noop"},
+    {"id": "body_auto_yell_score_tag_group_card_additional_yell_per", "pattern": r"^自分がエールしたとき、エールにより公開された自分のカードの中にある<スコア\+1>を持つ『(?P<group>[^』]+)』のカード1枚につき、1枚追加でエールを行う。$", "op": "body_always_noop"},
+    {"id": "body_always_success_score_sum_div_blade", "pattern": r"^自分の成功ライブカード置き場にあるカードのスコアの合計(?P<div>\d+)につき、(?P<blades>(?:<\(ブレード\)>)+)を得る。$", "op": "body_always_noop"},
     {"id": "body_always_success_group_exists_icons", "pattern": r"^自分の成功ライブカード置き場に『(?P<group>[^』]+)』のカードがあるかぎり、(?P<icons>(?:<(?:\([^)]+\)|[^<>]+)>)+)を得る。$", "op": "body_always_noop"},
     {"id": "body_always_success_self_stage_score_bonus", "pattern": r"^このカードが自分の成功ライブカード置き場にあり、かつ自分のステージに『(?P<group>[^』]+)』のメンバーがいるかぎり、自分の成功ライブカード置き場にあるこのカードのスコアを\+(?P<score_n>\d+)する。$", "op": "body_always_noop"},
     {"id": "body_always_success_center_group_member_blade", "pattern": r"^このカードが自分の成功ライブカード置き場にあるかぎり、自分のセンターエリアにいる『(?P<group>[^』]+)』のメンバーは(?P<blades>(?:<\(ブレード\)>)+)を得る。$", "op": "body_always_noop"},
@@ -589,6 +597,7 @@ _EFFECT_RULES = [
     # wrappers generic: the cost route pays first, then this effect template applies
     # to the named area if the member there matches the requested group/unit.
     {"id": "area_group_member_gain_icons_until_end_live", "pattern": r"^ライブ終了時まで、自分の(?P<area>センター|レフト|ライト|左サイド|右サイド)エリアにいる『(?P<group>[^』]+)』のメンバーは、(?P<icons>(?:<(?:\([^)]+\)|[^<>]+)>)+)を得る。$", "op": "area_group_member_gain_icons_until_end_live"},
+    {"id": "area_group_member_gain_icons_until_end_live_no_no", "pattern": r"^ライブ終了時まで、自分の(?P<area>センター|レフト|ライト|左サイド|右サイド)エリアにいる『(?P<group>[^』]+)』メンバーは、(?P<icons>(?:<(?:\([^)]+\)|[^<>]+)>)+)を得る。$", "op": "area_group_member_gain_icons_until_end_live"},
     # Free heart choice (self): "好きなハートの色を1つ指定する。ライブ終了時まで、そのハートを1つ得る。"
     {"id": "choose_heart_gain_self", "pattern": r"^好きなハートの色を1つ指定する。ライブ終了時まで、そのハートを(?P<n>\d+)つ得る。$", "op": "choose_heart_gain_self"},
     # Free heart choice (other group member)
@@ -618,6 +627,7 @@ _EFFECT_RULES = [
     {"id": "set_opponent_wait_exactly1", "pattern": r"^相手のステージ(?:に)?いるコスト(?P<cost>\d+)以下のメンバ(?:ー)?1人をウェイト(?:状態)?にする。$", "op": "set_opponent_wait_exactly1"},
     {"id": "set_opponent_wait_all_cost", "pattern": r"^相手のステージ(?:に)?いるすべてのコスト(?P<cost>\d+)以下のメンバーをウェイト(?:状態)?にする。$", "op": "set_opponent_wait_all_cost"},
     {"id": "set_opponent_wait_original_blade_le", "pattern": r"^相手のステージにいる元々持つ<\(ブレード\)>(?:の数)?が(?P<blade_lim>\d+)(?:つ|個)?以下のメンバー1人をウェイトにする。$", "op": "set_opponent_wait_original_blade_le"},
+    {"id": "set_opponent_wait_original_heart_le", "pattern": r"^相手のステージにいる元々持つハートの数が(?P<heart_lim>\d+)つ以下のメンバー1人をウェイトにする。$", "op": "set_opponent_wait_original_heart_le"},
     {"id": "set_opponent_wait_original_blade_le_under_energy_plus", "pattern": r"^相手のステージにいる、?元々持つ<\(ブレード\)>の数がこのメンバーの下にあるエネルギーカードの枚数に(?P<plus>\d+)を足した数以下のメンバー(?P<n>\d+)人をウェイトにする。$", "op": "set_opponent_wait_original_blade_le_under_energy_plus"},
     {"id": "set_opponent_wait_original_blade_eq", "pattern": r"^相手のステージにいる元々持つ<\(ブレード\)>(?:の数)?がちょうど(?P<blade_eq>\d+)(?:つ|個)?のメンバー1人をウェイトにする。$", "op": "set_opponent_wait_original_blade_eq"},
     {"id": "set_opponent_wait_original_blade_le_not_group", "pattern": r"^相手のステージにいる元々持つ<\(ブレード\)>(?:の数)?が(?P<blade_lim>\d+)(?:つ|個)?以下の『(?P<group>[^』]+)』以外のメンバー1人をウェイトにする。$", "op": "set_opponent_wait_original_blade_le_not_group"},
@@ -626,6 +636,8 @@ _EFFECT_RULES = [
     {"id": "opponent_stage_cost_le_wait_upto_no_active_next", "pattern": r"^相手のステージにいるコスト(?P<cost>\d+)以下のメンバーを(?P<max_n>\d+)人までウェイトにする。そのメンバーは次のターンのアクティブフェイズにアクティブしない。$", "op": "set_opponent_wait_no_active_next"},
     {"id": "opponent_stage_cost_le_activate_upto_no_active_next_legacy_db_typo", "pattern": r"^相手のステージにいるコスト(?P<cost>\d+)以下のメンバーを(?P<max_n>\d+)人までアクティブにする。そのメンバーは次のターンのアクティブフェイズにアクティブしない。$", "op": "set_opponent_wait_no_active_next"},
     {"id": "opponent_front_cost_le_blade_loss_body", "pattern": r"^このメンバーの正面のエリアにいるコスト(?P<cost>\d+)以下のメンバーは、<\(ブレード\)>を失う。$", "op": "opponent_front_blade_loss_body"},
+    {"id": "opponent_front_original_heart_le_enter_wait_body", "pattern": r"^このメンバーの正面のエリアには、元々持つハートの数が(?P<heart_lim>\d+)つ以下のメンバーは、ウェイト状態で登場する。$", "op": "opponent_front_original_heart_le_enter_wait_body"},
+    {"id": "opponent_disable_live_success_gain_icons", "pattern": r"^相手のステージにいるメンバー(?P<n>\d+)人のすべての<ライブ成功時>能力を、ライブ終了時まで、無効にする。これにより無効にした場合、ライブ終了時まで、(?P<icons>(?:<(?:\([^)]+\)|[^<>]+)>)+)を得る。$", "op": "opponent_disable_live_success_gain_icons"},
     {"id": "opponent_wait_side_cost_gte", "pattern": r"^相手のステージの右サイドエリアか左サイドエリアにいるコスト(?P<cost>\d+)以上のメンバー1人をウェイトにする。$", "op": "opponent_wait_manual_text"},
     {"id": "draw_1_then_opponent_wait_cost_upto1", "pattern": r"^カードを1枚引く。相手のステージ(?:に)?いるコスト(?P<cost>\d+)以下のメンバーを(?P<max_n>1)人までウェイト(?:状態)?にする。$", "op": "draw_then_opponent_wait"},
     {"id": "conditional_opponent_wait_manual", "pattern": r"^(?P<condition>.+場合)、(?P<action>相手(?:は|のステージ).+ウェイト.+)$", "op": "conditional_opponent_wait_manual"},
@@ -4214,6 +4226,19 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
             return
         _enqueue_choose_from_green(gs, cards_db, kind=kind, n=n, group=group, ctx=ctx, score_lim=score_lim)
         return
+    if op == 'retrieve_group_live_then_energy_per_success_group_card':
+        n = int(gd.get('n', 1) or 1)
+        group = str(gd.get('group', '') or '').strip()
+        src = str((ctx or {}).get('source_cn', '') or '')
+        success_n = 0
+        for cn0 in list(getattr(gs, 'success_zone', []) or []):
+            ci0 = _get_card(cards_db, cn0)
+            if ci0 and _ci_matches_group_or_unit(ci0, group):
+                success_n += 1
+        activated = _activate_wait_energy(gs, success_n, reason=f'{src}:success-zone 『{group}』 count')
+        _enqueue_choose_from_green(gs, cards_db, kind='LIVE', n=n, group=group, ctx=ctx)
+        gs.log.append(f'[AUTO] {src}: queued retrieve 『{group}』 LIVE x{n}; success-zone 『{group}』 cards={success_n} -> energy active {activated}/{success_n}')
+        return
     if op == 'retrieve_member_cost_ge_named_gain_icons':
         n = max(1, int(gd.get('n', 1) or 1))
         cost_min = max(0, int(gd.get('cost_min', 0) or 0))
@@ -5574,6 +5599,18 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         if ok2 and draw_n > 0:
             got = draw(gs, draw_n, rng)
             gs.log.append(f'[AUTO] {src}: baton target {new_cn} cost={actual_cost} >= {c2} -> draw {draw_n} (drew {got})')
+        return
+    if op == 'stage_leave_baton_new_group_cost_energy_activate':
+        group = str(gd.get('group', '') or '')
+        cost_min = int(gd.get('cost', 0) or 0)
+        energy_n = int(gd.get('energy_n', 0) or 0)
+        src = str((ctx or {}).get('source_cn', '') or '')
+        ok, actual_cost, new_cn = _baton_new_member_condition_allow_bladeheart(gs, cards_db, ctx, group, cost_min)
+        if not ok:
+            gs.log.append(f'[SKIP] {src}: baton target {new_cn or "?"} group={group} cost={actual_cost}/{cost_min} -> energy activate skipped')
+            return
+        take = _activate_wait_energy(gs, energy_n, reason=f'{src}:stage_leave_baton_new_group_cost_energy_activate')
+        gs.log.append(f'[AUTO] {src}: baton target {new_cn} 『{group}』 cost={actual_cost}/{cost_min} -> energy activate {take}/{energy_n}')
         return
     if op == 'topdeck_from_green':
         kind = str(rule.get('card_kind', '') or '').upper() or 'ANY'
@@ -8556,6 +8593,29 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         if not _grant_stage_member_temp_icons(gs, cards_db, pos, icons, source_cn=src):
             gs.log.append(f'[WARN] {src}: no source slot for success-zone tag icon gain')
         return
+    if op == 'success_score_tag_group_exists_stage_group_blade_body':
+        group = str(gd.get('group', '') or '').strip()
+        tag = str(gd.get('tag', 'スコア+1') or 'スコア+1').strip()
+        blade_n = max(1, int(_count_blade_icons_from_tagblob(str(gd.get('blades', '') or '')) or 1))
+        got = _success_zone_group_card_count_with_tag(gs, cards_db, group, tag)
+        src = str((ctx or {}).get('source_cn', '') or '')
+        if got <= 0:
+            gs.log.append(f'[SKIP] {src}: success-zone 『{group}』 <{tag}> cards=0 -> stage group blade skipped')
+            return
+        positions = _stage_group_member_positions(gs, cards_db, group)
+        applied = []
+        for pos2 in positions:
+            if _grant_stage_member_temp_blade(gs, cards_db, pos2, blade_n, source_cn=src):
+                applied.append(pos2)
+        gs.pending.append({
+            'kind': 'message_ack',
+            'source_cn': src,
+            'label': f'{src} success-zone group blade resolved',
+            'text': _auto_effect_detail_block(ctx, f'成功ライブカード置き場の『{group}』<{tag}>カード{got}枚を確認し、ステージの『{group}』メンバー{applied or []}にブレード+{blade_n}を適用しました。'),
+            'options': ['ok'],
+        })
+        gs.log.append(f'[AUTO] {src}: success-zone 『{group}』 <{tag}> exists -> stage 『{group}』 members {applied} blade +{blade_n}')
+        return
     if op == 'success_group_tag_retrieve_group_any':
         group = str(gd.get('group', '') or '').strip()
         tag = str(gd.get('tag', '') or '').strip()
@@ -9765,6 +9825,41 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
             _add_live_success_score_bonus(gs, src, delta, detail=f'all revealed cards are 『{group_name}』 ({len(revealed_cards)})')
         else:
             gs.log.append(f'[SKIP] {src}: all revealed cards are 『{group_name}』 -> not satisfied ({len(revealed_cards)} revealed)')
+        return
+    if op == 'live_success_all_revealed_members_same_one_of_groups_retrieve_member':
+        groups = [str(x or '').strip() for x in re.findall(r'『([^』]+)』', str(gd.get('groups', '') or '')) if str(x or '').strip()]
+        n = max(1, int(gd.get('n', 1) or 1))
+        src = str((ctx or {}).get('source_cn', '') or '')
+        revealed_members = []
+        for cn0 in list(getattr(gs, '_yell_revealed_this_live', []) or []):
+            ci0 = _get_card(cards_db, cn0)
+            if ci0 and _is_member_ci(ci0):
+                revealed_members.append(str(cn0))
+        matched_group = ''
+        for group_name in groups:
+            if revealed_members and all(_ci_matches_group_or_unit(_get_card(cards_db, cn0), group_name) for cn0 in revealed_members):
+                matched_group = group_name
+                break
+        if not matched_group:
+            gs.log.append(f'[SKIP] {src}: revealed MEMBER cards are not all one of {groups} ({revealed_members or []})')
+            return
+        cands = _yell_revealed_candidates(gs, cards_db, 'MEMBER')
+        if not cands:
+            gs.log.append(f'[INFO] {src}: no revealed MEMBER candidates to retrieve')
+            return
+        gs.pending.append({
+            'kind': 'pick_from_yell',
+            'text': f'{src}[ライブ成功時]: エールで公開されたメンバーカードがすべて『{matched_group}』のため、メンバーカードを{n}枚手札に加える',
+            'options': list(cands),
+            'source_cn': src,
+            'remaining_n': n,
+            'card_kind': 'MEMBER',
+            'group': '',
+            'cost_lim': 99,
+            'score_lim': 99,
+            'up_to': False,
+        })
+        gs.log.append(f'[PENDING] {src}: revealed MEMBER all 『{matched_group}』 -> retrieve MEMBER {n} candidates={len(cands)}')
         return
     if op == 'live_success_stage_member_count_retrieve_live_score_le':
         need = int(gd.get('count', 0) or 0)
@@ -11838,6 +11933,10 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         blade_lim = int(gd.get('blade_lim', 99) or 99)
         _enqueue_opponent_wait_notice(gs, ctx, f'元々持つ<(ブレード)>の数が{blade_lim}つ以下のメンバー1人をウェイトにする')
         return
+    if op == 'set_opponent_wait_original_heart_le':
+        heart_lim = int(gd.get('heart_lim', 99) or 99)
+        _enqueue_opponent_wait_notice(gs, ctx, f'元々持つハートの数が{heart_lim}つ以下のメンバー1人をウェイトにする', max_delta=1)
+        return
     if op == 'set_opponent_wait_original_blade_le_under_energy_plus':
         plus_n = int(gd.get('plus', 0) or 0)
         target_n = int(gd.get('n', 1) or 1)
@@ -11909,6 +12008,27 @@ def _apply_effect_by_rule(gs: 'GameState', rng: random.Random, cards_db: Dict[st
         cost_lim = int(gd.get('cost', 99) or 99)
         src_cn = str((ctx or {}).get('source_cn', '') or '')
         gs.log.append(f'[MANUAL] {src_cn or "このメンバー"}: 正面の相手コスト{cost_lim}以下メンバーは<(ブレード)>を失う（2デッキでは実ステージに反映）')
+        return
+    if op == 'opponent_front_original_heart_le_enter_wait_body':
+        heart_lim = int(gd.get('heart_lim', 99) or 99)
+        src_cn = str((ctx or {}).get('source_cn', '') or '')
+        gs.log.append(f'[MANUAL] {src_cn or "このメンバー"}: 正面の相手メンバー登場時、元々持つハートの数が{heart_lim}つ以下ならウェイト状態で登場（2デッキ側で実ステージ反映対象）')
+        return
+    if op == 'opponent_disable_live_success_gain_icons':
+        n = max(1, int(gd.get('n', 1) or 1))
+        icons_blob = str(gd.get('icons', '') or '').strip()
+        src = str((ctx or {}).get('source_cn', '') or '')
+        gs.pending.append({
+            'kind': 'confirm_effect',
+            'source_cn': src,
+            'ctx': dict(ctx or {}),
+            'text': _auto_effect_detail_block(ctx, f'相手ステージのメンバー{n}人の<ライブ成功時>能力をライブ終了時まで無効にした場合、{icons_blob}を得ます。無効化を処理したら Apply、処理しない場合は Skip を選んでください。'),
+            'options': ['apply', 'skip'],
+            'after_effect_template': f'ライブ終了時まで、{icons_blob}を得る。',
+            'auto_effect_detail': str((ctx or {}).get('auto_effect_detail', '') or ''),
+            'suppress_card_text': bool(str((ctx or {}).get('auto_effect_detail', '') or '')),
+        })
+        gs.log.append(f'[PENDING] {src}: opponent live-success disable x{n}; apply to gain {icons_blob}')
         return
     if op == 'retrieve_from_yell':
         kind = str(rule.get('card_kind', '') or '').upper() or 'ANY'
@@ -17551,7 +17671,16 @@ def _slot_always_blade_bonus(gs: GameState, cards_db: Dict[str, CardInfo], pos: 
                 pass
         for _eff, blob in _iter_body_always_effects(c):
             try:
-                if '成功ライブカード置き場にあるカード1枚につき' in blob and 'ブレード' in blob:
+                if '自分の成功ライブカード置き場にある<スコア+1>を持つ『' in blob and 'カード1枚につき' in blob and 'ブレード' in blob:
+                    tag = _quoted_tag(blob)
+                    got = _success_zone_group_card_count_with_tag(gs, cards_db, tag, 'スコア+1') if tag else 0
+                    bonus += int(_count_blade_icons_from_tagblob(blob)) * int(got)
+                elif '自分の成功ライブカード置き場にあるカードのスコアの合計' in blob and 'につき' in blob and 'ブレード' in blob:
+                    m_div = re.search(r'スコアの合計(\d+)につき', blob)
+                    div = int(m_div.group(1)) if m_div else 0
+                    if div > 0:
+                        bonus += int(_count_blade_icons_from_tagblob(blob)) * (int(_own_success_zone_score_sum(gs, cards_db) or 0) // div)
+                elif '成功ライブカード置き場にあるカード1枚につき' in blob and 'ブレード' in blob:
                     bonus += int(_count_blade_icons_from_tagblob(blob)) * len(list(getattr(gs, 'success_zone', []) or []))
                 elif '自分の成功ライブカード置き場にあるカードのスコアの合計が相手より高い' in blob and 'ブレード' in blob:
                     opp_sum = _opponent_success_score_sum(gs)
@@ -25663,6 +25792,28 @@ def _collect_yell_revealed_body_auto_triggers(gs: GameState, cards_db: Dict[str,
                         )
                     continue
 
+                # Revealed <スコア+1> group cards -> additional yell per card.
+                if ('スコア+1' in ec) and ('カード1枚につき' in ec) and ('追加でエール' in ec or '追加で1枚エール' in ec or '1枚追加でエール' in ec):
+                    m_group = re.search(r'を持つ『(?P<group>[^』]+)』のカード1枚につき', ec)
+                    group = str(m_group.group('group') or '').strip() if m_group else ''
+                    got = 0
+                    for cn2 in list(getattr(gs, '_yell_revealed_this_live', []) or []):
+                        ci2 = _get_card(cards_db, cn2)
+                        if not ci2:
+                            continue
+                        if group and not _ci_matches_group_or_unit(ci2, group):
+                            continue
+                        if _ci_blade_heart_has_tag(ci2, '<スコア+1>'):
+                            got += 1
+                    if got > 0:
+                        _append_trigger(
+                            pos, canon, key, once_per_turn,
+                            f"エール公開に<スコア+1>を持つ『{group}』カード{got}枚 → 追加エール{got}枚",
+                            'additional_yell_by_count', extra_count=int(got),
+                            detail=f"revealed {group} cards with score+1={got}; extra yell {got}",
+                        )
+                    continue
+
                 # ブレードハートを持たないメンバーカードがN枚以上 -> icons
                 if ('ブレードハートを持たないメンバーカードが' in ec) and m_icons:
                     m_need = re.search(r'ブレードハートを持たないメンバーカードが(?P<n>\d+)枚以上', ec)
@@ -25873,6 +26024,17 @@ def _apply_yell_revealed_body_auto_trigger(gs: GameState, rng: random.Random, ca
             else:
                 gs.log.append(f"[WARN] YELL AUTO: no source slot/current live for score bonus {src or '?'}")
                 return False
+    elif effect_kind == 'additional_yell_by_count':
+        extra_count = max(0, int((trig or {}).get('extra_count', 0) or 0))
+        if extra_count <= 0:
+            gs.log.append(f"[SKIP] YELL AUTO: {src or '?'} additional yell count is 0")
+            return False
+        before_revealed = list(getattr(gs, '_yell_revealed_this_live', []) or [])
+        _perform_additional_yell(gs, rng, cards_db, extra_count, reason=f'{src}: score-tag group revealed card')
+        after_revealed = list(getattr(gs, '_yell_revealed_this_live', []) or [])
+        added = max(0, len(after_revealed) - len(before_revealed))
+        detail = (detail + f"; additional yell {added}/{extra_count}").strip()
+        ok = True
     elif effect_kind == 'gain_icons':
         slot = (gs.stage or {}).get(pos)
         if not slot or not getattr(slot, 'cardnumber', ''):
@@ -25902,7 +26064,7 @@ def _apply_yell_revealed_body_auto_trigger(gs: GameState, rng: random.Random, ca
         except Exception:
             gs.used_this_turn = {usage_key: 1}
     gs.log.append(f"[AUTO] YELL: {src or '?'}({pos or '?'}) {detail}")
-    if ok and effect_kind in ('draw1', 'live_total_score_bonus', 'gain_icons'):
+    if ok and effect_kind in ('draw1', 'live_total_score_bonus', 'additional_yell_by_count', 'gain_icons'):
         gs.pending.append({
             'kind': 'message_ack',
             'source_cn': src,

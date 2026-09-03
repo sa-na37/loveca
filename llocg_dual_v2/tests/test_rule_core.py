@@ -3,7 +3,7 @@ import random
 import unittest
 from llocg_dual_v2.core import DualMatchEngine, Phase
 
-BUILD_TAG = "llocg_dual_v2_deck_center_energy_plain_fallback_20260720a"
+BUILD_TAG = "llocg_dual_v2_random_first_cpu_match_20260828a"
 
 
 def deck(prefix: str):
@@ -11,6 +11,14 @@ def deck(prefix: str):
 
 
 class RuleCoreTests(unittest.TestCase):
+    def test_first_player_id_can_start_with_player_two(self):
+        e = DualMatchEngine(deck('A'), deck('B'), 'A', 'B', seed=3, first_player_id=1)
+        self.assertEqual(e.state.first_player_id, 1)
+        self.assertEqual(e.active_player_id(), 1)
+        e.mulligan(1, [])
+        self.assertEqual(e.state.phase, Phase.MULLIGAN_SECOND)
+        self.assertEqual(e.active_player_id(), 0)
+
     def test_mulligan_then_automatic_first_normal_setup(self):
         e = DualMatchEngine(deck('A'), deck('B'), 'A', 'B', seed=3)
         e.mulligan(0, [0, 2])

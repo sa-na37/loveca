@@ -9,6 +9,7 @@ import datetime as _dt
 import json
 import os
 import pickle
+import random
 import re
 import threading
 import time
@@ -25,7 +26,7 @@ from llocg_ui.server import App, HTML as SINGLE_HTML
 from llocg_ui.views import make_view_state
 from .core import ENERGY_DECK_SIZE, DualMatchEngine, Phase, discover_data_root
 
-BUILD_TAG = "llocg_dual_v2_opponent_wait_no_active_bridge_20260825b"
+BUILD_TAG = "llocg_dual_v2_pb2_opponent_heart_wait_20260901a"
 
 
 @dataclass
@@ -108,6 +109,7 @@ class LegacyUIAdapter:
         seed: int,
         debug: bool,
         preserve_start_env: bool,
+        first_player_mode: str = "p1",
     ) -> None:
         self.reset_config = {
             "project_root": Path(project_root),
@@ -117,6 +119,7 @@ class LegacyUIAdapter:
             "seed": int(seed),
             "debug": bool(debug),
             "preserve_start_env": bool(preserve_start_env),
+            "first_player_mode": str(first_player_mode or "p1"),
         }
 
     def runtime(self, key: str) -> PlayerViewRuntime:
@@ -351,6 +354,15 @@ class LegacyUIAdapter:
     def _fresh_reset_seed(self) -> int:
         return int(time.time() * 1000) & 0x7FFFFFFF
 
+    @staticmethod
+    def _first_player_from_mode(mode: str, seed: int) -> int:
+        raw = str(mode or "p1").strip().lower()
+        if raw in {"p2", "2", "player2", "second"}:
+            return 1
+        if raw in {"random", "rand", "auto"}:
+            return int(random.Random(int(seed)).randrange(2))
+        return 0
+
     def _reset_match_from_config(self) -> None:
         if not self.reset_config:
             raise RuntimeError("reset configuration is missing")
@@ -362,6 +374,7 @@ class LegacyUIAdapter:
         debug = bool(cfg.get("debug", False))
         preserve_start_env = bool(cfg.get("preserve_start_env", False))
         new_seed = self._fresh_reset_seed()
+        first_player_id = self._first_player_from_mode(str(cfg.get("first_player_mode") or "p1"), new_seed)
 
         saved_env: Dict[str, str] = {}
         if not preserve_start_env:
@@ -369,7 +382,14 @@ class LegacyUIAdapter:
                 if key.startswith("LLOCG_START_") or key.startswith("LLOCG_DEBUG_"):
                     saved_env[key] = os.environ.pop(key)
         try:
-            engine = DualMatchEngine.from_codes(project_root, deck1, deck2, seed=new_seed, data_root=data_root)
+            engine = DualMatchEngine.from_codes(
+                project_root,
+                deck1,
+                deck2,
+                seed=new_seed,
+                data_root=data_root,
+                first_player_id=first_player_id,
+            )
             p1_app = App(root=data_root, code="dual-v2-p1", deck_code=deck1, seed=new_seed, debug=debug)
             p2_app = App(root=data_root, code="dual-v2-p2", deck_code=deck2, seed=new_seed + 1, debug=debug)
         finally:
@@ -1344,6 +1364,13 @@ class LegacyUIAdapter:
             key = str(suggestion_payload.get("active_player_key") or "")
             command = str(suggestion.get("command") or "").strip()
             payload = suggestion.get("payload") if isinstance(suggestion.get("payload"), dict) else {}
+            card = suggestion.get("card") if isinstance(suggestion.get("card"), dict) else {}
+            card_label = str(card.get("card_no") or card.get("name") or "")
+            reason = str(suggestion.get("reason") or "")
+            self.engine.state.log.append(
+                f"[CPU][{key.upper()}] command={command or 'none'} kind={suggestion.get('kind', '')} "
+                f"confidence={suggestion.get('confidence', '')} card={card_label} reason={reason}"
+            )
             if not command:
                 return {"ok": True, "suggestion": suggestion, "state": self.state(), "applied": False}
             if command.upper() == "NEXT":
@@ -1678,6 +1705,38 @@ class LegacyUIAdapter:
                 return str(raw)
         return ""
 
+    def _card_original_heart_total(self, rt: PlayerViewRuntime, cardnumber: str) -> int:
+        payload = self.card_info_payload(rt.key, cardnumber) or {}
+        for name in ("heart_total", "hearts_total", "heart_count", "hearts_count"):
+            raw = payload.get(name)
+            if raw in (None, ""):
+                continue
+            try:
+                return max(0, int(float(str(raw).strip())))
+            except Exception:
+                pass
+        for name in ("hearts", "heart", "heart_icons", "hearts_json"):
+            raw = payload.get(name)
+            if raw in (None, ""):
+                continue
+            if isinstance(raw, dict):
+                return max(0, sum(self._safe_int(v, 0) for v in raw.values()))
+            if isinstance(raw, list):
+                return max(0, len(raw))
+            text = str(raw or "").strip()
+            try:
+                parsed = json.loads(text)
+            except Exception:
+                parsed = None
+            if isinstance(parsed, dict):
+                return max(0, sum(self._safe_int(v, 0) for v in parsed.values()))
+            if isinstance(parsed, list):
+                return max(0, len(parsed))
+            icons = re.findall(r"<(?:\([^)]+\)|[^<>]+)>", text)
+            if icons:
+                return len(icons)
+        return 0
+
     def _opponent_wait_candidates(self, other: PlayerViewRuntime, request: Dict[str, Any]) -> List[str]:
         body = self._opponent_wait_condition_text(request)
         active_positions: List[str] = []
@@ -1707,6 +1766,11 @@ class LegacyUIAdapter:
         if m and blade_eq is None:
             blade_le = int(m.group(1))
 
+        heart_le = None
+        m = re.search(r"元々持つハートの数が\s*(\d+)\s*つ以下", body)
+        if m:
+            heart_le = int(m.group(1))
+
         group_not = ""
         m = re.search(r"『([^』]+)』以外", body)
         if m:
@@ -1726,6 +1790,8 @@ class LegacyUIAdapter:
             if blade_eq is not None and blade != blade_eq:
                 continue
             if blade_le is not None and blade > blade_le:
+                continue
+            if heart_le is not None and self._card_original_heart_total(other, cn) > heart_le:
                 continue
             if group_not:
                 group = self._card_text_field(other, cn, "group")
@@ -1781,6 +1847,56 @@ class LegacyUIAdapter:
         if not m:
             return None
         return int(m.group(1))
+
+    def _front_enter_wait_heart_limit(self, rt: PlayerViewRuntime, cn: str) -> Optional[int]:
+        payload = self.card_info_payload(rt.key, cn) or {}
+        text = "\n".join(
+            str(x or "") for x in [
+                payload.get("effect", ""),
+                payload.get("effect_text_raw", ""),
+                payload.get("effect_text_norm", ""),
+                "\n".join(list(payload.get("abilities", []) or [])),
+            ]
+        )
+        normalized = re.sub(r"<BODY>|【BODY】|BODY", "", text)
+        m = re.search(r"このメンバーの正面のエリアには、元々持つハートの数が\s*(\d+)\s*つ以下のメンバーは、ウェイト状態で登場する。", normalized)
+        if not m:
+            return None
+        return int(m.group(1))
+
+    def _apply_dual_front_enter_wait_on_new_pairs(self) -> None:
+        current_pairs: set[str] = set()
+        changes: List[str] = []
+        seen = set(getattr(self, "_front_enter_wait_seen_pairs", set()) or set())
+        for rt in self.players.values():
+            other = self.runtime("p2" if rt.key == "p1" else "p1")
+            for pos, slot in dict(getattr(rt.app.gs, "stage", {}) or {}).items():
+                src_cn = self._slot_cardnumber(slot)
+                if not src_cn:
+                    continue
+                heart_lim = self._front_enter_wait_heart_limit(rt, src_cn)
+                if heart_lim is None:
+                    continue
+                target_pos = self._front_position_for_opponent(pos)
+                target = dict(getattr(other.app.gs, "stage", {}) or {}).get(target_pos)
+                target_cn = self._slot_cardnumber(target)
+                if not target_cn:
+                    continue
+                pair_key = f"{rt.key}:{pos}:{src_cn}->{other.key}:{target_pos}:{target_cn}"
+                current_pairs.add(pair_key)
+                if pair_key in seen:
+                    continue
+                if not bool(getattr(target, "active", True)):
+                    continue
+                heart_total = self._card_original_heart_total(other, target_cn)
+                if heart_total > heart_lim:
+                    continue
+                setattr(target, "active", False)
+                changes.append(f"P{rt.player_id + 1}:{pos}->{other.key}:{target_pos} heart={heart_total}/{heart_lim}")
+                self._sync_view_to_core(other)
+        if changes:
+            self.engine.state.log.append(f"[DUAL EFFECT][OPPONENT FRONT ENTER WAIT] {', '.join(changes)}")
+        setattr(self, "_front_enter_wait_seen_pairs", current_pairs)
 
     def _apply_dual_front_blade_loss_continuous(self) -> None:
         changes: List[str] = []
@@ -3651,6 +3767,7 @@ class LegacyUIAdapter:
                 )
                 self._apply_favorite_answer_side_effect(rt, favorite_side_effect)
                 self._install_opponent_position_pending(rt, opponent_position_request)
+                self._apply_dual_front_enter_wait_on_new_pairs()
                 if yell_ack_command or (cmd == "next" and yell_notice_before):
                     self._acknowledge_yell_notice(
                         rt,
@@ -4082,9 +4199,9 @@ function loadCpuPrefs(){{
     if(saved&&Object.prototype.hasOwnProperty.call(saved,'p1')){{
       cpuPlayers.p1=Boolean(saved.p1);cpuPlayers.p2=Boolean(saved.p2);cpuAuto=Boolean(saved.auto);
     }}else{{
-      cpuPlayers={{p1:true,p2:true}};cpuAuto=CPU_AUTO_DEFAULT;
+      cpuPlayers={{p1:false,p2:true}};cpuAuto=CPU_AUTO_DEFAULT;
     }}
-  }}catch(e){{cpuPlayers={{p1:true,p2:true}};cpuAuto=CPU_AUTO_DEFAULT}}
+  }}catch(e){{cpuPlayers={{p1:false,p2:true}};cpuAuto=CPU_AUTO_DEFAULT}}
 }}
 function saveCpuPrefs(){{if(!CPU_UI)return;try{{localStorage.setItem('llocgDualCpuPrefs',JSON.stringify({{p1:cpuPlayers.p1,p2:cpuPlayers.p2,auto:cpuAuto}}))}}catch(e){{}}}}
 function updateCpuButtons(){{
@@ -4513,8 +4630,31 @@ class Handler(BaseHTTPRequestHandler):
         return self._send(404, b'not found', 'text/plain')
 
 
-def serve(*, host: str, port: int, project_root: Path, data_root: Path, deck1: str, deck2: str, seed: int, debug: bool, preserve_start_env: bool, verbose_http: bool, cpu_ui: bool = False, cpu_auto_default: bool = False) -> None:
-    engine = DualMatchEngine.from_codes(project_root, deck1, deck2, seed=seed, data_root=data_root)
+def serve(
+    *,
+    host: str,
+    port: int,
+    project_root: Path,
+    data_root: Path,
+    deck1: str,
+    deck2: str,
+    seed: int,
+    debug: bool,
+    preserve_start_env: bool,
+    verbose_http: bool,
+    cpu_ui: bool = False,
+    cpu_auto_default: bool = False,
+    first_player: str = "p1",
+) -> None:
+    first_player_id = LegacyUIAdapter._first_player_from_mode(first_player, seed)
+    engine = DualMatchEngine.from_codes(
+        project_root,
+        deck1,
+        deck2,
+        seed=seed,
+        data_root=data_root,
+        first_player_id=first_player_id,
+    )
     saved_env: Dict[str, str] = {}
     if not preserve_start_env:
         for key in list(os.environ):
@@ -4534,6 +4674,7 @@ def serve(*, host: str, port: int, project_root: Path, data_root: Path, deck1: s
         seed=seed,
         debug=debug,
         preserve_start_env=preserve_start_env,
+        first_player_mode=first_player,
     )
     Handler.adapter = adapter
     Handler.verbose_http = bool(verbose_http)
@@ -4543,6 +4684,7 @@ def serve(*, host: str, port: int, project_root: Path, data_root: Path, deck1: s
     print(f'[LLCG DUAL V2] BUILD_TAG={BUILD_TAG}')
     print(f'[LLCG DUAL V2] project_root={project_root}')
     print(f'[LLCG DUAL V2] data_root={data_root}')
+    print(f'[LLCG DUAL V2] first_player=P{first_player_id + 1} mode={first_player}')
     print(f'[LLCG DUAL V2] http://{host}:{port}')
     httpd.serve_forever()
 
@@ -4560,10 +4702,25 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument('--preserve-start-env', action='store_true')
     ap.add_argument('--verbose-http', action='store_true', help='定期state取得を含むHTTPアクセスログを表示する')
     ap.add_argument('--cpu-ui', action='store_true', help='CPU操作用の2デッキUIを表示する')
-    ap.add_argument('--cpu-auto-default', action='store_true', help='CPU UI初回表示時に両側CPU/自動を既定ONにする')
+    ap.add_argument('--cpu-auto-default', action='store_true', help='CPU UI初回表示時にP2 CPU/自動を既定ONにする')
+    ap.add_argument('--first-player', choices=['p1', 'p2', 'random'], default='p1', help='初期先攻プレイヤー')
     ns = ap.parse_args(argv)
     project_root = Path(ns.root).expanduser().resolve()
     explicit = Path(ns.data_root).expanduser() if ns.data_root else None
     data_root = discover_data_root(project_root, explicit)
-    serve(host=ns.host, port=ns.port, project_root=project_root, data_root=data_root, deck1=ns.deck1, deck2=ns.deck2, seed=ns.seed, debug=ns.debug, preserve_start_env=ns.preserve_start_env, verbose_http=ns.verbose_http, cpu_ui=ns.cpu_ui, cpu_auto_default=ns.cpu_auto_default)
+    serve(
+        host=ns.host,
+        port=ns.port,
+        project_root=project_root,
+        data_root=data_root,
+        deck1=ns.deck1,
+        deck2=ns.deck2,
+        seed=ns.seed,
+        debug=ns.debug,
+        preserve_start_env=ns.preserve_start_env,
+        verbose_http=ns.verbose_http,
+        cpu_ui=ns.cpu_ui,
+        cpu_auto_default=ns.cpu_auto_default,
+        first_player=ns.first_player,
+    )
     return 0

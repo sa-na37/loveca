@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# BUILD_TAG = "loveca_distribution_autoplay_cli_20260730a"
+# BUILD_TAG = "loveca_distribution_patch_runtime_only_20260903b"
 """Build a pruned Loveca Application distribution zip."""
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import List
 
 
-BUILD_TAG = "loveca_distribution_autoplay_cli_20260730a"
+BUILD_TAG = "loveca_distribution_patch_runtime_only_20260903b"
 
 
 RUNTIME_INCLUDE_DIRS = (
@@ -112,6 +112,8 @@ def should_skip(path: Path, root: Path) -> bool:
         return True
     if name.endswith(".zip"):
         return True
+    if len(rel_parts) >= 2 and rel_parts[0] == "docs" and rel_parts[1] == "reports":
+        return True
     return False
 
 
@@ -180,6 +182,8 @@ def patch_candidate_paths(root: Path, base_ref: str = "HEAD") -> List[Path]:
     for line in list(proc.stdout.splitlines()) + list(extra_lines):
         rel = line.strip()
         if not rel:
+            continue
+        if rel.startswith(("docs/debug/", "docs/handoffs/", "docs/reports/", "docs/patches/", "docs/codex_knowledge/")):
             continue
         path = (root / rel).resolve()
         try:

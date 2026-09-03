@@ -10,7 +10,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-BUILD_TAG = "llocg_dual_v2_path_deck_app_launch_20260722a"
+BUILD_TAG = "llocg_dual_v2_random_first_cpu_match_20260828a"
 ENERGY_DECK_SIZE = 12
 OPENING_HAND_SIZE = 6
 OPENING_ENERGY_SIZE = 3
@@ -252,9 +252,24 @@ class DualMatchEngine:
         self._assert_invariants()
 
     @classmethod
-    def from_codes(cls, project_root: Path, code1: str, code2: str, seed: int = 1, data_root: Optional[Path] = None) -> "DualMatchEngine":
+    def from_codes(
+        cls,
+        project_root: Path,
+        code1: str,
+        code2: str,
+        seed: int = 1,
+        data_root: Optional[Path] = None,
+        first_player_id: int = 0,
+    ) -> "DualMatchEngine":
         root = discover_data_root(project_root, data_root)
-        return cls(load_deck(root, code1), load_deck(root, code2), code1, code2, seed=seed)
+        return cls(
+            load_deck(root, code1),
+            load_deck(root, code2),
+            code1,
+            code2,
+            seed=seed,
+            first_player_id=first_player_id,
+        )
 
     def _draw_opening_hand(self, p: PlayerState) -> None:
         if len(p.main_deck) < OPENING_HAND_SIZE:

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "source_csv": "/Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full/_update_work/run_20260817_161821/final/cards_min_tokv1.csv",
+  "source_csv": "/Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full/_update_work/run_20260901_102429/final/cards_min_tokv1.csv",
   "cards": [
     {
       "cardnumber": "LL-PR-004",
@@ -4227,6 +4227,372 @@
               "cost_op": null,
               "effect_op": null,
               "raw": "自分の成功ライブカード置き場にある『μ's』のカードの中に、<ドロー+1>を持つカードがある場合、自分の控え室から『μ's』のカードを1枚手札に加える。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!-pb2-002",
+      "cardname": "絢瀬絵里",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "常時",
+          "trigger": "BODY",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "このメンバーの正面のエリアには、元々持つハートの数が4つ以下のメンバーは、ウェイト状態で登場する。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "このメンバーの正面のエリアには、元々持つハートの数が4つ以下のメンバーは、ウェイト状態で登場する。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!-pb2-003",
+      "cardname": "南ことり",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ開始時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "相手のステージにいるメンバー1人のすべての<ライブ成功時>能力を、ライブ終了時まで、無効にする。これにより無効にした場合、ライブ終了時まで、<黄>を得る。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "相手のステージにいるメンバー1人のすべての<ライブ成功時>\n能力を、ライブ終了時まで、無効にする。これにより無効にした場合、ライブ終了時まで、<黄>を得る。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!-pb2-004",
+      "cardname": "園田海未",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "常時",
+          "trigger": "BODY",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分の成功ライブカード置き場にある<スコア+1>を持つ『μ's』のカード1枚につき、<(ブレード)>を得る。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分の成功ライブカード置き場にある\n<スコア+1>を持つ『μ's』のカード1枚につき、<(ブレード)>を得る。"
+            }
+          ]
+        },
+        {
+          "ability_type": "自動",
+          "trigger": "BODY",
+          "conditions": "ターン1回",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分がエールしたとき、エールにより公開された自分のカードの中にある<スコア+1>を持つ『μ's』のカード1枚につき、1枚追加でエールを行う。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分がエールしたとき、エールにより公開された自分のカードの中にある\n<スコア+1>を持つ『μ's』のカード1枚につき、1枚追加でエールを行う。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!-pb2-005",
+      "cardname": "星空凛",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "登場",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分の成功ライブカード置き場にある<スコア+1>を持つ『μ's』のカードがある場合、ライブ終了時まで、『<常時>自分のステージにいる『μ's』のメンバーは、<(ブレード)>を得る。』を得る。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分の成功ライブカード置き場にある\n<スコア+1>を持つ『μ's』のカードがある場合、ライブ終了時まで、『<常時>自分のステージにいる『μ's』のメンバーは、<(ブレード)>を得る。』を得る。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!-pb2-006",
+      "cardname": "西木野真姫",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "起動",
+          "trigger": "BODY",
+          "conditions": "ターン1回",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "このメンバーをウェイトにし、手札を1枚控え室に置く",
+              "effect_template": "相手のステージにいる元々持つハートの数が1つ以下のメンバー1人をウェイトにする。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "このメンバーをウェイトにし、手札を1枚控え室に置く：相手のステージにいる元々持つハートの数が1つ以下のメンバー1人をウェイトにする。"
+            }
+          ]
+        },
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ開始時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "このメンバーをウェイトにし、手札を1枚控え室に置いてもよい",
+              "effect_template": "相手のステージにいる元々持つハートの数が1つ以下のメンバー1人をウェイトにする。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "このメンバーをウェイトにし、手札を1枚控え室に置いてもよい：相手のステージにいる元々持つハートの数が1つ以下のメンバー1人をウェイトにする。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!-pb2-007",
+      "cardname": "東條希",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "起動",
+          "trigger": "BODY",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "このメンバーをステージから控え室に置く",
+              "effect_template": "自分の控え室から『μ's』のライブカード1枚を手札に加える。その後、自分の成功ライブカード置き場にある『μ's』のカード1枚につき、エネルギーを1枚アクティブにする。",
+              "cost_op": {
+                "id": "C046",
+                "template": "このメンバーをステージから控え室に置く",
+                "op": "TODO",
+                "params": {},
+                "note": "",
+                "confidence": 0.0
+              },
+              "effect_op": null,
+              "raw": "このメンバーをステージから控え室に置く：自分の控え室から『μ's』のライブカード1枚を手札に加える。その後、自分の成功ライブカード置き場にある『μ's』のカード1枚につき、エネルギーを1枚アクティブにする。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!-pb2-008",
+      "cardname": "小泉花陽",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "登場",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": true,
+              "cost_template": "このメンバーをウェイトにしてもよい",
+              "effect_template": "自分のデッキの上からカードを4枚見る。その中から必要ハートの合計が8以上の『μ's』のライブカードを1枚公開して手札に加えてもよい。残りを控え室に置く。",
+              "cost_op": {
+                "id": "C098",
+                "template": "このメンバーをウェイトにしてもよい",
+                "op": "TODO",
+                "params": {},
+                "note": "",
+                "confidence": 0.0
+              },
+              "effect_op": null,
+              "raw": "このメンバーをウェイトにしてもよい：自分のデッキの上からカードを4枚見る。その中から必要ハートの合計が8以上の『μ's』のライブカードを1枚公開して手札に加えてもよい。残りを控え室に置く。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!-pb2-009",
+      "cardname": "矢澤にこ",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "BODY",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "このメンバーがステージから控え室に置かれたとき、このメンバーがコスト15以上の『μ's』のメンバーとバトンタッチしていた場合、エネルギーを2枚アクティブにする。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "このメンバーがステージから控え室に置かれたとき、このメンバーがコスト15以上の『μ's』のメンバーとバトンタッチしていた場合、エネルギーを2枚アクティブにする。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!-pb2-019",
+      "cardname": "高坂穂乃果",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ開始時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "このメンバーをウェイトにし、手札を1枚控え室に置いてもよい",
+              "effect_template": "ライブ終了時まで、自分のセンターエリアにいる『μ's』メンバーは、<(ブレード)><(ブレード)>を得る。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "このメンバーをウェイトにし、手札を1枚控え室に置いてもよい：ライブ終了時まで、自分のセンターエリアにいる『μ's』メンバーは、<(ブレード)><(ブレード)>\nを得る。"
+            },
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "（ウェイト状態のメンバーが持つ<(ブレード)>は、エールで公開する枚数を増やさない。）",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "（ウェイト状態のメンバーが持つ<(ブレード)>は、エールで公開する枚数を増やさない。）"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!-pb2-022",
+      "cardname": "園田海未",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "起動",
+          "trigger": "BODY",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "このメンバーをステージから控え室に置く",
+              "effect_template": "自分の控え室からメンバーカードを1枚手札に加える。",
+              "cost_op": {
+                "id": "C046",
+                "template": "このメンバーをステージから控え室に置く",
+                "op": "TODO",
+                "params": {},
+                "note": "",
+                "confidence": 0.0
+              },
+              "effect_op": null,
+              "raw": "このメンバーをステージから控え室に置く：自分の控え室からメンバーカードを1枚手札に加える。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!-pb2-030",
+      "cardname": "南ことり",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "常時",
+          "trigger": "BODY",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分の成功ライブカード置き場にあるカードのスコアの合計5につき、<(ブレード)>を得る。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分の成功ライブカード置き場にあるカードのスコアの合計5につき、<(ブレード)>を得る。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!-pb2-033",
+      "cardname": "西木野真姫",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "登場/ライブ開始時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "相手のステージにいる元々持つハートの数が3つ以下のメンバー1人をウェイトにする。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "相手のステージにいる元々持つハートの数が3つ以下のメンバー1人をウェイトにする。"
+            },
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "（ウェイト状態のメンバーが持つ<(ブレード)>は、エールで公開する枚数を増やさない。）",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "（ウェイト状態のメンバーが持つ<(ブレード)>は、エールで公開する枚数を増やさない。）"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!-pb2-037",
+      "cardname": "Shangri-La Shower",
+      "card_type": "LIVE",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ成功時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "エールにより公開された自分のメンバーカードがすべて『Printemps』か、すべて『lily white』か、すべて『BiBi』のいずれかの場合、エールにより公開された自分のカードの中からメンバーカードを1枚手札に加える。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "エールにより公開された自分のメンバーカードがすべて『Printemps』か、すべて『lily white』か、すべて『BiBi』のいずれかの場合、エールにより公開された自分のカードの中からメンバーカードを1枚手札に加える。"
             }
           ]
         }
@@ -15568,7 +15934,7 @@
               "effect_template": "（ウェイト状態のメンバーが持つ<(ブレード)>は、エールで公開する枚数を増やさない。）",
               "cost_op": null,
               "effect_op": null,
-              "raw": "（ウェイト状態のメンバーが持つ\n<(ブレード)>は、エールで公開する枚数を増やさない。）"
+              "raw": "（ウェイト状態のメンバーが持つ<(ブレード)>は、エールで公開する枚数を増やさない。）"
             }
           ]
         }

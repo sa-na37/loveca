@@ -922,6 +922,71 @@
         "cardname_from_post": "N 園田海未",
         "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
       }
+    ],
+    "PL!-pb2-033": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "N",
+        "image_url": "https://pbs.twimg.com/media/HQoS2JhbcAAcwYt.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2092545085460328770",
+        "tweet_id": "2092545085460328770",
+        "posted_at": "2026-08-26T09:30:00.000Z",
+        "cardname_from_post": "N 西木野真姫",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!-pb2-039": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "L",
+        "image_url": "https://pbs.twimg.com/media/HQpDGALboAEKg_q.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2092907473199907211",
+        "tweet_id": "2092907473199907211",
+        "posted_at": "2026-08-27T09:30:00.000Z",
+        "cardname_from_post": "L 僕たちはひとつの光",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!-pb2-020": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "N",
+        "image_url": "https://pbs.twimg.com/media/HQuCWtvb0AArtAH.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2093269863691128949",
+        "tweet_id": "2093269863691128949",
+        "posted_at": "2026-08-28T09:30:01.000Z",
+        "cardname_from_post": "N 絢瀬絵里",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!-pb2-026": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "N",
+        "image_url": "https://pbs.twimg.com/media/HQuEg6tboAA2199.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2093632250084757935",
+        "tweet_id": "2093632250084757935",
+        "posted_at": "2026-08-29T09:30:00.000Z",
+        "cardname_from_post": "N 小泉花陽 ?",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!-pb2-037": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "L",
+        "image_url": "https://pbs.twimg.com/media/HQuFQFwasAImQWs.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2093994636939284802",
+        "tweet_id": "2093994636939284802",
+        "posted_at": "2026-08-30T09:30:00.000Z",
+        "cardname_from_post": "L Shangri-La Shower",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
     ]
   }
 }
