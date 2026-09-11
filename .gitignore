@@ -33,5 +33,14 @@ _codex_outputs/github_release/
 sim_out/
 /sim_trace.txt
 docs/reports/
+!docs/reports/
+!docs/reports/README.md
+!docs/reports/autoplay/
+docs/reports/autoplay/**
+!docs/reports/autoplay/README.md
+!docs/reports/autoplay/*_aggregate.md
+!docs/reports/autoplay/*_summary.md
+!docs/reports/autoplay/*_probe.md
+!docs/reports/autoplay/autoplay_introspection_*.md
 __pycache__/
 *.pyc
