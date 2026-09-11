@@ -987,6 +987,136 @@
         "cardname_from_post": "L Shangri-La Shower",
         "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
       }
+    ],
+    "PL!-pb2-023": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "N",
+        "image_url": "https://pbs.twimg.com/media/HQuKWwgaMAA4vBp.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2094357025840923115",
+        "tweet_id": "2094357025840923115",
+        "posted_at": "2026-08-31T09:30:00.000Z",
+        "cardname_from_post": "N 星空凛",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!-pb2-010": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "P2",
+        "image_url": "https://pbs.twimg.com/media/HRF3yl-akAAqIht.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2094719413505147174",
+        "tweet_id": "2094719413505147174",
+        "posted_at": "2026-09-01T09:30:00.000Z",
+        "cardname_from_post": "P+ 高坂穂乃果",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!-pb2-014": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "R",
+        "image_url": "https://pbs.twimg.com/media/HRMxjiyboAA0m41.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2095081800611872889",
+        "tweet_id": "2095081800611872889",
+        "posted_at": "2026-09-02T09:30:00.000Z",
+        "cardname_from_post": "R 星空凛",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!-pb2-011": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "R",
+        "image_url": "https://pbs.twimg.com/media/HRM8R13aoAAu5xM.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2095444189727392181",
+        "tweet_id": "2095444189727392181",
+        "posted_at": "2026-09-03T09:30:00.000Z",
+        "cardname_from_post": "R 絢瀬絵里 ?",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!-pb2-016": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "R",
+        "image_url": "https://pbs.twimg.com/media/HRM8eFEaQAADS2i.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2095451748030923167",
+        "tweet_id": "2095451748030923167",
+        "posted_at": "2026-09-03T10:00:02.000Z",
+        "cardname_from_post": "R 東條希",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!-pb2-015": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "P2",
+        "image_url": "https://pbs.twimg.com/media/HRVXbLxaMAAyC0r.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2095806578285006925",
+        "tweet_id": "2095806578285006925",
+        "posted_at": "2026-09-04T09:30:01.000Z",
+        "cardname_from_post": "P+ 西木野真姫 ?",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!-pb2-018": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "P2",
+        "image_url": "https://pbs.twimg.com/media/HRXUizibUAAEkrB.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2096085915143721304",
+        "tweet_id": "2096085915143721304",
+        "posted_at": "2026-09-05T04:00:00.000Z",
+        "cardname_from_post": "P+ 矢澤にこ ?",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!-pb2-013": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "P2",
+        "image_url": "https://pbs.twimg.com/media/HRVaDATaQAAblZs.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2096448306037793063",
+        "tweet_id": "2096448306037793063",
+        "posted_at": "2026-09-06T04:00:00.000Z",
+        "cardname_from_post": "P+ 園田海未 ?",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!-pb2-038": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "L",
+        "image_url": "https://pbs.twimg.com/media/HRWLucoaQAAFw8n.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2096886188695343253",
+        "tweet_id": "2096886188695343253",
+        "posted_at": "2026-09-07T09:00:00.000Z",
+        "cardname_from_post": "9月7日(月) -L 嵐のなかの恋だから ?",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!-pb2-017": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "P2",
+        "image_url": "https://pbs.twimg.com/media/HRWMC6ObwAAIBaI.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2096893738035585222",
+        "tweet_id": "2096893738035585222",
+        "posted_at": "2026-09-07T09:30:00.000Z",
+        "cardname_from_post": "P+ 小泉花陽 ?",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
     ]
   }
 }

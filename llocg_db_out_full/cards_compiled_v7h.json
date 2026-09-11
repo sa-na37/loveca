@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "source_csv": "/Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full/_update_work/run_20260901_102429/final/cards_min_tokv1.csv",
+  "source_csv": "/Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full/_update_work/run_20260911_113658/final/cards_min_tokv1.csv",
   "cards": [
     {
       "cardnumber": "LL-PR-004",
@@ -4461,6 +4461,144 @@
       ]
     },
     {
+      "cardnumber": "PL!-pb2-010",
+      "cardname": "高坂穂乃果",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ開始時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "ライブ終了時まで、自分のステージにいる、このターン中に自分の『Printemps』のカードの効果によってウェイト状態からアクティブ状態にしていたメンバー1人につき、<(ブレード)>を得る。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "ライブ終了時まで、自分のステージにいる、このターン中に自分の『Printemps』のカードの効果によってウェイト状態からアクティブ状態にしていたメンバー1人につき、<(ブレード)>を得る。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!-pb2-012",
+      "cardname": "南ことり",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "常時",
+          "trigger": "BODY",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": true,
+              "cost_template": "",
+              "effect_template": "このカードをプレイする際、自分のステージにいる名前の異なる『Printemps』メンバーを2人ウェイトにしてもよい。そうしたとき、このカードのコストは2減る。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "このカードをプレイする際、自分のステージにいる名前の異なる『Printemps』メンバーを2人ウェイトにしてもよい。そうしたとき、このカードのコストは2減る。"
+            }
+          ]
+        },
+        {
+          "ability_type": "起動",
+          "trigger": "BODY",
+          "conditions": "ターン1回",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "このメンバーをウェイトにする",
+              "effect_template": "この能力を起動するための追加コストとして、手札を2枚控え室に置くか、『Printemps』のメンバーを2人ウェイトにする。自分の控え室から『Printemps』のライブカードを1枚手札に加える。",
+              "cost_op": {
+                "id": "C123",
+                "template": "このメンバーをウェイトにする",
+                "op": "TODO",
+                "params": {},
+                "note": "",
+                "confidence": 0.0
+              },
+              "effect_op": null,
+              "raw": "このメンバーをウェイトにする：この能力を起動するための追加コストとして、手札を2枚控え室に置くか、『Printemps』のメンバーを2人ウェイトにする。自分の控え室から『Printemps』のライブカードを1枚手札に加える。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!-pb2-014",
+      "cardname": "星空凛",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "登場",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": true,
+              "cost_template": "手札の『lily white』のライブカードを1枚公開してもよい",
+              "effect_template": "自分の成功ライブカード置き場にあるカードを1枚手札に加える。そうした場合、これにより公開したカードを自分の成功ライブカード置き場に置く。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "手札の『lily white』のライブカードを1枚公開してもよい：自分の成功ライブカード置き場にあるカードを1枚手札に加える。そうした場合、これにより公開したカードを自分の成功ライブカード置き場に置く。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!-pb2-016",
+      "cardname": "東條希",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ開始時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分の成功ライブカード置き場にある『lily white』のカード1枚につき、以下から1つを選ぶ。同じ選択肢を2回以上選んでもよい。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分の成功ライブカード置き場にある『lily white』のカード1枚につき、以下から1つを選ぶ。同じ選択肢を2回以上選んでもよい。"
+            },
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分のセンターエリアにいるメンバーは、ライブ終了時まで、<(ブレード)>を得る。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "・自分のセンターエリアにいるメンバーは、ライブ終了時まで、<(ブレード)>を得る。"
+            },
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分のステージにいるメンバー1人をアクティブにする。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "・自分のステージにいるメンバー1人をアクティブにする。"
+            },
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "カードを1枚引き、手札を1枚控え室に置く。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "・カードを1枚引き、手札を1枚控え室に置く。"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "cardnumber": "PL!-pb2-019",
       "cardname": "高坂穂乃果",
       "card_type": "MEMBER",
@@ -4492,6 +4630,29 @@
       ]
     },
     {
+      "cardnumber": "PL!-pb2-020",
+      "cardname": "絢瀬絵里",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "常時",
+          "trigger": "BODY",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分の成功ライブカード置き場にあるカードのスコアが9以上であるかぎり、<桃><黄>を得る。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分の成功ライブカード置き場にあるカードのスコアが9以上であるかぎり、<桃>\n<黄>を得る。"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "cardnumber": "PL!-pb2-022",
       "cardname": "園田海未",
       "card_type": "MEMBER",
@@ -4516,6 +4677,52 @@
               },
               "effect_op": null,
               "raw": "このメンバーをステージから控え室に置く：自分の控え室からメンバーカードを1枚手札に加える。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!-pb2-023",
+      "cardname": "星空凛",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "常時",
+          "trigger": "BODY",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分の成功ライブカード置き場にカードがないかぎり、<(ブレード)>を得る。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分の成功ライブカード置き場にカードがないかぎり、<(ブレード)>を得る。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!-pb2-026",
+      "cardname": "小泉花陽",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "起動",
+          "trigger": "BODY",
+          "conditions": "ターン1回",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "このメンバーをウェイトにし、手札を1枚控え室に置く",
+              "effect_template": "自分のデッキの上からカードを3枚見る。その中から『Printemps』のメンバーカードを1枚公開して手札に加えてもよい。残りを控え室に置く。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "このメンバーをウェイトにし、手札を1枚控え室に置く：自分のデッキの上からカードを3枚見る。その中から『Printemps』のメンバーカードを1枚公開して手札に加えてもよい。残りを控え室に置く。"
             }
           ]
         }
@@ -4631,6 +4838,44 @@
               "cost_op": null,
               "effect_op": null,
               "raw": "自分のステージのメンバーとエールにより公開された自分のメンバーカードの中にある、名前の異なる『μ's』のメンバー1人につき、このカードのスコアを+1する。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!-pb2-041",
+      "cardname": "春情ロマンティック",
+      "card_type": "LIVE",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "常時",
+          "trigger": "BODY",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "このカードが自分の成功ライブカード置き場にあるかぎり、自分の『lily white』のカードの効果によって、自分の成功ライブカード置き場にあるカードの枚数を数えるとき、このカードは2枚として扱う。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "このカードが自分の成功ライブカード置き場にあるかぎり、自分の『lily white』のカードの効果によって、自分の成功ライブカード置き場にあるカードの枚数を数えるとき、このカードは2枚として扱う。"
+            }
+          ]
+        },
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ開始時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分の成功ライブカード置き場に『lily white』のカードが2枚以上ある場合、このカードのスコアを+1すを。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分の成功ライブカード置き場に『lily white』のカードが2枚以上ある場合、このカードのスコアを+1すを。"
             }
           ]
         }
