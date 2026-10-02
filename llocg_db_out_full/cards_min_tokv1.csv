@@ -1327,9 +1327,21 @@ PL!-pb2-012,南ことり,PL!-pb2-012 南ことり - ラブライブ！シリー�
 <起動>
 <ターン1回>
 このメンバーをウェイトにする：この能力を起動するための追加コストとして、手札を2枚控え室に置くか、『Printemps』のメンバーを2人ウェイトにする。自分の控え室から『Printemps』のライブカードを1枚手札に加える。",HAS_TEXT,0,"{""hearts"": {}, ""blade_mentions"": [], ""tags"": [""(常時)"", ""(起動)"", ""(ターン1回)""], ""blade_icon_n"": 0, ""energy_icon_n"": 0, ""all_heart_n"": 0, ""score_delta_icon"": 0, ""unknown_tags"": [""(常時)"", ""(起動)"", ""(ターン1回)""]}",0,0,0,0,3,"{""draw"": 0, ""score"": 0, ""colorless"": 0}",0,0,0,,,"[{""set_title"": ""プレミアムブースター ラブライブ！ DUO"", ""set_url"": ""https://wikiwiki.jp/llocardgame/%E3%83%97%E3%83%AC%E3%83%9F%E3%82%A2%E3%83%A0%E3%83%96%E3%83%BC%E3%82%B9%E3%82%BF%E3%83%BC%20%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96%EF%BC%81%20DUO"", ""card_attr"": ""PL!-pb2-012-P+"", ""cardnumber"": ""PL!-pb2-012"", ""rarity_display"": ""P+"", ""rarity_norm"": ""P2""}]"
+PL!-pb2-013,園田海未,PL!-pb2-013 園田海未 - ラブライブ！シリーズ オフィシャルカードゲーム(ラブカ) 非公式 Wiki*,メンバー,ラブライブ！,μ's,lily white,2.0,1.0,<桃>,<桃> 1,,,"<登場>
+自分のデッキの上からカードを4枚公開する。それらがすべて『lily white』のカードの場合、公開したカードの中から『lily white』のライブカードを1枚手札に加え、残りを控え室に置く。",https://wikiwiki.jp/llocardgame/PL%21-pb2-013%20%E5%9C%92%E7%94%B0%E6%B5%B7%E6%9C%AA,MEMBER,"{""pink"": 1}",1,[],{},0,[],"{""pink"": 1}",1,[],"<登場>
+自分のデッキの上からカードを4枚公開する。それらがすべて『lily white』のカードの場合、公開したカードの中から『lily white』のライブカードを1枚手札に加え、残りを控え室に置く。",HAS_TEXT,0,"{""hearts"": {}, ""blade_mentions"": [], ""tags"": [""(登場)""], ""blade_icon_n"": 0, ""energy_icon_n"": 0, ""all_heart_n"": 0, ""score_delta_icon"": 0, ""unknown_tags"": [""(登場)""]}",0,0,0,0,1,"{""draw"": 0, ""score"": 0, ""colorless"": 0}",0,0,0,,,"[{""set_title"": ""プレミアムブースター ラブライブ！ DUO"", ""set_url"": ""https://wikiwiki.jp/llocardgame/%E3%83%97%E3%83%AC%E3%83%9F%E3%82%A2%E3%83%A0%E3%83%96%E3%83%BC%E3%82%B9%E3%82%BF%E3%83%BC%20%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96%EF%BC%81%20DUO"", ""card_attr"": ""PL!-pb2-013-R"", ""cardnumber"": ""PL!-pb2-013"", ""rarity_display"": ""R"", ""rarity_norm"": ""R""}]"
 PL!-pb2-014,星空凛,PL!-pb2-014 星空凛 - ラブライブ！シリーズ オフィシャルカードゲーム(ラブカ) 非公式 Wiki*,メンバー,ラブライブ！,μ's,lily white,11.0,2.0,<紫>,<桃> 1 <黄> 1 <紫> 2,,,"<登場>
 手札の『lily white』のライブカードを1枚公開してもよい：自分の成功ライブカード置き場にあるカードを1枚手札に加える。そうした場合、これにより公開したカードを自分の成功ライブカード置き場に置く。",https://wikiwiki.jp/llocardgame/PL%21-pb2-014%20%E6%98%9F%E7%A9%BA%E5%87%9B,MEMBER,"{""pink"": 1, ""yellow"": 1, ""purple"": 2}",4,[],{},0,[],"{""purple"": 1}",1,[],"<登場>
 手札の『lily white』のライブカードを1枚公開してもよい：自分の成功ライブカード置き場にあるカードを1枚手札に加える。そうした場合、これにより公開したカードを自分の成功ライブカード置き場に置く。",HAS_TEXT,0,"{""hearts"": {}, ""blade_mentions"": [], ""tags"": [""(登場)""], ""blade_icon_n"": 0, ""energy_icon_n"": 0, ""all_heart_n"": 0, ""score_delta_icon"": 0, ""unknown_tags"": [""(登場)""]}",0,0,0,0,1,"{""draw"": 0, ""score"": 0, ""colorless"": 0}",0,0,0,,,"[{""set_title"": ""プレミアムブースター ラブライブ！ DUO"", ""set_url"": ""https://wikiwiki.jp/llocardgame/%E3%83%97%E3%83%AC%E3%83%9F%E3%82%A2%E3%83%A0%E3%83%96%E3%83%BC%E3%82%B9%E3%82%BF%E3%83%BC%20%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96%EF%BC%81%20DUO"", ""card_attr"": ""PL!-pb2-014-R"", ""cardnumber"": ""PL!-pb2-014"", ""rarity_display"": ""R"", ""rarity_norm"": ""R""}]"
+PL!-pb2-015,西木野真姫,PL!-pb2-015 西木野真姫 - ラブライブ！シリーズ オフィシャルカードゲーム(ラブカ) 非公式 Wiki*,メンバー,ラブライブ！,μ's,BiBi,7.0,1.0,なし,<桃> 1 <黄> 1 <紫> 1,,,"<自動>
+<ターン1回>
+自分の『BiBi』のカードの効果によって、相手のステージいるメンバーがウェイト状態になったとき、以下から1つを選ぶ。
+・自分のステージにいる『BiBi』のメンバー1人をアクティブにする。
+・エネルギーを2枚アクティブにする。",https://wikiwiki.jp/llocardgame/PL%21-pb2-015%20%E8%A5%BF%E6%9C%A8%E9%87%8E%E7%9C%9F%E5%A7%AB,MEMBER,"{""pink"": 1, ""yellow"": 1, ""purple"": 1}",3,[],{},0,[],{},0,[],"<自動>
+<ターン1回>
+自分の『BiBi』のカードの効果によって、相手のステージいるメンバーがウェイト状態になったとき、以下から1つを選ぶ。
+・自分のステージにいる『BiBi』のメンバー1人をアクティブにする。
+・エネルギーを2枚アクティブにする。",HAS_TEXT,0,"{""hearts"": {}, ""blade_mentions"": [], ""tags"": [""(自動)"", ""(ターン1回)""], ""blade_icon_n"": 0, ""energy_icon_n"": 0, ""all_heart_n"": 0, ""score_delta_icon"": 0, ""unknown_tags"": [""(自動)"", ""(ターン1回)""]}",0,0,0,0,2,"{""draw"": 0, ""score"": 0, ""colorless"": 0}",0,0,0,,,"[{""set_title"": ""プレミアムブースター ラブライブ！ DUO"", ""set_url"": ""https://wikiwiki.jp/llocardgame/%E3%83%97%E3%83%AC%E3%83%9F%E3%82%A2%E3%83%A0%E3%83%96%E3%83%BC%E3%82%B9%E3%82%BF%E3%83%BC%20%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96%EF%BC%81%20DUO"", ""card_attr"": ""PL!-pb2-015-R"", ""cardnumber"": ""PL!-pb2-015"", ""rarity_display"": ""R"", ""rarity_norm"": ""R""}]"
 PL!-pb2-016,東條希,PL!-pb2-016 東條希 - ラブライブ！シリーズ オフィシャルカードゲーム(ラブカ) 非公式 Wiki*,メンバー,ラブライブ！,μ's,lily white,17.0,6.0,<桃>,<桃> 3 <黄> 2 <紫> 2,,,"<ライブ開始時>
 自分の成功ライブカード置き場にある『lily white』のカード1枚につき、以下から1つを選ぶ。同じ選択肢を2回以上選んでもよい。
 ・自分のセンターエリアにいるメンバーは、ライブ終了時まで、
@@ -1343,6 +1355,24 @@ PL!-pb2-016,東條希,PL!-pb2-016 東條希 - ラブライブ！シリーズ オ
 を得る。
 ・自分のステージにいるメンバー1人をアクティブにする。
 ・カードを1枚引き、手札を1枚控え室に置く。",HAS_TEXT,0,"{""hearts"": {}, ""blade_mentions"": [], ""tags"": [""(ライブ開始時)""], ""blade_icon_n"": 1, ""energy_icon_n"": 0, ""all_heart_n"": 0, ""score_delta_icon"": 0, ""unknown_tags"": [""(ライブ開始時)""]}",1,0,0,0,1,"{""draw"": 0, ""score"": 0, ""colorless"": 0}",0,0,0,,,"[{""set_title"": ""プレミアムブースター ラブライブ！ DUO"", ""set_url"": ""https://wikiwiki.jp/llocardgame/%E3%83%97%E3%83%AC%E3%83%9F%E3%82%A2%E3%83%A0%E3%83%96%E3%83%BC%E3%82%B9%E3%82%BF%E3%83%BC%20%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96%EF%BC%81%20DUO"", ""card_attr"": ""PL!-pb2-016-R"", ""cardnumber"": ""PL!-pb2-016"", ""rarity_display"": ""R"", ""rarity_norm"": ""R""}]"
+PL!-pb2-017,小泉花陽,PL!-pb2-017 小泉花陽 - ラブライブ！シリーズ オフィシャルカードゲーム(ラブカ) 非公式 Wiki*,メンバー,ラブライブ！,μ's,Printemps,17.0,6.0,<黄>,<桃> 2 <黄> 3 <紫> 2,,,"<登場>
+自分の控え室にある『Printemps』のメンバーカード4枚をこのメンバーの下に置く。
+<ライブ開始時>
+このメンバーの下にあるカードを3枚まで控え室に置いてもよい。これにより控え室に置いたカード1枚につき、自分のステージにいる『Printemps』のメンバー1人をアクティブにする。",https://wikiwiki.jp/llocardgame/PL%21-pb2-017%20%E5%B0%8F%E6%B3%89%E8%8A%B1%E9%99%BD,MEMBER,"{""pink"": 2, ""yellow"": 3, ""purple"": 2}",7,[],{},0,[],"{""yellow"": 1}",1,[],"<登場>
+自分の控え室にある『Printemps』のメンバーカード4枚をこのメンバーの下に置く。
+<ライブ開始時>
+このメンバーの下にあるカードを3枚まで控え室に置いてもよい。これにより控え室に置いたカード1枚につき、自分のステージにいる『Printemps』のメンバー1人をアクティブにする。",HAS_TEXT,0,"{""hearts"": {}, ""blade_mentions"": [], ""tags"": [""(登場)"", ""(ライブ開始時)""], ""blade_icon_n"": 0, ""energy_icon_n"": 0, ""all_heart_n"": 0, ""score_delta_icon"": 0, ""unknown_tags"": [""(登場)"", ""(ライブ開始時)""]}",0,0,0,0,2,"{""draw"": 0, ""score"": 0, ""colorless"": 0}",0,0,0,,,"[{""set_title"": ""プレミアムブースター ラブライブ！ DUO"", ""set_url"": ""https://wikiwiki.jp/llocardgame/%E3%83%97%E3%83%AC%E3%83%9F%E3%82%A2%E3%83%A0%E3%83%96%E3%83%BC%E3%82%B9%E3%82%BF%E3%83%BC%20%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96%EF%BC%81%20DUO"", ""card_attr"": ""PL!-pb2-017-R"", ""cardnumber"": ""PL!-pb2-017"", ""rarity_display"": ""R"", ""rarity_norm"": ""R""}]"
+PL!-pb2-018,矢澤にこ,PL!-pb2-018 矢澤にこ - ラブライブ！シリーズ オフィシャルカードゲーム(ラブカ) 非公式 Wiki*,メンバー,ラブライブ！,μ's,BiBi,17.0,8.0,なし,<桃> 1 <黄> 2 <紫> 2,,,"<登場>
+相手のステージいるウェイト状態のメンバーを3人までアクティブにしてもよい。そうしたとき、これによりアクティブにしたメンバー1人につき、カードを1枚引く。
+<登場>
+/
+<ライブ開始時>
+手札の名前の異なる『BiBi』のメンバーカードを3枚控え室に置いてもよい：自分のステージにいるメンバーが『BiBi』のみの場合、相手のステージにいるメンバー1人をウェイトにする。",https://wikiwiki.jp/llocardgame/PL%21-pb2-018%20%E7%9F%A2%E6%BE%A4%E3%81%AB%E3%81%93,MEMBER,"{""pink"": 1, ""yellow"": 2, ""purple"": 2}",5,[],{},0,[],{},0,[],"<登場>
+相手のステージいるウェイト状態のメンバーを3人までアクティブにしてもよい。そうしたとき、これによりアクティブにしたメンバー1人につき、カードを1枚引く。
+<登場>
+/
+<ライブ開始時>
+手札の名前の異なる『BiBi』のメンバーカードを3枚控え室に置いてもよい：自分のステージにいるメンバーが『BiBi』のみの場合、相手のステージにいるメンバー1人をウェイトにする。",HAS_TEXT,0,"{""hearts"": {}, ""blade_mentions"": [], ""tags"": [""(登場)"", ""(登場)"", ""(ライブ開始時)""], ""blade_icon_n"": 0, ""energy_icon_n"": 0, ""all_heart_n"": 0, ""score_delta_icon"": 0, ""unknown_tags"": [""(登場)"", ""(登場)"", ""(ライブ開始時)""]}",0,0,0,0,3,"{""draw"": 0, ""score"": 0, ""colorless"": 0}",0,0,0,,,"[{""set_title"": ""プレミアムブースター ラブライブ！ DUO"", ""set_url"": ""https://wikiwiki.jp/llocardgame/%E3%83%97%E3%83%AC%E3%83%9F%E3%82%A2%E3%83%A0%E3%83%96%E3%83%BC%E3%82%B9%E3%82%BF%E3%83%BC%20%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96%EF%BC%81%20DUO"", ""card_attr"": ""PL!-pb2-018-R"", ""cardnumber"": ""PL!-pb2-018"", ""rarity_display"": ""R"", ""rarity_norm"": ""R""}]"
 PL!-pb2-019,高坂穂乃果,PL!-pb2-019 高坂穂乃果 - ラブライブ！シリーズ オフィシャルカードゲーム(ラブカ) 非公式 Wiki*,メンバー,ラブライブ！,μ's,Printemps,4.0,1.0,<黄>,<黄> 1,,,"<ライブ開始時>
 このメンバーをウェイトにし、手札を1枚控え室に置いてもよい：ライブ終了時まで、自分のセンターエリアにいる『μ's』メンバーは、
 <(ブレード)>
@@ -1377,11 +1407,17 @@ PL!-pb2-023,星空凛,PL!-pb2-023 星空凛 - ラブライブ！シリーズ オ
 自分の成功ライブカード置き場にカードがないかぎり、
 <(ブレード)>
 を得る。",HAS_TEXT,0,"{""hearts"": {}, ""blade_mentions"": [], ""tags"": [""(常時)""], ""blade_icon_n"": 1, ""energy_icon_n"": 0, ""all_heart_n"": 0, ""score_delta_icon"": 0, ""unknown_tags"": [""(常時)""]}",1,0,0,0,1,"{""draw"": 0, ""score"": 0, ""colorless"": 0}",0,0,0,,,"[{""set_title"": ""プレミアムブースター ラブライブ！ DUO"", ""set_url"": ""https://wikiwiki.jp/llocardgame/%E3%83%97%E3%83%AC%E3%83%9F%E3%82%A2%E3%83%A0%E3%83%96%E3%83%BC%E3%82%B9%E3%82%BF%E3%83%BC%20%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96%EF%BC%81%20DUO"", ""card_attr"": ""PL!-pb2-023-N"", ""cardnumber"": ""PL!-pb2-023"", ""rarity_display"": ""N"", ""rarity_norm"": ""N""}]"
+PL!-pb2-024,西木野真姫,PL!-pb2-024 西木野真姫 - ラブライブ！シリーズ オフィシャルカードゲーム(ラブカ) 非公式 Wiki*,メンバー,ラブライブ！,μ's,BiBi,4.0,2.0,<黄>,<黄> 1,,,"<ライブ開始時>
+自分のステージにいるメンバーが『BiBi』のみの場合、相手のステージにいるコスト2以下のメンバー1人をウェイトにする。",https://wikiwiki.jp/llocardgame/PL%21-pb2-024%20%E8%A5%BF%E6%9C%A8%E9%87%8E%E7%9C%9F%E5%A7%AB,MEMBER,"{""yellow"": 1}",1,[],{},0,[],"{""yellow"": 1}",1,[],"<ライブ開始時>
+自分のステージにいるメンバーが『BiBi』のみの場合、相手のステージにいるコスト2以下のメンバー1人をウェイトにする。",HAS_TEXT,0,"{""hearts"": {}, ""blade_mentions"": [], ""tags"": [""(ライブ開始時)""], ""blade_icon_n"": 0, ""energy_icon_n"": 0, ""all_heart_n"": 0, ""score_delta_icon"": 0, ""unknown_tags"": [""(ライブ開始時)""]}",0,0,0,0,1,"{""draw"": 0, ""score"": 0, ""colorless"": 0}",0,0,0,,,"[{""set_title"": ""プレミアムブースター ラブライブ！ DUO"", ""set_url"": ""https://wikiwiki.jp/llocardgame/%E3%83%97%E3%83%AC%E3%83%9F%E3%82%A2%E3%83%A0%E3%83%96%E3%83%BC%E3%82%B9%E3%82%BF%E3%83%BC%20%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96%EF%BC%81%20DUO"", ""card_attr"": ""PL!-pb2-024-N"", ""cardnumber"": ""PL!-pb2-024"", ""rarity_display"": ""N"", ""rarity_norm"": ""N""}]"
 PL!-pb2-026,小泉花陽,PL!-pb2-026 小泉花陽 - ラブライブ！シリーズ オフィシャルカードゲーム(ラブカ) 非公式 Wiki*,メンバー,ラブライブ！,μ's,Printemps,5.0,3.0,なし,<黄> 1,,,"<起動>
 <ターン1回>
 このメンバーをウェイトにし、手札を1枚控え室に置く：自分のデッキの上からカードを3枚見る。その中から『Printemps』のメンバーカードを1枚公開して手札に加えてもよい。残りを控え室に置く。",https://wikiwiki.jp/llocardgame/PL%21-pb2-026%20%E5%B0%8F%E6%B3%89%E8%8A%B1%E9%99%BD,MEMBER,"{""yellow"": 1}",1,[],{},0,[],{},0,[],"<起動>
 <ターン1回>
 このメンバーをウェイトにし、手札を1枚控え室に置く：自分のデッキの上からカードを3枚見る。その中から『Printemps』のメンバーカードを1枚公開して手札に加えてもよい。残りを控え室に置く。",HAS_TEXT,0,"{""hearts"": {}, ""blade_mentions"": [], ""tags"": [""(起動)"", ""(ターン1回)""], ""blade_icon_n"": 0, ""energy_icon_n"": 0, ""all_heart_n"": 0, ""score_delta_icon"": 0, ""unknown_tags"": [""(起動)"", ""(ターン1回)""]}",0,0,0,0,2,"{""draw"": 0, ""score"": 0, ""colorless"": 0}",0,0,0,,,"[{""set_title"": ""プレミアムブースター ラブライブ！ DUO"", ""set_url"": ""https://wikiwiki.jp/llocardgame/%E3%83%97%E3%83%AC%E3%83%9F%E3%82%A2%E3%83%A0%E3%83%96%E3%83%BC%E3%82%B9%E3%82%BF%E3%83%BC%20%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96%EF%BC%81%20DUO"", ""card_attr"": ""PL!-pb2-026-N"", ""cardnumber"": ""PL!-pb2-026"", ""rarity_display"": ""N"", ""rarity_norm"": ""N""}]"
+PL!-pb2-027,矢澤にこ,PL!-pb2-027 矢澤にこ - ラブライブ！シリーズ オフィシャルカードゲーム(ラブカ) 非公式 Wiki*,メンバー,ラブライブ！,μ's,BiBi,2.0,1.0,<黄>,<黄> 1,,,"<起動>
+このメンバーをステージから控え室に置く：自分の控え室からメンバーカードを1枚手札に加える。",https://wikiwiki.jp/llocardgame/PL%21-pb2-027%20%E7%9F%A2%E6%BE%A4%E3%81%AB%E3%81%93,MEMBER,"{""yellow"": 1}",1,[],{},0,[],"{""yellow"": 1}",1,[],"<起動>
+このメンバーをステージから控え室に置く：自分の控え室からメンバーカードを1枚手札に加える。",HAS_TEXT,0,"{""hearts"": {}, ""blade_mentions"": [], ""tags"": [""(起動)""], ""blade_icon_n"": 0, ""energy_icon_n"": 0, ""all_heart_n"": 0, ""score_delta_icon"": 0, ""unknown_tags"": [""(起動)""]}",0,0,0,0,1,"{""draw"": 0, ""score"": 0, ""colorless"": 0}",0,0,0,,,"[{""set_title"": ""プレミアムブースター ラブライブ！ DUO"", ""set_url"": ""https://wikiwiki.jp/llocardgame/%E3%83%97%E3%83%AC%E3%83%9F%E3%82%A2%E3%83%A0%E3%83%96%E3%83%BC%E3%82%B9%E3%82%BF%E3%83%BC%20%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96%EF%BC%81%20DUO"", ""card_attr"": ""PL!-pb2-027-N"", ""cardnumber"": ""PL!-pb2-027"", ""rarity_display"": ""N"", ""rarity_norm"": ""N""}]"
 PL!-pb2-030,南ことり,PL!-pb2-030 南ことり - ラブライブ！シリーズ オフィシャルカードゲーム(ラブカ) 非公式 Wiki*,メンバー,ラブライブ！,μ's,Printemps,5.0,5.0,なし,<桃> 1 <黄> 1 <紫> 1,,,"<常時>
 自分の成功ライブカード置き場にあるカードのスコアの合計5につき、
 <(ブレード)>
@@ -1389,6 +1425,16 @@ PL!-pb2-030,南ことり,PL!-pb2-030 南ことり - ラブライブ！シリー�
 自分の成功ライブカード置き場にあるカードのスコアの合計5につき、
 <(ブレード)>
 を得る。",HAS_TEXT,0,"{""hearts"": {}, ""blade_mentions"": [], ""tags"": [""(常時)""], ""blade_icon_n"": 1, ""energy_icon_n"": 0, ""all_heart_n"": 0, ""score_delta_icon"": 0, ""unknown_tags"": [""(常時)""]}",1,0,0,0,1,"{""draw"": 0, ""score"": 0, ""colorless"": 0}",0,0,0,,,"[{""set_title"": ""プレミアムブースター ラブライブ！ DUO"", ""set_url"": ""https://wikiwiki.jp/llocardgame/%E3%83%97%E3%83%AC%E3%83%9F%E3%82%A2%E3%83%A0%E3%83%96%E3%83%BC%E3%82%B9%E3%82%BF%E3%83%BC%20%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96%EF%BC%81%20DUO"", ""card_attr"": ""PL!-pb2-030-N"", ""cardnumber"": ""PL!-pb2-030"", ""rarity_display"": ""N"", ""rarity_norm"": ""N""}]"
+PL!-pb2-031,園田海未,PL!-pb2-031 園田海未 - ラブライブ！シリーズ オフィシャルカードゲーム(ラブカ) 非公式 Wiki*,メンバー,ラブライブ！,μ's,lily white,4.0,2.0,<桃>,<桃> 1,,,"<ライブ開始時>
+手札の『μ's』のカードを1枚控え室に置いてもよい：ライブ終了時まで、
+<紫>
+を得る。",https://wikiwiki.jp/llocardgame/PL%21-pb2-031%20%E5%9C%92%E7%94%B0%E6%B5%B7%E6%9C%AA,MEMBER,"{""pink"": 1}",1,[],{},0,[],"{""pink"": 1}",1,[],"<ライブ開始時>
+手札の『μ's』のカードを1枚控え室に置いてもよい：ライブ終了時まで、
+<紫>
+を得る。",HAS_TEXT,0,"{""hearts"": {""purple"": 1}, ""blade_mentions"": [], ""tags"": [""(ライブ開始時)""], ""blade_icon_n"": 0, ""energy_icon_n"": 0, ""all_heart_n"": 0, ""score_delta_icon"": 0, ""unknown_tags"": [""(ライブ開始時)""]}",0,0,0,0,1,"{""draw"": 0, ""score"": 0, ""colorless"": 0}",0,0,0,,,"[{""set_title"": ""プレミアムブースター ラブライブ！ DUO"", ""set_url"": ""https://wikiwiki.jp/llocardgame/%E3%83%97%E3%83%AC%E3%83%9F%E3%82%A2%E3%83%A0%E3%83%96%E3%83%BC%E3%82%B9%E3%82%BF%E3%83%BC%20%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96%EF%BC%81%20DUO"", ""card_attr"": ""PL!-pb2-031-N"", ""cardnumber"": ""PL!-pb2-031"", ""rarity_display"": ""N"", ""rarity_norm"": ""N""}]"
+PL!-pb2-032,星空凛,PL!-pb2-032 星空凛 - ラブライブ！シリーズ オフィシャルカードゲーム(ラブカ) 非公式 Wiki*,メンバー,ラブライブ！,μ's,lily white,4.0,2.0,<紫>,<紫> 1,,,"<登場>
+手札を1枚控え室に置いてもよい：自分のデッキの上からカードを5枚見る。その中からブレードハートを持たない『μ's』のメンバーカードを1枚公開して手札に加えてもよい。残りを控え室に置く。",https://wikiwiki.jp/llocardgame/PL%21-pb2-032%20%E6%98%9F%E7%A9%BA%E5%87%9B,MEMBER,"{""purple"": 1}",1,[],{},0,[],"{""purple"": 1}",1,[],"<登場>
+手札を1枚控え室に置いてもよい：自分のデッキの上からカードを5枚見る。その中からブレードハートを持たない『μ's』のメンバーカードを1枚公開して手札に加えてもよい。残りを控え室に置く。",HAS_TEXT,0,"{""hearts"": {}, ""blade_mentions"": [], ""tags"": [""(登場)""], ""blade_icon_n"": 0, ""energy_icon_n"": 0, ""all_heart_n"": 0, ""score_delta_icon"": 0, ""unknown_tags"": [""(登場)""]}",0,0,0,0,1,"{""draw"": 0, ""score"": 0, ""colorless"": 0}",0,0,0,,,"[{""set_title"": ""プレミアムブースター ラブライブ！ DUO"", ""set_url"": ""https://wikiwiki.jp/llocardgame/%E3%83%97%E3%83%AC%E3%83%9F%E3%82%A2%E3%83%A0%E3%83%96%E3%83%BC%E3%82%B9%E3%82%BF%E3%83%BC%20%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96%EF%BC%81%20DUO"", ""card_attr"": ""PL!-pb2-032-N"", ""cardnumber"": ""PL!-pb2-032"", ""rarity_display"": ""N"", ""rarity_norm"": ""N""}]"
 PL!-pb2-033,西木野真姫,PL!-pb2-033 西木野真姫 - ラブライブ！シリーズ オフィシャルカードゲーム(ラブカ) 非公式 Wiki*,メンバー,ラブライブ！,μ's,BiBi,13.0,2.0,<黄>,<桃> 2 <黄> 2 <紫> 2,,,"<登場>
 /
 <ライブ開始時>
@@ -1402,6 +1448,8 @@ PL!-pb2-033,西木野真姫,PL!-pb2-033 西木野真姫 - ラブライブ！シ�
 （ウェイト状態のメンバーが持つ
 <(ブレード)>
 は、エールで公開する枚数を増やさない。）",HAS_TEXT,0,"{""hearts"": {}, ""blade_mentions"": [], ""tags"": [""(登場)"", ""(ライブ開始時)""], ""blade_icon_n"": 1, ""energy_icon_n"": 0, ""all_heart_n"": 0, ""score_delta_icon"": 0, ""unknown_tags"": [""(登場)"", ""(ライブ開始時)""]}",1,0,0,0,2,"{""draw"": 0, ""score"": 0, ""colorless"": 0}",0,0,0,,,"[{""set_title"": ""プレミアムブースター ラブライブ！ DUO"", ""set_url"": ""https://wikiwiki.jp/llocardgame/%E3%83%97%E3%83%AC%E3%83%9F%E3%82%A2%E3%83%A0%E3%83%96%E3%83%BC%E3%82%B9%E3%82%BF%E3%83%BC%20%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96%EF%BC%81%20DUO"", ""card_attr"": ""PL!-pb2-033-N"", ""cardnumber"": ""PL!-pb2-033"", ""rarity_display"": ""N"", ""rarity_norm"": ""N""}]"
+PL!-pb2-034,東條希,PL!-pb2-034 東條希 - ラブライブ！シリーズ オフィシャルカードゲーム(ラブカ) 非公式 Wiki*,メンバー,ラブライブ！,μ's,lily white,5.0,1.0,なし,<桃> 1 <黄> 1 <紫> 1,,,(なし),https://wikiwiki.jp/llocardgame/PL%21-pb2-034%20%E6%9D%B1%E6%A2%9D%E5%B8%8C,MEMBER,"{""pink"": 1, ""yellow"": 1, ""purple"": 1}",3,[],{},0,[],{},0,[],(なし),NO_ABILITY,1,"{""hearts"": {}, ""blade_mentions"": [], ""blade_icon_n"": 0, ""energy_icon_n"": 0, ""all_heart_n"": 0, ""score_delta_icon"": 0, ""unknown_tags"": [], ""tags"": []}",0,0,0,0,0,"{""draw"": 0, ""score"": 0, ""colorless"": 0}",0,0,0,,,"[{""set_title"": ""プレミアムブースター ラブライブ！ DUO"", ""set_url"": ""https://wikiwiki.jp/llocardgame/%E3%83%97%E3%83%AC%E3%83%9F%E3%82%A2%E3%83%A0%E3%83%96%E3%83%BC%E3%82%B9%E3%82%BF%E3%83%BC%20%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96%EF%BC%81%20DUO"", ""card_attr"": ""PL!-pb2-034-N"", ""cardnumber"": ""PL!-pb2-034"", ""rarity_display"": ""N"", ""rarity_norm"": ""N""}]"
+PL!-pb2-036,矢澤にこ,PL!-pb2-036 矢澤にこ - ラブライブ！シリーズ オフィシャルカードゲーム(ラブカ) 非公式 Wiki*,メンバー,ラブライブ！,μ's,BiBi,11.0,3.0,<紫>,<桃> 1 <黄> 2 <紫> 2,,,(なし),https://wikiwiki.jp/llocardgame/PL%21-pb2-036%20%E7%9F%A2%E6%BE%A4%E3%81%AB%E3%81%93,MEMBER,"{""pink"": 1, ""yellow"": 2, ""purple"": 2}",5,[],{},0,[],"{""purple"": 1}",1,[],(なし),NO_ABILITY,1,"{""hearts"": {}, ""blade_mentions"": [], ""blade_icon_n"": 0, ""energy_icon_n"": 0, ""all_heart_n"": 0, ""score_delta_icon"": 0, ""unknown_tags"": [], ""tags"": []}",0,0,0,0,0,"{""draw"": 0, ""score"": 0, ""colorless"": 0}",0,0,0,,,"[{""set_title"": ""プレミアムブースター ラブライブ！ DUO"", ""set_url"": ""https://wikiwiki.jp/llocardgame/%E3%83%97%E3%83%AC%E3%83%9F%E3%82%A2%E3%83%A0%E3%83%96%E3%83%BC%E3%82%B9%E3%82%BF%E3%83%BC%20%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96%EF%BC%81%20DUO"", ""card_attr"": ""PL!-pb2-036-N"", ""cardnumber"": ""PL!-pb2-036"", ""rarity_display"": ""N"", ""rarity_norm"": ""N""}]"
 PL!-pb2-037,Shangri-La Shower,PL!-pb2-037 Shangri-La Shower - ラブライブ！シリーズ オフィシャルカードゲーム(ラブカ) 非公式 Wiki*,ライブ,ラブライブ！,μ's,,,,<ALL>,,<任意> 8 (合計8),3.0,"<ライブ成功時>
 エールにより公開された自分のメンバーカードがすべて『Printemps』か、すべて『lily white』か、すべて『BiBi』のいずれかの場合、エールにより公開された自分のカードの中からメンバーカードを1枚手札に加える。",https://wikiwiki.jp/llocardgame/PL%21-pb2-037%20Shangri-La%20Shower,LIVE,{},0,[],"{""any"": 8}",8,[],"{""all"": 1}",1,[],"<ライブ成功時>
 エールにより公開された自分のメンバーカードがすべて『Printemps』か、すべて『lily white』か、すべて『BiBi』のいずれかの場合、エールにより公開された自分のカードの中からメンバーカードを1枚手札に加える。",HAS_TEXT,0,"{""hearts"": {}, ""blade_mentions"": [], ""tags"": [""(ライブ成功時)""], ""blade_icon_n"": 0, ""energy_icon_n"": 0, ""all_heart_n"": 0, ""score_delta_icon"": 0, ""unknown_tags"": [""(ライブ成功時)""]}",0,0,0,0,1,"{""draw"": 0, ""score"": 0, ""colorless"": 0}",0,0,0,,,"[{""set_title"": ""プレミアムブースター ラブライブ！ DUO"", ""set_url"": ""https://wikiwiki.jp/llocardgame/%E3%83%97%E3%83%AC%E3%83%9F%E3%82%A2%E3%83%A0%E3%83%96%E3%83%BC%E3%82%B9%E3%82%BF%E3%83%BC%20%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96%EF%BC%81%20DUO"", ""card_attr"": ""PL!-pb2-037-L"", ""cardnumber"": ""PL!-pb2-037"", ""rarity_display"": ""L"", ""rarity_norm"": ""L""}]"
@@ -1412,6 +1460,27 @@ PL!-pb2-039,僕たちはひとつの光,PL!-pb2-039 僕たちはひとつの光 
 自分の成功ライブカード置き場に『μ's』のカードが2枚以上ある場合、ライブ終了時まで、エールで公開される自分のカードの枚数が10枚増える。
 <ライブ成功時>
 自分のステージのメンバーとエールにより公開された自分のメンバーカードの中にある、名前の異なる『μ's』のメンバー1人につき、このカードのスコアを+1する。",HAS_TEXT,0,"{""hearts"": {}, ""blade_mentions"": [], ""tags"": [""(ライブ開始時)"", ""(ライブ成功時)""], ""blade_icon_n"": 0, ""energy_icon_n"": 0, ""all_heart_n"": 0, ""score_delta_icon"": 0, ""unknown_tags"": [""(ライブ開始時)"", ""(ライブ成功時)""]}",0,0,0,0,2,"{""draw"": 0, ""score"": 0, ""colorless"": 2}",0,0,2,,,"[{""set_title"": ""プレミアムブースター ラブライブ！ DUO"", ""set_url"": ""https://wikiwiki.jp/llocardgame/%E3%83%97%E3%83%AC%E3%83%9F%E3%82%A2%E3%83%A0%E3%83%96%E3%83%BC%E3%82%B9%E3%82%BF%E3%83%BC%20%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96%EF%BC%81%20DUO"", ""card_attr"": ""PL!-pb2-039-L"", ""cardnumber"": ""PL!-pb2-039"", ""rarity_display"": ""L"", ""rarity_norm"": ""L""}]"
+PL!-pb2-040,Love marginal,PL!-pb2-040 Love marginal - ラブライブ！シリーズ オフィシャルカードゲーム(ラブカ) 非公式 Wiki*,ライブ,ラブライブ！,μ's,Printemps,,,<ALL>,,<桃> 2 <黄> 6 <任意> 10 (合計18),7.0,"<ライブ開始時>
+自分のステージに、このターン中に自分の『Printemps』のカードの効果によってウェイト状態からアクティブにしていたメンバーが1人以上ある場合、このカードの必要ハートを
+<任意>
+<任意>
+<任意>
+減らす。2人以上いる場合、さらに
+<任意>
+<任意>
+減らす。3人以上いる場合、さらに
+<任意>
+減らす。",https://wikiwiki.jp/llocardgame/PL%21-pb2-040%20Love%20marginal,LIVE,{},0,[],"{""pink"": 2, ""yellow"": 6, ""any"": 10}",18,[],"{""all"": 1}",1,[],"<ライブ開始時>
+自分のステージに、このターン中に自分の『Printemps』のカードの効果によってウェイト状態からアクティブにしていたメンバーが1人以上ある場合、このカードの必要ハートを
+<任意>
+<任意>
+<任意>
+減らす。2人以上いる場合、さらに
+<任意>
+<任意>
+減らす。3人以上いる場合、さらに
+<任意>
+減らす。",HAS_TEXT,0,"{""hearts"": {""any"": 6}, ""blade_mentions"": [], ""tags"": [""(ライブ開始時)""], ""blade_icon_n"": 0, ""energy_icon_n"": 0, ""all_heart_n"": 0, ""score_delta_icon"": 0, ""unknown_tags"": [""(ライブ開始時)""]}",0,0,0,0,1,"{""draw"": 0, ""score"": 0, ""colorless"": 0}",0,0,0,,,"[{""set_title"": ""プレミアムブースター ラブライブ！ DUO"", ""set_url"": ""https://wikiwiki.jp/llocardgame/%E3%83%97%E3%83%AC%E3%83%9F%E3%82%A2%E3%83%A0%E3%83%96%E3%83%BC%E3%82%B9%E3%82%BF%E3%83%BC%20%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96%EF%BC%81%20DUO"", ""card_attr"": ""PL!-pb2-040-L"", ""cardnumber"": ""PL!-pb2-040"", ""rarity_display"": ""L"", ""rarity_norm"": ""L""}]"
 PL!-pb2-041,春情ロマンティック,PL!-pb2-041 春情ロマンティック - ラブライブ！シリーズ オフィシャルカードゲーム(ラブカ) 非公式 Wiki*,ライブ,ラブライブ！,μ's,lily white,,,<スコア+1>,,<桃> 6 <紫> 2 <任意> 8 (合計16),7.0,"<常時>
 このカードが自分の成功ライブカード置き場にあるかぎり、自分の『lily white』のカードの効果によって、自分の成功ライブカード置き場にあるカードの枚数を数えるとき、このカードは2枚として扱う。
 <ライブ開始時>
@@ -1419,6 +1488,11 @@ PL!-pb2-041,春情ロマンティック,PL!-pb2-041 春情ロマンティック 
 このカードが自分の成功ライブカード置き場にあるかぎり、自分の『lily white』のカードの効果によって、自分の成功ライブカード置き場にあるカードの枚数を数えるとき、このカードは2枚として扱う。
 <ライブ開始時>
 自分の成功ライブカード置き場に『lily white』のカードが2枚以上ある場合、このカードのスコアを+1すを。",HAS_TEXT,0,"{""hearts"": {}, ""blade_mentions"": [], ""tags"": [""(常時)"", ""(ライブ開始時)""], ""blade_icon_n"": 0, ""energy_icon_n"": 0, ""all_heart_n"": 0, ""score_delta_icon"": 0, ""unknown_tags"": [""(常時)"", ""(ライブ開始時)""]}",0,0,0,0,2,"{""draw"": 0, ""score"": 1, ""colorless"": 0}",0,1,0,,,"[{""set_title"": ""プレミアムブースター ラブライブ！ DUO"", ""set_url"": ""https://wikiwiki.jp/llocardgame/%E3%83%97%E3%83%AC%E3%83%9F%E3%82%A2%E3%83%A0%E3%83%96%E3%83%BC%E3%82%B9%E3%82%BF%E3%83%BC%20%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96%EF%BC%81%20DUO"", ""card_attr"": ""PL!-pb2-041-L"", ""cardnumber"": ""PL!-pb2-041"", ""rarity_display"": ""L"", ""rarity_norm"": ""L""}]"
+PL!-pb2-042,PSYCHIC FIRE,PL!-pb2-042 PSYCHIC FIRE - ラブライブ！シリーズ オフィシャルカードゲーム(ラブカ) 非公式 Wiki*,ライブ,ラブライブ！,μ's,BiBi,,,<ALL>,,<黄> 3 <紫> 7 <任意> 5 (合計15),7.0,"<自動>
+<ターン1回>
+自分がエールしたとき、エールにより公開された自分のカードの中に「絢瀬絵里」と「西木野真姫」と「矢澤にこ」のメンバーカードがあり、かつ自分のセンターエリアにコスト11以上の『BiBi』のメンバーがいる場合、相手のステージにいる元々持つハートの数が4つ以下のメンバー1人をウェイトにする。",https://wikiwiki.jp/llocardgame/PL%21-pb2-042%20PSYCHIC%20FIRE,LIVE,{},0,[],"{""yellow"": 3, ""purple"": 7, ""any"": 5}",15,[],"{""all"": 1}",1,[],"<自動>
+<ターン1回>
+自分がエールしたとき、エールにより公開された自分のカードの中に「絢瀬絵里」と「西木野真姫」と「矢澤にこ」のメンバーカードがあり、かつ自分のセンターエリアにコスト11以上の『BiBi』のメンバーがいる場合、相手のステージにいる元々持つハートの数が4つ以下のメンバー1人をウェイトにする。",HAS_TEXT,0,"{""hearts"": {}, ""blade_mentions"": [], ""tags"": [""(自動)"", ""(ターン1回)""], ""blade_icon_n"": 0, ""energy_icon_n"": 0, ""all_heart_n"": 0, ""score_delta_icon"": 0, ""unknown_tags"": [""(自動)"", ""(ターン1回)""]}",0,0,0,0,2,"{""draw"": 0, ""score"": 0, ""colorless"": 0}",0,0,0,,,"[{""set_title"": ""プレミアムブースター ラブライブ！ DUO"", ""set_url"": ""https://wikiwiki.jp/llocardgame/%E3%83%97%E3%83%AC%E3%83%9F%E3%82%A2%E3%83%A0%E3%83%96%E3%83%BC%E3%82%B9%E3%82%BF%E3%83%BC%20%E3%83%A9%E3%83%96%E3%83%A9%E3%82%A4%E3%83%96%EF%BC%81%20DUO"", ""card_attr"": ""PL!-pb2-042-L"", ""cardnumber"": ""PL!-pb2-042"", ""rarity_display"": ""L"", ""rarity_norm"": ""L""}]"
 PL!-sd1-001,高坂穂乃果,PL!-sd1-001 高坂穂乃果 - ラブライブ！シリーズ オフィシャルカードゲーム(ラブカ) 非公式 Wiki*,メンバー,ラブライブ！,μ's,Printemps,11.0,3.0,なし,<桃> 1 <黄> 2 <紫> 1,,,"<登場>
 自分の成功ライブカード置き場にカードが2枚以上ある場合、自分の控え室からライブカードを1枚手札に加える。
 <常時>

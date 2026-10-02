@@ -1117,6 +1117,162 @@
         "cardname_from_post": "P+ 小泉花陽 ?",
         "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
       }
+    ],
+    "PL!-pb2-025": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "N",
+        "image_url": "https://pbs.twimg.com/media/HR2G7UvaQAEXRmf.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2097985934964777319",
+        "tweet_id": "2097985934964777319",
+        "posted_at": "2026-09-10T09:50:00.000Z",
+        "cardname_from_post": "N 東條希 ?",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!-pb2-012": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "P2",
+        "image_url": "https://pbs.twimg.com/media/HR2PWukbIAA8rRX.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2098713227995840965",
+        "tweet_id": "2098713227995840965",
+        "posted_at": "2026-09-12T10:00:00.000Z",
+        "cardname_from_post": "P+ 南ことり",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!-pb2-036": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "N",
+        "image_url": "https://pbs.twimg.com/media/HR2QKJqbkAA5FbH.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2099068067477393902",
+        "tweet_id": "2099068067477393902",
+        "posted_at": "2026-09-13T09:30:00.000Z",
+        "cardname_from_post": "N 矢澤にこ",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!-pb2-032": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "N",
+        "image_url": "https://pbs.twimg.com/media/HR2UAnqaQAADWaT.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2099430455527330172",
+        "tweet_id": "2099430455527330172",
+        "posted_at": "2026-09-14T09:30:00.000Z",
+        "cardname_from_post": "N 星空凛",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!-pb2-035": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "N",
+        "image_url": "https://pbs.twimg.com/media/HSPO1zqbIAAjwfy.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2099792844449775973",
+        "tweet_id": "2099792844449775973",
+        "posted_at": "2026-09-15T09:30:01.000Z",
+        "cardname_from_post": "N 小泉花陽 ?",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!-pb2-028": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "N",
+        "image_url": "https://pbs.twimg.com/media/HSPuqo4bkAA_Szd.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2100155230067261505",
+        "tweet_id": "2100155230067261505",
+        "posted_at": "2026-09-16T09:30:00.000Z",
+        "cardname_from_post": "N 高坂穂乃果 ?",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX_PREVIEW_ONLY"
+      }
+    ],
+    "PL!-pb2-040": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "L",
+        "image_url": "https://pbs.twimg.com/media/HSaC_DfbEAAj_Cw.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2100510335212106106",
+        "tweet_id": "2100510335212106106",
+        "posted_at": "2026-09-17T09:01:04.000Z",
+        "cardname_from_post": "9月17日(木) -L Love marginal",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!-pb2-042": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "L",
+        "image_url": "https://pbs.twimg.com/media/HSaJvYka0AA91Q0.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2100517924985602482",
+        "tweet_id": "2100517924985602482",
+        "posted_at": "2026-09-17T09:31:13.000Z",
+        "cardname_from_post": "L PSYCHIC FIRE",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!-pb2-031": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "N",
+        "image_url": "https://pbs.twimg.com/media/HSaQm-RbYAAj21J.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2101189544242463090",
+        "tweet_id": "2101189544242463090",
+        "posted_at": "2026-09-19T06:00:00.000Z",
+        "cardname_from_post": "N 園田海未",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!-pb2-024": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "N",
+        "image_url": "https://pbs.twimg.com/media/HSaRYOvagAEU_XQ.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2101506645574779212",
+        "tweet_id": "2101506645574779212",
+        "posted_at": "2026-09-20T03:00:03.000Z",
+        "cardname_from_post": "9月20日(日) -N 西木野真姫",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!-pb2-027": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "N",
+        "image_url": "https://pbs.twimg.com/media/HSaTjeVa4AAydZC.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2101869026586624349",
+        "tweet_id": "2101869026586624349",
+        "posted_at": "2026-09-21T03:00:01.000Z",
+        "cardname_from_post": "9月21日(月) -N 矢澤にこ",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
+    ],
+    "PL!-pb2-034": [
+      {
+        "folder": "PBLL02",
+        "rarity_norm": "N",
+        "image_url": "https://pbs.twimg.com/media/HSaUipcakAApwDh.png",
+        "source": "official_x_via_wiki_official_posts_index",
+        "post_url": "https://x.com/LL_cardgame/status/2102231419372085687",
+        "tweet_id": "2102231419372085687",
+        "posted_at": "2026-09-22T03:00:02.000Z",
+        "cardname_from_post": "9月22日(火) -N 東條希",
+        "match_status": "MATCHED_WIKI_OFFICIAL_POST_INDEX"
+      }
     ]
   }
 }

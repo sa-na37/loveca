@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "source_csv": "/Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full/_update_work/run_20260911_113658/final/cards_min_tokv1.csv",
+  "source_csv": "/Users/tekitou/Desktop/gsim/loveca/llocg_db_out_full/_update_work/run_20261002_123735/final/cards_min_tokv1.csv",
   "cards": [
     {
       "cardnumber": "LL-PR-004",
@@ -4529,6 +4529,29 @@
       ]
     },
     {
+      "cardnumber": "PL!-pb2-013",
+      "cardname": "園田海未",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "登場",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分のデッキの上からカードを4枚公開する。それらがすべて『lily white』のカードの場合、公開したカードの中から『lily white』のライブカードを1枚手札に加え、残りを控え室に置く。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分のデッキの上からカードを4枚公開する。それらがすべて『lily white』のカードの場合、公開したカードの中から『lily white』のライブカードを1枚手札に加え、残りを控え室に置く。"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "cardnumber": "PL!-pb2-014",
       "cardname": "星空凛",
       "card_type": "MEMBER",
@@ -4546,6 +4569,45 @@
               "cost_op": null,
               "effect_op": null,
               "raw": "手札の『lily white』のライブカードを1枚公開してもよい：自分の成功ライブカード置き場にあるカードを1枚手札に加える。そうした場合、これにより公開したカードを自分の成功ライブカード置き場に置く。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!-pb2-015",
+      "cardname": "西木野真姫",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "BODY",
+          "conditions": "ターン1回",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分の『BiBi』のカードの効果によって、相手のステージいるメンバーがウェイト状態になったとき、以下から1つを選ぶ。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分の『BiBi』のカードの効果によって、相手のステージいるメンバーがウェイト状態になったとき、以下から1つを選ぶ。"
+            },
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分のステージにいる『BiBi』のメンバー1人をアクティブにする。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "・自分のステージにいる『BiBi』のメンバー1人をアクティブにする。"
+            },
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "エネルギーを2枚アクティブにする。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "・エネルギーを2枚アクティブにする。"
             }
           ]
         }
@@ -4593,6 +4655,82 @@
               "cost_op": null,
               "effect_op": null,
               "raw": "・カードを1枚引き、手札を1枚控え室に置く。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!-pb2-017",
+      "cardname": "小泉花陽",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "登場",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分の控え室にある『Printemps』のメンバーカード4枚をこのメンバーの下に置く。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分の控え室にある『Printemps』のメンバーカード4枚をこのメンバーの下に置く。"
+            }
+          ]
+        },
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ開始時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "このメンバーの下にあるカードを3枚まで控え室に置いてもよい。これにより控え室に置いたカード1枚につき、自分のステージにいる『Printemps』のメンバー1人をアクティブにする。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "このメンバーの下にあるカードを3枚まで控え室に置いてもよい。これにより控え室に置いたカード1枚につき、自分のステージにいる『Printemps』のメンバー1人をアクティブにする。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!-pb2-018",
+      "cardname": "矢澤にこ",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "登場",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": true,
+              "cost_template": "",
+              "effect_template": "相手のステージいるウェイト状態のメンバーを3人までアクティブにしてもよい。そうしたとき、これによりアクティブにしたメンバー1人につき、カードを1枚引く。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "相手のステージいるウェイト状態のメンバーを3人までアクティブにしてもよい。そうしたとき、これによりアクティブにしたメンバー1人につき、カードを1枚引く。"
+            }
+          ]
+        },
+        {
+          "ability_type": "自動",
+          "trigger": "登場/ライブ開始時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "手札の名前の異なる『BiBi』のメンバーカードを3枚控え室に置いてもよい",
+              "effect_template": "自分のステージにいるメンバーが『BiBi』のみの場合、相手のステージにいるメンバー1人をウェイトにする。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "手札の名前の異なる『BiBi』のメンバーカードを3枚控え室に置いてもよい：自分のステージにいるメンバーが『BiBi』のみの場合、相手のステージにいるメンバー1人をウェイトにする。"
             }
           ]
         }
@@ -4706,6 +4844,29 @@
       ]
     },
     {
+      "cardnumber": "PL!-pb2-024",
+      "cardname": "西木野真姫",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ開始時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分のステージにいるメンバーが『BiBi』のみの場合、相手のステージにいるコスト2以下のメンバー1人をウェイトにする。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分のステージにいるメンバーが『BiBi』のみの場合、相手のステージにいるコスト2以下のメンバー1人をウェイトにする。"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "cardnumber": "PL!-pb2-026",
       "cardname": "小泉花陽",
       "card_type": "MEMBER",
@@ -4729,6 +4890,36 @@
       ]
     },
     {
+      "cardnumber": "PL!-pb2-027",
+      "cardname": "矢澤にこ",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "起動",
+          "trigger": "BODY",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "このメンバーをステージから控え室に置く",
+              "effect_template": "自分の控え室からメンバーカードを1枚手札に加える。",
+              "cost_op": {
+                "id": "C046",
+                "template": "このメンバーをステージから控え室に置く",
+                "op": "TODO",
+                "params": {},
+                "note": "",
+                "confidence": 0.0
+              },
+              "effect_op": null,
+              "raw": "このメンバーをステージから控え室に置く：自分の控え室からメンバーカードを1枚手札に加える。"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "cardnumber": "PL!-pb2-030",
       "cardname": "南ことり",
       "card_type": "MEMBER",
@@ -4746,6 +4937,52 @@
               "cost_op": null,
               "effect_op": null,
               "raw": "自分の成功ライブカード置き場にあるカードのスコアの合計5につき、<(ブレード)>を得る。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!-pb2-031",
+      "cardname": "園田海未",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ開始時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "手札の『μ's』のカードを1枚控え室に置いてもよい",
+              "effect_template": "ライブ終了時まで、<紫>を得る。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "手札の『μ's』のカードを1枚控え室に置いてもよい：ライブ終了時まで、<紫>を得る。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!-pb2-032",
+      "cardname": "星空凛",
+      "card_type": "MEMBER",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "登場",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "手札を1枚控え室に置いてもよい",
+              "effect_template": "自分のデッキの上からカードを5枚見る。その中からブレードハートを持たない『μ's』のメンバーカードを1枚公開して手札に加えてもよい。残りを控え室に置く。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "手札を1枚控え室に置いてもよい：自分のデッキの上からカードを5枚見る。その中からブレードハートを持たない『μ's』のメンバーカードを1枚公開して手札に加えてもよい。残りを控え室に置く。"
             }
           ]
         }
@@ -4781,6 +5018,20 @@
           ]
         }
       ]
+    },
+    {
+      "cardnumber": "PL!-pb2-034",
+      "cardname": "東條希",
+      "card_type": "MEMBER",
+      "parse_status": "NO_ABILITY",
+      "abilities": []
+    },
+    {
+      "cardnumber": "PL!-pb2-036",
+      "cardname": "矢澤にこ",
+      "card_type": "MEMBER",
+      "parse_status": "NO_ABILITY",
+      "abilities": []
     },
     {
       "cardnumber": "PL!-pb2-037",
@@ -4844,6 +5095,29 @@
       ]
     },
     {
+      "cardnumber": "PL!-pb2-040",
+      "cardname": "Love marginal",
+      "card_type": "LIVE",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "ライブ開始時",
+          "conditions": "",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分のステージに、このターン中に自分の『Printemps』のカードの効果によってウェイト状態からアクティブにしていたメンバーが1人以上ある場合、このカードの必要ハートを<任意><任意><任意>減らす。2人以上いる場合、さらに<任意><任意>減らす。3人以上いる場合、さらに<任意>減らす。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分のステージに、このターン中に自分の『Printemps』のカードの効果によってウェイト状態からアクティブにしていたメンバーが1人以上ある場合、このカードの必要ハートを<任意>\n<任意>\n<任意>\n減らす。2人以上いる場合、さらに<任意>\n<任意>\n減らす。3人以上いる場合、さらに<任意>\n減らす。"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "cardnumber": "PL!-pb2-041",
       "cardname": "春情ロマンティック",
       "card_type": "LIVE",
@@ -4876,6 +5150,29 @@
               "cost_op": null,
               "effect_op": null,
               "raw": "自分の成功ライブカード置き場に『lily white』のカードが2枚以上ある場合、このカードのスコアを+1すを。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cardnumber": "PL!-pb2-042",
+      "cardname": "PSYCHIC FIRE",
+      "card_type": "LIVE",
+      "parse_status": "OK",
+      "abilities": [
+        {
+          "ability_type": "自動",
+          "trigger": "BODY",
+          "conditions": "ターン1回",
+          "clauses": [
+            {
+              "optional": false,
+              "cost_template": "",
+              "effect_template": "自分がエールしたとき、エールにより公開された自分のカードの中に「絢瀬絵里」と「西木野真姫」と「矢澤にこ」のメンバーカードがあり、かつ自分のセンターエリアにコスト11以上の『BiBi』のメンバーがいる場合、相手のステージにいる元々持つハートの数が4つ以下のメンバー1人をウェイトにする。",
+              "cost_op": null,
+              "effect_op": null,
+              "raw": "自分がエールしたとき、エールにより公開された自分のカードの中に「絢瀬絵里」と「西木野真姫」と「矢澤にこ」のメンバーカードがあり、かつ自分のセンターエリアにコスト11以上の『BiBi』のメンバーがいる場合、相手のステージにいる元々持つハートの数が4つ以下のメンバー1人をウェイトにする。"
             }
           ]
         }
